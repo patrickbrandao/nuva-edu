@@ -1,0 +1,61 @@
+# admin: site de administração, arquivos estáticos servidos por Nginx sem privilégios
+# (specs 006 e 031). Recebe tudo o que, no host do admin, não é /api/, /mcp nem /healthz.
+
+services:
+  admin:
+    image: tmsoftbrasil/nuva-edu-admin:${NUVA_IMAGE_TAG:-latest}
+    build:
+      context: ../..
+      dockerfile: apps/admin/Dockerfile
+    restart: unless-stopped
+    # Viram o /config.json gerado na subida; trocar um valor e subir de novo não refaz a imagem.
+    environment:
+      NUVA_DOMAIN: ${NUVA_DOMAIN:-localhost}
+      NUVA_ADMIN_HOST: ${NUVA_ADMIN_HOST:-edu-admin.localhost}
+      NUVA_CLASSROOM_HOST: ${NUVA_CLASSROOM_HOST:-classroom.localhost}
+      NUVA_PUBLIC_SCHEME: ${NUVA_PUBLIC_SCHEME:-http}
+      NUVA_PUBLIC_PORT: ${NUVA_PUBLIC_PORT-8080}
+      NUVA_CURRENCY: ${NUVA_CURRENCY:-BRL}
+      NUVA_LOCALE: ${NUVA_LOCALE:-pt-BR}
+    networks:
+      - public
+    read_only: true
+    tmpfs:
+      # O Nginx roda como o usuário 101 e grava o config.json em /run/nuva.
+      - /run:uid=101,gid=101,mode=0755
+      - /tmp
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    ulimits:
+      nofile:
+        soft: 4096
+        hard: 4096
+    deploy:
+      resources:
+        limits:
+          cpus: "${NUVA_ADMIN_CPUS:-1}"
+          memory: ${NUVA_ADMIN_MEMORY:-64m}
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:8080/config.json"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+      start_interval: 2s
+    logging:
+      driver: json-file
+      options:
+        max-size: ${NUVA_LOG_MAX_SIZE:-10m}
+        max-file: "${NUVA_LOG_MAX_FILE:-5}"
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=${TRAEFIK_NETWORK:-nuva-edu-proxy}"
+      - "traefik.http.services.nuva-edu-admin.loadbalancer.server.port=8080"
+      - "traefik.http.routers.nuva-edu-admin.rule=Host(`${NUVA_ADMIN_HOST:-edu-admin.localhost}`)"
+      - "traefik.http.routers.nuva-edu-admin.priority=10"
+      - "traefik.http.routers.nuva-edu-admin.entrypoints=${TRAEFIK_ENTRYPOINTS:-web}"
+      - "traefik.http.routers.nuva-edu-admin.service=nuva-edu-admin"
+      # TLS só com TRAEFIK_CERTRESOLVER preenchido; vazio, sai um rótulo neutro no lugar.
+      - "${TRAEFIK_CERTRESOLVER:+traefik.http.routers.nuva-edu-admin.tls.certresolver=}${TRAEFIK_CERTRESOLVER:-nuva-edu.admin.tls=off}"

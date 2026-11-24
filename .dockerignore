@@ -1,0 +1,47 @@
+# Contexto de build das imagens (apps/<app>/Dockerfile usa a raiz como contexto).
+# Só entra o que as imagens copiam: manifestos, código-fonte, migrations e contratos.
+
+.git
+.github
+.claude
+.opencode
+.vscode
+.idea
+
+# Segredos e configuração local nunca entram em imagem.
+.env
+.env.*
+*.pem
+*.key
+*.p8
+
+# Dependências e resultados de build são refeitos dentro da imagem.
+**/node_modules
+**/dist
+**/build
+**/coverage
+**/.vite
+**/*.tsbuildinfo
+
+# Testes não vão para as imagens.
+**/test
+**/*.test.ts
+**/*.test.tsx
+**/*.test.mjs
+**/vitest.config.ts
+**/vitest.setup.ts
+
+# Fora das imagens.
+tasks
+tmp
+specs
+docs
+e2e
+scripts
+mail
+CHANGELOG.md
+LICENSE
+**/README.md
+**/Dockerfile
+**/docker-compose.yml
+lefthook.yml

@@ -1,0 +1,121 @@
+# admin-api: API do site de administração e servidor MCP (specs 003 e 031).
+# Traz também o serviço `migrate`, que usa a mesma imagem com o comando de migrations e roda
+# até o fim antes de as APIs e o worker subirem.
+
+x-admin-api-image: &admin-api-image
+  image: tmsoftbrasil/nuva-edu-admin-api:${NUVA_IMAGE_TAG:-latest}
+  build:
+    context: ../..
+    dockerfile: apps/admin-api/Dockerfile
+    args:
+      NUVA_VERSION: ${NUVA_VERSION:-}
+
+# Variáveis não secretas e ajustes da instalação. O que está em `environment` vale por cima.
+x-admin-api-env-file: &admin-api-env-file
+  - path: ../../.env
+    required: false
+  - path: ../../.env.local
+    required: false
+
+x-admin-api-logging: &admin-api-logging
+  driver: json-file
+  options:
+    max-size: ${NUVA_LOG_MAX_SIZE:-10m}
+    max-file: "${NUVA_LOG_MAX_FILE:-5}"
+
+services:
+  migrate:
+    <<: *admin-api-image
+    command: ["node", "/app/database/postgres/src/cli.ts", "up"]
+    restart: "no"
+    env_file: *admin-api-env-file
+    environment:
+      # Dentro da rede do Compose o banco é sempre postgres:5432; NUVA_POSTGRES_PORT do .env é
+      # só a porta publicada no hospedeiro.
+      POSTGRES_HOST: postgres
+      NUVA_POSTGRES_PORT: "5432"
+      POSTGRES_DB: ${POSTGRES_DB:-nuva_edu}
+      POSTGRES_USER: ${POSTGRES_USER:-nuva_edu}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?defina POSTGRES_PASSWORD em .env.local}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - internal
+    read_only: true
+    tmpfs:
+      - /run
+      - /tmp
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    ulimits:
+      nofile:
+        soft: 4096
+        hard: 4096
+    deploy:
+      resources:
+        limits:
+          cpus: "${NUVA_MIGRATE_CPUS:-1}"
+          memory: ${NUVA_MIGRATE_MEMORY:-256m}
+    logging: *admin-api-logging
+
+  admin-api:
+    <<: *admin-api-image
+    restart: unless-stopped
+    env_file: *admin-api-env-file
+    environment:
+      POSTGRES_HOST: postgres
+      NUVA_POSTGRES_PORT: "5432"
+      POSTGRES_DB: ${POSTGRES_DB:-nuva_edu}
+      POSTGRES_USER: ${POSTGRES_USER:-nuva_edu}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?defina POSTGRES_PASSWORD em .env.local}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    networks:
+      - internal
+      - public
+    read_only: true
+    tmpfs:
+      - /run
+      - /tmp
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    ulimits:
+      nofile:
+        soft: 65536
+        hard: 65536
+    deploy:
+      resources:
+        limits:
+          cpus: "${NUVA_ADMIN_API_CPUS:-1}"
+          memory: ${NUVA_ADMIN_API_MEMORY:-384m}
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - "fetch('http://127.0.0.1:3000/healthz').then((r) => process.exit(r.ok ? 0 : 1), () => process.exit(1))"
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+      start_interval: 2s
+    logging: *admin-api-logging
+    # O proxy só entrega /api/, /mcp e /healthz; /readyz e /metrics ficam na rede interna.
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=${TRAEFIK_NETWORK:-nuva-edu-proxy}"
+      - "traefik.http.services.nuva-edu-admin-api.loadbalancer.server.port=3000"
+      - "traefik.http.routers.nuva-edu-admin-api.rule=Host(`${NUVA_ADMIN_HOST:-edu-admin.localhost}`) && (PathPrefix(`/api/`) || PathPrefix(`/mcp`) || Path(`/healthz`))"
+      - "traefik.http.routers.nuva-edu-admin-api.priority=20"
+      - "traefik.http.routers.nuva-edu-admin-api.entrypoints=${TRAEFIK_ENTRYPOINTS:-web}"
+      - "traefik.http.routers.nuva-edu-admin-api.service=nuva-edu-admin-api"
+      # TLS só com TRAEFIK_CERTRESOLVER preenchido; vazio, sai um rótulo neutro no lugar.
+      - "${TRAEFIK_CERTRESOLVER:+traefik.http.routers.nuva-edu-admin-api.tls.certresolver=}${TRAEFIK_CERTRESOLVER:-nuva-edu.admin-api.tls=off}"

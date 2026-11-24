@@ -1,0 +1,85 @@
+# classroom-api: API do site do aluno, com o fluxo SSE (specs 004 e 031).
+
+services:
+  classroom-api:
+    image: tmsoftbrasil/nuva-edu-classroom-api:${NUVA_IMAGE_TAG:-latest}
+    build:
+      context: ../..
+      dockerfile: apps/classroom-api/Dockerfile
+      args:
+        NUVA_VERSION: ${NUVA_VERSION:-}
+    restart: unless-stopped
+    # Variáveis não secretas e ajustes da instalação. O que está em `environment` vale por cima.
+    env_file:
+      - path: ../../.env
+        required: false
+      - path: ../../.env.local
+        required: false
+    environment:
+      # Dentro da rede do Compose o banco é sempre postgres:5432; NUVA_POSTGRES_PORT do .env é
+      # só a porta publicada no hospedeiro.
+      POSTGRES_HOST: postgres
+      NUVA_POSTGRES_PORT: "5432"
+      POSTGRES_DB: ${POSTGRES_DB:-nuva_edu}
+      POSTGRES_USER: ${POSTGRES_USER:-nuva_edu}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?defina POSTGRES_PASSWORD em .env.local}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    networks:
+      - internal
+      - public
+    read_only: true
+    tmpfs:
+      - /run
+      - /tmp
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    ulimits:
+      nofile:
+        soft: 65536
+        hard: 65536
+    deploy:
+      resources:
+        limits:
+          cpus: "${NUVA_CLASSROOM_API_CPUS:-1}"
+          memory: ${NUVA_CLASSROOM_API_MEMORY:-512m}
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - "fetch('http://127.0.0.1:3000/healthz').then((r) => process.exit(r.ok ? 0 : 1), () => process.exit(1))"
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+      start_interval: 2s
+    logging:
+      driver: json-file
+      options:
+        max-size: ${NUVA_LOG_MAX_SIZE:-10m}
+        max-file: "${NUVA_LOG_MAX_FILE:-5}"
+    # O proxy só entrega /api/ e /healthz; /readyz e /metrics ficam na rede interna.
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=${TRAEFIK_NETWORK:-nuva-edu-proxy}"
+      - "traefik.http.services.nuva-edu-classroom-api.loadbalancer.server.port=3000"
+      - "traefik.http.routers.nuva-edu-classroom-api.rule=Host(`${NUVA_CLASSROOM_HOST:-classroom.localhost}`) && (PathPrefix(`/api/`) || Path(`/healthz`))"
+      - "traefik.http.routers.nuva-edu-classroom-api.priority=20"
+      - "traefik.http.routers.nuva-edu-classroom-api.entrypoints=${TRAEFIK_ENTRYPOINTS:-web}"
+      - "traefik.http.routers.nuva-edu-classroom-api.service=nuva-edu-classroom-api"
+      # SSE: roteador próprio e sem middleware algum, para que nada comprima nem segure a
+      # resposta. O Traefik repassa o fluxo conforme chega e não limita a duração da resposta;
+      # a API envia um `ping` a cada 25 s, abaixo do tempo ocioso do proxy.
+      - "traefik.http.routers.nuva-edu-classroom-stream.rule=Host(`${NUVA_CLASSROOM_HOST:-classroom.localhost}`) && Path(`/api/v1/stream`)"
+      - "traefik.http.routers.nuva-edu-classroom-stream.priority=30"
+      - "traefik.http.routers.nuva-edu-classroom-stream.entrypoints=${TRAEFIK_ENTRYPOINTS:-web}"
+      - "traefik.http.routers.nuva-edu-classroom-stream.service=nuva-edu-classroom-api"
+      # TLS só com TRAEFIK_CERTRESOLVER preenchido; vazio, saem rótulos neutros no lugar.
+      - "${TRAEFIK_CERTRESOLVER:+traefik.http.routers.nuva-edu-classroom-api.tls.certresolver=}${TRAEFIK_CERTRESOLVER:-nuva-edu.classroom-api.tls=off}"
+      - "${TRAEFIK_CERTRESOLVER:+traefik.http.routers.nuva-edu-classroom-stream.tls.certresolver=}${TRAEFIK_CERTRESOLVER:-nuva-edu.classroom-stream.tls=off}"

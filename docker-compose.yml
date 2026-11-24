@@ -1,9 +1,9 @@
 # nuva-edu — compose principal.
 # Cada sistema tem o seu docker-compose.yml na própria pasta; este arquivo só os inclui.
-# Os composes das aplicações (apps/<app>/docker-compose.yml) entram aqui nas tarefas da Fase 0.
 #
 # Uso (os segredos ficam em .env.local, fora do Git):
-#   docker compose --env-file .env --env-file .env.local --profile traefik --profile mailpit up -d
+#   pnpm dev:up            ambiente local, com os perfis traefik e mailpit
+#   pnpm compose <args>    docker compose --env-file .env --env-file .env.local <args>
 #
 # Perfis:
 #   traefik  proxy reverso próprio (desligue onde já existe um Traefik e aponte TRAEFIK_NETWORK para a rede dele)
@@ -15,6 +15,11 @@ include:
   - path: database/postgres/docker-compose.yml
   - path: proxy/traefik/docker-compose.yml
   - path: mail/mailpit/docker-compose.yml
+  - path: apps/admin-api/docker-compose.yml
+  - path: apps/classroom-api/docker-compose.yml
+  - path: apps/worker/docker-compose.yml
+  - path: apps/admin/docker-compose.yml
+  - path: apps/classroom/docker-compose.yml
 
 networks:
   # Rede interna: banco e comunicação entre serviços. Sem saída publicada.

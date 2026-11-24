@@ -24,14 +24,13 @@ Em especificação. O comportamento está definido em [`specs/`](specs/INDEX.md)
 
 Requisitos: Docker com Compose e Node 26.
 
-Por enquanto só a base de infraestrutura sobe (PostgreSQL, Traefik e Mailpit):
-
 ```bash
+pnpm install
 cp .env.example .env.local   # preencha POSTGRES_PASSWORD
-docker compose --env-file .env --env-file .env.local --profile traefik --profile mailpit up -d
+pnpm dev:up                  # constrói as imagens, sobe tudo e espera a saúde
 ```
 
-Os serviços da aplicação entram ao longo da Fase 0.
+Sites em http://edu-admin.localhost:8080 e http://classroom.localhost:8080; `pnpm dev:down` derruba. Detalhes em [docs/ambiente-local.md](docs/ambiente-local.md).
 
 ## Licença
 

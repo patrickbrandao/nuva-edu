@@ -18,9 +18,9 @@
     "verify:quick": "node scripts/verify.mjs quick",
     "verify:full": "node scripts/verify.mjs full",
     "db:migrate": "pnpm --filter @nuva-edu/database run migrate",
-    "compose": "node scripts/pending.mjs compose 014",
-    "dev:up": "node scripts/pending.mjs dev:up 014",
-    "dev:down": "node scripts/pending.mjs dev:down 014",
+    "compose": "node scripts/dev.mjs compose",
+    "dev:up": "node scripts/dev.mjs up",
+    "dev:down": "node scripts/dev.mjs down",
     "deploy:test": "node scripts/pending.mjs deploy:test 016"
   },
   "devDependencies": {
