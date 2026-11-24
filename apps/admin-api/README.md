@@ -37,13 +37,22 @@ Escuta na porta 3000 (spec 031); `PORT` troca a porta fora do contêiner. Precis
 | `POST /api/v1/auth/logout` | Encerra a sessão atual e apaga o cookie (exige `X-CSRF-Token`) |
 | `GET /api/v1/session` | Dono da sessão, token CSRF e ações permitidas (`no-store`) |
 | `GET /api/v1/images/{id}/{largura}.webp` | Entrega pública de uma variante, com `ETag` e `304` |
+| `GET`, `POST /api/v1/users` | Lista com busca, filtros e cursor (`manager`, `admin`); criação de conta de equipe (`admin`) |
+| `GET`, `PATCH /api/v1/users/{id}` | Ficha; edição de nome, nome completo e e-mail com `version` |
+| `PATCH /api/v1/users/{id}/role` | Muda o papel (`admin`) |
+| `POST /api/v1/users/{id}/suspend`, `/reactivate` | Suspende e reativa (equipe como alvo: só `admin`) |
+| `POST /api/v1/users/{id}/password/reveal` | Única resposta com a senha (ADR 0002): só `admin`, com a senha dele; `no-store`; grava `user.password_view` sem o valor |
+| `PUT /api/v1/users/{id}/password` | Define a senha (`admin`) e encerra as sessões do usuário |
+| `GET`, `DELETE /api/v1/users/{id}/sessions` | Sessões do usuário nos dois sites; encerra todas |
+| `GET /api/v1/audit`, `GET /api/v1/audit/{id}` | Consulta da auditoria (`admin`); a lista grava `audit.search` |
+| `GET`, `POST /api/v1/terms`, `POST /api/v1/terms/{id}/publish` | Versões dos termos (`admin`); a publicação grava `terms.publish` |
 
 ## Sessão e autorização
 
 - `sessionCookie`: sessão válida do site admin (`authenticateSession` do núcleo); senão `401 unauthenticated`, e o cookie recebido é apagado. Renovada a sessão, o cookie volta com o `Max-Age` cheio.
 - Papel `student`: `403 permission_denied` em toda operação fora de `/api/v1/auth/*` (spec 003 RF-03). Cada ação de `x-permission` da operação precisa ser permitida ao papel (`can`, spec 008); com mais de uma, todas. A rota refina o que depende do alvo (aluno ou equipe, alcance do instrutor).
 - `csrfToken`: `X-CSRF-Token` igual ao token da sessão; senão `403 csrf_token_invalid`.
-- Toda resposta `403 permission_denied` grava `outcome = denied` na auditoria, com a ação em `details.permission` (spec 028).
+- A recusa do tratador (`x-permission` ou papel `student`) grava `outcome = denied` na auditoria, com a ação em `details.permission` (spec 028). O `403` que depende do alvo vem do núcleo, que já grava a negação: a API não a grava de novo.
 - Limite de taxa (spec 003 RNF-03): 300 por minuto por sessão; 20 por minuto por IP nas operações de `/api/v1/auth/*`.
 
 ## Admin inicial e `create-admin`

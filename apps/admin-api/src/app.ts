@@ -16,8 +16,11 @@ import {
 } from '@nuva-edu/core';
 import { loadAdminContract } from './contract.ts';
 import { readServiceVersion } from './meta.ts';
+import { registerAuditRoutes } from './routes/audit.ts';
 import { registerAuthRoutes } from './routes/auth.ts';
 import { registerImageRoutes } from './routes/images.ts';
+import { registerTermsRoutes } from './routes/terms.ts';
+import { registerUserRoutes } from './routes/users.ts';
 import {
   adminRateLimits,
   auditPermissionDenied,
@@ -92,5 +95,8 @@ export function buildAdminApp(options: AdminAppOptions): FastifyInstance {
   });
   registerAuthRoutes(app, { db, ttlDays });
   registerImageRoutes(app, { db });
+  registerUserRoutes(app, { db });
+  registerAuditRoutes(app, { db });
+  registerTermsRoutes(app, { db });
   return app;
 }

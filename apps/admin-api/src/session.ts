@@ -20,6 +20,7 @@ import {
   can,
   type Database,
   isPermissionAction,
+  type ManagementRequest,
   permissionDenied,
   type RequestContext,
   recordDenied,
@@ -72,6 +73,15 @@ export function requestContext(request: FastifyRequest): RequestContext {
   };
 }
 
+/**
+ * Quem pede, para as regras de gestão do núcleo (`listUsers`, `suspendUser`...): o usuário da
+ * sessão, com o papel lido nesta requisição, e o contexto da requisição.
+ */
+export function managementRequest(request: FastifyRequest): ManagementRequest {
+  const { user } = requireSession(request);
+  return { actor: { id: user.id, role: user.role }, context: requestContext(request) };
+}
+
 /** Rotas de autenticação (`/api/v1/auth/*`): fora da recusa ao `student` (003, critérios). */
 function isAuthOperation(operation: ContractOperation): boolean {
   return operation.path.startsWith('/api/v1/auth/');
@@ -120,13 +130,20 @@ export function sessionSecurity(options: SessionOptions): SecurityHandlers {
 }
 
 /**
- * Negação por permissão (`403 permission_denied`, do tratador ou da rota): grava
- * `outcome = denied` na auditoria, fora de transação, com a ação do contrato em
- * `details.permission` (spec 028, "Gravação").
+ * Negação por permissão do tratador de `sessionCookie` (`x-permission` da operação ou papel
+ * `student`): grava `outcome = denied` na auditoria, fora de transação, com a ação do contrato
+ * em `details.permission` (spec 028, "Gravação").
+ *
+ * O `403 permission_denied` lançado pela rota vem das regras do núcleo que dependem do alvo
+ * (conta de equipe exige `staff.manage`, alcance de `users.list`), e elas já gravam a negação:
+ * aqui ele não é gravado de novo.
  */
 export function auditPermissionDenied(db: Database): PermissionDeniedHandler {
-  return async (request, { operation, permissions }) => {
-    const permission = deniedPermission.get(request) ?? permissions[0] ?? ADMIN_ACCESS;
+  return async (request, { operation }) => {
+    const permission = deniedPermission.get(request);
+    if (permission === undefined) {
+      return;
+    }
     const user = adminSession.get(request)?.session.user ?? null;
     await recordDenied(db, {
       context: auditContextFor(SITE, requestContext(request), user),
