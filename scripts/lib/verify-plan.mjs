@@ -5,6 +5,15 @@
 /** Nome do pacote do banco: os testes dele formam o passo "banco". */
 export const DATABASE_PACKAGE = '@nuva-edu/database';
 
+/** Pacote do cliente gerado dos contratos OpenAPI: confere se o gerado acompanha o contrato. */
+export const API_CLIENT_PACKAGE = '@nuva-edu/api-client';
+
+/** Script que confere os tipos gerados do banco contra as migrations (tem em `packages/core`). */
+export const DB_TYPES_SCRIPT = 'db:types:check';
+
+/** Pasta, relativa ao pacote, dos testes de contrato de uma API. */
+export const CONTRACT_DIR = 'test/contract';
+
 /** Nome usado para a raiz do repositório quando ela é tratada como um pacote. */
 export const ROOT_PACKAGE = '(raiz)';
 
@@ -20,8 +29,11 @@ export const USAGE = `Uso:
 quick  confere só o que mudou: alterações não commitadas mais os commits ainda não enviados
        (origin/main..HEAD). Com --files, só os caminhos dados (relativos à raiz). Roda todos os
        passos e sai com código diferente de zero se algum falhar.
-full   lint, tipos, todos os testes com banco isolado (Testcontainers), contrato, banco e build;
-       --e2e acrescenta os testes de ponta a ponta. Para na primeira falha.
+       Contrato alterado roda o teste de contrato da API e confere o cliente gerado; migration
+       alterada roda os testes de banco e confere os tipos gerados do banco.
+full   lint, tipos, tipos gerados do banco, todos os testes com banco isolado (Testcontainers),
+       contrato, banco e build; --e2e acrescenta os testes de ponta a ponta. Para na primeira
+       falha.
 
 Saída: 0 tudo certo; 1 algum passo falhou; 2 ambiente indisponível.`;
 
@@ -172,7 +184,15 @@ export function isTestFile(file) {
 }
 
 export function isContractPath(relative) {
-  return relative === 'test/contract' || relative.startsWith('test/contract/');
+  return relative === CONTRACT_DIR || relative.startsWith(`${CONTRACT_DIR}/`);
+}
+
+/**
+ * Script que confere o cliente gerado contra os contratos: `check`; na falta dele, o `test` do
+ * pacote. `null` se o pacote não tem nenhum dos dois.
+ */
+export function clientCheckScript(pkg) {
+  return ['check', 'test'].find((name) => pkg?.scripts[name]) ?? null;
 }
 
 /**
@@ -221,12 +241,26 @@ function addTo(map, key, values) {
  * @param exists    `(caminho relativo à raiz) => boolean`
  * @returns `lint` (arquivos), `types` (nomes de pacote), e `tests`, `contract`, `database`:
  *          mapas nome do pacote → arquivos de teste relativos ao pacote. Em `database`, o valor
- *          `null` quer dizer "a suíte inteira do pacote".
+ *          `null` quer dizer "a suíte inteira do pacote". `client`: pacotes do cliente gerado a
+ *          conferir (contrato ou gerado alterado). `dbTypes`: pacotes cujos tipos gerados do
+ *          banco conferir (migration ou gerado alterado).
  */
 export function planQuick({ changed, packages, exists }) {
-  const plan = { lint: [], types: [], tests: new Map(), contract: new Map(), database: new Map() };
+  const plan = {
+    lint: [],
+    types: [],
+    tests: new Map(),
+    contract: new Map(),
+    client: [],
+    database: new Map(),
+    dbTypes: [],
+  };
   const typed = new Set();
   let allTypes = false;
+  const client = packages.find((pkg) => pkg.name === API_CLIENT_PACKAGE);
+  const withDbTypes = packages.filter((pkg) => pkg.scripts[DB_TYPES_SCRIPT]);
+  const dbTypes = new Set();
+  let checkClient = false;
 
   for (const { path, deleted } of changed) {
     const pkg = packageOf(path, packages);
@@ -244,7 +278,19 @@ export function planQuick({ changed, packages, exists }) {
 
     if (isDatabase && relative.startsWith('migrations/')) {
       plan.database.set(pkg.name, null);
+      // Migration nova ou alterada sem regenerar os tipos: quem acusa é o `db:types:check`.
+      for (const owner of withDbTypes) {
+        dbTypes.add(owner.name);
+      }
       continue;
+    }
+    // O próprio gerado (ou o script que o gera) mexido à mão também é conferido.
+    const generated = /(?:^|\/)generated\//.test(relative) || relative.startsWith('scripts/');
+    if (generated && pkg.scripts[DB_TYPES_SCRIPT]) {
+      dbTypes.add(pkg.name);
+    }
+    if (pkg.dir !== '' && (relative === 'openapi.yaml' || (generated && pkg === client))) {
+      checkClient = true;
     }
 
     const inPackage = (candidate) => (pkg.dir === '' ? candidate : `${pkg.dir}/${candidate}`);
@@ -257,8 +303,8 @@ export function planQuick({ changed, packages, exists }) {
 
     const touchesContract =
       relative === 'openapi.yaml' || /^src\/(?:.*\/)?routes?(?:\/|\.[^/]+$)/.test(relative);
-    if (touchesContract && exists(inPackage('test/contract'))) {
-      addTo(plan.contract, pkg.name, ['test/contract']);
+    if (touchesContract && exists(inPackage(CONTRACT_DIR))) {
+      addTo(plan.contract, pkg.name, [CONTRACT_DIR]);
     }
 
     for (const file of found) {
@@ -283,10 +329,12 @@ export function planQuick({ changed, packages, exists }) {
 
   // O diretório inteiro de contrato já inclui os arquivos soltos dele.
   for (const [name, files] of plan.contract) {
-    if (files.includes('test/contract')) {
-      plan.contract.set(name, ['test/contract']);
+    if (files.includes(CONTRACT_DIR)) {
+      plan.contract.set(name, [CONTRACT_DIR]);
     }
   }
+  plan.client = checkClient && clientCheckScript(client) ? [client.name] : [];
+  plan.dbTypes = [...dbTypes].sort();
   return plan;
 }
 
@@ -454,6 +502,28 @@ export function buildTestCommand(pkg, files, flags = [], scriptName = 'test') {
   }
   const base = tokens.filter((token, index) => index === 0 || !looksLikeTestTarget(token));
   return { argv: [...base, ...options, ...files], filtered: true };
+}
+
+/**
+ * Comando da suíte inteira de um pacote no modo completo. `test:coverage`, quando existe,
+ * substitui `test`: é onde o pacote impõe a meta de cobertura.
+ *
+ * Com `hasContract` (o pacote tem `test/contract`), a pasta sai desta execução para o passo
+ * "contrato" não rodar os mesmos testes de novo. Só o Vitest sabe excluir pela linha de comando;
+ * com outro executor a suíte roda inteira e `contractExcluded` volta falso, para o passo
+ * "contrato" pular o pacote.
+ *
+ * @returns `{ argv, script, contractExcluded }` ou `null` se o pacote não tem testes
+ */
+export function buildFullTestCommand(pkg, { hasContract = false } = {}) {
+  const script = ['test:coverage', 'test'].find((name) => pkg.scripts[name]);
+  if (!script) {
+    return null;
+  }
+  const tokens = tokenizeScript(pkg.scripts[script]);
+  const contractExcluded = hasContract && tokens?.[0] === 'vitest';
+  const flags = contractExcluded ? ['--exclude', `${CONTRACT_DIR}/**`] : [];
+  return { argv: buildTestCommand(pkg, null, flags, script).argv, script, contractExcluded };
 }
 
 /** Comando de um script qualquer do pacote (`typecheck`, `build`), sem argumentos a mais. */

@@ -1,8 +1,9 @@
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { resolve } from 'node:path';
+import { relative, resolve } from 'node:path';
 import { describe, test } from 'node:test';
-import { prepareLocalDatabase } from './verify.mjs';
+import { describePackage, describeRoot, exitCodeFor, formatSummary } from './lib/verify-plan.mjs';
+import { fullSteps, prepareLocalDatabase, runSequence } from './verify.mjs';
 
 const script = resolve(import.meta.dirname, 'verify.mjs');
 
@@ -32,7 +33,7 @@ describe('linha de comando do verify', () => {
   test('quick sem nada ligado aos arquivos dados: tudo pulado, código 0', () => {
     const result = verify('quick', '--files', 'README.md');
     assert.equal(result.status, 0, result.stderr);
-    for (const name of ['lint', 'tipos', 'testes', 'contrato', 'banco']) {
+    for (const name of ['lint', 'tipos', 'testes', 'contrato', 'cliente', 'banco', 'tipos-banco']) {
       assert.match(result.stdout, new RegExp(`^– ${name}\\s+pulado`, 'm'));
     }
     assert.doesNotMatch(result.stdout, /^[✓✗]/m);
@@ -152,5 +153,152 @@ describe('Postgres local do modo rápido', () => {
       }),
       /senha incorreta/,
     );
+  });
+});
+
+describe('passos do modo completo', () => {
+  const repo = resolve(import.meta.dirname, '..');
+  const typecheck = 'tsc --noEmit -p tsconfig.json';
+  const packages = [
+    describeRoot({ name: 'nuva-edu', scripts: { 'test:scripts': 'node --test "scripts/*.mjs"' } }),
+    describePackage('database/postgres', {
+      name: '@nuva-edu/database',
+      scripts: { test: 'node --test "test/**/*.test.ts"', typecheck },
+    }),
+    describePackage('packages/core', {
+      name: '@nuva-edu/core',
+      scripts: {
+        test: 'vitest run',
+        'test:coverage': 'vitest run --coverage',
+        typecheck,
+        'db:types:check': 'node scripts/db-types.ts --verify',
+      },
+      devDependencies: { '@nuva-edu/database': 'workspace:*' },
+    }),
+    describePackage('apps/admin-api', {
+      name: '@nuva-edu/admin-api',
+      scripts: { test: 'vitest run', typecheck, build: 'tsc -p tsconfig.build.json' },
+      dependencies: { '@nuva-edu/core': 'workspace:*' },
+    }),
+  ];
+  const serverEnv = { DATABASE_URL: 'postgres://isolado' };
+
+  /**
+   * Roda a sequência com processos e Postgres de mentira. `outcome(comando, pasta)` devolve o
+   * código de saída; o padrão é 0.
+   */
+  async function runFull(t, { outcome = () => 0, list = packages, files = [], docker = true }) {
+    t.mock.method(console, 'log', () => {});
+    t.mock.method(console, 'error', () => {});
+    const calls = [];
+    let servers = 0;
+    const steps = await runSequence(
+      fullSteps({
+        packages: list,
+        exists: (path) => files.some((file) => file === path || file.startsWith(`${path}/`)),
+        ensureServer: async () => {
+          servers += 1;
+          return docker ? serverEnv : null;
+        },
+        exec: async (argv, { cwd, env = {} } = {}) => {
+          const call = { command: argv.join(' '), dir: relative(repo, cwd), env };
+          calls.push(call);
+          return outcome(call.command, call.dir);
+        },
+      }),
+      [],
+    );
+    return {
+      steps,
+      calls,
+      servers,
+      status: Object.fromEntries(steps.map((s) => [s.name, s.status])),
+    };
+  }
+
+  test('tudo certo: confere os tipos do banco, no Postgres isolado, antes dos testes', async (t) => {
+    const { steps, calls, status } = await runFull(t, {});
+    assert.deepEqual(
+      steps.map((step) => step.name),
+      ['lint', 'tipos', 'tipos-banco', 'testes', 'contrato', 'banco', 'build'],
+    );
+    assert.equal(status['tipos-banco'], 'ok');
+    const check = calls.find((call) => call.command === 'node scripts/db-types.ts --verify');
+    assert.equal(check.dir, 'packages/core');
+    assert.equal(check.env.DATABASE_URL, serverEnv.DATABASE_URL);
+    const order = calls.map((call) => call.command);
+    assert.ok(order.indexOf(check.command) < order.indexOf('vitest run --coverage'));
+  });
+
+  test('migration sem tipos regenerados: falha em tipos-banco e para ali, código 1', async (t) => {
+    // Dublê do `db:types:check`: o gerado não bate com o banco das migrations.
+    const { steps, calls, status } = await runFull(t, {
+      outcome: (command) => (command.includes('db-types.ts --verify') ? 1 : 0),
+    });
+    assert.equal(status['tipos-banco'], 'fail');
+    assert.match(steps[2].note, /falhou em core: tipos gerados diferem das migrations/);
+    for (const name of ['testes', 'contrato', 'banco', 'build']) {
+      assert.equal(status[name], 'not-run', name);
+    }
+    assert.ok(!calls.some((call) => call.command.startsWith('vitest')));
+    assert.match(formatSummary(steps), /^✗ tipos-banco/m);
+    assert.equal(exitCodeFor(steps), 1);
+  });
+
+  test('sem pacote com db:types:check o passo é pulado e os demais rodam', async (t) => {
+    const list = packages.filter((pkg) => pkg.name !== '@nuva-edu/core');
+    const { status } = await runFull(t, { list });
+    assert.equal(status['tipos-banco'], 'skipped');
+    assert.equal(status.testes, 'ok');
+  });
+
+  test('sem Docker: tipos-banco falha como ambiente indisponível, código 2', async (t) => {
+    const { steps, status, calls } = await runFull(t, { docker: false });
+    assert.equal(status['tipos-banco'], 'fail');
+    assert.equal(exitCodeFor(steps), 2);
+    assert.ok(!calls.some((call) => call.command.includes('db-types')));
+  });
+
+  test('contrato roda uma vez só: fora da suíte da API, dentro do passo contrato', async (t) => {
+    const { calls, steps, status } = await runFull(t, {
+      files: ['apps/admin-api/test/contract/contract.test.ts'],
+    });
+    const api = calls.filter(
+      (call) => call.dir === 'apps/admin-api' && /^vitest/.test(call.command),
+    );
+    assert.deepEqual(
+      api.map((call) => call.command),
+      ['vitest run --exclude test/contract/**', 'vitest run test/contract'],
+    );
+    assert.equal(status.contrato, 'ok');
+    assert.doesNotMatch(steps.find((step) => step.name === 'contrato').note, /já rodou/);
+  });
+
+  test('executor que não sabe excluir: o contrato roda com a suíte e não se repete', async (t) => {
+    const list = packages.map((pkg) =>
+      pkg.name === '@nuva-edu/admin-api'
+        ? { ...pkg, scripts: { ...pkg.scripts, test: 'node --test "test/**/*.test.ts"' } }
+        : pkg,
+    );
+    const { calls, steps } = await runFull(t, {
+      list,
+      files: ['apps/admin-api/test/contract/contract.test.ts'],
+    });
+    const api = calls.filter(
+      (call) => call.dir === 'apps/admin-api' && /--test/.test(call.command),
+    );
+    assert.deepEqual(
+      api.map((call) => call.command),
+      ['node --test test/**/*.test.ts'],
+    );
+    const contract = steps.find((step) => step.name === 'contrato');
+    assert.equal(contract.status, 'ok');
+    assert.match(contract.note, /admin-api: já rodou no passo testes/);
+  });
+
+  test('sem test/contract em nenhum pacote, o passo contrato é pulado', async (t) => {
+    const { status, calls } = await runFull(t, {});
+    assert.equal(status.contrato, 'skipped');
+    assert.ok(calls.some((call) => call.dir === 'apps/admin-api' && call.command === 'vitest run'));
   });
 });

@@ -1,7 +1,9 @@
 import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
 import {
+  API_CLIENT_PACKAGE,
   addExplicitTests,
+  buildFullTestCommand,
   buildScriptCommand,
   buildTestCommand,
   DATABASE_PACKAGE,
@@ -364,6 +366,118 @@ describe('plano do modo rápido', () => {
   });
 });
 
+describe('plano do modo rápido: cliente gerado e tipos do banco', () => {
+  const withGenerated = [
+    ...packages.map((pkg) =>
+      pkg.name === '@nuva-edu/core'
+        ? {
+            ...pkg,
+            scripts: { ...pkg.scripts, 'db:types:check': 'node scripts/db-types.ts --verify' },
+          }
+        : pkg,
+    ),
+    describePackage('packages/api-client', {
+      name: API_CLIENT_PACKAGE,
+      scripts: {
+        check: 'node scripts/check.mjs',
+        test: 'node scripts/check.mjs && vitest run',
+        'test:files': 'vitest run',
+        typecheck,
+      },
+    }),
+  ];
+  const plan = (exists, ...paths) =>
+    planQuick({ changed: changedOf(...paths), packages: withGenerated, exists });
+
+  test('openapi.yaml alterado: contrato da API e conferência do cliente gerado', () => {
+    const result = plan(
+      disk('apps/classroom-api/test/contract/routes.test.ts'),
+      'apps/classroom-api/openapi.yaml',
+    );
+    assert.deepEqual([...result.contract], [['@nuva-edu/classroom-api', ['test/contract']]]);
+    assert.deepEqual(result.client, [API_CLIENT_PACKAGE]);
+    assert.deepEqual(result.dbTypes, []);
+  });
+
+  test('API ainda sem teste de contrato: o cliente é conferido mesmo assim', () => {
+    const result = plan(disk(), 'apps/classroom-api/openapi.yaml');
+    assert.equal(result.contract.size, 0);
+    assert.deepEqual(result.client, [API_CLIENT_PACKAGE]);
+  });
+
+  test('contrato apagado também confere o cliente', () => {
+    const result = planQuick({
+      changed: [{ path: 'apps/classroom-api/openapi.yaml', deleted: true }],
+      packages: withGenerated,
+      exists: disk(),
+    });
+    assert.deepEqual(result.client, [API_CLIENT_PACKAGE]);
+  });
+
+  test('gerado ou gerador do cliente mexido à mão: confere; resto do pacote, não', () => {
+    assert.deepEqual(plan(disk(), 'packages/api-client/src/generated/admin.ts').client, [
+      API_CLIENT_PACKAGE,
+    ]);
+    assert.deepEqual(plan(disk(), 'packages/api-client/scripts/contracts.mjs').client, [
+      API_CLIENT_PACKAGE,
+    ]);
+    assert.deepEqual(plan(disk(), 'packages/api-client/src/errors.ts').client, []);
+    assert.deepEqual(plan(disk(), 'apps/classroom-api/src/routes/meta.ts').client, []);
+    assert.deepEqual(plan(disk(), 'openapi.yaml').client, []);
+  });
+
+  test('sem o pacote do cliente, ou sem script de conferência, nada a conferir', () => {
+    const without = planQuick({
+      changed: changedOf('apps/classroom-api/openapi.yaml'),
+      packages,
+      exists: disk(),
+    });
+    assert.deepEqual(without.client, []);
+    const bare = planQuick({
+      changed: changedOf('apps/classroom-api/openapi.yaml'),
+      packages: [...packages, describePackage('packages/api-client', { name: API_CLIENT_PACKAGE })],
+      exists: disk(),
+    });
+    assert.deepEqual(bare.client, []);
+  });
+
+  test('migration alterada: testes de banco e conferência dos tipos gerados', () => {
+    const result = plan(disk(), 'database/postgres/migrations/0003_users.sql');
+    assert.deepEqual([...result.database], [[DATABASE_PACKAGE, null]]);
+    assert.deepEqual(result.dbTypes, ['@nuva-edu/core']);
+    assert.deepEqual(result.client, []);
+  });
+
+  test('migration apagada também confere os tipos', () => {
+    const result = planQuick({
+      changed: [{ path: 'database/postgres/migrations/0003_users.sql', deleted: true }],
+      packages: withGenerated,
+      exists: disk(),
+    });
+    assert.deepEqual(result.dbTypes, ['@nuva-edu/core']);
+  });
+
+  test('tipos gerados ou gerador mexidos à mão: confere; outra mudança no pacote, não', () => {
+    assert.deepEqual(plan(disk(), 'packages/core/src/db/generated/database.ts').dbTypes, [
+      '@nuva-edu/core',
+    ]);
+    assert.deepEqual(plan(disk(), 'packages/core/scripts/db-types.ts').dbTypes, ['@nuva-edu/core']);
+    assert.deepEqual(plan(disk(), 'packages/core/src/access.ts').dbTypes, []);
+    assert.deepEqual(plan(disk(), 'database/postgres/src/migrator.ts').dbTypes, []);
+    assert.deepEqual(plan(disk(), 'database/postgres/test/schema.test.ts').dbTypes, []);
+  });
+
+  test('sem pacote com db:types:check, migration só roda os testes de banco', () => {
+    const result = planQuick({
+      changed: changedOf('database/postgres/migrations/0003_users.sql'),
+      packages,
+      exists: disk(),
+    });
+    assert.deepEqual(result.dbTypes, []);
+    assert.deepEqual([...result.database], [[DATABASE_PACKAGE, null]]);
+  });
+});
+
 describe('testes explícitos depois de --', () => {
   const existsAll = disk(
     'apps/classroom-api/test/pedidos.test.ts',
@@ -485,6 +599,45 @@ describe('comandos', () => {
       filtered: true,
     });
     assert.deepEqual(buildTestCommand(pkg, null).argv, ['pnpm', 'run', 'test']);
+  });
+
+  test('completo: API com test/contract roda a suíte sem a pasta de contrato', () => {
+    const api = byName('@nuva-edu/classroom-api');
+    assert.deepEqual(buildFullTestCommand(api, { hasContract: true }), {
+      argv: ['vitest', 'run', '--exclude', 'test/contract/**'],
+      script: 'test',
+      contractExcluded: true,
+    });
+    assert.deepEqual(buildFullTestCommand(api).argv, ['vitest', 'run']);
+    assert.equal(buildFullTestCommand(api).contractExcluded, false);
+  });
+
+  test('completo: test:coverage substitui test; executor sem exclusão roda tudo', () => {
+    const covered = describePackage('packages/core', {
+      name: '@nuva-edu/core',
+      scripts: { test: 'vitest run', 'test:coverage': 'vitest run --coverage' },
+    });
+    assert.deepEqual(buildFullTestCommand(covered, { hasContract: true }), {
+      argv: ['vitest', 'run', '--coverage', '--exclude', 'test/contract/**'],
+      script: 'test:coverage',
+      contractExcluded: true,
+    });
+    const nodeTest = describePackage('apps/x', {
+      name: 'x',
+      scripts: { test: 'node --test "test/**/*.test.ts"' },
+    });
+    assert.deepEqual(buildFullTestCommand(nodeTest, { hasContract: true }), {
+      argv: ['node', '--test', 'test/**/*.test.ts'],
+      script: 'test',
+      contractExcluded: false,
+    });
+    const shell = describePackage('apps/y', { name: 'y', scripts: { test: 'a && vitest run' } });
+    assert.deepEqual(buildFullTestCommand(shell, { hasContract: true }), {
+      argv: ['pnpm', 'run', 'test'],
+      script: 'test',
+      contractExcluded: false,
+    });
+    assert.equal(buildFullTestCommand(describePackage('apps/z', { name: 'z' })), null);
   });
 
   test('script com shell não é filtrado; pacote sem script devolve null', () => {

@@ -8,9 +8,13 @@ import { delimiter, join, resolve } from 'node:path';
 import { performance } from 'node:perf_hooks';
 import {
   addExplicitTests,
+  buildFullTestCommand,
   buildScriptCommand,
   buildTestCommand,
+  CONTRACT_DIR,
+  clientCheckScript,
   DATABASE_PACKAGE,
+  DB_TYPES_SCRIPT,
   describePackage,
   describeRoot,
   exitCodeFor,
@@ -146,7 +150,7 @@ function heading(name) {
  * Executa um passo e registra o resultado. `body` devolve `{ status, note, environment }`;
  * `status` em `ok` | `fail` | `skipped`.
  */
-async function step(name, body) {
+async function step(name, body, into = steps) {
   const started = performance.now();
   let outcome;
   try {
@@ -156,7 +160,7 @@ async function step(name, body) {
     outcome = { status: 'fail', note: 'erro inesperado' };
   }
   const entry = { name, ms: performance.now() - started, ...outcome };
-  steps.push(entry);
+  into.push(entry);
   return entry;
 }
 
@@ -166,7 +170,11 @@ function finish() {
 }
 
 /** Roda os testes de vários pacotes, um de cada vez. `targets`: mapa nome → arquivos ou `null`. */
-async function runTests(packages, targets, { flags = [], env = {}, stopOnFailure = false } = {}) {
+async function runTests(
+  packages,
+  targets,
+  { flags = [], env = {}, stopOnFailure = false, exec = run } = {},
+) {
   const failed = [];
   let files = 0;
   for (const [name, list] of targets) {
@@ -184,7 +192,7 @@ async function runTests(packages, targets, { flags = [], env = {}, stopOnFailure
     }
     files += list?.length ?? 0;
     heading(`${shortName(name)}: ${command.argv.join(' ')}`);
-    const code = await run(command.argv, { cwd: join(root, pkg.dir), env });
+    const code = await exec(command.argv, { cwd: join(root, pkg.dir), env });
     if (code !== 0) {
       failed.push(shortName(name));
       if (stopOnFailure) {
@@ -199,12 +207,12 @@ async function runTests(packages, targets, { flags = [], env = {}, stopOnFailure
   return { status: 'ok', note: files > 0 ? `${plural(files, 'arquivo')}; ${names}` : names };
 }
 
-async function runScripts(packages, scriptName, env = {}) {
+async function runScripts(packages, scriptName, { env = {}, exec = run } = {}) {
   const failed = [];
   for (const pkg of packages) {
     const argv = buildScriptCommand(pkg, scriptName);
     heading(`${shortName(pkg.name)}: ${argv.join(' ')}`);
-    if ((await run(argv, { cwd: join(root, pkg.dir), env })) !== 0) {
+    if ((await exec(argv, { cwd: join(root, pkg.dir), env })) !== 0) {
       failed.push(shortName(pkg.name));
     }
   }
@@ -358,7 +366,7 @@ async function quick(options) {
       return pkg && usesDatabase(pkg, packages);
     });
   let database = { ok: true };
-  if ([plan.tests, plan.contract, plan.database].some(needsDatabase)) {
+  if (plan.dbTypes.length > 0 || [plan.tests, plan.contract, plan.database].some(needsDatabase)) {
     const prepared = await step('postgres', async () => {
       heading('postgres local');
       let result;
@@ -401,6 +409,16 @@ async function quick(options) {
     return runTests(packages, plan.contract, { flags: extra.flags, env });
   });
 
+  // Contrato alterado: o cliente gerado em `packages/api-client` tem de acompanhar.
+  await step('cliente', async () => {
+    const targets = packages.filter((pkg) => plan.client.includes(pkg.name));
+    if (targets.length === 0) {
+      return { status: 'skipped', note: 'sem mudança' };
+    }
+    const result = await runScripts(targets, clientCheckScript(targets[0]), { env });
+    return result.status === 'ok' ? { ...result, note: 'gerado em dia com os contratos' } : result;
+  });
+
   await step('banco', async () => {
     if (plan.database.size === 0) {
       return { status: 'skipped', note: 'sem mudança' };
@@ -415,19 +433,205 @@ async function quick(options) {
       : result;
   });
 
+  // Migration alterada: os tipos gerados do banco têm de acompanhar.
+  await step('tipos-banco', async () => {
+    const targets = packages.filter((pkg) => plan.dbTypes.includes(pkg.name));
+    if (targets.length === 0) {
+      return { status: 'skipped', note: 'sem mudança' };
+    }
+    if (!database.ok) {
+      return { status: 'fail', note: 'Postgres local fora do ar', environment: true };
+    }
+    return runScripts(targets, DB_TYPES_SCRIPT);
+  });
+
   return finish();
 }
 
-async function full(options) {
-  const packages = loadPackages();
+/**
+ * Passos do modo completo, na ordem. Separado de `full` para os testes trocarem o que toca o
+ * ambiente.
+ *
+ * @param packages      pacotes do workspace mais a raiz
+ * @param exists        `(caminho relativo à raiz) => boolean`
+ * @param ensureServer  sobe o Postgres isolado (uma vez) e devolve as variáveis de ambiente que
+ *                      apontam para ele, ou `null` se não conseguiu
+ * @param exec          roda um comando: `(argv, { cwd, env }) => código de saída`
+ * @returns lista de `[nome, corpo]`
+ */
+export function fullSteps({ packages, exists: has, ensureServer, exec = run, e2e = false }) {
   const workspace = packages.filter((pkg) => pkg.dir !== '');
   const rootPackage = packages.find((pkg) => pkg.dir === '');
   const databasePackage = workspace.find((pkg) => pkg.name === DATABASE_PACKAGE);
   const e2ePackage = workspace.find((pkg) => pkg.dir === 'e2e');
-  console.log(`verify:full${options.e2e ? ' --e2e' : ''} — ${plural(workspace.length, 'pacote')}`);
+  const noDocker = { status: 'fail', note: 'Testcontainers indisponível', environment: true };
+  const withContract = workspace.filter((pkg) => has(`${pkg.dir}/${CONTRACT_DIR}`));
+  // Pacotes cujos testes de contrato já rodaram junto com a suíte, no passo "testes".
+  const contractInSuite = new Set();
+
+  const sequence = [
+    [
+      'lint',
+      async () => {
+        heading('biome check .');
+        const code = await exec(['biome', 'check', '.'], { cwd: root });
+        return { status: code === 0 ? 'ok' : 'fail', note: 'repositório inteiro' };
+      },
+    ],
+    [
+      'tipos',
+      async () => {
+        const targets = workspace.filter((pkg) => pkg.scripts.typecheck);
+        if (targets.length === 0) {
+          return { status: 'skipped', note: 'nenhum pacote com script typecheck' };
+        }
+        return runScripts(targets, 'typecheck', { exec });
+      },
+    ],
+    [
+      // Migration nova sem os tipos regenerados falha aqui, antes de qualquer teste rodar
+      // contra tipos que não descrevem o banco.
+      'tipos-banco',
+      async () => {
+        const targets = workspace.filter((pkg) => pkg.scripts[DB_TYPES_SCRIPT]);
+        if (targets.length === 0) {
+          return { status: 'skipped', note: `nenhum pacote com script ${DB_TYPES_SCRIPT}` };
+        }
+        const env = await ensureServer();
+        if (!env) {
+          return noDocker;
+        }
+        const result = await runScripts(targets, DB_TYPES_SCRIPT, { env, exec });
+        return result.status === 'fail'
+          ? { ...result, note: `${result.note}: tipos gerados diferem das migrations` }
+          : result;
+      },
+    ],
+    [
+      'testes',
+      async () => {
+        const targets = [rootPackage, ...workspace]
+          .filter((pkg) => pkg && pkg !== databasePackage && pkg !== e2ePackage)
+          .filter((pkg) => pkg.scripts.test || pkg.scripts['test:coverage']);
+        if (targets.length === 0) {
+          return { status: 'skipped', note: 'nenhum pacote com script test' };
+        }
+        const env = await ensureServer();
+        if (!env) {
+          return noDocker;
+        }
+        const failed = [];
+        const notes = [];
+        for (const pkg of targets) {
+          const hasContract = withContract.includes(pkg);
+          const command = buildFullTestCommand(pkg, { hasContract });
+          heading(`${shortName(pkg.name)}: ${command.argv.join(' ')}`);
+          if ((await exec(command.argv, { cwd: join(root, pkg.dir), env })) !== 0) {
+            failed.push(shortName(pkg.name));
+            break;
+          }
+          if (hasContract && !command.contractExcluded) {
+            contractInSuite.add(pkg.name);
+          }
+          notes.push(
+            shortName(pkg.name) + (command.script === 'test:coverage' ? ' com cobertura' : ''),
+          );
+        }
+        if (failed.length > 0) {
+          return { status: 'fail', note: `falhou em ${failed.join(', ')}` };
+        }
+        const core = workspace.find((pkg) => pkg.dir === 'packages/core');
+        if (core && !core.scripts['test:coverage']) {
+          notes.push('AVISO: core sem script test:coverage, cobertura não medida');
+        }
+        return { status: 'ok', note: notes.join(', ') };
+      },
+    ],
+    [
+      'contrato',
+      async () => {
+        if (withContract.length === 0) {
+          return { status: 'skipped', note: 'sem testes de contrato' };
+        }
+        // O passo "testes" deixou `test/contract` de fora; o que ele não conseguiu separar
+        // (executor sem exclusão) já rodou lá e não roda de novo.
+        const targets = new Map(
+          withContract
+            .filter((pkg) => !contractInSuite.has(pkg.name))
+            .map((pkg) => [pkg.name, [CONTRACT_DIR]]),
+        );
+        const already = [...contractInSuite].map(shortName);
+        const alreadyNote = `${already.join(', ')}: já rodou no passo testes`;
+        if (targets.size === 0) {
+          return { status: 'ok', note: alreadyNote };
+        }
+        const env = await ensureServer();
+        if (!env) {
+          return noDocker;
+        }
+        const result = await runTests(packages, targets, { env, stopOnFailure: true, exec });
+        return already.length > 0 && result.status === 'ok'
+          ? { ...result, note: `${result.note}; ${alreadyNote}` }
+          : result;
+      },
+    ],
+    [
+      'banco',
+      async () => {
+        if (!databasePackage?.scripts.test) {
+          return { status: 'skipped', note: 'sem testes de banco' };
+        }
+        const env = await ensureServer();
+        if (!env) {
+          return noDocker;
+        }
+        return runTests(packages, new Map([[databasePackage.name, null]]), { env, exec });
+      },
+    ],
+    [
+      'build',
+      async () => {
+        const targets = workspace.filter((pkg) => pkg.scripts.build);
+        if (targets.length === 0) {
+          return { status: 'skipped', note: 'nenhum pacote com script build' };
+        }
+        return runScripts(targets, 'build', { exec });
+      },
+    ],
+  ];
+  if (e2e) {
+    sequence.push([
+      'e2e',
+      async () => {
+        if (!e2ePackage?.scripts.test) {
+          return { status: 'skipped', note: 'sem testes de ponta a ponta ainda' };
+        }
+        return runScripts([e2ePackage], 'test', { exec });
+      },
+    ]);
+  }
+  return sequence;
+}
+
+/** Roda os passos na ordem e para no primeiro que falhar; os seguintes ficam como "não rodou". */
+export async function runSequence(sequence, into = steps) {
+  let stopped = false;
+  for (const [name, body] of sequence) {
+    if (stopped) {
+      into.push({ name, status: 'not-run', ms: 0 });
+    } else if ((await step(name, body, into)).status === 'fail') {
+      stopped = true;
+    }
+  }
+  return into;
+}
+
+async function full(options) {
+  const packages = loadPackages();
+  const count = packages.filter((pkg) => pkg.dir !== '').length;
+  console.log(`verify:full${options.e2e ? ' --e2e' : ''} — ${plural(count, 'pacote')}`);
 
   let server = null;
-  let env = {};
   const stopServer = async () => {
     const running = server;
     server = null;
@@ -447,131 +651,15 @@ async function full(options) {
         console.error(
           `Não consegui subir o PostgreSQL pelo Testcontainers: ${error instanceof Error ? error.message : String(error)}\nO Docker está no ar?`,
         );
-        return false;
+        return null;
       }
-      env = { NUVA_TEST_DB: 'container', NUVA_TEST_PG_URL: server.url, DATABASE_URL: server.url };
       console.log('PostgreSQL isolado no ar.');
     }
-    return true;
+    return { NUVA_TEST_DB: 'container', NUVA_TEST_PG_URL: server.url, DATABASE_URL: server.url };
   };
-  const noDocker = { status: 'fail', note: 'Testcontainers indisponível', environment: true };
-
-  const sequence = [
-    [
-      'lint',
-      async () => {
-        heading('biome check .');
-        const code = await run(['biome', 'check', '.']);
-        return { status: code === 0 ? 'ok' : 'fail', note: 'repositório inteiro' };
-      },
-    ],
-    [
-      'tipos',
-      async () => {
-        const targets = workspace.filter((pkg) => pkg.scripts.typecheck);
-        if (targets.length === 0) {
-          return { status: 'skipped', note: 'nenhum pacote com script typecheck' };
-        }
-        return runScripts(targets, 'typecheck');
-      },
-    ],
-    [
-      'testes',
-      async () => {
-        // `test:coverage`, quando existe, substitui `test`: é onde o pacote impõe a meta de
-        // cobertura (packages/core, 80% de linhas).
-        const targets = [rootPackage, ...workspace]
-          .filter((pkg) => pkg !== databasePackage && pkg !== e2ePackage)
-          .filter((pkg) => pkg.scripts.test || pkg.scripts['test:coverage']);
-        if (targets.length === 0) {
-          return { status: 'skipped', note: 'nenhum pacote com script test' };
-        }
-        if (!(await ensureServer())) {
-          return noDocker;
-        }
-        const failed = [];
-        const notes = [];
-        for (const pkg of targets) {
-          const script = pkg.scripts['test:coverage'] ? 'test:coverage' : 'test';
-          const command = buildTestCommand(pkg, null, [], script);
-          heading(`${shortName(pkg.name)}: ${command.argv.join(' ')}`);
-          if ((await run(command.argv, { cwd: join(root, pkg.dir), env })) !== 0) {
-            failed.push(shortName(pkg.name));
-            break;
-          }
-          notes.push(shortName(pkg.name) + (script === 'test:coverage' ? ' com cobertura' : ''));
-        }
-        if (failed.length > 0) {
-          return { status: 'fail', note: `falhou em ${failed.join(', ')}` };
-        }
-        const core = workspace.find((pkg) => pkg.dir === 'packages/core');
-        if (core && !core.scripts['test:coverage']) {
-          notes.push('AVISO: core sem script test:coverage, cobertura não medida');
-        }
-        return { status: 'ok', note: notes.join(', ') };
-      },
-    ],
-    [
-      'contrato',
-      async () => {
-        const targets = new Map(
-          workspace
-            .filter((pkg) => exists(`${pkg.dir}/test/contract`))
-            .map((pkg) => [pkg.name, ['test/contract']]),
-        );
-        if (targets.size === 0) {
-          return { status: 'skipped', note: 'sem testes de contrato' };
-        }
-        if (!(await ensureServer())) {
-          return noDocker;
-        }
-        return runTests(packages, targets, { env, stopOnFailure: true });
-      },
-    ],
-    [
-      'banco',
-      async () => {
-        if (!databasePackage?.scripts.test) {
-          return { status: 'skipped', note: 'sem testes de banco' };
-        }
-        if (!(await ensureServer())) {
-          return noDocker;
-        }
-        return runTests(packages, new Map([[databasePackage.name, null]]), { env });
-      },
-    ],
-    [
-      'build',
-      async () => {
-        const targets = workspace.filter((pkg) => pkg.scripts.build);
-        if (targets.length === 0) {
-          return { status: 'skipped', note: 'nenhum pacote com script build' };
-        }
-        return runScripts(targets, 'build');
-      },
-    ],
-  ];
-  if (options.e2e) {
-    sequence.push([
-      'e2e',
-      async () => {
-        if (!e2ePackage?.scripts.test) {
-          return { status: 'skipped', note: 'sem testes de ponta a ponta ainda' };
-        }
-        return runScripts([e2ePackage], 'test');
-      },
-    ]);
-  }
 
   try {
-    let stopped = false;
-    for (const [name, body] of sequence) {
-      if (stopped) {
-        steps.push({ name, status: 'not-run', ms: 0 });
-      } else if ((await step(name, body)).status === 'fail') {
-        stopped = true;
-      }
-    }
+    await runSequence(fullSteps({ packages, exists, ensureServer, e2e: options.e2e }));
   } finally {
     await stopServer();
   }
