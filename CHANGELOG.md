@@ -6,6 +6,7 @@ Detalhe das decisões em `specs/decisions/`.
 ## [Não lançado]
 
 ### Adicionado
+- Janela de contrato provada no repositório com o `task.mjs` (`--join`, `pronta`, fechamento único).
 - Marca da escola no `/api/v1/meta` (logotipo, cor de destaque, código-fonte): contrato, duas APIs, cliente e sites.
 - Teste de contrato confere as respostas de erro declaradas; worker lê o fuso de `school.timezone`.
 - Processo: a janela de contrato chega à `main` por um único branch (ADR 0022, spec 002); spec 003 alinhada: a subida barra só rota × operação.
