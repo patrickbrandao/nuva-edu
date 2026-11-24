@@ -13,6 +13,7 @@ Detalhe das decisões em `specs/decisions/`.
 - Monorepo pnpm 12, TypeScript 7, Biome, lefthook (lint no pre-commit, commit validado).
 - `pnpm db:migrate` (`up`, `down`, `status`, `template`), migration 0001 (`settings`) e banco modelo dos testes.
 - `packages/ui` (`@nuva-edu/ui`): tokens, Inter, primitivos, painel admin, preços e tema Sistema/Claro/Escuro do minui; catálogo e testes de renderização.
+- `packages/api-client` (`@nuva-edu/api-client`): clientes tipados da admin-api e da classroom-api gerados dos contratos, erro problem+json (`ApiError`), fluxo SSE tipado e verificação de gerado desatualizado.
 
 ### Decisões
 - Instalável, uma escola por instalação; AGPL-3.0.
