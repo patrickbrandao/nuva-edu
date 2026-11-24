@@ -32,21 +32,35 @@ export const USER_EVENT_KINDS = [
 
 export type UserEventKind = (typeof USER_EVENT_KINDS)[number];
 
-export interface UserEventInput {
+/**
+ * O `data` de cada evento: o mesmo mapa dos esquemas `Stream*Data` do contrato da classroom-api
+ * (spec 004). Evento com formato errado não compila. Os identificadores são UUID em texto.
+ */
+export interface UserEventData {
+  'dm.message.created': { conversationId: string; messageId: string };
+  'dm.message.read': { conversationId: string; messageId: string };
+  'dm.message.deleted': { conversationId: string; messageId: string };
+  'notification.created': { notificationId: string; type: string; unreadCount: number };
+  'forum.post.created': { topicId: string; postId: string };
+  'announcement.published': { announcementId: string; unreadCount: number };
+  presence: { userId: string; online: boolean };
+}
+
+export interface UserEventInput<K extends UserEventKind = UserEventKind> {
   /** Destinatário: só as conexões SSE dele recebem. */
   userId: string;
-  kind: UserEventKind;
+  kind: K;
   /** Só identificadores (spec 004): o conteúdo é buscado pela rota normal, que checa permissão. */
-  data?: Readonly<Record<string, unknown>>;
+  data: Readonly<UserEventData[K]>;
 }
 
 /** A carga do `NOTIFY`, no formato que a classroom-api lê. */
-export interface PublishedUserEvent {
+export interface PublishedUserEvent<K extends UserEventKind = UserEventKind> {
   userId: string;
-  kind: UserEventKind;
+  kind: K;
   /** Inteiro crescente gerado no banco; vira o campo `id` do SSE. */
   id: number;
-  data: Readonly<Record<string, unknown>>;
+  data: Readonly<UserEventData[K]>;
 }
 
 /** Devolve o próximo `id` de evento, usando a mesma conexão ou transação da publicação. */
@@ -90,21 +104,22 @@ export async function nextUserEventId(db: Database): Promise<number> {
  * `{ userId, kind, id, data }`. Passe a transação da escrita de negócio: o aviso só sai no
  * COMMIT, e não sai se a transação for desfeita.
  *
- * Lança `TypeError` para `userId` ou `kind` fora do formato (erro de quem chama) e
+ * O `data` é tipado pelo `kind` (`UserEventData`); em execução só se confere que é um objeto.
+ * Lança `TypeError` para `userId`, `kind` ou `data` fora do formato (erro de quem chama) e
  * `user_event_too_large` (500) quando a carga não cabe no NOTIFY; nesse caso nada é publicado.
  */
-export async function publishUserEvent(
+export async function publishUserEvent<K extends UserEventKind>(
   db: Database,
-  input: UserEventInput,
+  input: UserEventInput<K>,
   options: PublishUserEventOptions = {},
-): Promise<PublishedUserEvent> {
+): Promise<PublishedUserEvent<K>> {
   if (typeof input.userId !== 'string' || !UUID_PATTERN.test(input.userId)) {
     throw new TypeError('publishUserEvent: userId precisa ser um UUID.');
   }
   if (!isUserEventKind(input.kind)) {
     throw new TypeError(`publishUserEvent: evento desconhecido "${String(input.kind)}".`);
   }
-  const data = input.data ?? {};
+  const data = input.data;
   if (typeof data !== 'object' || data === null || Array.isArray(data)) {
     throw new TypeError('publishUserEvent: data precisa ser um objeto.');
   }
@@ -116,7 +131,7 @@ export async function publishUserEvent(
   if (!Number.isSafeInteger(id) || id < 0) {
     throw new TypeError('publishUserEvent: o gerador devolveu um id que não é inteiro válido.');
   }
-  const event: PublishedUserEvent = { ...base, id, data };
+  const event: PublishedUserEvent<K> = { ...base, id, data };
   await sql`SELECT pg_notify(${USER_EVENTS_CHANNEL}, ${JSON.stringify(event)})`.execute(db);
   return event;
 }

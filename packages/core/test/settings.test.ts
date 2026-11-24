@@ -3,8 +3,10 @@ import { afterAll, beforeAll, beforeEach, describe, expect, inject, it } from 'v
 import {
   closeDatabase,
   createDatabase,
+  createLogger,
   createSettingsReader,
   type Database,
+  DEFAULT_SOURCE_CODE_URL,
   getSchoolName,
   getSchoolTimezone,
   getSetting,
@@ -14,8 +16,12 @@ import {
   SETTING_DEFAULTS,
   SETTING_KEYS,
   SETTINGS_CACHE_TTL_MS,
+  SOURCE_CODE_URL_MAX_LENGTH,
+  schoolLogoUrl,
   setSetting,
 } from '../src/index.ts';
+
+const LOGO_ID = '019aa3f2-7b1c-7e55-9a10-5299822472aa';
 
 let db: Database;
 let queries = 0;
@@ -44,7 +50,13 @@ beforeEach(async () => {
 
 describe('leitura das configurações', () => {
   it('as chaves passam na restrição de formato da tabela', () => {
-    expect(SETTING_KEYS).toEqual(['school.name', 'school.timezone']);
+    expect(SETTING_KEYS).toEqual([
+      'school.name',
+      'school.timezone',
+      'school.logo_image_id',
+      'school.accent_color',
+      'school.source_code_url',
+    ]);
     for (const key of SETTING_KEYS) {
       expect(key).toMatch(/^[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*)*$/);
     }
@@ -56,12 +68,63 @@ describe('leitura das configurações', () => {
     expect(await getSettings(db)).toEqual(SETTING_DEFAULTS);
   });
 
+  it('banco sem linha em settings devolve todos os padrões da tabela da spec 031', async () => {
+    const count = await sql<{
+      n: number;
+    }>`SELECT count(*)::int AS n FROM settings WHERE key LIKE 'school.%'`.execute(db);
+    expect(count.rows[0]?.n).toBe(0);
+    const defaults = {
+      'school.name': 'nuva-edu',
+      'school.timezone': 'America/Sao_Paulo',
+      'school.logo_image_id': null,
+      'school.accent_color': null,
+      'school.source_code_url': 'https://github.com/patrickbrandao/nuva-edu',
+    };
+    expect(SETTING_DEFAULTS).toEqual(defaults);
+    expect(DEFAULT_SOURCE_CODE_URL).toBe(defaults['school.source_code_url']);
+    expect(await getSettings(db)).toEqual(defaults);
+    expect(await createSettingsReader(db).all()).toEqual(defaults);
+    for (const key of SETTING_KEYS) {
+      expect(await getSetting(db, key)).toBe(defaults[key]);
+    }
+  });
+
+  it('grava e lê a marca da escola: logotipo, cor e endereço do código', async () => {
+    expect(await setSetting(db, 'school.logo_image_id', LOGO_ID.toUpperCase())).toBe(LOGO_ID);
+    expect(await setSetting(db, 'school.accent_color', '#1A2b3C')).toBe('#1A2b3C');
+    expect(
+      await setSetting(db, 'school.source_code_url', '  https://git.escola.example/fork  '),
+    ).toBe('https://git.escola.example/fork');
+    expect(await getSettings(db)).toEqual({
+      ...SETTING_DEFAULTS,
+      'school.logo_image_id': LOGO_ID,
+      'school.accent_color': '#1A2b3C',
+      'school.source_code_url': 'https://git.escola.example/fork',
+    });
+    expect(schoolLogoUrl(await getSetting(db, 'school.logo_image_id'))).toBe(
+      `/api/v1/images/${LOGO_ID}/256.webp`,
+    );
+
+    // Nulo gravado é valor válido (sem logotipo, cor padrão), não ausência.
+    expect(await setSetting(db, 'school.logo_image_id', null)).toBeNull();
+    expect(await setSetting(db, 'school.accent_color', null)).toBeNull();
+    const rows = await db
+      .selectFrom('settings')
+      .select(['key', 'value'])
+      .where('key', 'in', ['school.logo_image_id', 'school.accent_color'])
+      .execute();
+    expect(rows.map((row) => row.value)).toEqual([null, null]);
+    expect(await getSetting(db, 'school.accent_color')).toBeNull();
+    expect(schoolLogoUrl(await getSetting(db, 'school.logo_image_id'))).toBeNull();
+  });
+
   it('devolve o que foi gravado', async () => {
     expect(await setSetting(db, 'school.name', '  Escola do Zé  ')).toBe('Escola do Zé');
     await setSetting(db, 'school.timezone', 'America/Manaus');
     expect(await getSchoolName(db)).toBe('Escola do Zé');
     expect(await getSetting(db, 'school.timezone')).toBe('America/Manaus');
     expect(await getSettings(db)).toEqual({
+      ...SETTING_DEFAULTS,
       'school.name': 'Escola do Zé',
       'school.timezone': 'America/Manaus',
     });
@@ -71,10 +134,46 @@ describe('leitura das configurações', () => {
     await sql`
       INSERT INTO settings (key, value) VALUES
         ('school.name', '{"errado": true}'::jsonb),
-        ('school.timezone', '"Marte/Olympus"'::jsonb)
+        ('school.timezone', '"Marte/Olympus"'::jsonb),
+        ('school.logo_image_id', '"não é uuid"'::jsonb),
+        ('school.accent_color', '"vermelho"'::jsonb),
+        ('school.source_code_url', '"http://sem-tls.example"'::jsonb)
     `.execute(db);
     expect(await getSettings(db)).toEqual(SETTING_DEFAULTS);
     expect(await getSchoolName(db)).toBe('nuva-edu');
+  });
+
+  it('valor inválido gera aviso no log, com a chave e sem o valor', async () => {
+    await sql`
+      INSERT INTO settings (key, value) VALUES
+        ('school.name', '"Escola Boa"'::jsonb),
+        ('school.accent_color', '"segredo-vermelho"'::jsonb),
+        ('school.source_code_url', '42'::jsonb)
+    `.execute(db);
+    const lines: string[] = [];
+    const logger = createLogger({ service: 'core-test', write: (line) => lines.push(line) });
+
+    expect(await getSettings(db, { logger })).toEqual({
+      ...SETTING_DEFAULTS,
+      'school.name': 'Escola Boa',
+    });
+    expect(lines.map((line) => JSON.parse(line))).toEqual([
+      expect.objectContaining({ level: 'warn', setting_key: 'school.accent_color' }),
+      expect.objectContaining({ level: 'warn', setting_key: 'school.source_code_url' }),
+    ]);
+    expect(lines.join('')).not.toContain('segredo-vermelho');
+
+    lines.length = 0;
+    expect(await getSetting(db, 'school.accent_color', { logger })).toBeNull();
+    expect(await getSetting(db, 'school.name', { logger })).toBe('Escola Boa');
+    expect(lines).toHaveLength(1);
+
+    // O leitor com cache avisa a cada ida ao banco, não a cada leitura.
+    lines.length = 0;
+    const reader = createSettingsReader(db, { logger });
+    expect(await reader.get('school.accent_color')).toBeNull();
+    expect(await reader.get('school.source_code_url')).toBe(DEFAULT_SOURCE_CODE_URL);
+    expect(lines).toHaveLength(2);
   });
 });
 
@@ -100,6 +199,21 @@ describe('setSetting', () => {
     ['school.timezone', 'Marte/Olympus'],
     ['school.timezone', ''],
     ['school.timezone', null as unknown as string],
+    ['school.logo_image_id', ''],
+    ['school.logo_image_id', '019aa3f2-7b1c-7e55-9a10'],
+    ['school.logo_image_id', 7 as unknown as string],
+    ['school.accent_color', 'red'],
+    ['school.accent_color', '#FFF'],
+    ['school.accent_color', '#12345G'],
+    ['school.accent_color', '1A2B3C'],
+    ['school.source_code_url', ''],
+    ['school.source_code_url', 'http://github.com/escola/fork'],
+    ['school.source_code_url', 'github.com/escola/fork'],
+    ['school.source_code_url', 'https://'],
+    ['school.source_code_url', 'https://exemplo.com/com espaço'],
+    ['school.source_code_url', 'https://usuario:senha@exemplo.com/fork'],
+    ['school.source_code_url', `https://exemplo.com/${'a'.repeat(SOURCE_CODE_URL_MAX_LENGTH)}`],
+    ['school.source_code_url', null as unknown as string],
   ] as const)('recusa %s = %j com validation_failed, sem gravar', async (key, value) => {
     const error = await setSetting(db, key, value).catch((caught: unknown) => caught);
     expect(isDomainError(error)).toBe(true);
@@ -148,10 +262,7 @@ describe('createSettingsReader', () => {
     await setSetting(db, 'school.name', 'Depois');
     expect(await reader.schoolName()).toBe('nuva-edu');
     reader.invalidate();
-    expect(await reader.all()).toEqual({
-      'school.name': 'Depois',
-      'school.timezone': 'America/Sao_Paulo',
-    });
+    expect(await reader.all()).toEqual({ ...SETTING_DEFAULTS, 'school.name': 'Depois' });
   });
 
   it('leituras simultâneas compartilham a mesma consulta', async () => {

@@ -1,3 +1,4 @@
+import { BlockList, isIP } from 'node:net';
 import { describe, expect, it } from 'vitest';
 import {
   ConfigError,
@@ -246,6 +247,81 @@ describe('loadConfig', () => {
     expect(error.message).toMatch(
       /NUVA_SUBSCRIPTION_GRACE_DAYS: deve ser um inteiro maior ou igual a 0/,
     );
+  });
+
+  it('guarda NUVA_LOCALE na forma canônica, sem diferenciar maiúsculas', () => {
+    const locale = (value: string) => loadConfig({ env: { ...base, NUVA_LOCALE: value } }).locale;
+    expect(locale('pt-br')).toBe('pt-BR');
+    expect(locale('PT-BR')).toBe('pt-BR');
+    expect(locale(' en-us ')).toBe('en-US');
+    expect(locale('ES')).toBe('es');
+    expect(locale('zh-hant-tw')).toBe('zh-Hant-TW');
+  });
+
+  it.each([
+    ['português'],
+    ['pt_BR'],
+    ['p'],
+    // No formato da spec, mas recusadas pelo Intl: subetiqueta repetida e variante inválida.
+    ['pt-br-br'],
+    ['en-gb-oed'],
+  ])('NUVA_LOCALE=%s falha na subida', (value) => {
+    const error = issuesOf({ ...base, NUVA_LOCALE: value });
+    expect(error.issues).toEqual([
+      { variable: 'NUVA_LOCALE', message: expect.stringContaining(`recebido "${value}"`) },
+    ]);
+  });
+
+  it('a lista padrão de TRUSTED_PROXIES é a da spec 031, e a variável a substitui inteira', () => {
+    expect([...DEFAULT_TRUSTED_PROXIES]).toEqual([
+      '10.0.0.0/8',
+      '172.16.0.0/12',
+      '192.168.0.0/16',
+      '100.64.0.0/10',
+      '127.0.0.0/8',
+      '::1/128',
+      '169.254.0.0/16',
+      'fe80::/10',
+      'fc00::/7',
+    ]);
+    const restricted = loadConfig({ env: { ...base, TRUSTED_PROXIES: '172.18.0.0/16' } });
+    expect(restricted.trustedProxies).toEqual(['172.18.0.0/16']);
+  });
+
+  it.each([
+    // [conexão, lista padrão confia?]
+    ['100.64.0.1', true],
+    ['100.127.255.254', true],
+    ['100.128.0.1', false],
+    ['169.254.0.1', true],
+    ['169.255.0.1', false],
+    ['fe80::1', true],
+    ['fec0::1', false],
+    ['::1', true],
+    ['::2', false],
+    ['127.0.0.1', true],
+    ['10.1.2.3', true],
+    ['172.18.0.5', true],
+    ['172.32.0.1', false],
+    ['192.168.1.10', true],
+    ['fd12:3456::1', true],
+    ['45.80.10.20', false],
+    ['2001:db8::1', false],
+  ] as const)('conexão vinda de %s: proxy confiável na lista padrão = %s', (address, trusted) => {
+    // Mesma leitura que o api-kit faz de `config.trustedProxies` (BlockList do Node).
+    const contains = (entries: readonly string[]) => {
+      const list = new BlockList();
+      for (const entry of entries) {
+        const [network = '', prefix] = entry.split('/');
+        const family = isIP(network) === 4 ? 'ipv4' : 'ipv6';
+        list.addSubnet(network, Number(prefix ?? (family === 'ipv4' ? 32 : 128)), family);
+      }
+      return list.check(address, isIP(address) === 4 ? 'ipv4' : 'ipv6');
+    };
+    expect(contains(loadConfig({ env: base }).trustedProxies)).toBe(trusted);
+    // Restrita a outra faixa, a origem deixa de ser confiável.
+    const restricted = loadConfig({ env: { ...base, TRUSTED_PROXIES: '203.0.113.0/24' } });
+    expect(contains(restricted.trustedProxies)).toBe(false);
   });
 
   it('aceita IPs e faixas em TRUSTED_PROXIES', () => {

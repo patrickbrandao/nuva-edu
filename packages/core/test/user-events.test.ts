@@ -37,9 +37,6 @@ const pause = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 beforeAll(async () => {
   db = createDatabase({ connectionString: inject('databaseUrl'), maxConnections: 3 });
-  // Banco descartável desta execução: o teste tira a sequência da migration 0003 para provar o
-  // erro de banco sem migration, e a recria adiante.
-  await sql`DROP SEQUENCE IF EXISTS ${sql.id(USER_EVENTS_SEQUENCE)} CASCADE`.execute(db);
   listener = listenChannel({
     connectionString: inject('databaseUrl'),
     channel: USER_EVENTS_CHANNEL,
@@ -53,8 +50,37 @@ afterAll(async () => {
   await closeDatabase(db);
 });
 
+const PRESENCE = { userId: USER_ID, online: true } as const;
+
 describe('publishUserEvent', () => {
+  it('no banco migrado, numera pela sequência user_event_id_seq da migration 0003', async () => {
+    expect(USER_EVENTS_SEQUENCE).toBe('user_event_id_seq');
+    const exists = await sql<{ kind: string }>`
+      SELECT relkind::text AS kind FROM pg_class WHERE oid = to_regclass('user_event_id_seq')
+    `.execute(db);
+    expect(exists.rows).toEqual([{ kind: 'S' }]);
+
+    received.length = 0;
+    const first = await publishUserEvent(db, { userId: USER_ID, kind: 'presence', data: PRESENCE });
+    const second = await publishUserEvent(db, {
+      userId: USER_ID,
+      kind: 'forum.post.created',
+      data: { topicId: 't1', postId: 'p1' },
+    });
+    expect(second.id).toBeGreaterThan(first.id);
+    const current = await sql<{ last: string }>`
+      SELECT last_value::text AS last FROM user_event_id_seq
+    `.execute(db);
+    expect(Number(current.rows[0]?.last)).toBe(second.id);
+    await waitFor(() => received.length === 2);
+    expect(JSON.parse(received[1] ?? '')).toEqual(second);
+  });
+
   it('sem a sequência, falha com erro claro e não aborta a transação de quem chamou', async () => {
+    // Banco descartável desta execução: tira a sequência para provar o erro de banco sem a
+    // migration; o teste adiante a recria.
+    await sql`DROP SEQUENCE ${sql.id(USER_EVENTS_SEQUENCE)} CASCADE`.execute(db);
+    received.length = 0;
     const error = await nextUserEventId(db).catch((caught: unknown) => caught);
     expect(isDomainError(error)).toBe(true);
     expect(error).toMatchObject({ code: 'user_event_sequence_missing', status: 500 });
@@ -62,7 +88,7 @@ describe('publishUserEvent', () => {
 
     const alive = await db.transaction().execute(async (trx) => {
       await expect(
-        publishUserEvent(trx, { userId: USER_ID, kind: 'presence' }),
+        publishUserEvent(trx, { userId: USER_ID, kind: 'presence', data: PRESENCE }),
       ).rejects.toMatchObject({ code: 'user_event_sequence_missing' });
       const result = await sql<{ ok: number }>`SELECT 1 AS ok`.execute(trx);
       return result.rows[0]?.ok;
@@ -93,16 +119,16 @@ describe('publishUserEvent', () => {
     expect(JSON.parse(received[0] ?? '')).toEqual(event);
   });
 
-  it('com a sequência criada, numera em ordem crescente; data ausente vira objeto vazio', async () => {
+  it('com a sequência criada, numera em ordem crescente', async () => {
     await sql`CREATE SEQUENCE ${sql.id(USER_EVENTS_SEQUENCE)} AS bigint`.execute(db);
     received.length = 0;
-    const first = await publishUserEvent(db, { userId: USER_ID, kind: 'presence' });
+    const first = await publishUserEvent(db, { userId: USER_ID, kind: 'presence', data: PRESENCE });
     const second = await publishUserEvent(db, {
       userId: USER_ID,
       kind: 'notification.created',
       data: { notificationId: 'n1', type: 'x', unreadCount: 3 },
     });
-    expect(first).toMatchObject({ id: 1, data: {} });
+    expect(first).toMatchObject({ id: 1, data: PRESENCE });
     expect(second.id).toBe(2);
     await waitFor(() => received.length === 2);
     expect(received.map((payload) => JSON.parse(payload).id)).toEqual([1, 2]);
@@ -112,12 +138,12 @@ describe('publishUserEvent', () => {
     received.length = 0;
     await expect(
       db.transaction().execute(async (trx) => {
-        await publishUserEvent(trx, { userId: USER_ID, kind: 'presence' });
+        await publishUserEvent(trx, { userId: USER_ID, kind: 'presence', data: PRESENCE });
         throw new Error('desiste');
       }),
     ).rejects.toThrow('desiste');
     await db.transaction().execute(async (trx) => {
-      await publishUserEvent(trx, { userId: USER_ID, kind: 'presence', data: { online: true } });
+      await publishUserEvent(trx, { userId: USER_ID, kind: 'presence', data: PRESENCE });
       await pause(100);
       expect(received).toEqual([]);
     });
@@ -132,6 +158,8 @@ describe('publishUserEvent', () => {
       generated += 1;
       return 7;
     };
+    // O tipo do `data` não deixa passar texto livre: o teste força, para medir o limite.
+    const big = (text: string) => ({ text }) as never;
     const envelope = JSON.stringify({
       userId: USER_ID,
       kind: 'presence',
@@ -140,16 +168,12 @@ describe('publishUserEvent', () => {
     }).length;
     const fits = 'a'.repeat(USER_EVENT_MAX_PAYLOAD_BYTES - envelope);
 
-    await publishUserEvent(
-      db,
-      { userId: USER_ID, kind: 'presence', data: { text: fits } },
-      { nextId },
-    );
+    await publishUserEvent(db, { userId: USER_ID, kind: 'presence', data: big(fits) }, { nextId });
     await waitFor(() => received.length === 1);
 
     const error = await publishUserEvent(
       db,
-      { userId: USER_ID, kind: 'presence', data: { text: `${fits}a` } },
+      { userId: USER_ID, kind: 'presence', data: big(`${fits}a`) },
       { nextId },
     ).catch((caught: unknown) => caught);
     expect(isDomainError(error)).toBe(true);
@@ -159,7 +183,7 @@ describe('publishUserEvent', () => {
     await expect(
       publishUserEvent(
         db,
-        { userId: USER_ID, kind: 'presence', data: { text: `${fits.slice(1)}é` } },
+        { userId: USER_ID, kind: 'presence', data: big(`${fits.slice(1)}é`) },
         { nextId },
       ),
     ).rejects.toMatchObject({ code: 'user_event_too_large' });
@@ -171,16 +195,40 @@ describe('publishUserEvent', () => {
   it('recusa destinatário, evento, data e id fora do formato', async () => {
     const nextId = async () => 1;
     await expect(
-      publishUserEvent(db, { userId: 'ana', kind: 'presence' }, { nextId }),
+      publishUserEvent(db, { userId: 'ana', kind: 'presence', data: PRESENCE }, { nextId }),
     ).rejects.toThrow(TypeError);
     await expect(
-      publishUserEvent(db, { userId: USER_ID, kind: 'ping' as never }, { nextId }),
+      publishUserEvent(
+        db,
+        { userId: USER_ID, kind: 'ping' as never, data: {} as never },
+        { nextId },
+      ),
     ).rejects.toThrow('evento desconhecido');
     await expect(
       publishUserEvent(db, { userId: USER_ID, kind: 'presence', data: [] as never }, { nextId }),
     ).rejects.toThrow('data precisa ser um objeto');
     await expect(
-      publishUserEvent(db, { userId: USER_ID, kind: 'presence' }, { nextId: async () => 1.5 }),
+      publishUserEvent(
+        db,
+        { userId: USER_ID, kind: 'presence', data: PRESENCE },
+        { nextId: async () => 1.5 },
+      ),
+    ).rejects.toThrow('id');
+    await expect(
+      publishUserEvent(
+        db,
+        { userId: USER_ID, kind: 'presence', data: undefined as never },
+        { nextId },
+      ),
+    ).rejects.toThrow('data precisa ser um objeto');
+    // Formato errado para o evento não compila.
+    await expect(
+      publishUserEvent(
+        db,
+        // @ts-expect-error `presence` não leva `messageId`.
+        { userId: USER_ID, kind: 'presence', data: { messageId: 'm1' } },
+        { nextId: async () => 1.5 },
+      ),
     ).rejects.toThrow('id');
   });
 

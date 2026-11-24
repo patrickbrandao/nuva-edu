@@ -45,6 +45,7 @@ export interface Config {
   adminUrl: string;
   classroomUrl: string;
   currency: string;
+  /** Etiqueta BCP 47 na forma canônica (`pt-BR`), seja como for que `NUVA_LOCALE` foi escrita. */
   locale: string;
   sessionSecret: string | null;
   admin: { email: string | null; password: string | null };
@@ -95,13 +96,29 @@ export interface Config {
   accountDeletionGraceDays: number;
 }
 
+/**
+ * Origens de onde um proxy na mesma máquina ou na mesma rede interna pode chegar (spec 031,
+ * "IP real do cliente"): redes privadas, CGNAT, laço local, link-local e ULA do IPv6.
+ *
+ * O padrão é amplo para funcionar atrás de qualquer proxy sem configuração. O custo: um cliente
+ * cujo endereço real cai numa dessas faixas (rede interna da escola, mesmo CGNAT do servidor) é
+ * tratado como proxy, e o `X-Forwarded-For` que ele enviar é aceito, ou seja, ele consegue
+ * forjar o próprio IP. Quem atende usuários assim restringe `TRUSTED_PROXIES` à rede do proxy.
+ */
 export const DEFAULT_TRUSTED_PROXIES = [
   '10.0.0.0/8',
   '172.16.0.0/12',
   '192.168.0.0/16',
+  '100.64.0.0/10',
   '127.0.0.0/8',
+  '::1/128',
+  '169.254.0.0/16',
+  'fe80::/10',
   'fc00::/7',
 ] as const;
+
+/** Etiqueta BCP 47 aceita em `NUVA_LOCALE` (spec 031), sem diferenciar maiúsculas. */
+const LOCALE_PATTERN = /^[a-z]{2,3}(-[a-z0-9]{2,8})*$/i;
 
 const HOST_PATTERN = /^[a-z0-9]([a-z0-9.-]*[a-z0-9])?$/i;
 
@@ -149,12 +166,7 @@ export function loadConfig(options: LoadConfigOptions = {}): Config {
     adminUrl: origin(adminHost),
     classroomUrl: origin(classroomHost),
     currency: reader.matching('NUVA_CURRENCY', 'BRL', /^[A-Z]{3}$/, 'deve ser um código ISO 4217'),
-    locale: reader.matching(
-      'NUVA_LOCALE',
-      'pt-BR',
-      /^[a-z]{2,3}(-[A-Za-z0-9]{2,8})*$/,
-      'deve ser uma etiqueta de idioma como pt-BR',
-    ),
+    locale: readLocale(reader),
     sessionSecret: secret('SESSION_SECRET'),
     admin: { email: adminEmail, password: secret('ADMIN_PASSWORD') },
     smtp: {
@@ -249,6 +261,30 @@ export function loadConfigOrExit(options: LoadConfigOrExitOptions = {}): Config 
     write(`${JSON.stringify(line)}\n`);
     return exit(1);
   }
+}
+
+/**
+ * `NUVA_LOCALE` na forma canônica do `Intl` (`pt-br` vira `pt-BR`). Fora do formato da spec 031,
+ * ou recusada pelo `Intl` (`pt-br-br`), é erro de configuração: o serviço não sobe.
+ */
+function readLocale(reader: EnvReader): string {
+  const fallback = 'pt-BR';
+  const raw = reader.string('NUVA_LOCALE', fallback);
+  if (LOCALE_PATTERN.test(raw)) {
+    try {
+      const [canonical] = Intl.getCanonicalLocales(raw);
+      if (canonical !== undefined) {
+        return canonical;
+      }
+    } catch {
+      // RangeError do Intl: cai na recusa abaixo.
+    }
+  }
+  reader.fail(
+    'NUVA_LOCALE',
+    `deve ser uma etiqueta de idioma BCP 47 como pt-BR; recebido "${raw}"`,
+  );
+  return fallback;
 }
 
 /** Vazio significa "sem porta na URL" (80/443); ausente vale o padrão 8080. */

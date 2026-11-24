@@ -67,6 +67,14 @@ export {
   SENSITIVE_KEY_PARTS,
 } from './logging/redact.ts';
 export {
+  imagePath,
+  isImageId,
+  SCHOOL_LOGO_DEFAULT_VARIANT,
+  SCHOOL_LOGO_VARIANTS,
+  type SchoolLogoVariant,
+  schoolLogoUrl,
+} from './modules/images/image-url.ts';
+export {
   JOBS_CHANNEL,
   type JobListener,
   type JobListenerOptions,
@@ -118,6 +126,7 @@ export {
 } from './modules/jobs/registry.ts';
 export {
   createSettingsReader,
+  DEFAULT_SOURCE_CODE_URL,
   getSchoolName,
   getSchoolTimezone,
   getSetting,
@@ -129,7 +138,9 @@ export {
   type SettingKey,
   type SettingsReader,
   type SettingsReaderOptions,
+  type SettingsReadOptions,
   type SettingValues,
+  SOURCE_CODE_URL_MAX_LENGTH,
   setSetting,
 } from './modules/settings/settings.ts';
 export {
@@ -142,6 +153,7 @@ export {
   USER_EVENT_MAX_PAYLOAD_BYTES,
   USER_EVENTS_CHANNEL,
   USER_EVENTS_SEQUENCE,
+  type UserEventData,
   type UserEventIdGenerator,
   type UserEventInput,
   type UserEventKind,

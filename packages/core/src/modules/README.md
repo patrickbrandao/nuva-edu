@@ -1,6 +1,6 @@
 # Módulos do núcleo
 
-Uma pasta por área de negócio; `jobs`, `settings` e `stream` estão implementados, as demais ainda vazias. Cada módulo ganha seu código (entidades, regras, consultas Kysely) junto com a tarefa que o implementa, e exporta o que as APIs e o worker usam por `src/index.ts`.
+Uma pasta por área de negócio; `jobs`, `settings` e `stream` estão implementados, `images` tem só o caminho de entrega, as demais ainda vazias. Cada módulo ganha seu código (entidades, regras, consultas Kysely) junto com a tarefa que o implementa, e exporta o que as APIs e o worker usam por `src/index.ts`.
 
 | Pasta | Conteúdo | Spec |
 | --- | --- | --- |
