@@ -8,6 +8,7 @@ Detalhe das decisões em `specs/decisions/`.
 ### Adicionado
 - `task:finish` repete o push uma vez na corrida entre dois finish (remoto ancestral da `main` local); senão, código 7.
 - `task:start` simultâneos: o `pnpm install` do worktree não reinstala os ganchos do Git (confere e instala sob trava se faltarem) e o `git worktree add` roda um de cada vez (task 112).
+- Exceção temporária no Trivy (`.trivyignore.yaml`, só nos jobs `admin` e `classroom`, só o `nginx` 1.30.6-r1, vence em 2026-12-24) para publicar os sites; teste barra exceção sem motivo, sem prazo ou vencida (task 118).
 - `pnpm deploy:test [etiqueta]` (`scripts/deploy-test.sh`): confere as imagens no Docker Hub, envia só os composes e o `.env`, `pull` e `up -d --wait` do projeto `nuva-edu` no servidor de testes; `--only`, `--dry-run`; `docs/ambiente-de-teste.md` (task 016).
 - Janela de contrato provada no repositório com o `task.mjs` (`--join`, `pronta`, fechamento único).
 - Marca da escola no `/api/v1/meta` (logotipo, cor de destaque, código-fonte): contrato, duas APIs, cliente e sites.

@@ -298,6 +298,107 @@ test('images: Trivy falha com alta ou crítica, antes de publicar', () => {
   assert.equal(steps[trivy]['continue-on-error'], undefined);
 });
 
+// Exceções do Trivy (.trivyignore.yaml): sempre temporárias, com motivo, prazo curto e pacote.
+const SITES = APPS.filter((app) => !BACKENDS.includes(app));
+const IGNORE_FILE = '.trivyignore.yaml';
+const MAX_EXCEPTION_DAYS = 60;
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+/** Problemas das entradas de um arquivo de exceções do Trivy, na data `today` (AAAA-MM-DD, UTC). */
+function exceptionProblems(file, today) {
+  const problems = [];
+  const groups = Object.entries(file ?? {});
+  for (const [kind, entries] of groups) {
+    if (kind !== 'vulnerabilities') {
+      problems.push(`${kind}: só exceções de vulnerabilidade são aceitas`);
+      continue;
+    }
+    for (const entry of entries ?? []) {
+      const id = entry?.id ?? '(sem id)';
+      if (typeof entry?.id !== 'string' || !/^[A-Z]+-[\w-]+$/.test(entry.id)) {
+        problems.push(`${id}: sem id válido`);
+      }
+      if (typeof entry?.statement !== 'string' || entry.statement.trim().length < 20) {
+        problems.push(`${id}: sem motivo (statement)`);
+      }
+      if (!Array.isArray(entry?.purls) || entry.purls.length === 0) {
+        problems.push(`${id}: sem pacote (purls)`);
+      } else if (entry.purls.some((purl) => !/^pkg:[a-z]+\/\S+$/.test(String(purl)))) {
+        problems.push(`${id}: purl inválido`);
+      }
+      const expires = String(entry?.expired_at ?? '');
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(expires) || Number.isNaN(Date.parse(expires))) {
+        problems.push(`${id}: sem prazo (expired_at no formato AAAA-MM-DD)`);
+        continue;
+      }
+      // O Trivy deixa de aplicar a entrada à 0h UTC do dia do prazo.
+      const days = (Date.parse(expires) - Date.parse(today)) / DAY_MS;
+      if (days <= 0) {
+        problems.push(`${id}: prazo vencido em ${expires}; retire a exceção (docs/ci.md)`);
+      } else if (days > MAX_EXCEPTION_DAYS) {
+        problems.push(`${id}: prazo a mais de ${MAX_EXCEPTION_DAYS} dias (${expires})`);
+      }
+    }
+  }
+  return problems;
+}
+
+test('trivy: toda exceção tem motivo, pacote e prazo de até 60 dias, e nenhuma está vencida', () => {
+  const today = new Date().toISOString().slice(0, 10);
+  // O YAML é lido como texto: datas não viram Date, e uma chave repetida falha a leitura.
+  assert.deepEqual(exceptionProblems(load(IGNORE_FILE), today), []);
+});
+
+test('trivy: a conferência das exceções acusa motivo, pacote e prazo errados', () => {
+  const entry = {
+    id: 'CVE-2026-0001',
+    purls: ['pkg:apk/alpine/nginx@1.30.6-r1'],
+    expired_at: '2026-12-24',
+    statement: 'Motivo escrito com detalhe suficiente.',
+  };
+  const check = (change, today = '2026-11-24') =>
+    exceptionProblems({ vulnerabilities: [{ ...entry, ...change }] }, today);
+  assert.deepEqual(check({}), []);
+  assert.deepEqual(check({}, '2026-12-23'), []);
+  assert.match(check({}, '2026-12-24')[0], /prazo vencido/);
+  assert.match(check({}, '2027-01-10')[0], /prazo vencido/);
+  assert.match(check({ expired_at: '2027-01-24' })[0], /a mais de 60 dias/);
+  assert.deepEqual(check({ expired_at: '2027-01-23' }), []);
+  assert.match(check({ expired_at: undefined })[0], /sem prazo/);
+  assert.match(check({ expired_at: '24/12/2026' })[0], /sem prazo/);
+  assert.match(check({ statement: undefined })[0], /sem motivo/);
+  assert.match(check({ statement: '  ' })[0], /sem motivo/);
+  assert.match(check({ purls: undefined })[0], /sem pacote/);
+  assert.match(check({ purls: [] })[0], /sem pacote/);
+  assert.match(check({ id: undefined })[0], /sem id/);
+  assert.match(exceptionProblems({ secrets: [{ id: 'x' }] }, '2026-11-24')[0], /só exceções de/);
+});
+
+test('images: o arquivo de exceções do Trivy vai só aos jobs dos sites', () => {
+  const job = images.jobs.images;
+  const trivy = job.steps.filter((step) => step.uses?.startsWith('aquasecurity/trivy-action@'));
+  assert.equal(trivy.length, 1);
+  assert.equal(trivy[0].with.trivyignores, `${OPEN} matrix.trivyignores }}`);
+  // Nenhum outro caminho para exceção: sem política, sem configuração e sem variável do Trivy.
+  for (const input of ['ignore-policy', 'trivy-config', 'skip-dirs', 'skip-files', 'vuln-type']) {
+    assert.equal(trivy[0].with[input], undefined, `Trivy com ${input}`);
+  }
+  assert.equal(trivy[0].env, undefined);
+  assert.doesNotMatch(read('.github/workflows/images.yml'), /TRIVY_/);
+  const byApp = Object.fromEntries(
+    job.strategy.matrix.include.map((item) => [item.app, item.trivyignores]),
+  );
+  for (const app of BACKENDS) {
+    assert.equal(byApp[app], '', `${app}: backend não recebe exceção do Trivy`);
+  }
+  for (const app of SITES) {
+    assert.equal(byApp[app], IGNORE_FILE, `${app}: arquivo de exceções`);
+  }
+  // Um arquivo só na raiz, e nenhum `.trivyignore` de texto, que o Trivy carregaria sozinho.
+  const found = readdirSync(root).filter((name) => name.startsWith('.trivyignore'));
+  assert.deepEqual(found, [IGNORE_FILE]);
+});
+
 test('images: confere as plataformas e a versão do que foi publicado', () => {
   const published = images.jobs.images.steps.find((step) => step.name === 'Imagem publicada');
   assert.equal(published.if, "steps.hub.outputs.publish == 'true'");

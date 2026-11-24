@@ -43,7 +43,7 @@ Ordem em cada job: build amd64, conferência da versão gravada na imagem, Trivy
 plataformas com publicação, conferência do que ficou no Docker Hub (as duas plataformas e a
 versão). Vulnerabilidade alta ou crítica com correção disponível falha o job antes de publicar.
 
-### O que o Trivy examina e a pendência do Nginx
+### O que o Trivy examina e a exceção temporária do Nginx
 
 O Trivy roda com `severity: HIGH,CRITICAL` e `ignore-unfixed: true`. Para a imagem não carregar
 vulnerabilidade da base que o serviço não usa:
@@ -54,37 +54,58 @@ vulnerabilidade da base que o serviço não usa:
 - `admin` e `classroom`: o estágio final roda `apk upgrade --no-cache` como root e volta ao
   usuário 101.
 
-**Pendência conhecida (2026-11-24):** os jobs `admin` e `classroom` falham no Trivy por causa do
-próprio Nginx. A base `nginxinc/nginx-unprivileged:stable-alpine` traz o `nginx` 1.30.6-r1, com
-4 críticas (CVE-2026-113425, CVE-2026-121810, CVE-2026-123007, CVE-2026-123633) e 2 altas
-(CVE-2026-118899, CVE-2026-123634), todas corrigidas no 1.30.7. O `apk upgrade` não o troca: a
-base fixa o pacote na versão empacotada pelo nginx.org (`nginx=1.30.6-r1` e os módulos em
-`/etc/apk/world`). A decisão (tarefa 097) foi esperar a imagem `stable` com o 1.30.7, sem mudar
-para `mainline` e sem `.trivyignore`; até lá esses dois jobs ficam vermelhos e os três de backend
-ficam verdes.
+**A exceção temporária do Nginx (tarefa 118, decisão do usuário em 2026-11-24).** A base
+`nginxinc/nginx-unprivileged:stable-alpine` traz o `nginx` 1.30.6-r1, com 4 críticas
+(CVE-2026-113425, CVE-2026-121810, CVE-2026-123007, CVE-2026-123633) e 2 altas
+(CVE-2026-118899, CVE-2026-123634), todas corrigidas no 1.30.7-r0. O `apk upgrade` não o troca:
+a base fixa o pacote na versão empacotada pelo nginx.org (`nginx=1.30.6-r1` e os módulos em
+`/etc/apk/world`). Para publicar os sites sem esperar a imagem `stable` com o 1.30.7, essas seis
+vulnerabilidades estão em `.trivyignore.yaml`, na raiz, com estes limites:
 
-Quando a base for atualizada, não é preciso commit: a etiqueta `stable-alpine` é móvel, e o build
-resolve o digest dela a cada execução. Reexecute só os jobs que falharam na última execução do
-`images`:
+- **Só os sites.** O fluxo passa o arquivo (`trivyignores`) apenas aos jobs `admin` e
+  `classroom`; `admin-api`, `classroom-api` e `worker` rodam o Trivy sem exceção nenhuma.
+- **Só o pacote e a versão.** Cada entrada tem `purls: pkg:apk/alpine/nginx@1.30.6-r1`: a mesma
+  CVE em outro pacote, ou no `nginx` de outra versão, continua barrando.
+- **Com prazo.** `expired_at: 2026-12-24`: a exceção vale até 2026-12-23; à 0h UTC do dia 24 o
+  Trivy deixa de aplicá-la sozinho e os dois jobs voltam a falhar. O `scripts/ci.test.mjs`
+  (`pnpm verify:quick`) falha no mesmo dia, e também se uma entrada ficar sem motivo
+  (`statement`), sem pacote, sem prazo ou com prazo a mais de 60 dias.
+- Qualquer outra vulnerabilidade alta ou crítica com correção continua falhando o job.
+
+O formato é o do Trivy (`vulnerabilities:` com `id`, `purls`, `expired_at` e `statement`); a
+`trivy-action` o entrega pelo `--ignorefile`.
+
+**Como retirar a exceção** quando a base trouxer o nginx 1.30.7:
 
 ```bash
 docker buildx imagetools inspect nginxinc/nginx-unprivileged:stable-alpine   # digest novo?
-gh run list --workflow images --branch main --limit 3
-gh run rerun <id> --failed
-gh run watch <id> --exit-status
+docker run --rm --pull always --entrypoint nginx nginxinc/nginx-unprivileged:stable-alpine -v
 ```
+
+1. Com o 1.30.7 na base, abra uma tarefa do papel `infra` e, em `.trivyignore.yaml`, apague as
+   seis entradas, deixando `vulnerabilities: []` (o fluxo exige que o arquivo exista).
+2. Confira na máquina (comandos abaixo, sem `--ignorefile`): saída 0 nas duas imagens dos sites.
+3. `pnpm task:finish`; o `verify` e o `images` rodam sozinhos. A etiqueta `stable-alpine` é
+   móvel e o build resolve o digest dela a cada execução; se o cache do build segurar a camada
+   antiga, reexecute: `gh run rerun <id> --failed`.
+
+Se o prazo chegar antes da base nova, o fluxo fica vermelho nos dois sites de propósito:
+prorrogar é decisão do humano (nova data em `expired_at`, no máximo 60 dias à frente, e o
+motivo atualizado), nunca um ajuste automático.
 
 O mesmo vale para uma correção nova do Alpine: a camada do `apk upgrade` fica no cache do build
 enquanto o digest da base não muda, então ela só é refeita com base nova ou com mudança no
 Dockerfile.
 
-Para conferir uma imagem na máquina, do mesmo jeito que o fluxo:
+Para conferir a imagem de um site na máquina, do mesmo jeito que o fluxo (para um backend, tire
+o `--ignorefile`):
 
 ```bash
 docker build -f apps/admin/Dockerfile -t nuva-prova-admin:local .
 docker run --rm -v trivy-cache:/root/.cache/ -v /var/run/docker.sock:/var/run/docker.sock \
+  -v "$PWD/.trivyignore.yaml:/w/.trivyignore.yaml:ro" -w /w \
   aquasec/trivy:0.76.2 image --severity HIGH,CRITICAL --ignore-unfixed --exit-code 1 \
-  nuva-prova-admin:local
+  --ignorefile .trivyignore.yaml nuva-prova-admin:local
 docker rmi nuva-prova-admin:local
 ```
 

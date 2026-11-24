@@ -55,16 +55,23 @@ jobs:
       matrix:
         include:
           # nuva_version: a imagem recebe o argumento de build NUVA_VERSION (só os backends).
+          # trivyignores: arquivo de exceções do Trivy; só os sites têm (exceção temporária do
+          # nginx da imagem base, com prazo: docs/ci.md). Backend não recebe exceção nenhuma.
           - app: admin-api
             nuva_version: true
+            trivyignores: ""
           - app: classroom-api
             nuva_version: true
+            trivyignores: ""
           - app: worker
             nuva_version: true
+            trivyignores: ""
           - app: admin
             nuva_version: false
+            trivyignores: .trivyignore.yaml
           - app: classroom
             nuva_version: false
+            trivyignores: .trivyignore.yaml
     env:
       IMAGE: tmsoftbrasil/nuva-edu-${{ matrix.app }}
       COMMIT: ${{ github.event.workflow_run.head_sha || github.sha }}
@@ -168,6 +175,7 @@ jobs:
           ignore-unfixed: true
           exit-code: "1"
           format: table
+          trivyignores: ${{ matrix.trivyignores }}
 
       # As duas plataformas num único manifesto. Sem os segredos, o build acontece (valida o
       # arm64 e aquece o cache), mas nada é enviado.
