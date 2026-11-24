@@ -243,6 +243,21 @@ test('cópia que falha remove só o volume novo, criado nesta execução', () =>
   );
 });
 
+test('config que falha diz que os segredos vêm dos --env-file depois de --', () => {
+  const env = { CONFIG_STATUS: '1' };
+  const bare = run(['--check'], { env });
+  assert.equal(bare.status, 1);
+  assert.match(bare.stderr, /docker compose config falhou/);
+  assert.match(bare.stderr, /Nada foi passado depois de --/);
+  assert.match(bare.stderr, /-- --env-file \.env --env-file \.env\.local/);
+  assert.deepEqual(changes(bare), []);
+
+  const withArgs = run(['--check', ...COMPOSE], { env });
+  assert.equal(withArgs.status, 1);
+  assert.match(withArgs.stderr, /Os segredos vêm dos --env-file/);
+  assert.doesNotMatch(withArgs.stderr, /Nada foi passado/);
+});
+
 test('opção desconhecida e nome inválido saem com 2', () => {
   assert.equal(run(['--nada']).status, 2);
   assert.equal(run(['--from', 'a b', ...COMPOSE]).status, 2);

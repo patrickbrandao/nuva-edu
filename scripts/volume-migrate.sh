@@ -6,6 +6,12 @@
 # Exemplo (o que o `pnpm dev:up` faz):
 #   bash scripts/volume-migrate.sh -- --env-file .env --env-file .env.local
 #
+# Os arquivos de ambiente e de Compose vêm só do que estiver depois de `--`: o script não carrega
+# o `.env.local` por conta própria (no servidor de testes, o `deploy:test` passa os dele). Sem
+# nada depois de `--`, o Compose lê só o `.env`, e o `docker compose config` falha pelos segredos
+# exigidos (`${VAR:?}`). Para conferir o ambiente local:
+#   bash scripts/volume-migrate.sh --check -- --env-file .env --env-file .env.local
+#
 # Copia o volume antigo (`postgres-data`) para o volume que o Compose declara para
 # /var/lib/postgresql do serviço `postgres` só quando, ao mesmo tempo:
 #   1. o Compose declara um nome diferente do antigo;
@@ -84,7 +90,17 @@ compose() { docker compose "$@" </dev/null; }
 
 config_args=(config)
 if $NO_INTERPOLATE; then config_args+=(--no-interpolate); fi
-config="$(compose "$@" "${config_args[@]}")" || die 1 'o docker compose config falhou (veja acima).'
+config_failed() {
+  local hint='Os segredos vêm dos --env-file depois de --; no ambiente local:
+  bash scripts/volume-migrate.sh [opções] -- --env-file .env --env-file .env.local'
+  if [ "$1" -eq 0 ]; then
+    hint="Nada foi passado depois de --, então o Compose leu só o .env (o .env.local não é carregado).
+$hint"
+  fi
+  die 1 "o docker compose config falhou (veja acima).
+$hint"
+}
+config="$(compose "$@" "${config_args[@]}")" || config_failed $#
 
 # Lê a forma normalizada do `docker compose config` (chaves em ordem, dois espaços por nível):
 # o projeto (`name:`), a origem do volume montado em $TARGET no serviço $SERVICE e o `name:`
