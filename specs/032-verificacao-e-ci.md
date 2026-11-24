@@ -84,7 +84,7 @@ Na ordem, parando na primeira falha:
 2. `tipos`: tipos de todos os pacotes (`tsc`).
 3. `tipos-banco`: os tipos gerados do banco conferem com as migrations (`db:types:check`). Vem antes dos testes para nenhum teste rodar contra tipos que não descrevem o banco.
 4. `testes`: todos os testes de unidade e integração (Vitest), com o banco isolado por Testcontainers (PostgreSQL 18), e cobertura de `packages/core`. Os testes de contrato ficam de fora. O `test` de `packages/api-client` inclui a conferência do cliente gerado, então no completo não há passo `cliente` separado.
-5. `contrato`: testes de contrato das duas APIs contra os `openapi.yaml`, uma única vez. Aqui entra também o `check-contract --no-pending` das duas APIs ([003](003-admin-api.md), "Subida estrita"), quando a tarefa 035 o ligar.
+5. `contrato`: testes de contrato das duas APIs contra os `openapi.yaml`, uma única vez. Depois deles, no mesmo passo, roda o `check-contract --no-pending` de cada API que tem o comando ([003](003-admin-api.md), "Subida estrita"); se o teste de contrato falha, a conferência nem roda.
 6. `banco`: todos os testes de banco: migrations do zero, `down` de cada migration reversível, e ida e volta da última.
 7. `build`: build de todas as aplicações e dos pacotes.
 8. `e2e`, com `--e2e`: testes de ponta a ponta (Playwright) contra o ambiente Compose completo, com Mailpit e Mercado Pago simulado.
@@ -103,7 +103,7 @@ Os testes e2e cobrem, no mínimo, os fluxos de medida de sucesso de [000](000-vi
 
 ### Qualidade de código
 
-- **Biome**: lint e formatação, uma configuração na raiz. Cobre JavaScript, TypeScript, JSON, CSS e YAML (os `docker-compose.yml`, os `openapi.yaml`, os fluxos do CI); Markdown, o `pnpm-lock.yaml` e as pastas `generated` ficam de fora. YAML mal formatado falha o `lint` como qualquer outro arquivo, nos dois níveis e no gancho de commit. O `verify:full` e o `pre-commit` já conferem YAML; a tarefa 062 leva a mesma cobertura ao `verify:quick`.
+- **Biome**: lint e formatação, uma configuração na raiz. Cobre JavaScript, TypeScript, JSON, CSS e YAML (os `docker-compose.yml`, os `openapi.yaml`, os fluxos do CI); Markdown, o `pnpm-lock.yaml` e as pastas `generated` ficam de fora. YAML mal formatado falha o `lint` como qualquer outro arquivo, nos dois níveis e no gancho de commit. O `verify:quick`, o `verify:full` e o `pre-commit` conferem YAML.
 - **`tsc`**: modo estrito; referências de projeto por pacote.
 - **lefthook**:
   - `pre-commit`: Biome nos arquivos em stage, YAML inclusive (sem `git add` automático de arquivos alheios), e bloqueio de arquivos proibidos (`.env.local`, dumps).

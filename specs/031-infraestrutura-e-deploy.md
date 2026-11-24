@@ -202,8 +202,8 @@ O script só age sobre o projeto Compose `nuva-edu`; qualquer outra ação no se
 | Variável | Padrão | Descrição |
 | --- | --- | --- |
 | `NUVA_DOMAIN` | `localhost` | Domínio base |
-| `NUVA_ADMIN_HOST` | `edu-admin.${NUVA_DOMAIN}` | Host do site admin |
-| `NUVA_CLASSROOM_HOST` | `classroom.${NUVA_DOMAIN}` | Host do classroom |
+| `NUVA_ADMIN_HOST` | `edu-admin.${NUVA_DOMAIN}` | Host do site admin ([Padrão dos hosts](#padrão-dos-hosts)) |
+| `NUVA_CLASSROOM_HOST` | `classroom.${NUVA_DOMAIN}` | Host do classroom ([Padrão dos hosts](#padrão-dos-hosts)) |
 | `NUVA_PUBLIC_SCHEME` | `http` | `http` ou `https`, para montar URLs em e-mails e retornos |
 | `NUVA_PUBLIC_PORT` | `8080` | Porta pública; vazio quando 80/443 |
 | `NUVA_CURRENCY` | `BRL` | Moeda da instalação |
@@ -317,7 +317,13 @@ Os sites são arquivos estáticos e a mesma imagem serve a qualquer instalação
 - O `healthcheck` dos contêineres dos sites pede `/config.json`: site sem o arquivo não fica saudável.
 - Fora do contêiner (`vite dev`), o servidor de desenvolvimento de cada site responde `/config.json` com os mesmos campos, montados das mesmas variáveis e dos mesmos padrões.
 - Uso pelos sites: [006](006-sites-e-interface.md), "Configuração de execução".
-- O script atual ainda grava `adminHost`, `classroomHost`, `currency` e `locale`. Esses campos saem pela tarefa 060 e os sites não os leem.
+
+### Padrão dos hosts
+
+O padrão de `NUVA_ADMIN_HOST` e de `NUVA_CLASSROOM_HOST` deriva de `NUVA_DOMAIN` em todo lugar que lê essas variáveis: `packages/core` (configuração das APIs e do worker), `proxy/nginx/40-nuva-config.sh` (`/config.json`), os rótulos do Traefik e o `environment` dos arquivos Compose. Definir só `NUVA_DOMAIN=escola.com.br` basta para os dois sites responderem em `edu-admin.escola.com.br` e `classroom.escola.com.br`; os dois hosts só precisam ser informados quando fogem desse formato.
+
+- No Compose, a forma é `${NUVA_ADMIN_HOST:-edu-admin.${NUVA_DOMAIN:-localhost}}` (idem `classroom`), a mesma expressão nos rótulos do Traefik e no ambiente dos serviços. Padrão fixo em `edu-admin.localhost` é erro: com `NUVA_DOMAIN` definido e os hosts não, as APIs montariam URLs de um domínio e o proxy rotearia outro.
+- Os arquivos Compose atuais ainda usam o padrão fixo (`edu-admin.localhost`, `classroom.localhost`); a tarefa 089 (`infra`) os corrige, com teste em `scripts/compose.test.mjs`. Até lá, fora do desenvolvimento, informe os dois hosts junto com `NUVA_DOMAIN`.
 
 ### Configurações da escola
 

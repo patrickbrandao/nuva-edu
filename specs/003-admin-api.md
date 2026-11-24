@@ -167,7 +167,7 @@ Não há parâmetro de cabeçalho para o token. Como parâmetro obrigatório, o 
 
 - As chaves de `settings`, os formatos e os padrões estão em [031](031-infraestrutura-e-deploy.md), "Configurações da escola".
 - A leitura de `settings` é feita por `packages/core` (módulo `settings`), que aplica o padrão quando a chave não existe ou tem valor inválido; valor inválido gera aviso no log e nunca derruba o `/meta`.
-- `logoUrl`, `accentColor` e `sourceCodeUrl` entram no contrato pela janela das tarefas 027 a 034; até lá os sites usam o nome de `schoolName` e o endereço padrão do repositório.
+- No contrato, os oito campos são obrigatórios (`required`): `logoUrl` e `accentColor` vão sempre na resposta, com `null` quando não há valor, e nunca são omitidos.
 
 ### Subida estrita
 
@@ -176,7 +176,7 @@ Não há parâmetro de cabeçalho para o token. Como parâmetro obrigatório, o 
 - Operação pendente **com** rota registrada também não impede a subida, mas gera aviso (`warn`) no log da subida e a cada conferência do contrato: a marca precisa sair do contrato.
 - No teste de contrato, a lista de divergências continua vazia com operação pendente, com ou sem rota: o teste passa. Os avisos saem numa lista à parte, cada linha começando por `aviso:`, que o teste imprime.
 - As demais regras valem para a operação pendente: `csrfToken` nas escritas e esquemas válidos.
-- `check-contract --no-pending` falha se o contrato tiver qualquer operação pendente, com ou sem rota, listando-as; é usado no `verify:full` e na release, e é o que impede a marca de ficar esquecida. Sem a opção, o comando só avisa. O comando confere rotas e contrato sem precisar de banco. Hoje existe na `admin-api` (`pnpm --filter @nuva-edu/admin-api check-contract`); o da `classroom-api` chega pela tarefa 067 e a chamada no `verify:full`, pela 035.
+- `check-contract --no-pending` falha se o contrato tiver qualquer operação pendente, com ou sem rota, listando-as; é usado no `verify:full` e na release, e é o que impede a marca de ficar esquecida. Sem a opção, o comando só avisa. O comando confere rotas e contrato sem precisar de banco. Existe nas duas APIs (`pnpm --filter @nuva-edu/admin-api check-contract` e `pnpm --filter @nuva-edu/classroom-api check-contract`), e o `verify:full` o chama no passo `contrato` ([032](032-verificacao-e-ci.md)).
 - O fluxo de trabalho que essa regra impõe está em [002](002-organizacao-do-trabalho.md), "Janela de contrato".
 
 ### Alcance do instrutor

@@ -55,7 +55,7 @@ tags:
   - name: health
     description: Sondas do processo, fora de `/api/v1`.
   - name: meta
-    description: Dados públicos da instalação.
+    description: Dados públicos da instalação e da marca da escola.
 security:
   - sessionCookie: []
 paths:
@@ -111,7 +111,11 @@ paths:
       tags: [meta]
       summary: Dados públicos da instalação
       description: |
-        Nome da escola, versão, moeda, idioma e provedores de login social ativos. Não exige sessão.
+        Dados públicos da instalação e da marca da escola: nome, versão, moeda, idioma, provedores
+        de login social ativos, logotipo, cor de destaque e endereço do código-fonte. Não exige
+        sessão. É o único endpoint de marca: os dois sites o chamam ao carregar, e as duas APIs
+        devolvem o mesmo esquema `Meta`. Nome, logotipo, cor e endereço do código-fonte vêm da
+        configuração da escola (`settings`), com o padrão quando não há nada gravado.
       security: []
       responses:
         "200":
@@ -123,6 +127,8 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Meta"
+        "400":
+          $ref: "#/components/responses/BadRequest"
         "429":
           $ref: "#/components/responses/TooManyRequests"
         "500":
@@ -195,7 +201,9 @@ components:
   responses:
     # --- comum ---
     BadRequest:
-      description: Requisição inválida; `errors` lista os campos.
+      description: |
+        Requisição fora do contrato (`validation_failed`); `errors` lista os campos. Vale também
+        para operação sem parâmetros: cabeçalho ou URL malformados são recusados antes da rota.
       headers:
         X-Request-Id:
           $ref: "#/components/headers/XRequestId"
@@ -234,6 +242,28 @@ components:
             $ref: "#/components/schemas/Problem"
     Conflict:
       description: Conflito de estado, com `code` próprio (por exemplo, `version_conflict`).
+      headers:
+        X-Request-Id:
+          $ref: "#/components/headers/XRequestId"
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+    PayloadTooLarge:
+      description: |
+        Corpo acima do limite da rota (`payload_too_large`): 1 MB, ou 5 MB no envio de imagem.
+        A rota não roda.
+      headers:
+        X-Request-Id:
+          $ref: "#/components/headers/XRequestId"
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+    UnsupportedMediaType:
+      description: |
+        `Content-Type` que a operação não declara em `requestBody.content`, ou que o serviço não
+        sabe ler (`unsupported_media_type`). A rota não roda.
       headers:
         X-Request-Id:
           $ref: "#/components/headers/XRequestId"
@@ -399,6 +429,8 @@ components:
             | `csrf_token_invalid` | 403 | Escrita sem `X-CSRF-Token` ou com token diferente do da sessão |
             | `not_found` | 404 | Recurso inexistente ou fora do alcance de quem pede |
             | `version_conflict` | 409 | `version` enviada diferente da gravada |
+            | `payload_too_large` | 413 | Corpo acima do limite da rota |
+            | `unsupported_media_type` | 415 | `Content-Type` que a operação não declara, ou que o serviço não sabe ler |
             | `rate_limited` | 429 | Limite de taxa; traz `retryAfterSeconds` |
             | `internal_error` | 500 | Erro inesperado; sem `detail` |
             | `database_unavailable` | 503 | Banco indisponível |
@@ -455,11 +487,22 @@ components:
       description: Provedor de login social.
     Meta:
       type: object
-      required: [schoolName, version, currency, locale, authProviders]
+      description: |
+        Dados públicos da instalação e da marca da escola (`specs/003-admin-api.md`, "Meta").
+        Todos os campos estão sempre presentes; `logoUrl` e `accentColor` podem ser `null`.
+      required:
+        - schoolName
+        - version
+        - currency
+        - locale
+        - authProviders
+        - logoUrl
+        - accentColor
+        - sourceCodeUrl
       properties:
         schoolName:
           type: string
-          description: Nome da escola, definido na configuração do admin.
+          description: Nome da escola, definido na configuração do admin; padrão `nuva-edu`.
         version:
           type: string
           description: Versão instalada do nuva-edu (SemVer).
@@ -476,4 +519,25 @@ components:
           items:
             $ref: "#/components/schemas/AuthProvider"
           uniqueItems: true
+        logoUrl:
+          type: [string, "null"]
+          format: uri-reference
+          description: |
+            Caminho do logotipo na própria API, na variante de 256 px
+            (`specs/029-imagens.md`). `null` sem logotipo: os sites mostram só o nome.
+          examples: [/api/v1/images/0193a5b2-7c1e-7d3a-9f4b-2a6c8e1d5f70/256.webp, null]
+        accentColor:
+          type: [string, "null"]
+          pattern: "^#[0-9A-Fa-f]{6}$"
+          description: |
+            Cor de destaque da escola, em `#RRGGBB`. `null` usa a cor de destaque padrão de
+            `packages/ui`.
+          examples: ["#1F6FEB", null]
+        sourceCodeUrl:
+          type: string
+          format: uri
+          description: |
+            Endereço do código-fonte desta instalação, exigido pela AGPL-3.0. Sempre presente;
+            padrão `https://github.com/patrickbrandao/nuva-edu`.
+          examples: [https://github.com/patrickbrandao/nuva-edu]
       additionalProperties: false
