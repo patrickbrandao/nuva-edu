@@ -258,18 +258,34 @@ test('com Traefik externo, as aplicações entram na rede dele e não publicam p
 });
 
 test('os sites recebem só as variáveis do config.json, sem segredo algum', { skip }, () => {
-  const { services } = config({ NUVA_ADMIN_HOST: 'painel.escola.test' });
+  const { services } = config({
+    NUVA_ADMIN_HOST: 'painel.escola.test',
+    // Segredos presentes na interpolação não podem chegar aos sites.
+    SESSION_SECRET: 'segredo-so-do-teste',
+    SMTP_PASSWORD: 'segredo-so-do-teste',
+  });
   for (const site of ['admin', 'classroom']) {
-    assert.deepEqual(Object.keys(services[site].environment).sort(), [
+    const environment = services[site].environment;
+    assert.deepEqual(Object.keys(environment).sort(), [
       'NUVA_ADMIN_HOST',
       'NUVA_CLASSROOM_HOST',
-      'NUVA_CURRENCY',
       'NUVA_DOMAIN',
-      'NUVA_LOCALE',
       'NUVA_PUBLIC_PORT',
       'NUVA_PUBLIC_SCHEME',
     ]);
-    assert.equal(services[site].environment.NUVA_ADMIN_HOST, 'painel.escola.test');
-    assert.equal(services[site].env_file, undefined);
+    assert.equal(environment.NUVA_ADMIN_HOST, 'painel.escola.test');
+    assert.equal(services[site].env_file, undefined, `${site}: env_file`);
+    assert.equal(environment.POSTGRES_PASSWORD, undefined, `${site}: POSTGRES_PASSWORD`);
+    assert.doesNotMatch(JSON.stringify(services[site]), /so-do-teste/, `${site}: segredo`);
+    assert.deepEqual(
+      Object.keys(services[site].networks),
+      ['public'],
+      `${site}: só a rede do proxy`,
+    );
+    assert.match(
+      services[site].healthcheck.test.join(' '),
+      /127\.0\.0\.1:8080\/config\.json/,
+      site,
+    );
   }
 });

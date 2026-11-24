@@ -9,14 +9,13 @@ services:
       dockerfile: apps/classroom/Dockerfile
     restart: unless-stopped
     # Viram o /config.json gerado na subida; trocar um valor e subir de novo não refaz a imagem.
+    # O arquivo é público: aqui não entra segredo nem `env_file` (spec 031).
     environment:
       NUVA_DOMAIN: ${NUVA_DOMAIN:-localhost}
       NUVA_ADMIN_HOST: ${NUVA_ADMIN_HOST:-edu-admin.localhost}
       NUVA_CLASSROOM_HOST: ${NUVA_CLASSROOM_HOST:-classroom.localhost}
       NUVA_PUBLIC_SCHEME: ${NUVA_PUBLIC_SCHEME:-http}
       NUVA_PUBLIC_PORT: ${NUVA_PUBLIC_PORT-8080}
-      NUVA_CURRENCY: ${NUVA_CURRENCY:-BRL}
-      NUVA_LOCALE: ${NUVA_LOCALE:-pt-BR}
     networks:
       - public
     read_only: true

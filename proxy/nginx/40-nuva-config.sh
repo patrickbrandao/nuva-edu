@@ -1,6 +1,8 @@
 #!/bin/sh
-# Gera /run/nuva/config.json na subida do contêiner dos sites (spec 031): nomes de host, moeda
-# e idioma chegam em tempo de execução, para a mesma imagem servir a qualquer instalação.
+# Gera /run/nuva/config.json na subida do contêiner dos sites (spec 031, "Configuração de execução
+# dos sites"): qual site é este e o endereço público dos dois, para a mesma imagem servir a
+# qualquer instalação. Moeda, idioma e versão vêm do /api/v1/meta, não daqui.
+# O arquivo é público: nunca recebe segredo. O primeiro argumento troca a pasta de saída (testes).
 set -eu
 
 fail() {
@@ -13,7 +15,13 @@ check() {
   name="$1"
   value="$2"
   pattern="$3"
-  if ! printf '%s' "$value" | grep -Eq "$pattern"; then
+  # O `\n` no fim dá ao grep uma linha mesmo com o valor vazio (porta vazia é válida); valor com
+  # quebra de linha é recusado antes, porque o grep confere linha a linha.
+  case "$value" in
+    *"
+"*) fail "$name inválida: tem quebra de linha" ;;
+  esac
+  if ! printf '%s\n' "$value" | grep -Eq "$pattern"; then
     fail "$name inválida: \"$value\""
   fi
 }
@@ -24,16 +32,13 @@ admin_host="${NUVA_ADMIN_HOST:-edu-admin.$domain}"
 classroom_host="${NUVA_CLASSROOM_HOST:-classroom.$domain}"
 scheme="${NUVA_PUBLIC_SCHEME:-http}"
 port="${NUVA_PUBLIC_PORT-8080}"
-currency="${NUVA_CURRENCY:-BRL}"
-locale="${NUVA_LOCALE:-pt-BR}"
+out_dir="${1:-/run/nuva}"
 
 check NUVA_APP "$app" '^(admin|classroom)$'
 check NUVA_ADMIN_HOST "$admin_host" '^[A-Za-z0-9]([A-Za-z0-9.-]*[A-Za-z0-9])?$'
 check NUVA_CLASSROOM_HOST "$classroom_host" '^[A-Za-z0-9]([A-Za-z0-9.-]*[A-Za-z0-9])?$'
 check NUVA_PUBLIC_SCHEME "$scheme" '^https?$'
 check NUVA_PUBLIC_PORT "$port" '^[0-9]{0,5}$'
-check NUVA_CURRENCY "$currency" '^[A-Z]{3}$'
-check NUVA_LOCALE "$locale" '^[A-Za-z]{2,3}(-[A-Za-z0-9]{2,8})*$'
 
 # Mesma regra de packages/core: porta vazia ou padrão do esquema não aparece na URL.
 suffix=""
@@ -42,16 +47,12 @@ if [ -n "$port" ]; then
   if [ "$scheme" = "https" ] && [ "$port" != "443" ]; then suffix=":$port"; fi
 fi
 
-mkdir -p /run/nuva
-cat > /run/nuva/config.json <<JSON
+mkdir -p "$out_dir"
+cat > "$out_dir/config.json" <<JSON
 {
   "app": "$app",
-  "adminHost": "$admin_host",
-  "classroomHost": "$classroom_host",
   "adminUrl": "$scheme://$admin_host$suffix",
-  "classroomUrl": "$scheme://$classroom_host$suffix",
-  "currency": "$currency",
-  "locale": "$locale"
+  "classroomUrl": "$scheme://$classroom_host$suffix"
 }
 JSON
-echo "nuva-config: /run/nuva/config.json gerado para o site $app"
+echo "nuva-config: $out_dir/config.json gerado para o site $app"

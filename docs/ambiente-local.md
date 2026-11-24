@@ -69,9 +69,14 @@ Cada `apps/<app>/Dockerfile` usa a raiz do repositório como contexto e tem trê
   workspace (`/app/apps`, `/app/packages`, `/app/database/postgres`) porque o Node só executa
   `.ts` fora de `node_modules`.
 - Sites: `vite build` e Nginx (`proxy/nginx/nginx.conf`), com retorno ao `index.html` para as
-  rotas da SPA. Na subida, `proxy/nginx/40-nuva-config.sh` gera `/config.json` com os endereços
-  públicos, a moeda e o idioma, a partir das variáveis do contêiner; trocar `NUVA_ADMIN_HOST` e
-  subir de novo não refaz a imagem.
+  rotas da SPA. Na subida, `proxy/nginx/40-nuva-config.sh` gera `/config.json` só com `app`
+  (`admin` ou `classroom`), `adminUrl` e `classroomUrl`, a partir de `NUVA_APP` (fixada na
+  imagem), `NUVA_PUBLIC_SCHEME`, `NUVA_ADMIN_HOST`, `NUVA_CLASSROOM_HOST` e `NUVA_PUBLIC_PORT`; a
+  porta some da URL quando está vazia ou é a padrão do esquema. Moeda, idioma e versão vêm do
+  `GET /api/v1/meta`. O arquivo é público e sai com `Cache-Control: no-store`; os sites não
+  recebem segredo nem `env_file`. Valor fora do formato impede a subida, com a variável citada no
+  log. Trocar `NUVA_ADMIN_HOST` e subir de novo não refaz a imagem; mudança no
+  script, porém, só vale depois de reconstruir as imagens dos dois sites (`pnpm dev:up`).
 - Sites: o `index.html` sai com `Content-Security-Policy` sem `unsafe-inline`. No build,
   `proxy/nginx/csp.mjs` lê o `dist/index.html` e grava `/etc/nginx/nuva-csp.conf` com o hash do
   script inline do tema; a política só aceita a própria origem (API, SSE, imagens, fontes,
