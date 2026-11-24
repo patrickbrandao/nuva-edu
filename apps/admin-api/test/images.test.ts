@@ -1,6 +1,6 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { afterAll, describe, expect, it } from 'vitest';
-import { createTestApp, createUser } from './helpers.ts';
+import { createTestApp, createUser, nextIp, sessionCookieOf } from './helpers.ts';
 
 const test = createTestApp();
 afterAll(() => test.close());
@@ -83,5 +83,77 @@ describe('GET /api/v1/images/{imageId}/{variant}.webp', () => {
     });
     expect(response.statusCode).toBe(400);
     expect(response.json()).toMatchObject({ code: 'validation_failed' });
+  });
+});
+
+describe('limite de taxa da entrega (spec 029)', () => {
+  it('com sessão, 100 entregas no minuto não consomem os 300 da sessão', async () => {
+    const manager = await createUser(test.db, { role: 'manager' });
+    const login = await test.app.inject({
+      method: 'POST',
+      url: '/api/v1/auth/login',
+      remoteAddress: nextIp(),
+      payload: { email: manager.email, password: manager.password },
+    });
+    expect(login.statusCode).toBe(200);
+    const cookies = { nuva_admin_session: sessionCookieOf(login.headers['set-cookie']) as string };
+    const ip = nextIp();
+    const avatar = await storeAvatar();
+    for (let i = 0; i < 100; i += 1) {
+      const response = await test.app.inject({
+        method: 'GET',
+        url: `/api/v1/images/${avatar.id}/64.webp`,
+        remoteAddress: ip,
+        cookies,
+      });
+      expect(response.statusCode).toBe(200);
+    }
+    // Os 300 da sessão continuam inteiros; a 301ª passa do limite.
+    for (let i = 0; i < 300; i += 1) {
+      const response = await test.app.inject({
+        method: 'GET',
+        url: '/api/v1/session',
+        remoteAddress: ip,
+        cookies,
+      });
+      expect(response.statusCode).toBe(200);
+    }
+    const limited = await test.app.inject({
+      method: 'GET',
+      url: '/api/v1/session',
+      remoteAddress: ip,
+      cookies,
+    });
+    expect(limited.statusCode).toBe(429);
+  });
+
+  it('a 601ª entrega no mesmo minuto e IP responde 429 com Retry-After; 304 conta', async () => {
+    const avatar = await storeAvatar();
+    const ip = nextIp();
+    for (let i = 0; i < 600; i += 1) {
+      const revalidate = i % 2 === 0;
+      const response = await test.app.inject({
+        method: 'GET',
+        url: `/api/v1/images/${avatar.id}/256.webp`,
+        remoteAddress: ip,
+        headers: revalidate ? { 'if-none-match': avatar.etag } : {},
+      });
+      expect(response.statusCode).toBe(revalidate ? 304 : 200);
+    }
+    const limited = await test.app.inject({
+      method: 'GET',
+      url: `/api/v1/images/${avatar.id}/256.webp`,
+      remoteAddress: ip,
+    });
+    expect(limited.statusCode).toBe(429);
+    expect(limited.json()).toMatchObject({ code: 'rate_limited' });
+    expect(Number(limited.headers['retry-after'])).toBeGreaterThan(0);
+    // Outro IP segue livre.
+    const other = await test.app.inject({
+      method: 'GET',
+      url: `/api/v1/images/${avatar.id}/256.webp`,
+      remoteAddress: nextIp(),
+    });
+    expect(other.statusCode).toBe(200);
   });
 });

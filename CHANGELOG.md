@@ -10,6 +10,7 @@ Detalhe das decisões em `specs/decisions/`.
 - worker: `retention.purge` apaga, em lotes, as tarefas da fila `done` (7 dias) e `failed` (30 dias) por `finished_at`; `queued` e `running` nunca (task 279).
 - `@nuva-edu/api-kit`: `setApiCookie` e `readApiCookie` só tratam o cookie de sessão e recusam o de retorno OAuth, que é assinado pelo núcleo; comentários corrigidos (task 280).
 - worker: `retention.purge` com as regras de expurgo das contas e da auditoria (`NUVA_RETENTION_AUDIT_DAYS`) em lotes de 5.000; manipuladores e agenda de `image.cleanup` (diária 03:45) e `suspension.expire` (a cada 15 min) (task 151).
+- admin-api: `getImageVariant` fora do limite de 300/min da sessão, com conta própria de 600/min por IP (`304` conta) (task 336).
 - `classroom-api`: login social (Google, Facebook, Apple por `form_post`), vínculo por `intent=link` e cadastro pendente (`/auth/social/pending` e `/complete`), com `authProviders` do `/meta` vindo do núcleo (task 153).
 - Compose exige `SESSION_SECRET` (APIs), `ADMIN_EMAIL` e `ADMIN_PASSWORD` (admin-api); `pnpm dev:up` e CI sobem o provedor OAuth simulado (task 157).
 - `@nuva-edu/core`: tipos de tarefa `suspension.expire` (3 tentativas) e `image.cleanup` (5) no registro da fila, ainda em `PendingHandlerJobType` até o worker trazer os manipuladores (task 235).

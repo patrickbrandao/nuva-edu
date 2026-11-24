@@ -185,14 +185,24 @@ export const AUTH_OPERATIONS: readonly string[] = [
   'oauthCallbackForm',
 ];
 
-/** Limites da 003 RNF-03: 300 por minuto por sessão; 20 por minuto por IP na autenticação. */
+/** Entrega de imagem: conta própria por IP, fora do limite da sessão (spec 029). */
+export const IMAGE_DELIVERY_OPERATION = 'getImageVariant';
+
+/**
+ * Limites da 003 RNF-03: 300 por minuto por sessão; 20 por minuto por IP na autenticação. A
+ * entrega de imagem (`getImageVariant`) não conta na sessão e tem conta própria de 600 por minuto
+ * por IP, com ou sem sessão, `304` incluído (spec 029, "Limite de taxa da entrega").
+ */
 export function adminRateLimits(): RateLimitRule[] {
   return [
     {
       name: 'session',
       limit: 300,
       windowSeconds: 60,
-      key: (request) => adminSession.get(request)?.session.id ?? null,
+      key: (request) =>
+        request.operation?.operationId === IMAGE_DELIVERY_OPERATION
+          ? null
+          : (adminSession.get(request)?.session.id ?? null),
     },
     {
       name: 'auth-ip',
@@ -200,6 +210,13 @@ export function adminRateLimits(): RateLimitRule[] {
       windowSeconds: 60,
       key: rateLimitByIp,
       operations: AUTH_OPERATIONS,
+    },
+    {
+      name: 'image-ip',
+      limit: 600,
+      windowSeconds: 60,
+      key: rateLimitByIp,
+      operations: [IMAGE_DELIVERY_OPERATION],
     },
   ];
 }
