@@ -28,7 +28,7 @@ Escuta na porta 3000 (spec 031); `PORT` troca a porta fora do contêiner. Precis
 | --- | --- |
 | `GET /healthz` | Processo vivo; não toca no banco |
 | `GET /readyz` | `200` com banco no ar e migrations em dia; senão `503` |
-| `GET /metrics` | Texto do Prometheus; fora do contrato, só rede interna |
+| `GET /metrics` | Texto do Prometheus (inclui `db_pool_connections{state}`: `active`, `idle`, `waiting`); fora do contrato, só rede interna |
 | `GET /api/v1/meta` | Dados públicos da instalação, sem sessão |
 
 ## Nova rota

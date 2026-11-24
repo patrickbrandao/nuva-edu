@@ -1,8 +1,12 @@
+import { DEFAULT_TRUSTED_PROXIES } from '@nuva-edu/core';
 import { describe, expect, it } from 'vitest';
 import { createTrustedProxies, normalizeAddress, resolveClientAddress } from '../src/index.ts';
 
-// Padrão da spec 031 (`DEFAULT_TRUSTED_PROXIES` do core).
-const DEFAULT = ['10.0.0.0/8', '172.16.0.0/12', '192.168.0.0/16', '127.0.0.0/8', 'fc00::/7'];
+// O padrão da spec 031 mora no núcleo: aqui não há cópia da lista.
+const DEFAULT = DEFAULT_TRUSTED_PROXIES;
+
+// Conexões que só a lista padrão da spec 031 cobre: CGNAT, link-local (IPv4 e IPv6) e `::1`.
+const DEFAULT_ONLY_PEERS = ['100.64.0.1', '169.254.0.1', 'fe80::1', '::1'];
 
 type Row = [peer: string, xff: string | null, realIp: string | null, ip: string, source: string];
 
@@ -43,6 +47,11 @@ describe('resolveClientAddress com o padrão de faixas privadas', () => {
   ];
   it.each(rows)('peer %s, XFF %s, X-Real-IP %s → %s (%s)', (...row) => run(DEFAULT, row));
 
+  it.each(DEFAULT_ONLY_PEERS)('conexão vinda de %s tem o X-Forwarded-For aceito', (peer) => {
+    run(DEFAULT, [peer, '6.6.6.6, 45.80.10.20', null, '45.80.10.20', 'x-forwarded-for']);
+    run(DEFAULT, [peer, null, '45.80.10.20', '45.80.10.20', 'x-real-ip']);
+  });
+
   it('junta ocorrências repetidas do X-Forwarded-For', () => {
     const result = resolveClientAddress(
       '172.18.0.5',
@@ -81,6 +90,11 @@ describe('resolveClientAddress com TRUSTED_PROXIES restrito', () => {
     ['172.30.0.7', '45.80.10.20', '45.80.10.20', '172.30.0.7', 'tcp'],
   ];
   it.each(rows)('peer %s, XFF %s, X-Real-IP %s → %s (%s)', (...row) => run(['172.30.0.2/32'], row));
+
+  it.each(DEFAULT_ONLY_PEERS)('conexão vinda de %s tem o X-Forwarded-For recusado', (peer) => {
+    const ip = normalizeAddress(peer) as string;
+    run(['172.30.0.2/32'], [peer, '45.80.10.20', '45.80.10.20', ip, 'tcp']);
+  });
 });
 
 describe('createTrustedProxies', () => {

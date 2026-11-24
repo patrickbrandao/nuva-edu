@@ -9,6 +9,7 @@ Detalhe das decisões em `specs/decisions/`.
 - `task:abort` recusa sem `--force` quando o branch tem commits fora da `main`.
 - `verify:quick`: YAML (`.yml` e `.yaml`) entra no passo `lint`; o `pnpm-lock.yaml` continua fora (task 062).
 - Worker: sinal de aborto por tarefa (encerramento e trava perdida) e medidores `jobs_oldest_pending_seconds` e `db_pool_connections{state}`; classroom-api confere cada evento SSE com o `StreamEvent` do contrato antes de entregar, expõe `db_pool_connections{state}` e usa o SSE, o estado por requisição, as métricas e a saúde do api-kit.
+- admin-api expõe `db_pool_connections{state}` (`active`, `idle`, `waiting`); o teste do IP real do api-kit usa a lista padrão de proxies do núcleo (CGNAT, link-local e `::1`).
 - Specs 000 a 033, plano em 8 fases, ADRs 0001 a 0018.
 - Definições de papel para Claude Code e OpenCode.
 - Compose base: Postgres 18, Traefik opcional, Mailpit.

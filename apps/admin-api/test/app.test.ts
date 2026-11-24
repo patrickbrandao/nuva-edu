@@ -64,6 +64,19 @@ describe('sondas', () => {
     expect(response.body).toContain('http_request_duration_seconds_bucket');
   });
 
+  it('GET /metrics expõe o estado do pool do banco em db_pool_connections', async () => {
+    // Garante ao menos uma conexão aberta e devolvida ao pool antes da leitura.
+    await test.app.inject({ method: 'GET', url: '/readyz' });
+    const response = await test.app.inject({ method: 'GET', url: '/metrics' });
+    expect(response.body.match(/^# TYPE db_pool_connections gauge$/gm)).toHaveLength(1);
+    const states = [...response.body.matchAll(/^db_pool_connections\{state="(\w+)"\} (\d+)$/gm)];
+    expect(states.map((match) => match[1])).toEqual(['active', 'idle', 'waiting']);
+    const pool = Object.fromEntries(states.map((match) => [match[1], Number(match[2])]));
+    expect(pool.active + pool.idle).toBeGreaterThanOrEqual(1);
+    expect(pool.active + pool.idle).toBeLessThanOrEqual(2);
+    expect(pool.waiting).toBe(0);
+  });
+
   it('GET /metrics não responde a quem chega pelo proxy', async () => {
     const response = await test.app.inject({
       method: 'GET',

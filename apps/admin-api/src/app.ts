@@ -4,7 +4,7 @@ import {
   type FastifyInstance,
   type ReadinessChecks,
 } from '@nuva-edu/api-kit';
-import type { Config, Database, Logger } from '@nuva-edu/core';
+import { type Config, type Database, databasePoolStats, type Logger } from '@nuva-edu/core';
 import { loadAdminContract } from './contract.ts';
 import { readServiceVersion } from './meta.ts';
 import { registerMetaRoutes } from './routes/meta.ts';
@@ -35,6 +35,19 @@ export function buildAdminApp(options: AdminAppOptions): FastifyInstance {
     // Sessão e CSRF entram na Fase 1 (spec 007): os tratadores de `sessionCookie` e `csrfToken`
     // são registrados aqui. Hoje todas as operações do contrato são públicas.
     security: {},
+  });
+
+  app.metrics.gauge({
+    name: 'db_pool_connections',
+    help: 'Conexões do pool do PostgreSQL neste processo, por estado.',
+    collect: () => {
+      const pool = databasePoolStats(db);
+      return [
+        { labels: { state: 'active' }, value: pool.active },
+        { labels: { state: 'idle' }, value: pool.idle },
+        { labels: { state: 'waiting' }, value: pool.waiting },
+      ];
+    },
   });
 
   registerMetaRoutes(app, { config, version: options.version ?? readServiceVersion() });
