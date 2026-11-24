@@ -40,6 +40,20 @@ export interface AuditLog {
   userAgent: string | null;
 }
 
+export interface EmailOutbox {
+  attempts: Generated<number>;
+  createdAt: Generated<Timestamp>;
+  data: Generated<Json>;
+  id: Generated<string>;
+  lastError: string | null;
+  sentAt: Timestamp | null;
+  status: Generated<string>;
+  subject: string | null;
+  to: string;
+  type: string;
+  userId: string;
+}
+
 export interface EmailTokens {
   createdAt: Generated<Timestamp>;
   expiresAt: Timestamp;
@@ -134,6 +148,26 @@ export interface Settings {
   value: Json;
 }
 
+export interface TermsAcceptances {
+  acceptedAt: Generated<Timestamp>;
+  id: Generated<string>;
+  ip: string | null;
+  termsVersionId: string;
+  userAgent: string | null;
+  userId: string;
+}
+
+export interface TermsVersions {
+  bodyMd: string;
+  createdAt: Generated<Timestamp>;
+  document: string;
+  effectiveAt: Timestamp | null;
+  id: Generated<string>;
+  publishedAt: Timestamp | null;
+  requiresReacceptance: Generated<boolean>;
+  version: number | null;
+}
+
 export interface UserDevices {
   deviceKey: string;
   firstSeenAt: Generated<Timestamp>;
@@ -178,6 +212,7 @@ export interface UserSuspensions {
 
 export interface DB {
   auditLog: AuditLog;
+  emailOutbox: EmailOutbox;
   emailTokens: EmailTokens;
   images: Images;
   imageVariants: ImageVariants;
@@ -187,6 +222,8 @@ export interface DB {
   profiles: Profiles;
   sessions: Sessions;
   settings: Settings;
+  termsAcceptances: TermsAcceptances;
+  termsVersions: TermsVersions;
   userDevices: UserDevices;
   users: Users;
   userSuspensions: UserSuspensions;
