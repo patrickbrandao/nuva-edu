@@ -1,15 +1,17 @@
 // Testes do `scripts/task.mjs`. Cada teste monta um repositório Git próprio num diretório
 // temporário do sistema, com um remoto `origin` de mentira; o repositório real nunca é tocado.
-// A instalação e a verificação são injetadas: nenhum `pnpm install` roda aqui.
+// A instalação e a verificação são injetadas: nenhum `pnpm install` roda aqui, a não ser no teste
+// lento do fim do arquivo, que só roda com `TASK_TEST_SLOW=1`.
 
 import assert from 'node:assert/strict';
-import { spawnSync } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 import {
   appendFileSync,
   existsSync,
   lstatSync,
   mkdirSync,
   mkdtempSync,
+  readdirSync,
   readFileSync,
   readlinkSync,
   realpathSync,
@@ -19,14 +21,17 @@ import {
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { after, describe, test } from 'node:test';
+import { fileURLToPath } from 'node:url';
 import {
   citesTask,
   EXIT,
   formatTable,
+  hooksInConfig,
   parseArgs,
   parseTask,
   runTask,
   setTaskFields,
+  WORKTREE_INSTALL_ENV,
 } from './task.mjs';
 
 // O Git dos testes ignora a configuração da máquina (ganchos, assinatura, identidade).
@@ -1205,5 +1210,333 @@ describe('janela de contrato: task:list', () => {
     const env = makeRepo({ tasks: WINDOW_TASKS });
     const lines = run(env.repo, ['list']).out.split('\n');
     assert.match(lines[2], /^011\s+aberta\s+infra\s+-\s+010\s+010\s+-\s+Tarefa 011/);
+  });
+});
+
+// ---------------------------------------------------------------------------------------------
+// Ganchos do Git: a pasta `.git/hooks` é uma só para o checkout principal e os worktrees.
+
+const HOOKS = ['pre-commit', 'commit-msg'];
+const LEFTHOOK_YML =
+  'pre-commit:\n  jobs:\n    - name: proibido\n      run: test ! -f proibido.txt\n\n' +
+  'commit-msg:\n  jobs:\n    - name: tarefa\n      run: grep -q "(task [0-9][0-9]*)" {1}\n';
+const HOOK_BODY = '#!/bin/sh\n# gancho do lefthook (de mentira)\n';
+
+/** Repositório com `lefthook.yml` na `main` e, se pedido, os ganchos já instalados. */
+function makeHooksRepo({ tasks, installed = true } = {}) {
+  const env = makeRepo({ tasks });
+  writeFileSync(join(env.repo, 'lefthook.yml'), LEFTHOOK_YML);
+  git(env.repo, 'add', 'lefthook.yml');
+  git(env.repo, 'commit', '--quiet', '-m', 'chore: ganchos (task 000)');
+  env.hooks = join(env.repo, '.git', 'hooks');
+  mkdirSync(env.hooks, { recursive: true });
+  if (installed) {
+    for (const name of HOOKS) writeFileSync(join(env.hooks, name), HOOK_BODY, { mode: 0o755 });
+  }
+  return env;
+}
+
+function hooksState(env) {
+  return Object.fromEntries(
+    readdirSync(env.hooks)
+      .filter((name) => !name.endsWith('.sample'))
+      .sort()
+      .map((name) => [name, readFileSync(join(env.hooks, name), 'utf8')]),
+  );
+}
+
+/**
+ * Programa que roda um `task:start` num processo só dele, para vários rodarem ao mesmo tempo.
+ * A instalação de mentira imita o `pnpm install` de verdade: chama o "lefthook install" (que troca
+ * cada gancho apagando e regravando o arquivo, e falha se outro processo apagou antes), a não ser
+ * que o ambiente recebido peça para pular os ganchos. No modo "legado" ela ignora esse pedido,
+ * como o `task:start` de antes da tarefa 112.
+ */
+function writeStartDriver(base) {
+  const file = join(base, 'start-driver.mjs');
+  const taskModule = new URL('./task.mjs', import.meta.url).href;
+  writeFileSync(
+    file,
+    `import { appendFileSync, existsSync, rmSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { runTask } from ${JSON.stringify(taskModule)};
+
+const [repo, id, mode] = process.argv.slice(2);
+const hooks = join(repo, '.git', 'hooks');
+const pause = (ms) => Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
+
+function lefthookInstall() {
+  for (const name of ${JSON.stringify(HOOKS)}) {
+    const file = join(hooks, name);
+    if (existsSync(file)) {
+      pause(20);
+      try {
+        rmSync(file);
+      } catch {
+        console.error('could not replace the hook: remove ' + file);
+        return 1;
+      }
+    }
+    pause(5);
+    writeFileSync(file, ${JSON.stringify(HOOK_BODY)} + '# instalado por ' + id + '\\n', { mode: 0o755 });
+  }
+  return 0;
+}
+
+process.exitCode = runTask(['start', id, '--as', 'infra'], {
+  cwd: repo,
+  install: (_dir, env = {}) =>
+    env.NUVA_SKIP_GIT_HOOKS && mode !== 'legado' ? 0 : lefthookInstall(),
+  installHooks: () => {
+    appendFileSync(join(repo, '.git', 'instalacoes-de-ganchos.log'), id + '\\n');
+    return lefthookInstall();
+  },
+  verify: () => 0,
+});
+`,
+  );
+  return file;
+}
+
+function spawnAsync(command, args, options) {
+  return new Promise((resolve, reject) => {
+    const child = spawn(command, args, { ...options, stdio: ['ignore', 'pipe', 'pipe'] });
+    let output = '';
+    child.stdout.on('data', (chunk) => {
+      output += chunk;
+    });
+    child.stderr.on('data', (chunk) => {
+      output += chunk;
+    });
+    child.on('error', reject);
+    child.on('close', (code) => resolve({ code, output }));
+  });
+}
+
+const TEN = Array.from({ length: 10 }, (_, i) => String(i + 1).padStart(3, '0'));
+
+/** Dez `task:start` ao mesmo tempo, um processo por tarefa; devolve código e saída de cada um. */
+function startTen(env, mode = 'atual') {
+  const driver = writeStartDriver(join(env.repo, '..'));
+  return Promise.all(
+    TEN.map((id) => spawnAsync(process.execPath, [driver, env.repo, id, mode], { cwd: env.repo })),
+  );
+}
+
+function assertTenStarted(env, results) {
+  for (const [i, result] of results.entries()) {
+    assert.equal(result.code, EXIT.OK, `task:start ${TEN[i]}:\n${result.output}`);
+  }
+  for (const id of TEN) {
+    assert.equal(git(env.worktree(id), 'symbolic-ref', '--short', 'HEAD'), `task/${id}`);
+    assert.equal(taskOf(env, id).status, 'em-andamento');
+  }
+}
+
+describe('task:start e os ganchos do Git', () => {
+  test('lefthook.yml: só as chaves da raiz que são nome de gancho', () => {
+    assert.deepEqual(hooksInConfig(LEFTHOOK_YML), HOOKS);
+    assert.deepEqual(
+      hooksInConfig('# pre-push: não\nmin_version: 2.0.0\npre-push:\n  jobs:\n    - run: x\n'),
+      ['pre-push'],
+    );
+    assert.deepEqual(hooksInConfig('  pre-commit:\nassert_lefthook_installed: true\n'), []);
+  });
+
+  test('instala no worktree com o ambiente que desliga os ganchos e não reinstala os que existem', () => {
+    const env = makeHooksRepo();
+    const before = hooksState(env);
+    const envs = [];
+    const result = run(env.repo, ['start', '001', '--as', 'infra'], {
+      install: (_dir, installEnv) => {
+        envs.push(installEnv);
+        return 0;
+      },
+      installHooks: () => assert.fail('os ganchos já existem: não é para instalar'),
+    });
+    assert.equal(result.code, EXIT.OK, result.out);
+    assert.deepEqual(envs, [WORKTREE_INSTALL_ENV]);
+    assert.equal(WORKTREE_INSTALL_ENV.NUVA_SKIP_GIT_HOOKS, '1');
+    assert.deepEqual(hooksState(env), before);
+  });
+
+  test('o prepare da raiz pula o lefthook install quando NUVA_SKIP_GIT_HOOKS está definida', () => {
+    const root = fileURLToPath(new URL('../package.json', import.meta.url));
+    const prepare = JSON.parse(readFileSync(root, 'utf8')).scripts.prepare;
+    const [guard, fallback] = prepare.split(' || ');
+    assert.equal(fallback, 'lefthook install');
+    const runGuard = (extra) =>
+      spawnSync(guard, { shell: true, env: { PATH: process.env.PATH, ...extra } }).status;
+    assert.equal(runGuard({ NUVA_SKIP_GIT_HOOKS: '1' }), 0);
+    assert.equal(runGuard({}), 1);
+  });
+
+  test('gancho faltando: instala uma vez pelo worktree e segue', () => {
+    const env = makeHooksRepo({ installed: false });
+    const calls = [];
+    const result = run(env.repo, ['start', '001', '--as', 'infra'], {
+      installHooks: (dir) => {
+        calls.push(dir);
+        for (const name of HOOKS) writeFileSync(join(env.hooks, name), HOOK_BODY, { mode: 0o755 });
+        return 0;
+      },
+    });
+    assert.equal(result.code, EXIT.OK, result.out);
+    assert.deepEqual(calls, [env.worktree('001')]);
+    assert.match(result.out, /ganchos do Git ausentes \(pre-commit, commit-msg\)/);
+    assert.equal(existsSync(join(env.repo, '.git', 'nuva-hooks.lock')), false);
+  });
+
+  test('gancho que não é do lefthook conta como faltando', () => {
+    const env = makeHooksRepo({ installed: false });
+    writeFileSync(join(env.hooks, 'pre-commit'), '#!/bin/sh\nexit 0\n', { mode: 0o755 });
+    writeFileSync(join(env.hooks, 'commit-msg'), HOOK_BODY, { mode: 0o755 });
+    const result = run(env.repo, ['start', '001', '--as', 'infra'], {
+      installHooks: () => {
+        writeFileSync(join(env.hooks, 'pre-commit'), HOOK_BODY, { mode: 0o755 });
+        return 0;
+      },
+    });
+    assert.equal(result.code, EXIT.OK, result.out);
+    assert.match(result.out, /ganchos do Git ausentes \(pre-commit\)/);
+  });
+
+  test('ganchos que continuam faltando: código 8, worktree e branch desfeitos, trava solta', () => {
+    for (const installHooks of [() => 1, () => 0]) {
+      const env = makeHooksRepo({ installed: false });
+      const result = run(env.repo, ['start', '001', '--as', 'infra'], { installHooks });
+      assert.equal(result.code, EXIT.INSTALL, result.out);
+      assert.match(result.out, /Ganchos do Git: /);
+      assert.equal(existsSync(env.worktree('001')), false);
+      assert.equal(git(env.repo, 'branch', '--list', 'task/001'), '');
+      assert.equal(taskOf(env, '001').status, 'aberta');
+      assert.equal(existsSync(join(env.repo, '.git', 'nuva-hooks.lock')), false);
+    }
+  });
+
+  test('trava abandonada por processo morto não segura o task:start', () => {
+    const env = makeHooksRepo({ installed: false });
+    const lock = join(env.repo, '.git', 'nuva-hooks.lock');
+    mkdirSync(lock);
+    const old = new Date(Date.now() - 10 * 60 * 1000);
+    spawnSync('touch', ['-t', touchStamp(old), lock]);
+    const result = run(env.repo, ['start', '001', '--as', 'infra'], {
+      installHooks: () => {
+        for (const name of HOOKS) writeFileSync(join(env.hooks, name), HOOK_BODY, { mode: 0o755 });
+        return 0;
+      },
+    });
+    assert.equal(result.code, EXIT.OK, result.out);
+    assert.equal(existsSync(lock), false);
+  });
+
+  test('dez task:start simultâneos com os ganchos instalados: todos passam e ninguém toca neles', async () => {
+    const env = makeHooksRepo({ tasks: TEN.map((id) => ({ id })) });
+    const before = hooksState(env);
+    assertTenStarted(env, await startTen(env));
+    assert.deepEqual(hooksState(env), before);
+    assert.equal(existsSync(join(env.repo, '.git', 'instalacoes-de-ganchos.log')), false);
+  });
+
+  test('dez task:start simultâneos sem ganchos: todos passam e a instalação acontece uma vez só', async () => {
+    const env = makeHooksRepo({ tasks: TEN.map((id) => ({ id })), installed: false });
+    assertTenStarted(env, await startTen(env));
+    assert.deepEqual(Object.keys(hooksState(env)), ['commit-msg', 'pre-commit']);
+    const log = readFileSync(join(env.repo, '.git', 'instalacoes-de-ganchos.log'), 'utf8');
+    assert.equal(log.trim().split('\n').length, 1, log);
+    assert.equal(existsSync(join(env.repo, '.git', 'nuva-hooks.lock')), false);
+  });
+});
+
+function touchStamp(date) {
+  const two = (n) => String(n).padStart(2, '0');
+  return `${date.getFullYear()}${two(date.getMonth() + 1)}${two(date.getDate())}${two(date.getHours())}${two(date.getMinutes())}`;
+}
+
+// Teste lento (uns 15 s; precisa do pnpm e do pacote `lefthook` no armazém local ou na rede):
+//   TASK_TEST_SLOW=1 node --test scripts/task.test.mjs
+// Roda o `scripts/task.mjs` de verdade, com `pnpm install` e `lefthook install` de verdade.
+const SLOW = process.env.TASK_TEST_SLOW === '1';
+
+describe('task:start com pnpm e lefthook de verdade (lento)', () => {
+  test('dez task:start simultâneos passam, não tocam nos ganchos, e o commit no worktree passa por eles', {
+    skip: SLOW ? false : 'lento: defina TASK_TEST_SLOW=1',
+    timeout: 300_000,
+  }, async () => {
+    const env = makeRepo({ tasks: TEN.map((id) => ({ id })) });
+    const root = JSON.parse(
+      readFileSync(fileURLToPath(new URL('../package.json', import.meta.url)), 'utf8'),
+    );
+    writeFileSync(
+      join(env.repo, 'package.json'),
+      `${JSON.stringify(
+        {
+          name: 'task-test',
+          private: true,
+          scripts: { prepare: root.scripts.prepare },
+          devDependencies: { lefthook: root.devDependencies.lefthook },
+        },
+        null,
+        2,
+      )}\n`,
+    );
+    writeFileSync(
+      join(env.repo, 'pnpm-workspace.yaml'),
+      "packages:\n  - '.'\nallowBuilds:\n  lefthook: true\n",
+    );
+    writeFileSync(join(env.repo, 'lefthook.yml'), LEFTHOOK_YML);
+    rmSync(join(env.repo, 'pnpm-lock.yaml'));
+    // Sem as variáveis de CI: o checkout principal instala os ganchos, como na máquina de quem
+    // desenvolve.
+    const plain = { ...process.env };
+    delete plain.CI;
+    delete plain.LEFTHOOK;
+    delete plain.NUVA_SKIP_GIT_HOOKS;
+    const first = spawnSync('pnpm', ['install', '--prefer-offline'], {
+      cwd: env.repo,
+      encoding: 'utf8',
+      env: plain,
+    });
+    assert.equal(first.status, 0, first.stdout + first.stderr);
+    git(env.repo, 'add', '.');
+    git(env.repo, 'commit', '--quiet', '-m', 'chore: lefthook de verdade (task 000)');
+    env.hooks = join(env.repo, '.git', 'hooks');
+    const before = hooksState(env);
+    assert.deepEqual(Object.keys(before), ['commit-msg', 'pre-commit']);
+
+    const script = fileURLToPath(new URL('./task.mjs', import.meta.url));
+    const results = await Promise.all(
+      TEN.map((id) =>
+        spawnAsync(process.execPath, [script, 'start', id, '--as', 'infra'], {
+          cwd: env.repo,
+          env: plain,
+        }),
+      ),
+    );
+    assertTenStarted(env, results);
+    assert.deepEqual(hooksState(env), before);
+
+    // Commit num worktree recém-criado: os ganchos do checkout principal valem lá.
+    const dir = env.worktree('007');
+    assert.ok(existsSync(join(dir, 'node_modules', '.bin', 'lefthook')));
+    const commit = (message) =>
+      spawnSync('git', ['commit', '-m', message], { cwd: dir, encoding: 'utf8', env: plain });
+    writeFileSync(join(dir, 'novo.txt'), 'novo\n');
+    git(dir, 'add', 'novo.txt');
+    const badMessage = commit('mensagem fora do padrão');
+    assert.notEqual(badMessage.status, 0, 'o commit-msg deveria recusar');
+    assert.match(badMessage.stdout + badMessage.stderr, /tarefa/);
+    writeFileSync(join(dir, 'proibido.txt'), 'x\n');
+    git(dir, 'add', 'proibido.txt');
+    const badFile = commit('chore: arquivo proibido (task 007)');
+    assert.notEqual(badFile.status, 0, 'o pre-commit deveria recusar');
+    assert.match(badFile.stdout + badFile.stderr, /proibido/);
+    git(dir, 'rm', '--quiet', '--cached', 'proibido.txt');
+    rmSync(join(dir, 'proibido.txt'));
+    const good = commit('chore: arquivo novo (task 007)');
+    assert.equal(good.status, 0, good.stdout + good.stderr);
+    assert.match(good.stdout + good.stderr, /pre-commit/);
+    assert.match(good.stdout + good.stderr, /commit-msg/);
+    assert.deepEqual(hooksState(env), before);
   });
 });

@@ -10,7 +10,7 @@
     "node": ">=26 <27"
   },
   "scripts": {
-    "prepare": "lefthook install",
+    "prepare": "node -e \"process.exit(process.env.NUVA_SKIP_GIT_HOOKS?0:1)\" || lefthook install",
     "lint": "biome check .",
     "format": "biome check --write .",
     "test:scripts": "node --test \"scripts/**/*.test.mjs\"",

@@ -28,6 +28,37 @@ O `task:start` liga o `.env.local` do checkout principal por link simbólico e r
 Ele recusa tarefa que não está `aberta`, tarefa com dependência (`depende-de`) ainda na fila e
 branch ou worktree já existentes.
 
+### Ganchos do Git e `task:start` simultâneos
+
+A pasta de ganchos (`.git/hooks`) é uma só para o checkout principal e todos os worktrees, e o
+`lefthook install` troca cada gancho apagando e regravando o arquivo. Dois `task:start` no mesmo
+instante falhavam com `could not replace the hook: remove .git/hooks/pre-commit`. Por isso:
+
+- O `pnpm install` do worktree **não instala ganchos**. O `task:start` (e a reinstalação do
+  `task:finish`) roda o pnpm com `NUVA_SKIP_GIT_HOOKS=1`, que faz o script `prepare` da raiz
+  pular o `lefthook install`, e com `CI=1` e `LEFTHOOK` vazia, que é como o `postinstall` do
+  próprio pacote `lefthook` deixa de instalá-los. Pular só o `prepare` não basta: o `postinstall`
+  também escreve na pasta. Os outros scripts de dependência (`allowBuilds` do
+  `pnpm-workspace.yaml`) rodam normalmente; `--ignore-scripts` não é usado.
+- Valem no worktree os ganchos que o checkout principal instalou (`pnpm install` nele). O lefthook
+  lê o `lefthook.yml` do diretório em que o commit acontece e usa o `node_modules` de lá: commit
+  no worktree passa pelo `pre-commit` (Biome) e pelo `commit-msg`, e mensagem fora do padrão é
+  recusada.
+- Depois de instalar, o `task:start` confere que cada gancho declarado no `lefthook.yml` existe e
+  é do lefthook. Se faltar algum (checkout principal que nunca rodou `pnpm install`, gancho novo),
+  roda `pnpm exec lefthook install` uma vez, com a trava `.git/nuva-hooks.lock`. Se ainda assim
+  faltar, sai com código 8 e desfaz worktree e branch: nenhum worktree fica sem ganchos.
+- `git worktree add` e `git worktree remove` rodam um de cada vez, com a trava
+  `.git/nuva-worktree.lock`: ao criar um worktree o Git lê a administração dos outros e tropeça em
+  um que está nascendo no mesmo instante (`failed to read .git/worktrees/.../commondir`).
+
+As travas são pastas criadas com `mkdir`; uma trava parada há mais de dois minutos é de processo
+morto e é retirada sozinha. Rodar `pnpm install` à mão num worktree (depois de mexer no
+`package.json`) continua instalando os ganchos; evite fazer isso em dois worktrees ao mesmo tempo.
+
+Teste lento, com `pnpm install` e `lefthook install` de verdade em dez `task:start` simultâneos:
+`TASK_TEST_SLOW=1 node --test scripts/task.test.mjs`.
+
 O `task:finish` faz, nesta ordem: confere o worktree limpo; `git rebase main`; `pnpm verify:quick`
 no worktree; `git merge --ff-only task/042` no checkout principal (se a `main` andou no meio,
 repete rebase e verificação uma vez); `git push origin main`; remove worktree, branch e o arquivo
@@ -70,7 +101,7 @@ Outros comandos:
 | 5 | `verify:quick` falhou | Corrigir, commitar e repetir; a `main` não mudou |
 | 6 | Fast-forward impossível depois da nova tentativa | Repetir o `task:finish`; a `main` não recebeu a tarefa |
 | 7 | Push falhou, mesmo depois da repetição única da corrida entre dois `task:finish` | A `main` local já avançou e a limpeza local foi feita. Não insistir: relatar ao humano, que roda `git push origin main` no checkout principal |
-| 8 | `pnpm install` falhou no worktree | Ler a saída do pnpm |
+| 8 | `pnpm install` falhou no worktree, ou os ganchos do Git ficaram faltando | Ler a saída do pnpm ou do lefthook |
 
 O `task:start` usa os códigos 1, 2 e 8 (com 8, desfaz worktree e branch e a tarefa continua
 `aberta`); o `task:abort`, 1, 2 e 3.

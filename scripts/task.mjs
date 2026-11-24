@@ -14,11 +14,13 @@
 import { spawnSync } from 'node:child_process';
 import {
   existsSync,
+  mkdirSync,
   readdirSync,
   readFileSync,
   readSync,
   realpathSync,
   rmSync,
+  statSync,
   symlinkSync,
   writeFileSync,
 } from 'node:fs';
@@ -42,9 +44,48 @@ export const EXIT = Object.freeze({
   NOT_FF: 6,
   /** O push falhou, também na repetição única: a `main` local já avançou e a limpeza foi feita. */
   PUSH: 7,
-  /** O `pnpm install` falhou no worktree. */
+  /** O `pnpm install` falhou no worktree, ou os ganchos do Git ficaram faltando. */
   INSTALL: 8,
 });
+
+/**
+ * Ambiente do `pnpm install` dentro de um worktree de tarefa: instala tudo, menos os ganchos do
+ * Git. A pasta de ganchos (`.git/hooks`) é uma só para o checkout principal e todos os worktrees,
+ * e o `lefthook install` troca cada gancho apagando e regravando o arquivo; dois ao mesmo tempo
+ * falham com "could not replace the hook". Dois scripts chamam o `lefthook install` num
+ * `pnpm install`, e cada um se desliga por um caminho:
+ * - `prepare` da raiz (`package.json`): não instala quando `NUVA_SKIP_GIT_HOOKS` está definida;
+ * - `postinstall` do pacote `lefthook`: não instala com `CI` ligada e `LEFTHOOK` desligada.
+ * Os demais scripts de dependência (`allowBuilds` do `pnpm-workspace.yaml`) rodam normalmente.
+ */
+export const WORKTREE_INSTALL_ENV = Object.freeze({
+  NUVA_SKIP_GIT_HOOKS: '1',
+  CI: '1',
+  LEFTHOOK: '',
+});
+
+/** Ganchos do Git que o `lefthook.yml` pode declarar na raiz (chave igual ao nome do gancho). */
+const GIT_HOOK_NAMES = new Set([
+  'applypatch-msg',
+  'pre-applypatch',
+  'post-applypatch',
+  'pre-commit',
+  'pre-merge-commit',
+  'prepare-commit-msg',
+  'commit-msg',
+  'post-commit',
+  'pre-rebase',
+  'post-checkout',
+  'post-merge',
+  'pre-push',
+  'post-rewrite',
+]);
+
+/** Espera máxima por uma trava; trava parada há mais tempo que isso é de processo morto. */
+const LOCK_TIMEOUT_MS = 120_000;
+/** Trava da instalação dos ganchos e trava do `git worktree add`/`remove`, no `.git` comum. */
+const HOOKS_LOCK = 'nuva-hooks.lock';
+const WORKTREE_LOCK = 'nuva-worktree.lock';
 
 export const USAGE = `Uso:
   pnpm task:start NNN --as <papel>   cria .worktrees/task-NNN no branch task/NNN a partir da main
@@ -89,7 +130,8 @@ Códigos de saída:
      removidos; falta só "git push origin main" no checkout principal. Antes de desistir, o
      finish repete o push uma única vez, e só se, depois de um fetch, origin/main não tiver
      commit que a main local não tem (corrida entre dois finish)
-  8  pnpm install falhou no worktree`;
+  8  pnpm install falhou no worktree, ou os ganchos do Git (lefthook) ficaram faltando; no
+     start, worktree e branch são desfeitos`;
 
 const GIT_ENV_TO_DROP = ['GIT_DIR', 'GIT_WORK_TREE', 'GIT_INDEX_FILE', 'GIT_PREFIX'];
 const ROLE = /^[a-z][a-z0-9-]*$/;
@@ -212,6 +254,13 @@ export function setTaskFields(text, fields) {
   return header + text.slice(match[0].length);
 }
 
+/** Ganchos do Git declarados num `lefthook.yml`: as chaves da raiz que são nome de gancho. */
+export function hooksInConfig(yaml) {
+  return [...yaml.matchAll(/^([a-z][a-z-]*):/gm)]
+    .map((match) => match[1])
+    .filter((name) => GIT_HOOK_NAMES.has(name));
+}
+
 /** Blocos de `git worktree list --porcelain`. O primeiro é o checkout principal. */
 export function parseWorktrees(porcelain) {
   return porcelain
@@ -278,9 +327,13 @@ function inside(child, parent) {
   return a === b || a.startsWith(b + sep);
 }
 
-function runInherit(command, args, cwd) {
-  const result = spawnSync(command, args, { cwd, stdio: 'inherit', env: cleanEnv() });
+function runInherit(command, args, cwd, env = {}) {
+  const result = spawnSync(command, args, { cwd, stdio: 'inherit', env: cleanEnv(env) });
   return result.status ?? 1;
+}
+
+function sleep(ms) {
+  Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
 }
 
 function askOnTerminal(prompt) {
@@ -291,15 +344,17 @@ function askOnTerminal(prompt) {
 }
 
 /**
- * O que os testes trocam: diretório de partida, saída, instalação, verificação e a confirmação
- * do `--force`. Em uso normal, tudo vem do processo.
+ * O que os testes trocam: diretório de partida, saída, instalação (das dependências e dos
+ * ganchos), verificação e a confirmação do `--force`. Em uso normal, tudo vem do processo.
+ * `install` recebe o worktree e o ambiente que desliga a instalação dos ganchos.
  */
 function withDefaults(deps) {
   return {
     cwd: process.cwd(),
     log: (line) => console.log(line),
     error: (line) => console.error(line),
-    install: (dir) => runInherit('pnpm', ['install', '--frozen-lockfile'], dir),
+    install: (dir, env) => runInherit('pnpm', ['install', '--frozen-lockfile'], dir, env),
+    installHooks: (dir) => runInherit('pnpm', ['exec', 'lefthook', 'install'], dir),
     verify: (dir) => runInherit('pnpm', ['verify:quick'], dir),
     isTTY: Boolean(process.stdin.isTTY && process.stdout.isTTY),
     ask: askOnTerminal,
@@ -409,6 +464,95 @@ function indent(text) {
     .join('\n');
 }
 
+function gitPath(ctx, args) {
+  const result = git(ctx.main, ['rev-parse', '--path-format=absolute', ...args]);
+  if (!result.ok) fail(EXIT.ERROR, `git rev-parse ${args.join(' ')} falhou:\n${result.output}`);
+  return result.stdout.trim();
+}
+
+/** Ganchos que o `lefthook.yml` do worktree declara e que não estão instalados pelo lefthook. */
+function missingHooks(ctx, dir) {
+  const config = join(dir, 'lefthook.yml');
+  if (!existsSync(config)) return [];
+  const hooksDir = gitPath(ctx, ['--git-path', 'hooks']);
+  return hooksInConfig(readFileSync(config, 'utf8')).filter((name) => {
+    try {
+      return !readFileSync(join(hooksDir, name), 'utf8').includes('lefthook');
+    } catch {
+      return true;
+    }
+  });
+}
+
+/**
+ * Roda `action` com a trava `name`: uma pasta dentro do `.git` comum, criada com `mkdir`
+ * (atômico). Quem não consegue criar espera; trava parada há mais tempo que o limite é de
+ * processo que morreu e é retirada.
+ */
+function withLock(ctx, name, action) {
+  const lock = join(gitPath(ctx, ['--git-common-dir']), name);
+  const deadline = Date.now() + LOCK_TIMEOUT_MS;
+  for (;;) {
+    try {
+      mkdirSync(lock);
+      break;
+    } catch (error) {
+      if (error.code !== 'EEXIST') throw error;
+    }
+    let age = 0;
+    try {
+      age = Date.now() - statSync(lock).mtimeMs;
+    } catch {
+      continue; // a trava saiu entre o mkdir e o stat: tenta de novo já
+    }
+    if (age > LOCK_TIMEOUT_MS) {
+      rmSync(lock, { recursive: true, force: true });
+    } else if (Date.now() > deadline) {
+      fail(EXIT.ERROR, `A trava não foi liberada a tempo: ${lock}`);
+    } else {
+      sleep(50);
+    }
+  }
+  try {
+    return action();
+  } finally {
+    rmSync(lock, { recursive: true, force: true });
+  }
+}
+
+/**
+ * `git worktree add` e `git worktree remove`, um de cada vez: ao criar um worktree o Git lê a
+ * pasta de administração de todos os outros (`.git/worktrees/*`), e encontra pela metade a de um
+ * que está nascendo ou saindo no mesmo instante ("failed to read .git/worktrees/.../commondir").
+ */
+function gitWorktree(ctx, args) {
+  return withLock(ctx, WORKTREE_LOCK, () => git(ctx.main, ['worktree', ...args]));
+}
+
+/**
+ * O `pnpm install` do worktree não instala ganchos (ver `WORKTREE_INSTALL_ENV`): valem os que o
+ * checkout principal instalou, porque a pasta de ganchos é compartilhada e o lefthook lê o
+ * `lefthook.yml` do diretório em que o commit acontece. Aqui se confere que eles existem; se
+ * faltar algum (checkout principal que nunca rodou `pnpm install`, gancho novo no `lefthook.yml`),
+ * instala uma vez, com trava, para que dois `task:start` não escrevam na pasta ao mesmo tempo.
+ * Devolve `null` se está tudo certo, ou o motivo da falha.
+ */
+function ensureHooks(ctx, dir, say) {
+  if (missingHooks(ctx, dir).length === 0) return null;
+  return withLock(ctx, HOOKS_LOCK, () => {
+    // Outro task:start pode ter instalado enquanto este esperava a trava.
+    const missing = missingHooks(ctx, dir);
+    if (missing.length === 0) return null;
+    say(`ganchos do Git ausentes (${missing.join(', ')}): lefthook install`);
+    const code = ctx.installHooks(dir);
+    if (code !== 0) return `lefthook install falhou (código ${code})`;
+    const still = missingHooks(ctx, dir);
+    return still.length > 0
+      ? `o lefthook install não deixou instalados os ganchos: ${still.join(', ')}`
+      : null;
+  });
+}
+
 /** O checkout principal tem de estar na `main` e limpo; senão, para sem tocar em nada. */
 function requireCleanMain(ctx) {
   const branch = currentBranch(ctx.main);
@@ -467,7 +611,7 @@ function start(ctx, { id, as, join: windowId }) {
     say(`aviso: a tarefa é do papel "${task.role}" e está sendo assumida por "${as}".`);
   }
 
-  const added = git(ctx.main, ['worktree', 'add', '-b', branch, dir, 'main']);
+  const added = gitWorktree(ctx, ['add', '-b', branch, dir, 'main']);
   if (!added.ok) fail(EXIT.ERROR, `git worktree add falhou:\n${added.output}`);
   say(`worktree criado no branch ${branch}, a partir da main`);
 
@@ -477,17 +621,25 @@ function start(ctx, { id, as, join: windowId }) {
     say('.env.local ligado ao do checkout principal');
   }
 
-  say('pnpm install --frozen-lockfile');
-  const installed = ctx.install(dir);
-  if (installed !== 0) {
-    // O worktree acabou de nascer e não tem trabalho de ninguém: desfaz para o start ser atômico.
-    git(ctx.main, ['worktree', 'remove', '--force', dir]);
+  // O worktree acabou de nascer e não tem trabalho de ninguém: desfaz para o start ser atômico.
+  const undo = (reason) => {
+    gitWorktree(ctx, ['remove', '--force', dir]);
     git(ctx.main, ['branch', '-D', branch]);
-    fail(
-      EXIT.INSTALL,
-      `pnpm install falhou (código ${installed}). Worktree e branch foram desfeitos; a tarefa continua "aberta".`,
-    );
+    fail(EXIT.INSTALL, `${reason}. Worktree e branch foram desfeitos; a tarefa continua "aberta".`);
+  };
+
+  say('pnpm install --frozen-lockfile (sem reinstalar os ganchos do Git)');
+  const installed = ctx.install(dir, WORKTREE_INSTALL_ENV);
+  if (installed !== 0) undo(`pnpm install falhou (código ${installed})`);
+
+  let hooksProblem;
+  try {
+    hooksProblem = ensureHooks(ctx, dir, say);
+  } catch (error) {
+    if (!(error instanceof TaskError)) throw error;
+    hooksProblem = error.message;
   }
+  if (hooksProblem) undo(`Ganchos do Git: ${hooksProblem}`);
 
   writeFileSync(file, setTaskFields(text, { status: 'em-andamento', responsavel: as }));
   say(`tarefa marcada como em-andamento (responsável: ${as})`);
@@ -650,7 +802,7 @@ function rebaseAndVerify(ctx, id, dir, options, say) {
   }
   if (git(dir, ['diff', '--quiet', before, 'HEAD', '--', 'pnpm-lock.yaml']).status === 1) {
     say('o pnpm-lock.yaml mudou com o rebase: pnpm install --frozen-lockfile');
-    const installed = ctx.install(dir);
+    const installed = ctx.install(dir, WORKTREE_INSTALL_ENV);
     if (installed !== 0) {
       fail(EXIT.INSTALL, `pnpm install falhou no worktree (código ${installed}): ${dir}`);
     }
@@ -790,7 +942,7 @@ function finish(ctx, options) {
   // Daqui em diante a main local já tem os commits: worktree e branch não guardam mais nada.
   const calledFromWorktree = inside(ctx.cwd, dir);
   if (inside(process.cwd(), dir)) process.chdir(ctx.main);
-  const removed = git(ctx.main, ['worktree', 'remove', dir]);
+  const removed = gitWorktree(ctx, ['remove', dir]);
   if (!removed.ok) {
     fail(
       EXIT.ERROR,
@@ -880,7 +1032,7 @@ function abort(ctx, { id, force }) {
 
   if (hasDir) {
     if (inside(process.cwd(), dir)) process.chdir(ctx.main);
-    const removed = git(ctx.main, ['worktree', 'remove', ...(force ? ['--force'] : []), dir]);
+    const removed = gitWorktree(ctx, ['remove', ...(force ? ['--force'] : []), dir]);
     if (!removed.ok) fail(EXIT.ERROR, `git worktree remove falhou:\n${indent(removed.output)}`);
     say('worktree removido');
   } else {
