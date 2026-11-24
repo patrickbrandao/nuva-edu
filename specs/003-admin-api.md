@@ -61,7 +61,7 @@ O `code` do problem+json é o que o cliente usa para decidir o que fazer; `title
 | `not_found` | 404 | Recurso inexistente ou fora do alcance de quem pede | |
 | `version_conflict` | 409 | `version` enviada diferente da gravada | |
 | `payload_too_large` | 413 | Corpo acima do limite da rota (RNF-02) | |
-| `unsupported_media_type` | 415 | `Content-Type` que a operação não declara no contrato | |
+| `unsupported_media_type` | 415 | `Content-Type` que a operação não declara em `requestBody.content`, ou que o serviço não sabe ler | |
 | `rate_limited` | 429 | Limite de taxa atingido | `retryAfterSeconds` |
 | `internal_error` | 500 | Erro inesperado; sem `detail`, o erro original vai só para o log | |
 | `database_unavailable` | 503 | Banco indisponível | |
@@ -73,9 +73,10 @@ Regras:
 - `409`, `422` e `503` não têm código genérico: cada ocorrência usa um código próprio da regra (`topic_closed`, `last_admin`), definido na spec do recurso e citado na descrição da operação no contrato. Recusa de acesso com motivo que a interface precisa distinguir também usa código próprio com `403` (`account_suspended`, `entitlement_required`).
 - A lista é aberta: código novo entra pela spec do recurso; um código existente só muda de nome ou de status com mudança de versão da API. Código geral novo entra nesta tabela e no esquema `Problem` dos dois contratos.
 - `retryAfterSeconds` (inteiro) repete o cabeçalho `Retry-After` e acompanha `rate_limited` quando o tempo é conhecido.
-- Corpo que não é JSON válido, corpo vazio com `Content-Type: application/json` e `Content-Length` divergente continuam `400 validation_failed`, com um item em `errors[]` de `path: body`: é requisição fora do contrato, e o cliente trata como qualquer outra validação.
+- Corpo que não é JSON válido, corpo vazio com `Content-Type: application/json`, corpo obrigatório ausente e `Content-Length` divergente continuam `400 validation_failed`, com um item em `errors[]` de `path: body`: é requisição fora do contrato, e o cliente trata como qualquer outra validação.
 - `payload_too_large` e `unsupported_media_type` têm código próprio porque o cliente reage de outro jeito: no primeiro, a interface diz o limite ao usuário (envio de imagem); o segundo indica erro de quem chama, não de preenchimento.
 - `unknown_error` não é emitido pelas APIs: é o que `packages/api-client` usa quando a resposta de erro não é um problem+json.
+- O status `499` não é um erro da API: é a marca interna, nos logs e nas métricas, da requisição que o cliente encerrou antes do fim da resposta ([033](033-observabilidade-retencao-backup.md), "Requisição encerrada pelo cliente"). Nunca vai ao cliente, não tem `code` e não entra nos contratos.
 
 ### Respostas de erro declaradas
 
@@ -146,7 +147,7 @@ Não há parâmetro de cabeçalho para o token. Como parâmetro obrigatório, o 
 | Campo | Tipo | Origem | Regra |
 | --- | --- | --- | --- |
 | `schoolName` | texto | `settings` `school.name` | Padrão `nuva-edu` |
-| `version` | texto | versão do pacote | SemVer |
+| `version` | texto | `version` do `package.json` do serviço | SemVer. Na imagem, é a versão gravada pelo argumento de build `NUVA_VERSION` ([031](031-infraestrutura-e-deploy.md), "Dockerfiles"); fora dela, a do repositório |
 | `currency` | texto | `NUVA_CURRENCY` | ISO 4217 |
 | `locale` | texto | `NUVA_LOCALE` | Etiqueta BCP 47, já na forma canônica ([031](031-infraestrutura-e-deploy.md)) |
 | `authProviders` | lista | variáveis dos provedores | `google`, `facebook`, `apple`; vazia quando nenhum |
@@ -161,8 +162,11 @@ Não há parâmetro de cabeçalho para o token. Como parâmetro obrigatório, o 
 ### Subida estrita
 
 - Na inicialização, a API compara as rotas registradas com o contrato nos dois sentidos e confere o `csrfToken` das escritas; qualquer divergência impede a subida, com a lista completa no log. O teste de contrato faz a mesma conferência no CI, e o comando `check-contract` a repete na imagem.
-- Operação com `x-nuva-pending: true` no contrato é ignorada quando não tem rota (o contrato chegou antes do código). Operação pendente **com** rota registrada também não impede a subida, mas gera aviso no log e na saída do teste de contrato: a marca precisa sair do contrato.
-- `check-contract --no-pending` falha se o contrato tiver qualquer operação pendente, com ou sem rota; é usado no `verify:full` e na release, e é o que impede a marca de ficar esquecida.
+- Operação com `x-nuva-pending: true` no contrato é ignorada quando não tem rota (o contrato chegou antes do código): a subida só a cita no log, em nível `info`, e o caminho responde `404 not_found` como qualquer outro inexistente.
+- Operação pendente **com** rota registrada também não impede a subida, mas gera aviso (`warn`) no log da subida e a cada conferência do contrato: a marca precisa sair do contrato.
+- No teste de contrato, a lista de divergências continua vazia com operação pendente, com ou sem rota: o teste passa. Os avisos saem numa lista à parte, cada linha começando por `aviso:`, que o teste imprime.
+- As demais regras valem para a operação pendente: `csrfToken` nas escritas e esquemas válidos.
+- `check-contract --no-pending` falha se o contrato tiver qualquer operação pendente, com ou sem rota, listando-as; é usado no `verify:full` e na release, e é o que impede a marca de ficar esquecida. Sem a opção, o comando só avisa. O comando confere rotas e contrato sem precisar de banco. Hoje existe na `admin-api` (`pnpm --filter @nuva-edu/admin-api check-contract`); o da `classroom-api` chega pela tarefa 065 e a chamada no `verify:full`, pela 035.
 - O fluxo de trabalho que essa regra impõe está em [002](002-organizacao-do-trabalho.md), "Janela de contrato".
 
 ### Alcance do instrutor
@@ -180,7 +184,8 @@ Toda listagem e toda leitura de conteúdo, fórum, progresso e certificados feit
 
 - HTTP: `apps/admin-api/openapi.yaml`.
 - MCP: Streamable HTTP em `/mcp`, ferramentas descritas em [027](027-mcp.md).
-- Linha de comando na imagem: `create-admin` (emergência, ver [007](007-contas-e-autenticacao.md)), `check-contract` e `migrate` (aplica as migrations; é o comando do serviço `migrate` do Compose, que usa esta mesma imagem e roda antes das APIs, ver [031](031-infraestrutura-e-deploy.md)).
+- Linha de comando na imagem: `create-admin` (emergência, ver [007](007-contas-e-autenticacao.md)), `check-contract` e o comando de migrations (`node /app/database/postgres/src/cli.ts up`), que é o que o serviço `migrate` do Compose executa: ele usa esta mesma imagem, está no `docker-compose.yml` da `admin-api` e roda antes das APIs e do worker ([031](031-infraestrutura-e-deploy.md)).
+- Base HTTP: `packages/api-kit`, comum às duas APIs. Além da validação pelo contrato e dos erros, ela dá o registro e as métricas de cada requisição, inclusive da encerrada pelo cliente (status `499`), e a base dos fluxos SSE ([004](004-classroom-api.md), "Base do fluxo"; [033](033-observabilidade-retencao-backup.md)).
 - Banco: migrations em `database/postgres/migrations`.
 
 ## Dados

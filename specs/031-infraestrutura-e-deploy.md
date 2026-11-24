@@ -13,7 +13,7 @@ O nuva-edu é distribuído como imagens Docker e um conjunto de arquivos Compose
 - RF-02: Cada sistema tem o seu `docker-compose.yml` na própria pasta; o `docker-compose.yml` da raiz apenas os inclui (`include:`).
 - RF-03: O Traefik próprio, o backup e o Mailpit são perfis opcionais.
 - RF-04: Os nomes de host dos dois sites vêm de variáveis de ambiente.
-- RF-05: Nenhuma senha ou chave tem valor padrão: o Compose falha com mensagem clara se faltar (`${VAR:?}`).
+- RF-05: Nenhuma senha ou chave tem valor padrão: o Compose falha com mensagem clara se faltar (`${VAR:?}`). A exigência de cada segredo entra junto com o código que o usa ([Segredos exigidos](#segredos-exigidos)).
 - RF-06: As migrations são aplicadas por um serviço de execução única antes de as APIs e o worker subirem.
 - RF-07: As APIs obtêm o IP real do cliente a partir dos cabeçalhos do proxy, confiando apenas nas origens de `TRUSTED_PROXIES`.
 - RF-08: As imagens são publicadas para `linux/amd64` e `linux/arm64` em `tmsoftbrasil/nuva-edu-<app>`.
@@ -34,20 +34,36 @@ O nuva-edu é distribuído como imagens Docker e um conjunto de arquivos Compose
 | `.env` | Valores padrão não secretos (versionado) |
 | `.env.example` | Todas as variáveis, com descrição |
 | `.env.local` | Segredos e ajustes da instalação (fora do Git) |
-| `database/postgres/docker-compose.yml` | `postgres`, `migrate` e, no perfil `backup`, `backup` |
+| `.dockerignore` | O que fica fora do contexto de build: segredos (`.env*`, chaves), `node_modules`, testes, `specs/`, `docs/`, `e2e/`, `scripts/`, `tasks/`, `tmp/` |
+| `database/postgres/docker-compose.yml` | `postgres` e, no perfil `backup`, `backup` |
 | `database/postgres/migrations/` | Arquivos `.sql` numerados |
 | `proxy/traefik/docker-compose.yml` | `traefik` (perfil `traefik`) |
+| `proxy/nginx/` | Nginx dos dois sites, igual nas duas imagens: `nginx.conf` e `40-nuva-config.sh`, que gera o `/config.json` na subida ([Configuração de execução dos sites](#configuração-de-execução-dos-sites)) |
 | `mail/mailpit/docker-compose.yml` | `mailpit` (perfil `mailpit`) |
-| `apps/<app>/docker-compose.yml` | Um por aplicação: `admin-api`, `classroom-api`, `worker`, `admin`, `classroom` |
-| `apps/<app>/Dockerfile` | Build em stages |
+| `apps/<app>/docker-compose.yml` | Um por aplicação: `admin-api`, `classroom-api`, `worker`, `admin`, `classroom`. O da `admin-api` traz também o `migrate`, que usa a imagem e o `build` dela |
+| `apps/<app>/Dockerfile` | Build em stages, com a raiz do repositório como contexto |
 
-O Compose lê `.env` e depois `.env.local` (`env_file` e `--env-file`, encapsulados nos scripts `pnpm compose ...`).
+O `docker-compose.yml` da raiz declara também o nome do projeto (`nuva-edu`) e as duas redes: `internal` (banco e comunicação entre serviços) e `public` (a do proxy, `TRAEFIK_NETWORK`).
+
+### Arquivos de ambiente
+
+O Compose lê `.env` e depois `.env.local`, de duas formas:
+
+- **Interpolação** (`${VAR}` nos arquivos Compose): `--env-file .env --env-file .env.local`, encapsulado em `pnpm compose`, `pnpm dev:up` e `pnpm dev:down`. Chamar `docker compose` direto, sem os dois `--env-file`, não lê o `.env.local`.
+- **Entrega ao contêiner** (`env_file`): `admin-api`, `classroom-api`, `worker` e `migrate` recebem os dois arquivos inteiros; o que o serviço declara em `environment` vale por cima. Os quatro leem a configuração pelo mesmo módulo de `packages/core`, têm o mesmo acesso ao banco e formam um único domínio de confiança, por isso não há lista de variáveis por serviço, em nenhum ambiente.
+- Os demais serviços (`admin`, `classroom`, `postgres`, `traefik`, `mailpit`, `backup`) não usam `env_file`: recebem só as variáveis listadas em `environment`. Os sites são servidos ao público e nunca recebem segredo.
+
+Consequências da entrega por `env_file`:
+
+- `PORT` não vai em `.env` nem em `.env.local`: chegaria ao contêiner e tiraria o serviço da porta 3000, que o `healthcheck` e o proxy usam. Quem roda os processos fora do contêiner define `PORT` na linha de comando ou no ambiente do terminal.
+- `POSTGRES_HOST` e `NUVA_POSTGRES_PORT` são sobrescritas em `environment` (`postgres` e `5432`): dentro da rede do Compose o banco é sempre `postgres:5432`, e o `NUVA_POSTGRES_PORT` dos arquivos é só a porta publicada no hospedeiro.
+- `.env.local` de servidor não leva `NUVA_DEPLOY_SSH_*`: essas variáveis só existem na máquina de quem roda o `pnpm deploy:test`.
 
 ### Serviços
 
 | Serviço | Imagem | Porta interna | CPU | Memória | Perfil |
 | --- | --- | --- | --- | --- | --- |
-| `postgres` | `postgres:18` | 5432 | 1 | 1024 MB | padrão |
+| `postgres` | `postgres:18-alpine` | 5432 | 1 | 1024 MB | padrão |
 | `migrate` | `nuva-edu-admin-api` (comando de migration) | — | 1 | 256 MB | padrão (execução única) |
 | `admin-api` | `nuva-edu-admin-api` | 3000 | 1 | 384 MB | padrão |
 | `classroom-api` | `nuva-edu-classroom-api` | 3000 | 1 | 512 MB | padrão |
@@ -58,9 +74,11 @@ O Compose lê `.env` e depois `.env.local` (`env_file` e `--env-file`, encapsula
 | `backup` | `postgres:18` com script | — | 1 | 256 MB | `backup` |
 | `mailpit` | `axllent/mailpit` | 1025 / 8025 | 1 | 64 MB | `mailpit` |
 
-CPU e memória de cada serviço são ajustáveis por `NUVA_<SERVICO>_CPUS` e `NUVA_<SERVICO>_MEMORY`.
+CPU e memória de cada serviço são ajustáveis por `NUVA_<SERVICO>_CPUS` e `NUVA_<SERVICO>_MEMORY`, com o nome do serviço em maiúsculas e `_` no lugar do hífen: `POSTGRES`, `MIGRATE`, `ADMIN_API`, `CLASSROOM_API`, `WORKER`, `ADMIN`, `CLASSROOM`, `TRAEFIK`, `BACKUP`, `MAILPIT`.
 
-As duas APIs e o worker escutam na porta de `PORT` (padrão 3000). No Compose a variável não é definida: a porta interna é sempre 3000, e é ela que os `healthcheck` e os rótulos do Traefik usam. `PORT` existe para rodar os três processos lado a lado fora do contêiner (desenvolvimento e testes).
+O `migrate` executa o comando de migrations que vai dentro da imagem da `admin-api` (`database/postgres/src/cli.ts up`), termina, e só então as APIs e o worker sobem.
+
+As duas APIs e o worker escutam na porta de `PORT` (padrão 3000). No Compose a variável não é definida, nem pode chegar pelos arquivos de ambiente ([Arquivos de ambiente](#arquivos-de-ambiente)): a porta interna é sempre 3000, e é ela que os `healthcheck` e os rótulos do Traefik usam. `PORT` existe para rodar os três processos lado a lado fora do contêiner (desenvolvimento e testes).
 
 ### Padrões de todo contêiner
 
@@ -71,17 +89,19 @@ As duas APIs e o worker escutam na porta de `PORT` (padrão 3000). No Compose a 
 - `healthcheck` em todos; dependências com `condition: service_healthy` (ou `service_completed_successfully` para `migrate`).
 - `restart: unless-stopped`, exceto `migrate`.
 - Logs com rotação: `json-file`, `max-size: 10m`, `max-file: 5`.
-- Só o `traefik` (e, em desenvolvimento, `postgres` e `mailpit`, em `127.0.0.1`) publica portas no hospedeiro.
+- Só o `traefik` (e, em desenvolvimento, `postgres` e `mailpit`, em `127.0.0.1`) publica portas no hospedeiro. Fora do desenvolvimento o `postgres` não publica porta nenhuma: a publicação é opcional e vem desligada no servidor de testes e na instalação da escola. O compose atual ainda publica `127.0.0.1:${NUVA_POSTGRES_PORT}` em todo ambiente; a tarefa 061 a torna opcional e registra aqui a variável ou o perfil que a liga.
 
 ### Dockerfiles
 
 Build em stages, na ordem que favorece o cache:
 
 1. `deps`: copia só `pnpm-lock.yaml`, `pnpm-workspace.yaml` e os `package.json`; instala dependências.
-2. `build`: copia o código e compila a aplicação e os pacotes de que ela depende.
-3. `runtime`: imagem mínima (`node:26-slim` para APIs e worker; Nginx sem privilégios para os sites), só com o resultado do build e as dependências de produção.
+2. `build`: copia o código. Nos sites, roda o `vite build`. Nas APIs e no worker não há compilação: o serviço roda TypeScript direto no Node 26 (`node src/main.ts`), e o estágio só junta o código às dependências de produção e grava a versão.
+3. `runtime`: imagem mínima (`node:26-slim` para APIs e worker; Nginx sem privilégios para os sites), sem pnpm e com usuário sem privilégios. A imagem das APIs e do worker mantém a árvore do workspace (`/app/apps`, `/app/packages`, `/app/database/postgres`), porque o Node só executa `.ts` fora de `node_modules`.
 
-Os sites são estáticos: os nomes de host e a moeda chegam em tempo de execução por um `config.json` gerado na subida do contêiner, não no build, para que a mesma imagem sirva a qualquer instalação.
+Versão da imagem: o argumento de build `NUVA_VERSION` (SemVer, sem o `v` da tag) é gravado, no estágio `build`, no `package.json` do serviço dentro da imagem das APIs e do worker. É esse `package.json` que o `GET /api/v1/meta` lê para o campo `version` ([003](003-admin-api.md), "Meta"). Sem o argumento, vale a versão que está no repositório. A versão é da imagem, não da instalação: não existe variável de execução que a altere. As imagens dos sites não recebem o argumento; a versão que os sites mostram é a do `/meta`.
+
+Os sites são estáticos: o que depende da instalação e não vem da API chega em tempo de execução pelo `/config.json`, gerado na subida do contêiner, não no build, para que a mesma imagem sirva a qualquer instalação ([Configuração de execução dos sites](#configuração-de-execução-dos-sites)).
 
 ### Roteamento
 
@@ -98,8 +118,22 @@ Os sites são estáticos: os nomes de host e a moeda chegam em tempo de execuç�
 - `/healthz` é a única sonda roteada para fora, para monitoramento externo; `/readyz` e `/metrics` ficam só na rede interna ([033](033-observabilidade-retencao-backup.md)).
 - Os rótulos do Traefik ficam no `docker-compose.yml` de cada aplicação e usam `TRAEFIK_NETWORK`, `TRAEFIK_ENTRYPOINTS` e `TRAEFIK_CERTRESOLVER`.
 - Com `TRAEFIK_CERTRESOLVER` vazio, os rótulos de TLS não são emitidos (desenvolvimento em HTTP).
-- A rota de SSE (`/api/v1/stream`) desliga o buffer de resposta e tem tempo limite de leitura de 1 hora.
-- `/metrics` e `/readyz` não são roteados pelo proxy.
+- Prioridade dos roteadores: 30 para o fluxo SSE, 20 para as APIs, 10 para os sites; assim o caminho mais específico vence no mesmo host.
+- `/metrics` e `/readyz` não são roteados pelo proxy; se chegarem ao Nginx de um site, a resposta é `404`, não o `index.html`.
+
+### SSE atrás do proxy
+
+O fluxo `GET /api/v1/stream` ([004](004-classroom-api.md)) tem um roteador próprio no Traefik (`nuva-edu-classroom-stream`, regra `Path` exata), apontando para o mesmo serviço da `classroom-api`. O que é configurado, e onde:
+
+| Garantia | Onde | Como |
+| --- | --- | --- |
+| Sem compressão | roteador do fluxo | Nenhum middleware; o Traefik só comprime com o middleware `compress`, e a API não comprime o fluxo |
+| Sem buffer de resposta | roteador do fluxo e API | Nenhum middleware (o Traefik só segura a resposta com o middleware `buffering`) e o cabeçalho `X-Accel-Buffering: no`, que a API envia para proxies do tipo Nginx no caminho |
+| Conexão mantida | API | `ping` a cada 25 s, abaixo do tempo ocioso de proxies, balanceadores e NAT |
+
+- O Traefik não tem tempo limite por roteador: os tempos de leitura, escrita e ociosidade são da entrada (`entryPoints.<nome>.transport.respondingTimeouts`, configuração estática). O nuva-edu não os define: no Traefik próprio valem os padrões do Traefik 3, sem limite para a escrita da resposta (`writeTimeout` 0), e no Traefik compartilhado do servidor de testes a configuração não é nossa. Por isso a spec não promete duração mínima da conexão.
+- Se o proxy da instalação limitar a duração da resposta, o fluxo é cortado nesse prazo e o navegador reconecta sozinho com `Last-Event-ID` ([004](004-classroom-api.md), "Reenvio na reconexão"). Nenhuma tela depende de a conexão durar.
+- Regra para quem acrescentar middleware (compressão, cabeçalhos, limite de taxa) aos roteadores das APIs: o roteador do fluxo fica de fora.
 
 ### IP real do cliente
 
@@ -132,7 +166,7 @@ Os sites são estáticos: os nomes de host e a moeda chegam em tempo de execuç�
 | E-mail | Mailpit (`http://localhost:8025`) | SMTP real de teste |
 | Mercado Pago | credenciais de teste | credenciais de teste |
 | Imagens | build local | Docker Hub, etiqueta do commit |
-| Postgres no hospedeiro | `127.0.0.1:5432` | não publicado |
+| Postgres no hospedeiro | `127.0.0.1:${NUVA_POSTGRES_PORT}` | não publicado (depende da tarefa 061; ver "Padrões de todo contêiner") |
 
 No servidor de testes o Traefik existente redireciona a porta 80 para a 443 e expõe só contêineres com `traefik.enable=true`; o nuva-edu não altera a configuração dele.
 
@@ -144,6 +178,8 @@ No servidor de testes o Traefik existente redireciona a porta 80 para a 443 e ex
 - Plataformas: `linux/amd64` e `linux/arm64`, num único manifesto.
 - Etiquetas: `sha-<7 caracteres>` e `main` a cada push na `main`; `X.Y.Z`, `X.Y` e `latest` a cada tag `vX.Y.Z`.
 - O Compose usa `NUVA_IMAGE_TAG` (padrão `latest`).
+- Versão: o fluxo `images` do CI passa `NUVA_VERSION` como argumento de build das imagens da `admin-api`, da `classroom-api` e do `worker` ([032](032-verificacao-e-ci.md)). Em tag `vX.Y.Z`, o valor é `X.Y.Z`. Em push na `main`, é a versão do `package.json` da raiz seguida de `-sha-<7 caracteres>` (por exemplo `0.3.0-sha-0940e32`), que é um SemVer de pré-lançamento válido e diz de qual commit a imagem saiu.
+- No build local (`pnpm dev:up`), `NUVA_VERSION` fica vazio e o `/meta` mostra a versão do repositório.
 
 ### `pnpm deploy:test`
 
@@ -174,20 +210,24 @@ O script só age sobre o projeto Compose `nuva-edu`; qualquer outra ação no se
 | `NUVA_LOCALE` | `pt-BR` | Idioma padrão, como etiqueta BCP 47 (`^[a-z]{2,3}(-[A-Za-z0-9]{2,8})*$`, sem diferenciar maiúsculas). A configuração guarda a forma canônica (`pt-br` vira `pt-BR`), e é ela que o `/meta` devolve |
 | `PORT` | `3000` | Porta de escuta das duas APIs e do worker; não é definida no Compose |
 | `NUVA_IMAGE_TAG` | `latest` | Etiqueta das imagens |
+| `NUVA_VERSION` | vazio | Só no build: versão gravada nas imagens das APIs e do worker ([Dockerfiles](#dockerfiles)); não é lida em execução |
 | `NUVA_TEST_DB` | vazio | `local` liga o banco de testes clonado ([032](032-verificacao-e-ci.md)) |
 | `ADMIN_EMAIL` | segredo | E-mail do admin inicial |
 | `ADMIN_PASSWORD` | segredo | Senha do admin inicial |
 | `POSTGRES_DB` | `nuva_edu` | Banco |
 | `POSTGRES_USER` | `nuva_edu` | Usuário |
 | `POSTGRES_PASSWORD` | segredo | Senha do banco |
-| `DATABASE_URL` | montada das três acima | Conexão usada pelas aplicações |
-| `NUVA_POSTGRES_PORT` | `5432` | Porta em `127.0.0.1` no desenvolvimento |
+| `POSTGRES_HOST` | `127.0.0.1` | Endereço do banco para os processos; no Compose é sempre `postgres` |
+| `DATABASE_URL` | montada de `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_DB`, `POSTGRES_HOST` e `NUVA_POSTGRES_PORT` | Conexão usada pelas aplicações; definida, vale no lugar das cinco |
+| `NUVA_POSTGRES_PORT` | `5432` | Porta do banco para os processos fora do contêiner e porta publicada em `127.0.0.1` no desenvolvimento; no Compose os serviços usam sempre `5432` |
+| `POSTGRES_IMAGE`, `POSTGRES_MAX_CONNECTIONS`, `POSTGRES_SHARED_BUFFERS`, `POSTGRES_SHM_SIZE` | `postgres:18-alpine`, `100`, `256MB`, `128mb` | Imagem e ajustes do contêiner do banco |
 | `SESSION_SECRET` | segredo | Assinatura de cookies e tokens |
 | `SMTP_HOST` | `mailpit` | Servidor SMTP |
 | `SMTP_PORT` | `1025` | Porta SMTP |
 | `SMTP_USER` | vazio | Usuário SMTP |
 | `SMTP_PASSWORD` | vazio (segredo quando usado) | Senha SMTP |
 | `SMTP_FROM` | `nuva-edu <no-reply@${NUVA_DOMAIN}>` | Remetente |
+| `MAILPIT_UI_PORT` | `8025` | Porta da tela do Mailpit em `127.0.0.1` (perfil `mailpit`) |
 | `MP_ACCESS_TOKEN` | segredo | Mercado Pago |
 | `MP_PUBLIC_KEY` | vazio | Mercado Pago (chave pública) |
 | `MP_WEBHOOK_SECRET` | segredo | Assinatura dos webhooks |
@@ -200,6 +240,7 @@ O script só age sobre o projeto Compose `nuva-edu`; qualquer outra ação no se
 | `TRAEFIK_CERTRESOLVER` | vazio | Resolvedor de certificado; vazio = sem TLS |
 | `TRAEFIK_HTTP_PORT`, `TRAEFIK_HTTPS_PORT` | `8080`, `8443` | Portas do Traefik próprio |
 | `TRAEFIK_ACME_EMAIL` | vazio | E-mail do Let's Encrypt no Traefik próprio |
+| `TRAEFIK_IMAGE` | `traefik:v3` | Imagem do Traefik próprio |
 | `TRUSTED_PROXIES` | faixas privadas, CGNAT, laço local e link-local | Origens confiáveis para o IP real ([IP real do cliente](#ip-real-do-cliente)) |
 | `NUVA_RETENTION_SESSION_DAYS` | `30` | Sessão sem uso |
 | `NUVA_RETENTION_EMAIL_TOKEN_HOURS` | `24` | Links de confirmação e de redefinição |
@@ -222,10 +263,61 @@ O script só age sobre o projeto Compose `nuva-edu`; qualquer outra ação no se
 | `NUVA_IMAGE_MAX_UPLOAD_MB`, `NUVA_CASE_MAX_IMAGES`, `NUVA_IMAGE_UPLOADS_PER_HOUR` | `5`, `8`, `30` | Limites de imagem ([029](029-imagens.md)) |
 | `NUVA_ACCOUNT_DELETION_GRACE_DAYS` | `7` | Carência da exclusão de conta ([030](030-lgpd.md)) |
 | `NUVA_LOG_LEVEL` | `info` | Nível de log |
+| `NUVA_LOG_MAX_SIZE`, `NUVA_LOG_MAX_FILE` | `10m`, `5` | Rotação dos logs dos contêineres |
 | `NUVA_DEPLOY_SSH_USER`, `NUVA_DEPLOY_SSH_HOST`, `NUVA_DEPLOY_SSH_PORT` | sem padrão | Acesso SSH usado só pelo `pnpm deploy:test`; ficam no `.env.local` |
-| `NUVA_<SERVICO>_CPUS`, `NUVA_<SERVICO>_MEMORY` | tabela de serviços | Limites por contêiner |
+| `NUVA_<SERVICO>_CPUS`, `NUVA_<SERVICO>_MEMORY` | tabela de serviços | Limites por contêiner (`NUVA_MIGRATE_CPUS`, `NUVA_ADMIN_API_MEMORY`, ...) |
 
-Segredos de Mercado Pago e de SMTP usam `${VAR:?}` apenas nos serviços que os exigem; em desenvolvimento, o `.env.local` de exemplo traz valores de teste.
+### Segredos exigidos
+
+O Compose exige um segredo (`${VAR:?}`) só nos serviços que o usam e só a partir da fase em que o código passa a usá-lo; exigir antes obrigaria a preencher valor que ninguém lê.
+
+| Segredo | Exigido em | A partir de |
+| --- | --- | --- |
+| `POSTGRES_PASSWORD` | `postgres`, `migrate`, `admin-api`, `classroom-api`, `worker` (e `backup`, quando existir) | Fase 0 (já exigido) |
+| `SESSION_SECRET` | `admin-api`, `classroom-api` | Fase 1 |
+| `ADMIN_EMAIL`, `ADMIN_PASSWORD` | `admin-api` | Fase 1 ([007](007-contas-e-autenticacao.md), "Admin inicial") |
+| `MP_ACCESS_TOKEN`, `MP_WEBHOOK_SECRET` | serviços que falam com o Mercado Pago ([013](013-pagamentos-mercado-pago.md)) | Fase 3 |
+| `SMTP_PASSWORD` | serviço que envia e-mail ([024](024-notificacoes-e-email.md)) | Fase 1, e só quando `SMTP_USER` está definido: a checagem é do serviço, não do Compose |
+
+- A mensagem do `${VAR:?}` cita a variável e o arquivo: `defina POSTGRES_PASSWORD em .env.local`.
+- O `.env.example` lista todos desde já, para o `.env.local` nascer completo.
+- A tarefa que liga cada exigência pertence ao `infra` e é criada com as tarefas da fase ([PLAN](PLAN.md)).
+
+### Configuração de execução dos sites
+
+Os sites são arquivos estáticos e a mesma imagem serve a qualquer instalação. O que o navegador precisa saber da instalação chega por dois canais, e cada dado tem uma única fonte:
+
+| Dado | Fonte | Motivo |
+| --- | --- | --- |
+| Nome, logotipo e cor da escola, endereço do código-fonte | `GET /api/v1/meta` | Vêm de `settings`, mudam sem reiniciar nada |
+| Moeda (`currency`) e idioma (`locale`) | `GET /api/v1/meta` | A API valida e normaliza `NUVA_CURRENCY` e `NUVA_LOCALE`; é o mesmo valor que ela usa em preços e e-mails |
+| Versão (`version`) | `GET /api/v1/meta` | É a da imagem da API ([Dockerfiles](#dockerfiles)) |
+| Provedores de login (`authProviders`) | `GET /api/v1/meta` | Dependem dos segredos, que só a API conhece |
+| Qual site é este e o endereço público dos dois sites | `/config.json` | A API de um site não é chamada pelo outro, e o endereço do outro site é necessário mesmo com a API fora do ar |
+
+`/config.json` é servido pelo Nginx do próprio site, na raiz, com `Content-Type: application/json` e `Cache-Control: no-store`:
+
+```json
+{
+  "app": "admin",
+  "adminUrl": "https://edu-admin.escola.com.br",
+  "classroomUrl": "https://classroom.escola.com.br"
+}
+```
+
+| Campo | Tipo | Origem |
+| --- | --- | --- |
+| `app` | `admin` ou `classroom` | `NUVA_APP`, fixada na imagem de cada site |
+| `adminUrl` | URL de origem, sem barra no fim | `NUVA_PUBLIC_SCHEME`, `NUVA_ADMIN_HOST`, `NUVA_PUBLIC_PORT` |
+| `classroomUrl` | URL de origem, sem barra no fim | `NUVA_PUBLIC_SCHEME`, `NUVA_CLASSROOM_HOST`, `NUVA_PUBLIC_PORT` |
+
+- A URL segue a mesma regra de `packages/core`: a porta some quando está vazia ou é a padrão do esquema (80 em `http`, 443 em `https`).
+- O arquivo é gerado na subida do contêiner por `proxy/nginx/40-nuva-config.sh`, em `/run/nuva/config.json` (`tmpfs`). O script valida cada variável; valor fora do formato impede a subida, com a variável citada no log. Trocar `NUVA_ADMIN_HOST` e subir de novo muda o arquivo sem refazer a imagem.
+- O arquivo é público: nunca contém segredo nem dado de usuário. Campo novo só entra se não puder vir do `/meta`, e entra nesta tabela.
+- O `healthcheck` dos contêineres dos sites pede `/config.json`: site sem o arquivo não fica saudável.
+- Fora do contêiner (`vite dev`), o servidor de desenvolvimento de cada site responde `/config.json` com os mesmos campos, montados das mesmas variáveis e dos mesmos padrões.
+- Uso pelos sites: [006](006-sites-e-interface.md), "Configuração de execução".
+- O script atual ainda grava `adminHost`, `classroomHost`, `currency` e `locale`. Esses campos saem pela tarefa 060 e os sites não os leem.
 
 ### Configurações da escola
 
@@ -249,8 +341,8 @@ Regras:
 
 ### Comandos
 
-- `pnpm compose <args>` — `docker compose` com os arquivos de ambiente corretos.
-- `pnpm dev:up` / `pnpm dev:down` — sobe e derruba o ambiente local com os perfis `traefik` e `mailpit`.
+- `pnpm compose <args>` — `docker compose --env-file .env --env-file .env.local <args>`.
+- `pnpm dev:up` / `pnpm dev:down` — sobe (construindo as imagens e esperando a saúde) e derruba o ambiente local com os perfis `traefik` e `mailpit`; os volumes ficam.
 - `pnpm db:migrate` — aplica migrations pendentes.
 - `pnpm deploy:test` — publica no servidor de testes.
 
@@ -263,7 +355,12 @@ Regras:
 ## Critérios de aceite
 
 - [ ] `docker compose config` na raiz é válido e o arquivo raiz contém apenas `include:`.
-- [ ] Sem `POSTGRES_PASSWORD`, o Compose falha citando a variável.
+- [ ] Sem `POSTGRES_PASSWORD`, o Compose falha citando a variável; a partir da Fase 1, o mesmo vale para `SESSION_SECRET`, `ADMIN_EMAIL` e `ADMIN_PASSWORD`.
+- [ ] Os serviços `admin` e `classroom` não recebem `POSTGRES_PASSWORD` nem outro segredo (teste lê o `docker compose config`).
+- [ ] Com a publicação do Postgres desligada, nenhum serviço além do `traefik` publica porta.
+- [ ] `/config.json` dos dois sites traz `app`, `adminUrl` e `classroomUrl`, sem cache; host inválido impede a subida do contêiner.
+- [ ] Imagem construída com `NUVA_VERSION=1.2.3` responde `version: 1.2.3` no `/meta`.
+- [ ] O fluxo SSE atravessa o proxy sem compressão e sem atraso de entrega, e fica aberto por mais de 5 minutos só com os `ping`.
 - [ ] Com os perfis `traefik` e `mailpit`, os dois sites respondem em `*.localhost:8080` no Docker Desktop.
 - [ ] Sem o perfil `traefik` e com `TRAEFIK_NETWORK=network_public`, os contêineres entram na rede externa e nenhum publica porta.
 - [ ] Todos os contêineres rodam com raiz somente leitura, limites de CPU e memória e `nofile` definidos (teste lê o `docker compose config`).

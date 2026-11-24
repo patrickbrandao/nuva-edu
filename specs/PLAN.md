@@ -22,6 +22,7 @@ Cada fase termina em algo utilizável. As tarefas de uma fase são criadas em `t
 - **Specs:** [007](007-contas-e-autenticacao.md), [008](008-papeis-e-permissoes.md), [028](028-auditoria.md), [029](029-imagens.md), [024](024-notificacoes-e-email.md) (só o envio de e-mail).
 - **Depende de:** Fase 0.
 - **Em paralelo:** `api-classroom` (cadastro, login, sessão) e `api-admin` (gestão de usuários, equipe, auditoria), depois de contrato, migration e núcleo; em seguida `web-classroom` e `web-admin`; `testador` ao final.
+- **Itens de infraestrutura da fase:** o Compose passa a exigir `SESSION_SECRET` (nas duas APIs) e `ADMIN_EMAIL` e `ADMIN_PASSWORD` (na `admin-api`) com `${VAR:?}`, no mesmo conjunto de tarefas em que o código começa a usá-los ([031](031-infraestrutura-e-deploy.md), "Segredos exigidos"); o `.env.local` do servidor de testes recebe os três antes do primeiro `pnpm deploy:test` da fase (humano).
 - **Critério de saída:** uma pessoa se cadastra por senha e por cada provedor, confirma o e-mail e redefine a senha; o admin inicial nasce das variáveis; o admin cria gerente e instrutor, suspende um aluno e vê a senha de um usuário com registro na auditoria; e2e desses fluxos passa.
 - **Precisa do humano:** credenciais de Google, Facebook e Apple.
 

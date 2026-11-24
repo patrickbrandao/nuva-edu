@@ -93,8 +93,8 @@ Qualquer pessoa pode se cadastrar no classroom. A mesma conta serve a alunos e �
 ### Admin inicial
 
 - Na subida da `admin-api`: se não existir nenhum usuário com papel `admin` e `ADMIN_EMAIL` e `ADMIN_PASSWORD` estiverem definidos, cria o admin com e-mail confirmado. Se já existir admin, as variáveis são ignoradas.
-- As variáveis não têm valor padrão; sem elas e sem admin, a API sobe e registra aviso no log a cada inicialização.
-- Emergência: `docker compose exec admin-api node dist/cli.js create-admin --email <e-mail>` cria ou promove a conta e pede a senha no terminal (não aceita senha por argumento).
+- As variáveis não têm valor padrão. No Compose, `ADMIN_EMAIL`, `ADMIN_PASSWORD` e `SESSION_SECRET` são exigidas (`${VAR:?}`) a partir desta fase, junto com o código que as usa ([031](031-infraestrutura-e-deploy.md), "Segredos exigidos"): instalação nova não sobe sem admin inicial definido. Fora do Compose (desenvolvimento e testes), sem `ADMIN_EMAIL` e `ADMIN_PASSWORD` e sem admin, a API sobe e registra aviso no log a cada inicialização.
+- Emergência: o comando `create-admin` da imagem da `admin-api` ([003](003-admin-api.md), "Interfaces e contratos"), executado com `docker compose exec admin-api`, recebe `--email <e-mail>`, cria ou promove a conta e pede a senha no terminal (não aceita senha por argumento).
 - Sempre precisa existir ao menos um `admin` ativo: rebaixar, suspender ou excluir o último é recusado.
 
 ### Casos de erro

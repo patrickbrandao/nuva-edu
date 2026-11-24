@@ -20,6 +20,7 @@ O nuva-edu tem dois sites, ambos SPAs em React: `admin` (equipe) e `classroom` (
 - RF-09: Estados de carregamento, vazio e erro em toda listagem e toda tela de detalhe; estado vazio sempre com uma ação sugerida.
 - RF-10: O site admin mostra apenas os itens de menu e botões que o papel do usuário pode usar ([008](008-papeis-e-permissoes.md)); a API continua sendo quem decide.
 - RF-11: O rodapé dos dois sites exibe o link "Código-fonte", apontando para o endereço de `sourceCodeUrl` do `GET /api/v1/meta` (padrão: o repositório público `https://github.com/patrickbrandao/nuva-edu`; ajustável nas configurações da escola, chave `school.source_code_url`, para quem distribui uma versão modificada), como a AGPL-3.0 exige para uso em rede ([0016](decisions/0016-licenca-agpl-3.md)).
+- RF-12: O que depende da instalação chega ao site em tempo de execução, nunca no build: os dados da escola e da instalação por `GET /api/v1/meta`, e o endereço público dos dois sites por `/config.json` ([Configuração de execução](#configuração-de-execução)). A mesma imagem serve a qualquer instalação.
 - RNF-01: Responsivo de 360 px a 1920 px de largura, sem rolagem horizontal; menu lateral vira gaveta abaixo de 1024 px.
 - RNF-02: WCAG 2.1 nível AA nos fluxos principais (cadastro, login, vitrine, checkout, player, fórum, chamados): contraste mínimo 4,5:1, tudo operável por teclado, foco visível, rótulos em campos, `aria-live` em avisos.
 - RNF-03: JavaScript inicial de cada site abaixo de 300 KB comprimido (gzip); demais telas carregadas sob demanda.
@@ -37,6 +38,24 @@ O nuva-edu tem dois sites, ambos SPAs em React: `admin` (equipe) e `classroom` (
 - Texto escrito por usuário é exibido a partir de Markdown restrito (negrito, itálico, listas, links, código, citação), sempre higienizado; nunca HTML bruto.
 - Sessão: ao carregar, o site chama `GET /api/v1/session`; `401` leva à tela de login guardando o destino. O site admin, ao receber `403` por papel, mostra "sem acesso ao painel" com link para o classroom.
 - Tempo real no classroom: uma conexão SSE por aba ([004](004-classroom-api.md)), que invalida as consultas afetadas.
+
+### Configuração de execução
+
+Cada dado tem uma única fonte ([031](031-infraestrutura-e-deploy.md), "Configuração de execução dos sites"):
+
+| O site precisa de | Lê de |
+| --- | --- |
+| Nome, logotipo, cor de destaque, endereço do código-fonte | `GET /api/v1/meta` |
+| Moeda, idioma, versão, provedores de login | `GET /api/v1/meta` |
+| Endereço do outro site (`adminUrl`, `classroomUrl`) e qual site é este (`app`) | `/config.json` |
+
+- Ao carregar, o site busca `/config.json` (sem cache) em paralelo com `/api/v1/meta` e `/api/v1/session`. É um arquivo estático do próprio site, fora de `/api/v1`, e por isso é a única chamada que não passa pelo cliente gerado (RF-02).
+- O site não lê moeda, idioma nem versão do `/config.json`, mesmo que o arquivo os traga.
+- Uso de `classroomUrl` no admin: o link para o classroom da tela "sem acesso ao painel" ([Base técnica](#base-técnica)).
+- Uso de `adminUrl` no classroom: o item "Administração" do menu do usuário, mostrado só a quem tem papel de equipe ([008](008-papeis-e-permissoes.md)).
+- Links para o próprio site são sempre relativos; `adminUrl` e `classroomUrl` só montam link para o outro site.
+- `/config.json` ausente, ilegível ou sem o campo: o site funciona, os links para o outro site não aparecem e o problema é registrado no console do navegador. Nunca é tela de erro.
+- No `vite dev`, o servidor de desenvolvimento do site responde `/config.json` com os mesmos campos, a partir das mesmas variáveis de ambiente e padrões.
 
 ### Casca comum
 
@@ -122,7 +141,8 @@ A tela de configurações mostra o estado das integrações definidas por variá
 
 - `apps/admin` consome `apps/admin-api/openapi.yaml`; `apps/classroom` consome `apps/classroom-api/openapi.yaml`, ambos por `packages/api-client`.
 - Imagens servidas em `/api/v1/images/:id` ([029](029-imagens.md)).
-- Sites entregues como arquivos estáticos por Nginx sem privilégios; qualquer rota desconhecida devolve `index.html` ([031](031-infraestrutura-e-deploy.md)).
+- Sites entregues como arquivos estáticos por Nginx sem privilégios (`proxy/nginx/`, igual nas duas imagens); qualquer rota desconhecida devolve `index.html`, sem cache, e os arquivos de `/assets/`, com hash no nome, têm cache longo ([031](031-infraestrutura-e-deploy.md)). Caminho de API ou de sonda que chegue ao Nginx do site (`/api/`, `/mcp`, `/healthz`, `/readyz`, `/metrics`) responde `404`, não o `index.html`.
+- `/config.json`: formato em [031](031-infraestrutura-e-deploy.md), "Configuração de execução dos sites".
 
 ## Dados
 
@@ -138,6 +158,8 @@ Os sites não são donos de dados. No navegador guardam apenas: tema (`nuva-them
 - [ ] Fluxos principais passam na verificação automática de acessibilidade (axe) sem violações AA e são concluídos só com teclado.
 - [ ] Telas utilizáveis a 360 px de largura, sem rolagem horizontal.
 - [ ] Tamanho inicial de cada site dentro de RNF-03, verificado no build.
+- [ ] O link para o outro site usa o endereço do `/config.json`; sem o arquivo, o site abre e o link não aparece.
+- [ ] Nenhum site lê moeda, idioma ou versão de outra fonte que não o `/api/v1/meta`.
 - [ ] Definition of Done ([002](002-organizacao-do-trabalho.md)) atendida.
 
 ## Fora de escopo

@@ -71,7 +71,7 @@ Regra adicional: recurso que existe mas ao qual o aluno não tem direito respond
 
 ### Fluxo SSE (`GET /api/v1/stream`)
 
-1. O navegador abre a conexão com o cookie de sessão. Resposta `text/event-stream`, sem compressão, com `Cache-Control: no-store`.
+1. O navegador abre a conexão com o cookie de sessão. Resposta `text/event-stream`, sem compressão, com `Cache-Control: no-store` e `X-Accel-Buffering: no` ([Base do fluxo](#base-do-fluxo)).
 2. A API mantém uma única conexão `LISTEN` ao PostgreSQL por processo, no canal `nuva_user_events`.
 3. Quem grava uma mensagem ou notificação (API ou worker) chama `publishUserEvent(trx, { userId, kind, data })`, de `packages/core`, na mesma transação da escrita. A função pega o `id` na sequência `user_event_id_seq` e executa `pg_notify('nuva_user_events', carga)`; o aviso só sai no `COMMIT`.
 4. A API confere a carga recebida e repassa o evento às conexões abertas daquele `userId`.
@@ -111,6 +111,22 @@ Carga do `NOTIFY` (JSON):
 - Presença: usuário é "online" enquanto tiver conexão SSE aberta; `profiles.last_seen_at` ([019](019-perfil-e-diretorio.md)) é atualizado no fechamento e a cada 60 s.
 - Sessão encerrada ou usuário com suspensão `full`: a conexão é fechada pelo servidor.
 
+### Base do fluxo
+
+O que não é específico deste fluxo fica em `packages/api-kit` e vale para qualquer API que abra um fluxo SSE. O serviço liga a opção `eventStreams` e a base passa a cuidar de:
+
+| Item | Regra |
+| --- | --- |
+| Cabeçalhos | Sempre os três, postos pela base ao abrir o fluxo: `Content-Type: text/event-stream`, `Cache-Control: no-store`, `X-Accel-Buffering: no` (desliga o buffer de proxies do tipo Nginx) |
+| Contagem | Medidor `sse_connections` ([033](033-observabilidade-retencao-backup.md)): sobe quando o fluxo abre e desce quando fecha, por qualquer motivo |
+| Encerramento do serviço | No `SIGTERM`, a base termina os fluxos abertos antes de esperar as requisições em curso (gancho `preClose`); sem isso, o encerramento esperaria por conexões que nunca terminam sozinhas |
+| Formato do evento | Uma função da base escreve `id`, `event`, `retry` e `data` (JSON numa linha) e o comentário de abertura |
+
+- Sem `eventStreams` ligado, abrir um fluxo é erro de programação: a base recusa.
+- Fim do fluxo no log e nas métricas: quando é o cliente que fecha (o caso normal: aba fechada, navegação, queda de rede), a requisição é registrada com o status convencional `499`; quando é o servidor que encerra (sessão encerrada, limite de conexões, desligamento), com `200`. O `499` nunca vai ao navegador e não entra no contrato ([033](033-observabilidade-retencao-backup.md), "Requisição encerrada pelo cliente").
+- O que é deste fluxo e fica na `classroom-api`: a escuta do canal, a entrega por usuário, o `ping`, os limites por usuário e o reenvio.
+- O proxy não comprime nem segura o fluxo; o que é configurado nele está em [031](031-infraestrutura-e-deploy.md), "SSE atrás do proxy".
+
 ### Reenvio na reconexão
 
 Comportamento aceito para a Fase 0 e registrado como provisório ([0020](decisions/0020-eventos-de-usuario-do-sse.md)):
@@ -148,6 +164,8 @@ O estado de pagamento, as assinaturas e os direitos derivados são escritos pelo
 - [ ] `publishUserEvent` numa transação desfeita não entrega evento; com carga de 8000 bytes ou mais, lança erro.
 - [ ] Reconexão com `Last-Event-ID` dentro de 5 minutos recebe os eventos perdidos, em ordem e sem repetir os já vistos.
 - [ ] Carga inválida no canal é descartada sem derrubar a escuta.
+- [ ] A resposta do fluxo traz `Cache-Control: no-store` e `X-Accel-Buffering: no`, e nenhum `Content-Encoding`.
+- [ ] Fechar a conexão pelo cliente baixa `sse_connections` e conta a requisição com `status="499"`; o `SIGTERM` com fluxos abertos encerra o serviço dentro do prazo.
 - [ ] 500 conexões SSE simultâneas mantidas em teste de carga, dentro de RNF-02.
 - [ ] Conteúdo com `<script>` em tópico, case, mensagem ou perfil é neutralizado na gravação e na leitura.
 - [ ] Webhook com assinatura inválida é recusado e registrado.

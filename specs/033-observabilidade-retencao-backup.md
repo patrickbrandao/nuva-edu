@@ -28,6 +28,7 @@ Uma instalação é operada por uma escola pequena, sem equipe de infraestrutura
 ### Logs
 
 - Formato JSON, uma linha por evento, com `time`, `level`, `service`, `msg`, `request_id` e, quando houver, `user_id`, `route`, `status`, `duration_ms`, `job_id`.
+- Cada requisição gera uma linha só nas APIs, com `method`, `route` (o padrão da rota, nunca a URL com consulta), `status`, `duration_ms` e o IP do cliente: `Requisição atendida` quando a resposta termina, ou `Requisição encerrada pelo cliente`, com `aborted: true`, quando o cliente fecha a conexão antes ([Requisição encerrada pelo cliente](#requisição-encerrada-pelo-cliente)). As sondas saem em nível `debug`.
 - O `request_id` nasce no Traefik (ou na API, se ausente), volta ao cliente em `X-Request-Id` e acompanha as tarefas que a requisição enfileira.
 - Nível por `NUVA_LOG_LEVEL` (`info` por padrão). Erros incluem a pilha.
 - Lista de campos sempre mascarados: `password`, `token`, `secret`, `authorization`, `cookie`, `cpf`, `cnpj`, `document`, `key`. O nome é comparado sem diferenciar maiúsculas e vale como palavra dentro de nomes compostos (`apiKey`, `secret_key`, `accessToken`). Mascarar a mais é aceitável; deixar passar, não. Exceção: o trecho `key` é perdoado em nomes que nunca guardam credencial e precisam aparecer no log, listados em `packages/core` — a chave de unicidade da fila (`unique_key`, [005](005-worker-e-fila.md)), o nome de uma configuração (`setting_key`) e a chave de um texto traduzido (`translation_key`, `i18n_key`). Nome novo só entra nessa lista se o valor nunca for credencial.
@@ -54,7 +55,7 @@ Sem identificadores de usuário nos rótulos.
 | --- | --- | --- |
 | `http_requests_total{route,method,status}` | contador | APIs |
 | `http_request_duration_seconds{route,method}` | histograma | APIs |
-| `sse_connections` | medidor | `classroom-api`, `admin-api` |
+| `sse_connections` | medidor | APIs com fluxo SSE (`classroom-api`) |
 | `db_pool_connections{state}` | medidor | todos |
 | `jobs_total{type,outcome}` | contador | worker |
 | `jobs_duration_seconds{type}` | histograma | worker |
@@ -81,7 +82,21 @@ Detalhe das métricas do worker:
 - `worker_database_up`: 1 quando a leitura da fila para a coleta funcionou. Com o banco fora, vale 0, os medidores `jobs_queue_depth`, `jobs_failed`, `jobs_count` e `jobs_oldest_pending_seconds` ficam de fora da resposta e o `/metrics` continua respondendo `200`.
 - Os medidores da fila são lidos do banco a cada coleta; com mais de um worker, todos devolvem o mesmo valor, e quem coleta usa `max`, não `sum`.
 
-`sse_connections` conta as conexões abertas no processo. Requisição encerrada pelo cliente antes do fim da resposta (o caso normal do SSE) é registrada uma vez, no log e nas métricas HTTP, com o status convencional `499`. Em `/api/v1/stream`, a duração observada é a da conexão, não a de um atendimento: painel ou alerta de latência exclui essa rota.
+`sse_connections` conta os fluxos SSE abertos no processo. O medidor é registrado pela base HTTP (`packages/api-kit`) em todo serviço que liga os fluxos SSE, e só neles ([004](004-classroom-api.md), "Base do fluxo"); hoje, a `classroom-api`.
+
+### Requisição encerrada pelo cliente
+
+Quando o cliente fecha a conexão antes do fim da resposta, a API não tem status de resposta para registrar. A base HTTP usa então o status convencional `499` (o mesmo que o Nginx usa para esse caso):
+
+- uma linha de log, `Requisição encerrada pelo cliente`, com `aborted: true` e `status: 499`, no lugar de `Requisição atendida`;
+- uma contagem em `http_requests_total{status="499"}` e uma observação em `http_request_duration_seconds`, com o tempo até o fechamento.
+
+Regras:
+
+- O `499` nunca é enviado ao cliente (a conexão já fechou), não é erro da API e não entra nos contratos.
+- É o fim normal de um fluxo SSE: aba fechada, navegação ou queda de rede. Em `/api/v1/stream`, `status="499"` é o esperado, e `status="200"` indica fluxo encerrado pelo servidor.
+- Alertas e painéis: `499` não conta como erro. A taxa de erro usa só `5xx`; em `/api/v1/stream`, a duração observada é a da conexão, não a de um atendimento, então painel ou alerta de latência exclui essa rota.
+- Fora do SSE, `499` em volume numa rota comum indica cliente desistindo de resposta lenta: vale olhar a latência da rota, não a contagem de erros.
 
 Não há tracing distribuído nem alertas embutidos. O guia em `docs/` traz um exemplo de coleta com Prometheus e três alertas sugeridos (fila parada, taxa de erro 5xx, backup atrasado).
 
@@ -168,6 +183,7 @@ Antes da versão 1.0 (Fase 7 do plano), um roteiro k6 simula 500 usuários simul
 - [ ] Toda linha de log das APIs e do worker é JSON válido com `request_id` quando originada de requisição.
 - [ ] A varredura dos logs da suíte e2e não encontra nenhum campo da lista de mascarados com valor.
 - [ ] `/metrics` não responde pela URL pública.
+- [ ] Requisição que o cliente fecha antes da resposta gera uma única linha de log, com `aborted: true`, e conta em `http_requests_total` com `status="499"`.
 - [ ] Parar o Postgres deixa `/readyz` em falha e `/healthz` em sucesso.
 - [ ] Um e-mail que falha no SMTP aparece na tela "Operação" e é reenviado pelo botão.
 - [ ] Após o expurgo, não restam sessões com mais de 30 dias sem uso nem tarefas concluídas com mais de 7 dias; notificações não lidas permanecem.

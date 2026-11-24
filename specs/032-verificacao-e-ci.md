@@ -34,15 +34,23 @@ O que ele considera "mudou" (adaptação ao diretório compartilhado, em que tod
 
 Passos:
 
-| Passo | O que roda |
-| --- | --- |
-| Lint e formatação | Biome só nos arquivos alterados |
-| Tipos | `tsc` dos pacotes afetados e dos que dependem deles (grafo do workspace) |
-| Testes | O arquivo de teste alterado ou o de mesmo nome do arquivo-fonte (`src/x.ts` → `test/x.test.ts`) |
-| Contrato | Teste de contrato da API cujo `openapi.yaml` ou cujas rotas mudaram |
-| Banco | Testes de banco alterados e os das migrations alteradas |
+| Passo | Nome no resumo | O que roda |
+| --- | --- | --- |
+| Lint e formatação | `lint` | Biome só nos arquivos alterados |
+| Tipos | `tipos` | `tsc` dos pacotes afetados e dos que dependem deles (grafo do workspace) |
+| Postgres local | `postgres` | Prepara o banco de testes; só aparece quando algum passo seguinte precisa dele |
+| Testes | `testes` | O arquivo de teste alterado ou o de mesmo nome do arquivo-fonte (`src/x.ts` → `test/x.test.ts`), exceto os de contrato |
+| Contrato | `contrato` | Teste de contrato (`test/contract`) da API cujo `openapi.yaml` ou cujas rotas mudaram |
+| Cliente gerado | `cliente` | `check` de `packages/api-client` quando um `openapi.yaml` muda, ou quando o próprio gerado (ou o script que o gera) é mexido: o gerado tem de estar em dia com os contratos |
+| Banco | `banco` | Testes de banco alterados; migration alterada roda a suíte inteira de `database/postgres` |
+| Tipos do banco | `tipos-banco` | `db:types:check` de `packages/core` quando uma migration muda, ou quando os tipos gerados são mexidos: os tipos gerados têm de descrever o banco das migrations |
 
 Não roda build, e2e nem a suíte inteira.
+
+Regras que valem nos dois níveis:
+
+- **Testes de contrato rodam só no passo `contrato`.** Os arquivos de `test/contract` ficam fora do passo `testes`, mesmo quando são eles os alterados, para o resumo dizer onde foi a falha e para o completo não os rodar duas vezes.
+- **Gerado não se edita à mão.** O cliente de `packages/api-client` e os tipos do banco de `packages/core` são conferidos contra a fonte (contrato e migrations); divergência é falha do passo `cliente` ou `tipos-banco`, e a correção é regenerar. Durante uma janela de contrato, o `cliente` vermelho é esperado ([002](002-organizacao-do-trabalho.md), "Janela de contrato").
 
 Testes explícitos depois de `--`, para quando a heurística não achar o certo:
 
@@ -70,13 +78,14 @@ Os testes que dependem de banco rodam contra o Postgres local já no ar (o do am
 
 Na ordem, parando na primeira falha:
 
-1. Lint e formatação de todo o repositório (Biome).
-2. Tipos de todos os pacotes (`tsc`).
-3. Todos os testes de unidade e integração (Vitest), com o banco isolado por Testcontainers (PostgreSQL 18), e cobertura de `packages/core`.
-4. Testes de contrato das duas APIs contra os `openapi.yaml`.
-5. Todos os testes de banco: migrations do zero, `down` de cada migration reversível, e ida e volta da última.
-6. Build de todas as aplicações e dos pacotes.
-7. Com `--e2e`: testes de ponta a ponta (Playwright) contra o ambiente Compose completo, com Mailpit e Mercado Pago simulado.
+1. `lint`: lint e formatação de todo o repositório (Biome), inclusive os YAML.
+2. `tipos`: tipos de todos os pacotes (`tsc`).
+3. `tipos-banco`: os tipos gerados do banco conferem com as migrations (`db:types:check`). Vem antes dos testes para nenhum teste rodar contra tipos que não descrevem o banco.
+4. `testes`: todos os testes de unidade e integração (Vitest), com o banco isolado por Testcontainers (PostgreSQL 18), e cobertura de `packages/core`. Os testes de contrato ficam de fora. O `test` de `packages/api-client` inclui a conferência do cliente gerado, então no completo não há passo `cliente` separado.
+5. `contrato`: testes de contrato das duas APIs contra os `openapi.yaml`, uma única vez. Aqui entra também o `check-contract --no-pending` das duas APIs ([003](003-admin-api.md), "Subida estrita"), quando a tarefa 035 o ligar.
+6. `banco`: todos os testes de banco: migrations do zero, `down` de cada migration reversível, e ida e volta da última.
+7. `build`: build de todas as aplicações e dos pacotes.
+8. `e2e`, com `--e2e`: testes de ponta a ponta (Playwright) contra o ambiente Compose completo, com Mailpit e Mercado Pago simulado.
 
 ### Níveis de teste e ferramentas
 
@@ -92,10 +101,10 @@ Os testes e2e cobrem, no mínimo, os fluxos de medida de sucesso de [000](000-vi
 
 ### Qualidade de código
 
-- **Biome**: lint e formatação, uma configuração na raiz.
+- **Biome**: lint e formatação, uma configuração na raiz. Cobre JavaScript, TypeScript, JSON, CSS e YAML (os `docker-compose.yml`, os `openapi.yaml`, os fluxos do CI); Markdown, o `pnpm-lock.yaml` e as pastas `generated` ficam de fora. YAML mal formatado falha o `lint` como qualquer outro arquivo, nos dois níveis e no gancho de commit. Hoje só o `verify:full` confere YAML; a tarefa 062 leva a mesma cobertura ao `verify:quick` e ao `pre-commit`.
 - **`tsc`**: modo estrito; referências de projeto por pacote.
 - **lefthook**:
-  - `pre-commit`: Biome nos arquivos em stage (sem `git add` automático de arquivos alheios) e bloqueio de arquivos proibidos (`.env.local`, dumps).
+  - `pre-commit`: Biome nos arquivos em stage, YAML inclusive (sem `git add` automático de arquivos alheios), e bloqueio de arquivos proibidos (`.env.local`, dumps).
   - `commit-msg`: valida Conventional Commits em português com a tarefa citada ([002](002-organizacao-do-trabalho.md)).
   - Não roda testes: isso é papel do `verify:quick`.
 
@@ -105,9 +114,10 @@ Os testes e2e cobrem, no mínimo, os fluxos de medida de sucesso de [000](000-vi
 | --- | --- | --- |
 | `verify` | push na `main` e PR (contribuição externa) | `pnpm verify:full --e2e` |
 | `security` | push na `main` e semanal | `pnpm audit`, CodeQL, checagem de licença das dependências (compatíveis com a AGPL-3.0, ver [0016](decisions/0016-licenca-agpl-3.md)) |
-| `images` | `verify` verde na `main` | Build `amd64` + `arm64`, Trivy em cada imagem, push com `sha-<commit>` e `main` |
-| `release` | tag `vX.Y.Z` | `verify`, imagens `X.Y.Z`, `X.Y`, `latest`, teste de restauração de backup ([033](033-observabilidade-retencao-backup.md)), documentação no GitHub Pages |
+| `images` | `verify` verde na `main` | Build `amd64` + `arm64` com o argumento `NUVA_VERSION`, Trivy em cada imagem, push com `sha-<commit>` e `main` |
+| `release` | tag `vX.Y.Z` | `verify`, imagens `X.Y.Z`, `X.Y`, `latest` com `NUVA_VERSION=X.Y.Z`, teste de restauração de backup ([033](033-observabilidade-retencao-backup.md)), documentação no GitHub Pages |
 
+- Versão nas imagens: o CI passa `NUVA_VERSION` no build da `admin-api`, da `classroom-api` e do `worker`; é o que o `/api/v1/meta` mostra. Na tag `vX.Y.Z` o valor é `X.Y.Z`; na `main`, a versão do `package.json` da raiz seguida de `-sha-<7 caracteres>` ([031](031-infraestrutura-e-deploy.md), "Publicação de imagens"). Na release, o fluxo confere que a imagem publicada responde a versão da tag.
 - Dependabot semanal para npm, Docker e GitHub Actions.
 - Segredos no GitHub: apenas o token do Docker Hub. Nenhuma credencial do servidor de testes.
 - Se o `verify` da `main` falhar, vale a regra de [002](002-organizacao-do-trabalho.md): correção com prioridade máxima e nenhuma tarefa nova na área afetada.
@@ -126,11 +136,14 @@ Códigos de saída: `0` tudo certo; `1` algum passo falhou; `2` ambiente indispo
 Exemplo de resumo:
 
 ```
-✓ lint        1.2s   (4 arquivos)
-✓ tipos       6.8s   (classroom-api, core)
-✗ testes      3.1s   (1 de 12 falhou)
-– contrato    pulado (sem mudança)
-✓ banco       0.9s
+✓ lint         1.2s   (4 arquivos)
+✓ tipos        6.8s   (classroom-api, core)
+✓ postgres     0.4s
+✗ testes       3.1s   (1 de 12 falhou)
+– contrato     pulado (sem mudança)
+– cliente      pulado (sem mudança)
+✓ banco        0.9s
+– tipos-banco  pulado (sem mudança)
 ```
 
 ## Dados
@@ -145,6 +158,9 @@ Exemplo de resumo:
 - [ ] Argumentos depois de `--` chegam ao Vitest.
 - [ ] Com um passo falhando, o `verify:quick` ainda roda os demais e sai com código 1.
 - [ ] O `verify:full` para no primeiro passo que falhar.
+- [ ] Alterar um `openapi.yaml` sem regenerar o cliente falha o passo `cliente`; alterar uma migration sem regenerar os tipos falha o `tipos-banco`.
+- [ ] Um teste de `test/contract` alterado roda no passo `contrato`, não no `testes`; no completo, cada teste de contrato roda uma vez.
+- [ ] Um `docker-compose.yml` mal formatado falha o `lint` no rápido, no completo e no gancho de commit.
 - [ ] A segunda execução seguida do `verify:quick` não refaz o banco modelo; alterar uma migration refaz.
 - [ ] Duas execuções simultâneas do `verify:quick` não interferem entre si.
 - [ ] Com o Postgres local parado, o `verify:quick` o sobe ou mostra o comando.

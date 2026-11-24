@@ -10,7 +10,7 @@ As specs são a fonte da verdade. Carregue apenas a que a tarefa pedir. Decisõe
 | [003-admin-api.md](003-admin-api.md) | admin-api | Serviço da API administrativa | 001 | aprovada |
 | [004-classroom-api.md](004-classroom-api.md) | classroom-api | Serviço da API do aluno, SSE | 001 | aprovada |
 | [005-worker-e-fila.md](005-worker-e-fila.md) | Worker e fila | Tarefas em segundo plano | 001 | aprovada |
-| [006-sites-e-interface.md](006-sites-e-interface.md) | Sites e interface | Sites admin e classroom, telas, `packages/ui` | 001 | aprovada |
+| [006-sites-e-interface.md](006-sites-e-interface.md) | Sites e interface | Sites admin e classroom, telas, `packages/ui`, uso do `/config.json` | 001 | aprovada |
 | [007-contas-e-autenticacao.md](007-contas-e-autenticacao.md) | Contas e autenticação | Cadastro, login, senha, sessão, admin inicial | 001 | aprovada |
 | [008-papeis-e-permissoes.md](008-papeis-e-permissoes.md) | Papéis e permissões | Matriz de permissões por papel | 007 | aprovada |
 | [009-catalogo-e-conteudo.md](009-catalogo-e-conteudo.md) | Catálogo e conteúdo | Cursos, módulos, aulas, ebooks, pacotes, vitrine | 008 | aprovada |
@@ -35,6 +35,6 @@ As specs são a fonte da verdade. Carregue apenas a que a tarefa pedir. Decisõe
 | [028-auditoria.md](028-auditoria.md) | Auditoria | Registro imutável de ações | 003 | aprovada |
 | [029-imagens.md](029-imagens.md) | Imagens | Envio, limites, entrega | 001 | aprovada |
 | [030-lgpd.md](030-lgpd.md) | LGPD | Termos, exportação, exclusão | 007 | aprovada |
-| [031-infraestrutura-e-deploy.md](031-infraestrutura-e-deploy.md) | Infraestrutura e deploy | Docker, variáveis, ambientes, proxy | 001 | aprovada |
-| [032-verificacao-e-ci.md](032-verificacao-e-ci.md) | Verificação e CI | `verify:quick`, `verify:full`, lint, CI, versões | 001, 002 | aprovada |
-| [033-observabilidade-retencao-backup.md](033-observabilidade-retencao-backup.md) | Observabilidade, retenção e backup | Logs, saúde, métricas, expurgo, backup, ameaças | 001, 005 | aprovada |
+| [031-infraestrutura-e-deploy.md](031-infraestrutura-e-deploy.md) | Infraestrutura e deploy | Docker, variáveis, segredos exigidos, `/config.json` dos sites, ambientes, proxy e SSE atrás dele | 001 | aprovada |
+| [032-verificacao-e-ci.md](032-verificacao-e-ci.md) | Verificação e CI | `verify:quick`, `verify:full` e seus passos, lint, CI, versão nas imagens | 001, 002 | aprovada |
+| [033-observabilidade-retencao-backup.md](033-observabilidade-retencao-backup.md) | Observabilidade, retenção e backup | Logs, saúde, métricas, status 499, expurgo, backup, ameaças | 001, 005 | aprovada |
