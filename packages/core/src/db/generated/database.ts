@@ -23,6 +23,23 @@ export type JsonValue = JsonArray | JsonObject | JsonPrimitive;
 
 export type Timestamp = ColumnType<Date, Date | string, Date | string>;
 
+export interface AuditLog {
+  action: string;
+  actorRole: string | null;
+  actorUserId: string | null;
+  createdAt: Generated<Timestamp>;
+  details: Generated<Json>;
+  id: Generated<string>;
+  ip: string | null;
+  mcpKeyId: string | null;
+  origin: string;
+  outcome: string;
+  requestId: string | null;
+  targetId: string | null;
+  targetType: string | null;
+  userAgent: string | null;
+}
+
 export interface EmailTokens {
   createdAt: Generated<Timestamp>;
   expiresAt: Timestamp;
@@ -160,6 +177,7 @@ export interface UserSuspensions {
 }
 
 export interface DB {
+  auditLog: AuditLog;
   emailTokens: EmailTokens;
   images: Images;
   imageVariants: ImageVariants;
