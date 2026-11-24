@@ -12,14 +12,15 @@ import { readFileSync } from 'node:fs';
 
 /**
  * Tudo o que os sites usam vem da própria origem: a API e o SSE (`connect-src`), as imagens
- * regravadas pela API (`img-src`, mais `data:` para ícones embutidos no CSS), fontes e estilos.
+ * regravadas pela API (`img-src`, mais `data:` para ícones embutidos no CSS e `blob:` para a prévia
+ * do `ImagePicker`, feita com `URL.createObjectURL` antes do envio), fontes e estilos.
  * Nada externo entra; o que não está listado cai em `default-src 'none'`.
  */
 const BASE_POLICY = [
   ['default-src', "'none'"],
   ['script-src', "'self'"],
   ['style-src', "'self'"],
-  ['img-src', "'self'", 'data:'],
+  ['img-src', "'self'", 'data:', 'blob:'],
   ['font-src', "'self'"],
   ['connect-src', "'self'"],
   ['media-src', "'self'"],

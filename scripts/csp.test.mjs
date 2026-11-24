@@ -46,12 +46,32 @@ test('o hash do script do tema entra em script-src, sem unsafe-inline', () => {
   assert.deepEqual(directives['script-src'], ["'self'", sha(THEME_BOOT_SCRIPT)]);
   assert.doesNotMatch(policy, /unsafe-inline|unsafe-eval/);
   assert.deepEqual(directives['default-src'], ["'none'"]);
-  // API e SSE na mesma origem; imagens da origem e `data:`; fontes e estilos da origem.
+  // API e SSE na mesma origem; imagens da origem, `data:` e `blob:` (prévia do ImagePicker, só
+  // em img-src); fontes e estilos da origem.
   assert.deepEqual(directives['connect-src'], ["'self'"]);
-  assert.deepEqual(directives['img-src'], ["'self'", 'data:']);
+  assert.deepEqual(directives['img-src'], ["'self'", 'data:', 'blob:']);
   assert.deepEqual(directives['font-src'], ["'self'"]);
   assert.deepEqual(directives['style-src'], ["'self'"]);
   assert.deepEqual(directives['frame-ancestors'], ["'none'"]);
+  // As demais diretivas não mudam: a lista completa, na ordem, sem `blob:` fora de img-src.
+  assert.deepEqual(directives['media-src'], ["'self'"]);
+  assert.deepEqual(directives['manifest-src'], ["'self'"]);
+  assert.deepEqual(directives['base-uri'], ["'self'"]);
+  assert.deepEqual(directives['form-action'], ["'self'"]);
+  assert.deepEqual(Object.keys(directives), [
+    'default-src',
+    'script-src',
+    'style-src',
+    'img-src',
+    'font-src',
+    'connect-src',
+    'media-src',
+    'manifest-src',
+    'base-uri',
+    'form-action',
+    'frame-ancestors',
+  ]);
+  assert.equal(policy.match(/blob:/g).length, 1);
   // Nada externo: nenhuma origem com esquema ou curinga.
   assert.doesNotMatch(policy, /https?:|\*/);
 });
