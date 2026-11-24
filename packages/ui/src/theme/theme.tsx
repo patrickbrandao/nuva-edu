@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react';
 import { useEffect, useState, useSyncExternalStore } from 'react';
 import '../styles/tokens.css';
+import { THEME_BOOT_SCRIPT, THEME_STORAGE_KEY } from './boot';
 import './theme.css';
 
 /*
@@ -14,17 +15,11 @@ import './theme.css';
 export type ThemeMode = 'system' | 'light' | 'dark';
 export type ActiveTheme = 'light' | 'dark';
 
-/** Chave do tema no localStorage. */
-export const THEME_STORAGE_KEY = 'nuva-theme';
-
 /** Cor da barra do navegador (celular) em cada tema: o valor de --minui-stage. */
 export const THEME_BAR_COLORS: Record<ActiveTheme, string> = { light: '#f5f5f2', dark: '#070707' };
 
-/**
- * Script para o <head> do index.html de cada site: aplica o tema salvo antes
- * da primeira pintura, para a página não piscar no tema errado.
- */
-export const THEME_BOOT_SCRIPT = `try{const t=localStorage.getItem('${THEME_STORAGE_KEY}');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t)}catch{}`;
+// A chave e o script de partida ficam em ./boot, importável sem CSS nem JSX.
+export { THEME_BOOT_SCRIPT, THEME_STORAGE_KEY };
 
 const DARK_QUERY = '(prefers-color-scheme: dark)';
 

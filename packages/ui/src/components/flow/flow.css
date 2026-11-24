@@ -1,0 +1,129 @@
+/*
+ * Primitivos de fluxo: título de página, link de texto e estados de carregando e erro.
+ * Usam os tokens --adm-* (valem dentro de .minui-adm).
+ */
+
+/* só para leitores de tela */
+.minui-sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  border: 0;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/* =================== Título de página =================== */
+.minui-page-title {
+  min-width: 0;
+}
+
+.minui-page-title[data-align="center"] {
+  text-align: center;
+}
+
+.minui-page-title :is(h1, h2) {
+  margin: 0;
+  color: var(--adm-ink);
+  font-size: 24px;
+  font-weight: 600;
+  letter-spacing: -0.025em;
+  line-height: 1.25;
+  overflow-wrap: anywhere;
+}
+
+.minui-page-title p {
+  margin: 6px 0 0;
+  color: var(--adm-ink-3);
+  font-size: 14px;
+}
+
+/* =================== Link de texto =================== */
+.minui-text-link {
+  color: var(--adm-ink-2);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.minui-text-link:hover {
+  color: var(--adm-ink);
+}
+
+.minui-text-link--quiet {
+  text-decoration: none;
+}
+
+.minui-text-link--quiet:hover {
+  text-decoration: underline;
+}
+
+.minui-text-link > svg {
+  display: inline-block;
+  margin-left: 4px;
+  vertical-align: -1px;
+}
+
+/* =================== Estados: carregando e erro =================== */
+.minui-state--loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding: 36px 16px;
+  color: var(--adm-ink-3);
+  font-size: 13.5px;
+  text-align: center;
+}
+
+.minui-state--loading.minui-state--inline {
+  flex-direction: row;
+  padding: 0;
+  text-align: left;
+}
+
+.minui-state__spin {
+  flex: none;
+  width: 18px;
+  height: 18px;
+  border: 2px solid var(--adm-line-strong);
+  border-top-color: var(--adm-ink-2);
+  border-radius: 50%;
+  animation: minui-state-spin 0.8s linear infinite;
+}
+
+.minui-state--inline .minui-state__spin {
+  width: 14px;
+  height: 14px;
+}
+
+@keyframes minui-state-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.minui-state--error .minui-adm-empty > svg {
+  color: var(--adm-red);
+}
+
+.minui-state__detail {
+  font-size: 12.5px;
+  overflow-wrap: anywhere;
+}
+
+.minui-state__actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .minui-state__spin {
+    animation: none;
+  }
+}

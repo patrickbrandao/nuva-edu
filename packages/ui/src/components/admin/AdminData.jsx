@@ -182,10 +182,13 @@ export function AdminMeta({ items = [], className }) {
   );
 }
 
-/** Lista de detalhes: [{ label, icon, value }]. */
-export function AdminDetails({ items = [], className }) {
+/**
+ * Lista de detalhes: [{ label, icon, value }].
+ * `wrap` deixa o valor quebrar linha em vez de cortar com reticências.
+ */
+export function AdminDetails({ items = [], wrap = false, className }) {
   return (
-    <dl className={cx('minui-adm-details', className)}>
+    <dl className={cx('minui-adm-details', wrap && 'minui-adm-details--wrap', className)}>
       {items.map((item) => (
         <div key={item.label} style={{ display: 'contents' }}>
           <dt>
@@ -321,7 +324,7 @@ export function AdminEmpty({ icon, title, text, children }) {
   return (
     <div className="minui-adm-empty">
       {icon}
-      <strong>{title}</strong>
+      {title ? <strong>{title}</strong> : null}
       {text ? <span>{text}</span> : null}
       {children}
     </div>

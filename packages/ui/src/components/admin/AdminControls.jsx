@@ -2,6 +2,7 @@ import { Check, ChevronDown, Search } from 'lucide-react';
 import { useEffect, useId, useRef, useState } from 'react';
 import './admin.css';
 import { cx } from '../../lib/util';
+import { useLinkComponent } from '../link/link';
 
 /*
  * Controles do AdminUI: botão, busca, menu suspenso, campo de texto, caixa de
@@ -12,7 +13,8 @@ import { cx } from '../../lib/util';
 /**
  * Botão. `variant`: 'default' (contorno), 'primary' (cheio), 'ghost' (só o
  * texto). Só com `icon` e sem texto vira um botão quadrado — passe aria-label.
- * Com `href` é um link.
+ * Com `href` é um link; endereço interno usa o componente de link do site
+ * (`linkComponent`, ou o do LinkProvider), para o roteador não recarregar a página.
  */
 export function AdminButton({
   variant = 'default',
@@ -20,11 +22,17 @@ export function AdminButton({
   icon,
   iconEnd,
   href,
+  linkComponent,
   className,
   children,
   ...rest
 }) {
-  const Tag = href ? 'a' : 'button';
+  const Link = useLinkComponent(linkComponent, {
+    href,
+    target: rest.target,
+    download: rest.download,
+  });
+  const Tag = href ? Link : 'button';
   const props = href ? { href } : { type: 'button' };
   return (
     <Tag

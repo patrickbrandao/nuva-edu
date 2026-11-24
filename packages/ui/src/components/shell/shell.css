@@ -1,0 +1,293 @@
+/*
+ * Casca do site do aluno (.minui-room) e rodapé das cascas (.minui-shell-foot).
+ * Usam os tokens --adm-* de .minui-adm (admin.css).
+ */
+.minui-room {
+  --room-top-h: 56px;
+  --room-gutter: clamp(16px, 3vw, 24px);
+
+  display: flex;
+  flex-direction: column;
+  min-height: 100dvh;
+  background: var(--adm-bg);
+}
+
+/* link "Ir para o conteúdo": só aparece com o foco do teclado */
+.minui-room__skip:not(:focus) {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.minui-room__skip:focus {
+  position: fixed;
+  top: 8px;
+  left: 8px;
+  z-index: 60;
+  padding: 8px 12px;
+  border-radius: var(--adm-r-ctl);
+  background: var(--adm-card);
+  box-shadow: var(--adm-shadow-pop);
+  color: var(--adm-ink);
+}
+
+/* =================== Barra superior =================== */
+.minui-room__top {
+  position: sticky;
+  top: 0;
+  z-index: 30;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: none;
+  height: var(--room-top-h);
+  padding: 0 clamp(12px, 2vw, 16px);
+  border-bottom: 1px solid var(--adm-line);
+  background: var(--adm-bg);
+}
+
+.minui-room__brand {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  color: var(--adm-ink);
+  font-size: 15px;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.minui-room__brand-mark {
+  display: flex;
+  flex: none;
+}
+
+.minui-room__brand-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.minui-room__actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: none;
+  margin-left: auto;
+}
+
+/* =================== Menu lateral =================== */
+.minui-room__body {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+}
+
+.minui-room__side {
+  position: sticky;
+  top: var(--room-top-h);
+  display: flex;
+  flex: none;
+  flex-direction: column;
+  align-self: flex-start;
+  width: 240px;
+  height: calc(100dvh - var(--room-top-h));
+  border-right: 1px solid var(--adm-line);
+  background: var(--adm-side);
+}
+
+.minui-room__side[data-collapsed] {
+  width: 56px;
+}
+
+.minui-room__nav {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 12px 8px;
+  scrollbar-width: thin;
+  scrollbar-color: var(--adm-line-strong) transparent;
+}
+
+.minui-room__group + .minui-room__group {
+  margin-top: 16px;
+}
+
+.minui-room__group-label {
+  margin: 0;
+  padding: 0 10px 6px;
+  color: var(--adm-ink-3);
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.minui-room__list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.minui-room__item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 36px;
+  padding: 6px 10px;
+  border-radius: var(--adm-r-ctl);
+  color: var(--adm-ink-2);
+  font-size: 14px;
+  text-decoration: none;
+}
+
+.minui-room__item:hover {
+  background: var(--adm-hover);
+  color: var(--adm-ink);
+}
+
+.minui-room__item[aria-current="page"] {
+  background: var(--adm-active);
+  color: var(--adm-ink);
+  font-weight: 500;
+}
+
+.minui-room__item > svg {
+  width: 16px;
+  height: 16px;
+}
+
+.minui-room__item-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* coluna recolhida: só os ícones; os textos continuam para os leitores de tela */
+.minui-room__side[data-collapsed] :is(.minui-room__group-label, .minui-room__item-text) {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.minui-room__side[data-collapsed] .minui-room__item {
+  justify-content: center;
+  padding-inline: 0;
+}
+
+/* ---------- gaveta: o menu abre sobre a página ---------- */
+.minui-room__backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  background: rgba(0, 0, 0, 0.45);
+}
+
+.minui-room__side[data-drawer] {
+  position: fixed;
+  inset-block: 0;
+  left: 0;
+  z-index: 50;
+  width: 288px;
+  max-width: 85vw;
+  height: auto;
+  box-shadow: var(--adm-shadow-pop);
+  transition: transform 0.2s ease;
+}
+
+/* fechada: some só depois de deslizar; ao abrir fica visível na hora, para receber o foco */
+.minui-room__side[data-drawer="closed"] {
+  visibility: hidden;
+  transform: translateX(-100%);
+  transition:
+    transform 0.2s ease,
+    visibility 0s 0.2s;
+}
+
+.minui-room__side-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex: none;
+  height: var(--room-top-h);
+  padding: 0 12px;
+  border-bottom: 1px solid var(--adm-line);
+  color: var(--adm-ink);
+  font-weight: 500;
+}
+
+/* =================== Página: trilha, conteúdo e rodapé =================== */
+.minui-room__page {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.minui-room__trail {
+  display: flex;
+  align-items: center;
+  flex: none;
+  min-height: 44px;
+  padding: 0 var(--room-gutter);
+  border-bottom: 1px solid var(--adm-line);
+}
+
+.minui-room__trail nav {
+  min-width: 0;
+}
+
+.minui-room__trail .minui-adm-crumbs {
+  font-size: 13px;
+}
+
+.minui-room__trail .minui-adm-crumbs li:not(:last-child) {
+  flex: none;
+}
+
+.minui-room__trail .minui-adm-crumbs span.minui-adm-crumbs__here {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.minui-room__content {
+  flex: 1;
+  min-width: 0;
+}
+
+/* =================== Rodapé das cascas =================== */
+.minui-shell-foot {
+  display: flex;
+  flex: none;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 24px;
+  padding: 12px var(--room-gutter, var(--adm-gutter));
+  border-top: 1px solid var(--adm-line);
+  color: var(--adm-ink-3);
+  font-size: 13px;
+}
+
+.minui-shell-foot__links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 20px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}

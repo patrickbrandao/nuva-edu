@@ -96,6 +96,33 @@ body {
   border-radius: 14px;
 }
 
+.cat__note a {
+  color: inherit;
+}
+
+/* moldura de celular para as cascas: 360 px de largura, o mínimo da spec 006 */
+.cat__device {
+  display: block;
+  width: 360px;
+  max-width: 100%;
+  height: 640px;
+  margin: 0 auto;
+  border: 1px solid var(--minui-stage-line);
+  border-radius: 14px;
+}
+
+/* corpo das páginas de demonstração das cascas */
+.demo__page {
+  display: grid;
+  gap: 16px;
+  max-width: 720px;
+  padding: 24px clamp(16px, 3vw, 24px);
+}
+
+.minui-adm-content .demo__page {
+  padding: 0;
+}
+
 @media (max-width: 900px) {
   .cat__pair {
     grid-template-columns: minmax(0, 1fr);

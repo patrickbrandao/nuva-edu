@@ -180,10 +180,41 @@ export const SnippetCard = rawSnippetCard.SnippetCard as Loose<typeof rawSnippet
 export const SnippetGrid = rawSnippetCard.SnippetGrid as Loose<typeof rawSnippetCard.SnippetGrid>;
 
 export { ICON_PATHS } from './components/core/iconPaths.js';
+// fluxo: título de página, link de texto, estados de carregando e erro (TypeScript)
+export type {
+  ErrorStateProps,
+  LoadingStateProps,
+  PageTitleProps,
+  TextLinkProps,
+} from './components/flow/flow';
+export { ErrorState, LoadingState, PageTitle, TextLink } from './components/flow/flow';
+// link do roteador (TypeScript)
+export type {
+  LinkComponent,
+  LinkProps,
+  LinkProviderProps,
+  LinkTarget,
+} from './components/link/link';
+export { isInternalHref, LinkProvider, useLinkComponent } from './components/link/link';
+// casca do site do aluno e rodapé das cascas (TypeScript)
+export type {
+  ClassroomShellLabels,
+  ClassroomShellProps,
+  ShellBrand,
+  ShellCrumb,
+  ShellFooterLink,
+  ShellFooterProps,
+  ShellNavGroup,
+  ShellNavItem,
+} from './components/shell/ClassroomShell';
+export { ClassroomShell, ShellFooter } from './components/shell/ClassroomShell';
+export { useMediaQuery, useNarrowViewport } from './components/shell/drawer';
 // utilitários
 export { cx, firstName, hueOf } from './lib/util.js';
 
 // tema (TypeScript)
+export type { ThemeBootPlugin } from './theme/boot';
+export { themeBootPlugin } from './theme/boot';
 export type {
   ActiveTheme,
   ThemeMode,

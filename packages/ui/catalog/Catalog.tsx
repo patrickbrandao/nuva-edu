@@ -8,6 +8,7 @@ import {
   AdminButton,
   AdminCard,
   AdminCheckbox,
+  AdminDetails,
   AdminEmpty,
   AdminField,
   AdminList,
@@ -27,14 +28,18 @@ import {
   ClientOverview,
   DiffBlocks,
   Dot,
+  ErrorState,
   Field,
   LabelPill,
+  LoadingState,
   MarketingWaitlist,
+  PageTitle,
   PricingPage,
   Resolved,
   SnippetCard,
   SnippetGrid,
   Surface,
+  TextLink,
   ThemeSwitch,
   Txt,
   useTheme,
@@ -233,6 +238,76 @@ function AdminPieces() {
   );
 }
 
+const LONG_DETAILS = [
+  { label: 'Escola', value: 'Escola Aurora' },
+  {
+    label: 'Entrada',
+    value: 'E-mail e senha, Google, GitHub, Microsoft e conta da empresa (SAML)',
+  },
+];
+
+function FlowPieces() {
+  const [tries, setTries] = useState(0);
+  return (
+    <AdminScope className="cat__stack">
+      <PageTitle subtitle="Frase de apoio do título de página.">Meus cursos</PageTitle>
+      <p style={{ margin: 0 }}>
+        Texto com um <TextLink href="/termos">link interno</TextLink>, um{' '}
+        <TextLink href="/privacidade" quiet>
+          link discreto
+        </TextLink>{' '}
+        e um{' '}
+        <TextLink href="https://example.com" external newTabLabel="(abre em nova aba)">
+          link externo
+        </TextLink>
+        .
+      </p>
+      <AdminCard pad>
+        <LoadingState label="Carregando os cursos…" />
+      </AdminCard>
+      <LoadingState inline label="Salvando…" />
+      <AdminCard>
+        <ErrorState
+          title="Não foi possível carregar"
+          text="Confira a conexão e tente de novo."
+          detail={`Requisição 01JD2-EXEMPLO · tentativas: ${tries}`}
+          retryLabel="Tentar de novo"
+          onRetry={() => setTries(tries + 1)}
+        />
+      </AdminCard>
+      <AdminCard>
+        <AdminEmpty icon={<Inbox />} text="AdminEmpty sem título: só o ícone e a frase." />
+      </AdminCard>
+      <div style={{ maxWidth: 320 }} className="cat__stack">
+        <AdminCard pad>
+          <AdminDetails items={LONG_DETAILS} />
+        </AdminCard>
+        <AdminCard pad>
+          <AdminDetails wrap items={LONG_DETAILS} />
+        </AdminCard>
+      </div>
+    </AdminScope>
+  );
+}
+
+/** As duas cascas em molduras estreitas (menu em gaveta), uma por tema. */
+function ShellFrames({ demo, title }: { demo: string; title: string }) {
+  return (
+    <div className="cat__pair">
+      {(['light', 'dark'] as const).map((theme) => (
+        <div key={theme} className="cat__pane">
+          <h3>{theme === 'light' ? 'Claro' : 'Escuro'}</h3>
+          <iframe
+            className="cat__device"
+            title={`${title}, tema ${theme === 'light' ? 'claro' : 'escuro'}`}
+            src={`?demo=${demo}&theme=${theme}`}
+          />
+        </div>
+      ))}
+    </div>
+  );
+}
+
 export function Catalog() {
   const [mode, setMode, active] = useTheme();
   return (
@@ -260,6 +335,35 @@ export function Catalog() {
         <Pair>
           <AdminPieces />
         </Pair>
+      </section>
+
+      <section>
+        <h2>Fluxo e estados</h2>
+        <p className="cat__note">
+          PageTitle, TextLink, LoadingState, ErrorState, AdminEmpty sem título e AdminDetails sem e
+          com <code>wrap</code>.
+        </p>
+        <Pair>
+          <FlowPieces />
+        </Pair>
+      </section>
+
+      <section>
+        <h2>Casca do aluno</h2>
+        <p className="cat__note">
+          ClassroomShell e ShellFooter em moldura de 360 px (menu em gaveta).{' '}
+          <a href="?demo=classroom">Abrir em página inteira</a> para ver a coluna que recolhe.
+        </p>
+        <ShellFrames demo="classroom" title="Casca do aluno" />
+      </section>
+
+      <section>
+        <h2>Painel em página inteira</h2>
+        <p className="cat__note">
+          AdminShell com <code>fullPage</code> e <code>drawerBelow</code>, links pelo LinkProvider.{' '}
+          <a href="?demo=admin">Abrir em página inteira</a>.
+        </p>
+        <ShellFrames demo="admin" title="Painel" />
       </section>
 
       <section>

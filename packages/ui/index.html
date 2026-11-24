@@ -6,17 +6,7 @@
     <meta name="color-scheme" content="light dark" />
     <meta name="theme-color" content="#070707" />
     <title>Catálogo — @nuva-edu/ui</title>
-    <script>
-      // Aplica o tema salvo antes da primeira pintura (o mesmo conteúdo de THEME_BOOT_SCRIPT).
-      try {
-        const saved = localStorage.getItem('nuva-theme');
-        if (saved === 'light' || saved === 'dark') {
-          document.documentElement.setAttribute('data-theme', saved);
-        }
-      } catch {
-        // armazenamento indisponível: vale o tema do sistema
-      }
-    </script>
+    <!-- O tema salvo é aplicado pelo plugin themeBootPlugin (vite.config.ts). -->
   </head>
   <body>
     <div id="root"></div>
