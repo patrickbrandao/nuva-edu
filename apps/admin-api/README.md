@@ -9,7 +9,10 @@ API do site de administração (`@nuva-edu/admin-api`), descrita em `openapi.yam
 | `src/app.ts` | `buildAdminApp`: a API montada sobre `@nuva-edu/api-kit` |
 | `src/contract.ts` | Caminho do contrato e exceções de CSRF |
 | `src/check-contract.ts` | Comando `check-contract`: rotas x contrato, sem banco e sem porta |
-| `src/routes/` | Uma função `register...Routes` por grupo de rotas (criada com o primeiro grupo; o `/meta` vem do `api-kit`) |
+| `src/session.ts` | Tratadores de `sessionCookie` e `csrfToken`, renovação e remoção do cookie, limites de taxa e auditoria da negação |
+| `src/initial-admin.ts` | Admin inicial na subida (`ADMIN_EMAIL`, `ADMIN_PASSWORD`) |
+| `src/create-admin.ts` | Comando de emergência `create-admin` |
+| `src/routes/` | Uma função `register...Routes` por grupo de rotas (`auth.ts`: login, saída e sessão; `images.ts`: entrega; o `/meta` vem do `api-kit`) |
 | `test/` | Integração (requisições injetadas, banco de teste) |
 | `test/contract/` | Teste de contrato: rotas x `openapi.yaml`, regra do `csrfToken` e respostas de erro declaradas |
 
@@ -30,6 +33,28 @@ Escuta na porta 3000 (spec 031); `PORT` troca a porta fora do contêiner. Precis
 | `GET /readyz` | `200` com banco no ar e migrations em dia; senão `503` |
 | `GET /metrics` | Texto do Prometheus (inclui `db_pool_connections{state}`: `active`, `idle`, `waiting`); fora do contrato, só rede interna |
 | `GET /api/v1/meta` | Dados públicos da instalação e da marca da escola (`settings`), sem sessão; rota comum do `api-kit` (`registerMetaRoute`) |
+| `POST /api/v1/auth/login` | Login da equipe por senha; grava `nuva_admin_session` (`student`: `403 staff_only`) |
+| `POST /api/v1/auth/logout` | Encerra a sessão atual e apaga o cookie (exige `X-CSRF-Token`) |
+| `GET /api/v1/session` | Dono da sessão, token CSRF e ações permitidas (`no-store`) |
+| `GET /api/v1/images/{id}/{largura}.webp` | Entrega pública de uma variante, com `ETag` e `304` |
+
+## Sessão e autorização
+
+- `sessionCookie`: sessão válida do site admin (`authenticateSession` do núcleo); senão `401 unauthenticated`, e o cookie recebido é apagado. Renovada a sessão, o cookie volta com o `Max-Age` cheio.
+- Papel `student`: `403 permission_denied` em toda operação fora de `/api/v1/auth/*` (spec 003 RF-03). Cada ação de `x-permission` da operação precisa ser permitida ao papel (`can`, spec 008); com mais de uma, todas. A rota refina o que depende do alvo (aluno ou equipe, alcance do instrutor).
+- `csrfToken`: `X-CSRF-Token` igual ao token da sessão; senão `403 csrf_token_invalid`.
+- Toda resposta `403 permission_denied` grava `outcome = denied` na auditoria, com a ação em `details.permission` (spec 028).
+- Limite de taxa (spec 003 RNF-03): 300 por minuto por sessão; 20 por minuto por IP nas operações de `/api/v1/auth/*`.
+
+## Admin inicial e `create-admin`
+
+Na subida, sem nenhum `admin`: com `ADMIN_EMAIL` e `ADMIN_PASSWORD`, cria (ou promove) o admin; sem elas, registra um aviso a cada subida. Com admin existente, as variáveis são ignoradas. `ADMIN_PASSWORD` fora de 8 a 128 caracteres impede a subida. O log nunca leva a senha nem o e-mail.
+
+```bash
+docker compose exec -it admin-api node src/create-admin.ts --email <e-mail>
+```
+
+Pede a senha duas vezes, sem eco; senha por argumento é recusada (saída `2`), e sem terminal interativo também. Cria ou promove a conta, confirma o e-mail, encerra as sessões dela e grava na auditoria com `origin = cli`. Saída `0` em sucesso, `1` em falha (senhas diferentes, senha ou e-mail recusados, banco).
 
 ## Nova rota
 
