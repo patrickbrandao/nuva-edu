@@ -12,6 +12,9 @@ Detalhe das decisões em `specs/decisions/`.
 - `scripts/volume-migrate.sh`: cópia do `postgres-data` para o volume com prefixo do projeto no `pnpm dev:up` e, no servidor, só com `pnpm deploy:test --migrate-volume`; Traefik em `nuva-edu-traefik-acme`.
 - `@nuva-edu/ui`: `Dialog`, `ConfirmDialog`, `ToastProvider`/`useToast`, `Alert`, `PasswordInput` e `ImagePicker` para as telas de contas, em TypeScript, sem texto fixo, testados com axe-core (task 133).
 - Base HTTP da Fase 1 no `api-kit`: cookies de sessão e de retorno OAuth (spec 007), corpos `x-www-form-urlencoded` e `multipart/form-data` validados pelo contrato (`413` antes de ler o corpo), `302` e `Cache-Control: no-store` por operação, limite de taxa em memória (`429` com `Retry-After`) e gancho da negação por permissão (`x-permission`) (task 136).
+- Contratos da Fase 1 nas duas APIs (contas, sessão, login social, termos, usuários, auditoria, imagens), com as operações novas pendentes (task 131).
+- Cliente das APIs com os contratos da Fase 1: URL do login social, envio de imagem em multipart e 304 sem erro (task 132).
+- APIs: exceções de CSRF das rotas públicas de autenticação (spec 007) e `check-contract` tolerante às operações pendentes (task 168, task 169).
 - Specs da Fase 1 (contas) prontas para implementar: rotas, cookies, OAuth com provedor simulado (ADR 0024), e-mails, auditoria imutável por gatilho, termos no cadastro, volumes com prefixo; plano da fase em `PLAN.md`.
 - `task:finish` repete o push uma vez na corrida entre dois finish (remoto ancestral da `main` local); senão, código 7.
 - `task:start` simultâneos: o `pnpm install` do worktree não reinstala os ganchos do Git (confere e instala sob trava se faltarem) e o `git worktree add` roda um de cada vez (task 112).
