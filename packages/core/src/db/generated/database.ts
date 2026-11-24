@@ -23,6 +23,16 @@ export type JsonValue = JsonArray | JsonObject | JsonPrimitive;
 
 export type Timestamp = ColumnType<Date, Date | string, Date | string>;
 
+export interface EmailTokens {
+  createdAt: Generated<Timestamp>;
+  expiresAt: Timestamp;
+  id: Generated<string>;
+  purpose: string;
+  tokenHash: string;
+  usedAt: Timestamp | null;
+  userId: string;
+}
+
 export interface Images {
   createdAt: Generated<Timestamp>;
   hiddenAt: Timestamp | null;
@@ -60,6 +70,45 @@ export interface Jobs {
   uniqueKey: string | null;
 }
 
+export interface LoginAttempts {
+  createdAt: Generated<Timestamp>;
+  email: string;
+  id: Generated<string>;
+  ip: string;
+  site: string;
+  success: boolean;
+}
+
+export interface OauthIdentities {
+  createdAt: Generated<Timestamp>;
+  email: string | null;
+  emailVerified: Generated<boolean>;
+  id: Generated<string>;
+  provider: string;
+  providerUserId: string;
+  userId: string;
+}
+
+export interface Profiles {
+  avatarImageId: string | null;
+  createdAt: Generated<Timestamp>;
+  updatedAt: Generated<Timestamp>;
+  userId: string;
+}
+
+export interface Sessions {
+  createdAt: Generated<Timestamp>;
+  csrfToken: string;
+  expiresAt: Timestamp;
+  id: Generated<string>;
+  idHash: string;
+  ip: string;
+  lastUsedAt: Generated<Timestamp>;
+  site: string;
+  userAgent: string | null;
+  userId: string;
+}
+
 export interface Settings {
   createdAt: Generated<Timestamp>;
   id: Generated<string>;
@@ -68,9 +117,59 @@ export interface Settings {
   value: Json;
 }
 
+export interface UserDevices {
+  deviceKey: string;
+  firstSeenAt: Generated<Timestamp>;
+  id: Generated<string>;
+  lastSeenAt: Generated<Timestamp>;
+  userId: string;
+}
+
+export interface Users {
+  createdAt: Generated<Timestamp>;
+  deletedAt: Timestamp | null;
+  deletionRequestedAt: Timestamp | null;
+  email: string;
+  emailVerifiedAt: Timestamp | null;
+  fullName: string | null;
+  id: Generated<string>;
+  lastLoginAt: Timestamp | null;
+  name: string;
+  password: string | null;
+  role: Generated<string>;
+  suspendedAt: Timestamp | null;
+  suspendedBy: string | null;
+  suspendedKind: string | null;
+  suspendedReason: string | null;
+  taxId: string | null;
+  taxIdType: string | null;
+  updatedAt: Generated<Timestamp>;
+  version: Generated<number>;
+}
+
+export interface UserSuspensions {
+  createdAt: Generated<Timestamp>;
+  createdBy: string;
+  endsAt: Timestamp | null;
+  id: Generated<string>;
+  kind: string;
+  liftedAt: Timestamp | null;
+  reason: string;
+  startsAt: Generated<Timestamp>;
+  userId: string;
+}
+
 export interface DB {
+  emailTokens: EmailTokens;
   images: Images;
   imageVariants: ImageVariants;
   jobs: Jobs;
+  loginAttempts: LoginAttempts;
+  oauthIdentities: OauthIdentities;
+  profiles: Profiles;
+  sessions: Sessions;
   settings: Settings;
+  userDevices: UserDevices;
+  users: Users;
+  userSuspensions: UserSuspensions;
 }
