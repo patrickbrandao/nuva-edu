@@ -26,7 +26,7 @@ export interface ApiClientOptions {
 /**
  * Comportamento comum dos dois clientes:
  * - envia o cabeçalho CSRF nas requisições que alteram dados;
- * - transforma resposta fora de 2xx em `ApiError` (problem+json) lançado;
+ * - transforma resposta `4xx`/`5xx` em `ApiError` (problem+json) lançado;
  * - transforma falha de rede em `ApiNetworkError`.
  */
 function defaultMiddleware(options: ApiClientOptions): Middleware {
@@ -38,7 +38,9 @@ function defaultMiddleware(options: ApiClientOptions): Middleware {
       return request;
     },
     async onResponse({ response }) {
-      if (!response.ok) throw await apiErrorFromResponse(response);
+      // Só 4xx e 5xx são erro. O `304` de `getImageVariant` (com `If-None-Match`) volta como
+      // resposta comum, sem corpo: quem chama confere `response.status`.
+      if (response.status >= 400) throw await apiErrorFromResponse(response);
     },
     onError({ request, error }) {
       return new ApiNetworkError(request, error);

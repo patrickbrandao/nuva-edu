@@ -24,6 +24,36 @@ try {
 - Resposta fora de 2xx lança `ApiError` com o problem+json; falha de rede lança `ApiNetworkError`.
 - `X-CSRF-Token` é preenchido em requisições que alteram dados, a partir de `csrfToken`.
 
+- Só `4xx` e `5xx` lançam. `204` volta com `data` `undefined`; `304` (de `getImageVariant` com
+  `If-None-Match`) volta como resposta comum: confira `response.status`.
+- `Session` existe nos dois contratos com conteúdo diferente: use `AdminSession` ou
+  `ClassroomSession` (ou `AdminSchemas['Session']` / `ClassroomSchemas['Session']`).
+- `Problem.code` é `string`: a lista de códigos é aberta no contrato. Os códigos de cada operação
+  estão na descrição dela (e no comentário do tipo gerado).
+
+Login social: `startOAuth` e as voltas do provedor só respondem `302`. O site **navega** até a
+URL; não chama por `fetch` (seguiria o redirecionamento até o provedor e falharia por CORS):
+
+```ts
+import { classroomOAuthStartUrl } from '@nuva-edu/api-client/classroom';
+
+window.location.assign(classroomOAuthStartUrl('google', { intent: 'link', returnTo: '/conta' }));
+// admin: adminOAuthStartUrl('google', { returnTo: '/' }) — sem `intent`
+```
+
+Envio de imagem (`uploadImage`, `multipart/form-data`). O contrato declara `file` como `string`
+com `contentMediaType`, e o tipo gerado fica `string`; use o auxiliar, que recebe `File`/`Blob`
+e monta o `FormData` (o `fetch` põe o `Content-Type` com o `boundary`):
+
+```ts
+import { uploadImage } from '@nuva-edu/api-client/classroom';
+
+const { data: image } = await uploadImage(api, file, 'avatar'); // ClassroomSchemas['Image']
+```
+
+As variantes (`/api/v1/images/{imageId}/{variant}.webp`) são para `<img src>`; os campos
+`avatarUrl` e `logoUrl` já trazem esse caminho.
+
 Fluxo SSE do classroom:
 
 ```ts
