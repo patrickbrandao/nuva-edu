@@ -53,7 +53,11 @@ export interface paths {
         };
         /**
          * Dados públicos da instalação
-         * @description Nome da escola, versão, moeda, idioma e provedores de login social ativos. Não exige sessão.
+         * @description Dados públicos da instalação e da marca da escola: nome, versão, moeda, idioma, provedores
+         *     de login social ativos, logotipo, cor de destaque e endereço do código-fonte. Não exige
+         *     sessão. É o único endpoint de marca: os dois sites o chamam ao carregar, e as duas APIs
+         *     devolvem o mesmo esquema `Meta`. Nome, logotipo, cor e endereço do código-fonte vêm da
+         *     configuração da escola (`settings`), com o padrão quando não há nada gravado.
          */
         get: operations["getMeta"];
         put?: never;
@@ -76,8 +80,8 @@ export interface paths {
          * @description Conexão `text/event-stream` que entrega mensagens diretas e notificações sem recarregar a
          *     página. O envio continua por HTTP comum.
          *
-         *     Cada evento tem três campos SSE: `id` (inteiro crescente por usuário), `event` (o nome) e
-         *     `data` (um objeto JSON numa linha). No fio:
+         *     Cada evento tem três campos SSE: `id`, `event` (o nome) e `data` (um objeto JSON numa
+         *     linha). No fio:
          *
          *     ```
          *     id: 42
@@ -90,9 +94,18 @@ export interface paths {
          *     discriminador em `event`). O evento carrega só identificadores; o conteúdo é buscado pela
          *     rota normal, que checa permissão.
          *
+         *     - O `id` vem de uma sequência do banco, uma só para todos os usuários e para todos os
+         *       processos que publicam (ADR 0020): para cada usuário ele é crescente, mas não
+         *       consecutivo. O cliente só o compara e o devolve em `Last-Event-ID`; lacuna entre dois
+         *       `id` não indica evento perdido.
          *     - `ping` é enviado a cada 25 s, com `data: {}` e sem `id` (não altera o `Last-Event-ID`).
-         *     - Na reconexão, `Last-Event-ID` faz a API reenviar o que foi perdido nos últimos 5 minutos;
-         *       além disso, a interface recarrega as listas.
+         *     - Ao abrir, a API envia o comentário `: ok`, para os cabeçalhos saírem de imediato.
+         *     - Reenvio na reconexão: a API guarda em memória, por processo, os eventos de cada usuário
+         *       dos últimos 5 minutos, até 500 por usuário (os mais antigos saem primeiro). Com
+         *       `Last-Event-ID`, reenvia os guardados de `id` maior, em ordem, antes dos novos.
+         *     - O reenvio cobre a queda de rede do navegador; não cobre o reinício da API nem a troca
+         *       de processo. Por isso o fluxo é só um atalho: o estado está no banco, e a interface
+         *       recarrega as listas afetadas a cada reconexão, com ou sem reenvio.
          *     - Limite de 3 conexões por usuário; a quarta derruba a mais antiga.
          *     - Sessão encerrada, suspensão `full` ou banco indisponível: o servidor fecha a conexão.
          *     - Resposta sem compressão.
@@ -216,6 +229,8 @@ export interface components {
              *     | `csrf_token_invalid` | 403 | Escrita sem `X-CSRF-Token` ou com token diferente do da sessão |
              *     | `not_found` | 404 | Recurso inexistente ou fora do alcance de quem pede |
              *     | `version_conflict` | 409 | `version` enviada diferente da gravada |
+             *     | `payload_too_large` | 413 | Corpo acima do limite da rota |
+             *     | `unsupported_media_type` | 415 | `Content-Type` que a operação não declara, ou que o serviço não sabe ler |
              *     | `rate_limited` | 429 | Limite de taxa; traz `retryAfterSeconds` |
              *     | `internal_error` | 500 | Erro inesperado; sem `detail` |
              *     | `database_unavailable` | 503 | Banco indisponível |
@@ -259,8 +274,12 @@ export interface components {
          * @enum {string}
          */
         AuthProvider: "google" | "facebook" | "apple";
+        /**
+         * @description Dados públicos da instalação e da marca da escola (`specs/003-admin-api.md`, "Meta").
+         *     Todos os campos estão sempre presentes; `logoUrl` e `accentColor` podem ser `null`.
+         */
         Meta: {
-            /** @description Nome da escola, definido na configuração do admin. */
+            /** @description Nome da escola, definido na configuração do admin; padrão `nuva-edu`. */
             schoolName: string;
             /**
              * @description Versão instalada do nuva-edu (SemVer).
@@ -274,9 +293,32 @@ export interface components {
              *     Login por e-mail e senha está sempre disponível e não aparece na lista.
              */
             authProviders: components["schemas"]["AuthProvider"][];
+            /**
+             * Format: uri-reference
+             * @description Caminho do logotipo na própria API, na variante de 256 px
+             *     (`specs/029-imagens.md`). `null` sem logotipo: os sites mostram só o nome.
+             * @example /api/v1/images/0193a5b2-7c1e-7d3a-9f4b-2a6c8e1d5f70/256.webp
+             * @example null
+             */
+            logoUrl: string | null;
+            /**
+             * @description Cor de destaque da escola, em `#RRGGBB`. `null` usa a cor de destaque padrão de
+             *     `packages/ui`.
+             * @example #1F6FEB
+             * @example null
+             */
+            accentColor: string | null;
+            /**
+             * Format: uri
+             * @description Endereço do código-fonte desta instalação, exigido pela AGPL-3.0. Sempre presente;
+             *     padrão `https://github.com/patrickbrandao/nuva-edu`.
+             * @example https://github.com/patrickbrandao/nuva-edu
+             */
+            sourceCodeUrl: string;
         };
         /**
-         * @description Campo `id` do SSE. Inteiro crescente por usuário, em texto.
+         * @description Campo `id` do SSE: inteiro em texto, tirado de uma sequência do banco. Crescente para
+         *     cada usuário, não consecutivo.
          * @example 42
          */
         StreamEventId: string;
@@ -389,7 +431,10 @@ export interface components {
         StreamEvent: components["schemas"]["StreamEventDmMessageCreated"] | components["schemas"]["StreamEventDmMessageRead"] | components["schemas"]["StreamEventDmMessageDeleted"] | components["schemas"]["StreamEventNotificationCreated"] | components["schemas"]["StreamEventForumPostCreated"] | components["schemas"]["StreamEventAnnouncementPublished"] | components["schemas"]["StreamEventPresence"] | components["schemas"]["StreamEventPing"];
     };
     responses: {
-        /** @description Requisição inválida; `errors` lista os campos. */
+        /**
+         * @description Requisição fora do contrato (`validation_failed`); `errors` lista os campos. Vale também
+         *     para operação sem parâmetros: cabeçalho ou URL malformados são recusados antes da rota.
+         */
         BadRequest: {
             headers: {
                 "X-Request-Id": components["headers"]["XRequestId"];
@@ -434,6 +479,32 @@ export interface components {
         };
         /** @description Conflito de estado, com `code` próprio (por exemplo, `version_conflict`). */
         Conflict: {
+            headers: {
+                "X-Request-Id": components["headers"]["XRequestId"];
+                [name: string]: unknown;
+            };
+            content: {
+                "application/problem+json": components["schemas"]["Problem"];
+            };
+        };
+        /**
+         * @description Corpo acima do limite da rota (`payload_too_large`): 1 MB, ou 5 MB no envio de imagem.
+         *     A rota não roda.
+         */
+        PayloadTooLarge: {
+            headers: {
+                "X-Request-Id": components["headers"]["XRequestId"];
+                [name: string]: unknown;
+            };
+            content: {
+                "application/problem+json": components["schemas"]["Problem"];
+            };
+        };
+        /**
+         * @description `Content-Type` que a operação não declara em `requestBody.content`, ou que o serviço não
+         *     sabe ler (`unsupported_media_type`). A rota não roda.
+         */
+        UnsupportedMediaType: {
             headers: {
                 "X-Request-Id": components["headers"]["XRequestId"];
                 [name: string]: unknown;
@@ -491,7 +562,10 @@ export interface components {
         Cursor: components["schemas"]["Cursor"];
         /** @description Chave escolhida pelo cliente; a repetição devolve a primeira resposta por 24 h. */
         IdempotencyKey: string;
-        /** @description `id` do último evento recebido; o navegador o envia sozinho ao reconectar. */
+        /**
+         * @description `id` do último evento recebido; o navegador o envia sozinho ao reconectar. Valor que não
+         *     é um inteiro em texto: `400`.
+         */
         LastEventId: components["schemas"]["StreamEventId"];
     };
     requestBodies: never;
@@ -576,6 +650,7 @@ export interface operations {
                     "application/json": components["schemas"]["Meta"];
                 };
             };
+            400: components["responses"]["BadRequest"];
             429: components["responses"]["TooManyRequests"];
             500: components["responses"]["InternalError"];
             503: components["responses"]["ServiceUnavailable"];
@@ -585,7 +660,10 @@ export interface operations {
         parameters: {
             query?: never;
             header?: {
-                /** @description `id` do último evento recebido; o navegador o envia sozinho ao reconectar. */
+                /**
+                 * @description `id` do último evento recebido; o navegador o envia sozinho ao reconectar. Valor que não
+                 *     é um inteiro em texto: `400`.
+                 */
                 "Last-Event-ID"?: components["parameters"]["LastEventId"];
             };
             path?: never;
@@ -605,6 +683,7 @@ export interface operations {
                     "text/event-stream": string;
                 };
             };
+            400: components["responses"]["BadRequest"];
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
             429: components["responses"]["TooManyRequests"];

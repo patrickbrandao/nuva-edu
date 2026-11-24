@@ -35,8 +35,8 @@ describe('verificação do código gerado', () => {
   it('mudar um esquema do contrato sem regenerar é detectado', async () => {
     const admin = alteredCopy(
       'admin',
-      'required: [schoolName, version, currency, locale, authProviders]',
-      'required: [schoolName, version, currency, locale]',
+      '        - accentColor\n        - sourceCodeUrl\n',
+      '        - accentColor\n',
     );
 
     expect(await findStaleFiles({ contracts: { ...CONTRACTS, admin } })).toEqual([

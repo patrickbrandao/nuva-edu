@@ -18,6 +18,9 @@ const META = {
   currency: 'BRL',
   locale: 'pt-BR',
   authProviders: ['google'],
+  logoUrl: '/api/v1/images/0193a5b2-7c1e-7d3a-9f4b-2a6c8e1d5f70/256.webp',
+  accentColor: null,
+  sourceCodeUrl: 'https://github.com/patrickbrandao/nuva-edu',
 } satisfies AdminSchemas['Meta'];
 
 function fakeFetch(respond: (request: Request) => Response | Promise<Response>) {
@@ -44,6 +47,10 @@ describe('clientes gerados', () => {
     const { data } = await api.GET('/api/v1/meta');
 
     expectTypeOf(data).toEqualTypeOf<AdminSchemas['Meta'] | undefined>();
+    expectTypeOf<AdminSchemas['Meta']['logoUrl']>().toEqualTypeOf<string | null>();
+    expectTypeOf<AdminSchemas['Meta']['accentColor']>().toEqualTypeOf<string | null>();
+    expectTypeOf<AdminSchemas['Meta']['sourceCodeUrl']>().toEqualTypeOf<string>();
+    expectTypeOf<ClassroomSchemas['Meta']>().toEqualTypeOf<AdminSchemas['Meta']>();
     expect(data).toEqual(META);
     expect(requests).toHaveLength(1);
     expect(requests[0]?.url).toBe('http://api.test/api/v1/meta');
