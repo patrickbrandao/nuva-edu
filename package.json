@@ -17,7 +17,7 @@
     "typecheck": "pnpm -r --if-present run typecheck",
     "verify:quick": "node scripts/pending.mjs verify:quick 006",
     "verify:full": "node scripts/pending.mjs verify:full 006",
-    "db:migrate": "node scripts/pending.mjs db:migrate 003",
+    "db:migrate": "pnpm --filter @nuva-edu/database run migrate",
     "compose": "node scripts/pending.mjs compose 014",
     "dev:up": "node scripts/pending.mjs dev:up 014",
     "dev:down": "node scripts/pending.mjs dev:down 014",

@@ -2,6 +2,7 @@ packages:
   - "apps/*"
   - "packages/*"
   - "e2e"
+  - "database/postgres"
 
 # Recusa instalar com Node fora da faixa de "engines".
 engineStrict: true
