@@ -46,7 +46,15 @@ services:
           memory: ${NUVA_TRAEFIK_MEMORY:-128m}
     healthcheck:
       # Sem --ping.entryPoint o comando consulta a porta 8080, que aqui é a entrada `web`, e recebe 404.
-      test: ["CMD", "traefik", "healthcheck", "--ping", "--ping.entryPoint=ping", "--entrypoints.ping.address=:8082"]
+      test:
+        [
+          "CMD",
+          "traefik",
+          "healthcheck",
+          "--ping",
+          "--ping.entryPoint=ping",
+          "--entrypoints.ping.address=:8082",
+        ]
       interval: 15s
       timeout: 5s
       retries: 3
