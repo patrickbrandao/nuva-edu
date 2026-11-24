@@ -107,6 +107,7 @@ Códigos do retorno: `oauth_state_invalid` (sem cookie, `state` diferente ou ven
 - Quem cria o token é a tarefa `email.send` do worker, no momento de montar o e-mail ([024](024-notificacoes-e-email.md), "Links com token"): a API só enfileira o e-mail com o propósito. Assim o token nunca passa por `jobs.payload` nem por `email_outbox`.
 - Cada token novo de um propósito invalida os anteriores não usados do mesmo usuário e propósito: vale o último link enviado.
 - Link de redefinição: `<classroomUrl>/redefinir?token=<token>`. O site admin não tem redefinição própria: o "esqueci a senha" do admin leva a `<classroomUrl>/redefinir`.
+- Conta suspensa (`full` ou `posting`) continua recebendo os e-mails de conta desta spec: confirmação de e-mail, redefinição de senha, aviso de bloqueio, aviso de dispositivo novo, aviso de senha alterada e de mudança de papel. São de segurança da própria conta; a regra "suspenso não recebe nada" da [024](024-notificacoes-e-email.md) vale para as notificações. Conta excluída não recebe nenhum ([024](024-notificacoes-e-email.md), "E-mails do grupo `account` e da Fase 1").
 
 ### Exibição da senha (RF-09)
 
@@ -152,7 +153,7 @@ As escritas sem sessão (`/auth/register`, `/auth/login`, `/auth/email/verify`, 
 ### Termos no cadastro e aceite pendente
 
 - `acceptedTerms` é a lista de `id` das versões vigentes (`terms` e `privacy`) que o usuário aceitou. Com versão publicada de um documento, a vigente dele precisa estar na lista; faltando, ou com `id` que não é o vigente: `422` `terms_acceptance_required`, com `errors[]` indicando o documento.
-- Na sessão do classroom, `termsPending` lista as versões vigentes que o usuário ainda não aceitou: quem se cadastrou antes da primeira publicação, ou versão nova com `requires_reacceptance` ([030](030-lgpd.md)). Com a lista não vazia, as escritas do classroom respondem `403` `terms_acceptance_pending`, exceto `POST /me/terms-acceptance`, `POST /auth/logout` e as de `/account/sessions`. O site mostra a tela de aceite.
+- Na sessão do classroom, `termsPending` lista as versões vigentes dos documentos pendentes para o usuário, pela regra da barreira da [030](030-lgpd.md) (versão 1 ou a mais nova com `requires_reacceptance`; pendente quem não aceitou nenhuma versão igual ou posterior a ela). Com a lista não vazia, as escritas do classroom respondem `403` `terms_acceptance_pending`, exceto `POST /me/terms-acceptance`, `POST /auth/logout` e as de `/account/sessions`. O site mostra a tela de aceite.
 - No site admin não há bloqueio por termos.
 
 ### Avatar

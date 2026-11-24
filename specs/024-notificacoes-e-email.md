@@ -17,7 +17,7 @@ Vários recursos precisam avisar o usuário: resposta no fórum, compra aprovada
 - RF-06: Cada tipo tem um modelo de e-mail em pt-BR (assunto, texto e HTML), com nome e logotipo da escola vindos de `settings`.
 - RF-07: Todo e-mail não obrigatório tem link de descadastro de um clique para o grupo correspondente, sem exigir login.
 - RNF-01: Notificação na central em até 5 segundos após o fato (p95); contador do sino atualizado em até 2 segundos após a criação.
-- RNF-02: E-mail: até 5 tentativas da tarefa `email.send`, com espera própria (1 min, 5 min, 30 min, 2 h, 12 h) no lugar da regra geral da fila ([005](005-worker-e-fila.md)); depois marca `failed`.
+- RNF-02: E-mail: até 5 tentativas da tarefa `email.send`, com espera própria entre elas (1 min, 5 min, 30 min, 2 h: quatro esperas para cinco tentativas) no lugar da regra geral da fila ([005](005-worker-e-fila.md)); depois marca `failed`.
 - RNF-03: No máximo 1 e-mail por usuário, por tipo e por alvo a cada 15 minutos (agrupamento).
 - RNF-04: Notificações lidas são apagadas após 90 dias; não lidas após 180 dias (`NUVA_RETENTION_*`, ver [033](033-observabilidade-retencao-backup.md)).
 
@@ -41,7 +41,7 @@ Vários recursos precisam avisar o usuário: resposta no fórum, compra aprovada
 
 - A regra de quem deve receber cada tipo está na spec do recurso; aqui fica o transporte.
 - O worker confere, no momento do envio, se o destinatário ainda pode ver o alvo (por exemplo, perdeu o acesso ao curso); se não puder, descarta.
-- Ninguém é notificado das próprias ações. Usuário suspenso ou removido não recebe nada, exceto `moderation.suspended` e `account.deleted`.
+- Ninguém é notificado das próprias ações. Usuário suspenso ou removido não recebe nada, exceto `moderation.suspended` e `account.deleted`. A regra vale para as notificações (tarefa `notify`); os e-mails do grupo `account` seguem a regra própria da seção abaixo.
 
 ### Central
 
@@ -73,6 +73,7 @@ O grupo `account` não tem canal "plataforma", então não passa pela tarefa `no
 
 - Assunto e textos em pt-BR, nos arquivos de tradução do worker; o nome da escola vem de `settings` (`school.name`) no momento do envio.
 - `data` não leva senha, token nem motivo interno de suspensão.
+- Conta suspensa, com suspensão `full` ou `posting`, recebe todos os e-mails desta tabela: são de segurança da própria conta (confirmação de e-mail, redefinição de senha, bloqueio, dispositivo novo, mudança de senha ou de papel) e não dependem de a pessoa poder entrar. Conta excluída não recebe nenhum: `enqueueEmail` a deixa de fora. A suspensão não muda o envio; só a exclusão o impede.
 
 ### Links com token
 

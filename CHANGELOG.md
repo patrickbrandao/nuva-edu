@@ -103,6 +103,7 @@ Detalhe das decisões em `specs/decisions/`.
 - Sites: CSP aceita `blob:` só em `img-src`, para a prévia do `ImagePicker` antes do envio (task 170).
 - Specs 007, 024, 026, 028, 029 e 030: decisões de esquema das migrations 0004 a 0007 registradas; uma identidade por provedor em cada conta (`provider_already_linked`); anonimização substitui `email` e `name` (task 198).
 - Spec 032: banco modelo dos testes passa a ser um por conjunto de migrations, `nuva_edu_tpl_<hash>` (task 196).
+- Specs 024, 005, 007 e 030: `email.send` com 5 tentativas e quatro esperas (sai a de 12 h); conta suspensa recebe os e-mails de conta, excluída não; pendência dos termos pela regra da barreira, com exemplos (task 212).
 - `scripts/compose.test.mjs`: o volume do banco tem de se chamar `nuva-edu-postgres-data`; o nome antigo `postgres-data` deixa de ser aceito (task 184).
 - Spec 006: mapa de telas do admin ganha a ação do menu por item e segue a 008; instrutor vê eventos, novidades, gamificação e chamados (task 192).
 - `scripts/verify.mjs`: a nota do passo `postgres` mostra o modelo do conjunto de migrations (`<base>_tpl_<hash>`) e conta os modelos antigos removidos por `dropStaleTemplates`; comentário do `scripts/test-db.mjs` com o nome novo do modelo (task 197).

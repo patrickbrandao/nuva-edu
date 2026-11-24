@@ -45,7 +45,9 @@ A Fase 1 entrega o que o cadastro exige; exportação e exclusão ficam para a F
 
 - Rascunho não é editado: para mudar o texto, cria-se outro rascunho. Rascunhos antigos ficam na lista.
 - Vigente = a publicada de maior `version` do documento. O esquema `TermsVersion` (sessão, cadastro social) traz `id`, `document`, `version`, `effectiveAt`, sem o texto.
-- Pendente para um usuário ([007](007-contas-e-autenticacao.md), "Termos no cadastro e aceite pendente"): vigente sem aceite dele, quando é a primeira versão publicada do documento ou tem `requires_reacceptance`. Versão nova sem `requires_reacceptance` não bloqueia quem aceitou uma anterior.
+- Pendente para um usuário ([007](007-contas-e-autenticacao.md), "Termos no cadastro e aceite pendente"), por documento, pela **barreira**: a barreira é a versão publicada mais nova entre a versão 1 e as que têm `requires_reacceptance`. O documento fica pendente quando o usuário não aceitou nenhuma versão igual ou posterior à barreira; o que ele aceita para sair da pendência é a vigente. Versão nova sem `requires_reacceptance` não move a barreira: não bloqueia quem já aceitou a barreira ou outra posterior, e não apaga a pendência de quem não aceitou.
+  - Exemplo 1: a pessoa se cadastrou antes da v1 e volta depois de uma v2 sem novo aceite. A barreira é a v1; ela não aceitou v1 nem v2, então está pendente e aceita a v2 (a vigente).
+  - Exemplo 2: a v2 exige novo aceite e depois sai uma v3 sem novo aceite. A barreira é a v2; quem aceitou só a v1 continua pendente e aceita a v3; quem aceitou a v2 (ou a v3) não está pendente.
 - O site admin oferece um texto modelo ao criar a primeira versão de cada documento; o modelo vive no código do site, não no banco.
 - Aviso fixo no painel do admin enquanto algum dos dois documentos não tem versão publicada.
 
