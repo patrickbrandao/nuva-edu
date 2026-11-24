@@ -172,7 +172,7 @@ O agente para e pergunta quando houver:
 - tarefa que falhou em mais de uma tentativa de correção;
 - necessidade de alterar arquivo de outro papel, ou arquivo próprio alterado por outro agente;
 - push negado no `pnpm task:finish`: o agente relata e para; não insiste, não tenta outro caminho e não pede a outro agente que envie;
-- `pnpm task:abort --force`, que descarta trabalho não commitado: exige a confirmação do humano.
+- `pnpm task:abort --force`, que descarta trabalho não commitado ou commits que não chegaram à `main`: exige a confirmação do humano.
 
 ## Interfaces e contratos
 

@@ -72,14 +72,16 @@ Sem identificadores de usuário nos rótulos.
 | `mcp_tool_calls_total{tool,outcome}` | contador | `admin-api` |
 | `images_bytes_total` | medidor | worker |
 
+`db_pool_connections`: conexões do pool do PostgreSQL no processo. `state` tem três valores, os mesmos em todos os serviços (os campos de `databasePoolStats`, de `packages/core`): `active` (em uso), `idle` (abertas e livres) e `waiting` (pedidos na fila à espera de uma conexão). As três séries saem sempre, mesmo em zero. A conexão dedicada do `LISTEN` não passa pelo pool e não entra na conta.
+
 Detalhe das métricas do worker:
 
-- `jobs_total`: uma contagem por execução. `outcome` é `done` (concluída), `retry` (falhou e voltou à fila), `failed` (esgotou as tentativas) ou `lost` (o worker perdeu a trava e abandonou o resultado). Tipo que o worker não conhece conta com `type="unknown"`, para o rótulo não crescer sem limite.
+- `jobs_total`: uma contagem por execução. `outcome` é `done` (concluída), `retry` (falhou e voltou à fila), `failed` (esgotou as tentativas), `lost` (o worker perdeu a trava e abandonou o resultado, ou não conseguiu gravar o desfecho) ou `released` (interrompida pelo encerramento do worker e devolvida à fila sem contar a tentativa; [005](005-worker-e-fila.md), "Sinal de interrupção"). Tipo que o worker não conhece conta com `type="unknown"`, para o rótulo não crescer sem limite.
 - `jobs_duration_seconds`: tempo do manipulador, com faixas de 5 ms a 300 s.
 - `jobs_queue_depth`: tarefas `queued` por tipo. `jobs_failed`: tarefas `failed` por tipo, a mesma lista da tela "Operação".
 - `jobs_count`: total por `status` (`queued`, `ready`, `running`, `done`, `failed`); `ready` é a parte de `queued` com `run_at` vencido, o tamanho real da fila.
 - `worker_jobs_running` e `worker_concurrency`: ocupação deste processo e o seu limite (`NUVA_WORKER_CONCURRENCY`).
-- `worker_database_up`: 1 quando a leitura da fila para a coleta funcionou. Com o banco fora, vale 0, os medidores `jobs_queue_depth`, `jobs_failed`, `jobs_count` e `jobs_oldest_pending_seconds` ficam de fora da resposta e o `/metrics` continua respondendo `200`.
+- `worker_database_up`: 1 quando a leitura da fila para a coleta funcionou. Com o banco fora, vale 0, os medidores `jobs_queue_depth`, `jobs_failed`, `jobs_count` e `jobs_oldest_pending_seconds` saem sem série (só as linhas `# HELP` e `# TYPE`, que o registro de métricas sempre escreve) e o `/metrics` continua respondendo `200`.
 - Os medidores da fila são lidos do banco a cada coleta; com mais de um worker, todos devolvem o mesmo valor, e quem coleta usa `max`, não `sum`.
 
 `sse_connections` conta os fluxos SSE abertos no processo. O medidor é registrado pela base HTTP (`packages/api-kit`) em todo serviço que liga os fluxos SSE, e só neles ([004](004-classroom-api.md), "Base do fluxo"); hoje, a `classroom-api`.

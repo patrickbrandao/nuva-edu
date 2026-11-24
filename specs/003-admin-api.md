@@ -74,6 +74,16 @@ Regras:
 - A lista é aberta: código novo entra pela spec do recurso; um código existente só muda de nome ou de status com mudança de versão da API. Código geral novo entra nesta tabela e no esquema `Problem` dos dois contratos.
 - `retryAfterSeconds` (inteiro) repete o cabeçalho `Retry-After` e acompanha `rate_limited` quando o tempo é conhecido.
 - Corpo que não é JSON válido, corpo vazio com `Content-Type: application/json`, corpo obrigatório ausente e `Content-Length` divergente continuam `400 validation_failed`, com um item em `errors[]` de `path: body`: é requisição fora do contrato, e o cliente trata como qualquer outra validação.
+- Requisição que o servidor HTTP recusa antes de interpretar (o analisador do Node falha e a requisição nem chega às rotas):
+
+  | Caso | Resposta |
+  | --- | --- |
+  | HTTP malformado (linha de requisição ou cabeçalho inválido) | `400 validation_failed` em problem+json, com `errors[]` vazio |
+  | Corpo menor que o `Content-Length` anunciado | `400 validation_failed` em problem+json, com um item em `errors[]` de `path: body` |
+  | Prazo de envio da requisição esgotado | `408`, no formato padrão do servidor HTTP |
+  | Cabeçalhos acima do tamanho máximo | `431`, no formato padrão do servidor HTTP |
+
+  `408` e `431` não têm `code` nem problem+json: o corpo é o JSON simples do Fastify (`statusCode`, `error`, `message`), em `application/json`. Acontecem antes de existir uma requisição interpretada, não são resposta de nenhuma operação e não entram nos contratos nem na tabela de [Respostas de erro declaradas](#respostas-de-erro-declaradas). As quatro respostas levam `X-Request-Id` e fecham a conexão. O `packages/api-client` trata `408` e `431` como `unknown_error`.
 - `payload_too_large` e `unsupported_media_type` têm código próprio porque o cliente reage de outro jeito: no primeiro, a interface diz o limite ao usuário (envio de imagem); o segundo indica erro de quem chama, não de preenchimento.
 - `unknown_error` não é emitido pelas APIs: é o que `packages/api-client` usa quando a resposta de erro não é um problem+json.
 - O status `499` não é um erro da API: é a marca interna, nos logs e nas métricas, da requisição que o cliente encerrou antes do fim da resposta ([033](033-observabilidade-retencao-backup.md), "Requisição encerrada pelo cliente"). Nunca vai ao cliente, não tem `code` e não entra nos contratos.
@@ -151,7 +161,7 @@ Não há parâmetro de cabeçalho para o token. Como parâmetro obrigatório, o 
 | `currency` | texto | `NUVA_CURRENCY` | ISO 4217 |
 | `locale` | texto | `NUVA_LOCALE` | Etiqueta BCP 47, já na forma canônica ([031](031-infraestrutura-e-deploy.md)) |
 | `authProviders` | lista | variáveis dos provedores | `google`, `facebook`, `apple`; vazia quando nenhum |
-| `logoUrl` | texto ou nulo | `settings` `school.logo_image_id` | Caminho da imagem na própria API ([029](029-imagens.md)); nulo sem logotipo, e os sites mostram só o nome |
+| `logoUrl` | texto ou nulo | `settings` `school.logo_image_id` | Caminho da imagem na própria API, na variante de 256 px ([029](029-imagens.md)); nulo sem logotipo, e os sites mostram só o nome |
 | `accentColor` | texto ou nulo | `settings` `school.accent_color` | `#RRGGBB`; nulo usa a cor de destaque padrão de `packages/ui` |
 | `sourceCodeUrl` | texto | `settings` `school.source_code_url` | Sempre presente (AGPL-3.0, [0016](decisions/0016-licenca-agpl-3.md)); padrão `https://github.com/patrickbrandao/nuva-edu` |
 

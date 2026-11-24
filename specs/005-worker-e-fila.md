@@ -36,11 +36,25 @@ queued → running → done
 - Contagem de tentativas: `attempts` sobe quando o worker pega a tarefa, não quando ela falha. Tarefa com `attempts = max_attempts` não é mais pega.
 - Novas tentativas: espera de `min(2^tentativa × 30 s, 6 h)` com variação aleatória de ±20%. Máximo de tentativas por tipo (tabelas abaixo).
 - `failed` não é reprocessada sozinha; fica até alguém reenfileirar, descartar ou a retenção expirar.
-- Encerramento do contêiner: o worker para de pegar tarefas, espera até 30 s pelas em andamento e devolve as restantes à fila. A devolução desfaz a contagem daquela tentativa (`attempts - 1`): interrupção por encerramento não é falha da tarefa.
+- Encerramento do contêiner: o worker para de pegar tarefas, avisa as que estão em andamento, espera até 30 s por elas e devolve as restantes à fila. A devolução desfaz a contagem daquela tentativa (`attempts - 1`) e não mexe em `last_error`: interrupção por encerramento não é falha da tarefa. Detalhes em [Sinal de interrupção](#sinal-de-interrupção).
 - Tarefa presa (RNF-04) volta à fila de imediato, com a tentativa contada (o worker morreu executando); se já gastou todas, fica `failed` com `last_error` dizendo que ficou sem batimento.
-- Worker que perde a trava (a tarefa foi dada como presa e outro a pegou) abandona o resultado: concluir e falhar só valem para quem ainda é o `locked_by`.
+- Worker que perde a trava (a tarefa foi dada como presa e outro a pegou) abandona o resultado: concluir e falhar só valem para quem ainda é o `locked_by`. O manipulador é avisado pelo sinal para parar cedo.
 - Tarefa de tipo que o worker não conhece (versões diferentes durante uma atualização) falha como erro comum e segue as tentativas; não é descartada.
 - Mais de um contêiner `worker` pode rodar ao mesmo tempo; `SKIP LOCKED` evita execução dupla. As recorrentes usam chave de unicidade para não duplicar ([Tarefas recorrentes](#tarefas-recorrentes)).
+
+### Sinal de interrupção
+
+Cada execução recebe, no contexto do manipulador, um `AbortSignal` próprio (`context.signal`). O worker o aborta em dois momentos:
+
+| Quando | O que acontece com a tarefa |
+| --- | --- |
+| O worker começa a encerrar (`SIGTERM`) | O sinal é abortado na hora, não no fim do prazo. Manipulador que para por causa dele (rejeita depois do aborto) tem a tarefa devolvida à fila de imediato, com `attempts - 1` e sem gravar `last_error`. Manipulador que termina com sucesso dentro dos 30 s conclui a tarefa normalmente (`done`). O que não terminar no prazo é devolvido do mesmo jeito, e o resultado que chegar depois é ignorado |
+| O batimento descobre que a trava foi perdida | O sinal é abortado para o manipulador parar cedo; o resultado, qualquer que seja, é abandonado (outro worker já pode estar com a tarefa) |
+
+- Abortar no início do encerramento, e não só no fim dos 30 s, foi a opção escolhida: quem acompanha o sinal (repassa a `fetch`, a uma espera) libera o contêiner cedo, e quem o ignora mantém o prazo inteiro.
+- Depois do aborto por encerramento, qualquer rejeição do manipulador é tratada como interrupção, sem olhar o erro: a tarefa volta à fila sem contar a tentativa. Um erro real que coincida com o encerramento reaparece na execução seguinte.
+- Acompanhar o sinal é opcional. Como a tarefa devolvida é executada de novo, vale a regra de idempotência (RF-05).
+- Nas métricas, a execução interrompida assim conta com `outcome="released"` ([033](033-observabilidade-retencao-backup.md)). As devolvidas só no fim do prazo não geram contagem em `jobs_total`: o manipulador ainda não terminou.
 
 ### Idempotência
 
@@ -179,6 +193,7 @@ Retenção: `done` por 7 dias, `failed` por 30 dias ([033](033-observabilidade-r
 - [ ] Recorrentes não duplicam com dois workers no ar, nem depois de a tarefa da janela ter sido concluída.
 - [ ] Worker que sobe depois do horário de uma diária enfileira a janela do dia uma única vez.
 - [ ] Tarefa devolvida à fila no encerramento mantém o número de tentativas que tinha antes de ser pega.
+- [ ] Manipulador que para ao ver o sinal no encerramento tem a tarefa devolvida à fila antes do prazo, sem tentativa contada e sem `last_error`; perda da trava aborta o sinal da tarefa.
 - [ ] Reenfileirar uma `failed` zera as tentativas e acorda o worker; com outra tarefa ativa de mesma chave, responde `409 job_already_active`.
 - [ ] Tela de operações lista as `failed` e permite reenfileirar e descartar.
 - [ ] Definition of Done ([002](002-organizacao-do-trabalho.md)) atendida.

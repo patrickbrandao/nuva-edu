@@ -89,6 +89,7 @@ Carga do `NOTIFY` (JSON):
 - A sequência é uma só para todos os usuários: o `id` é crescente para cada usuário, mas não consecutivo. O cliente só o compara e o devolve em `Last-Event-ID`.
 - A carga serializada precisa ter menos de 8000 bytes, limite do `NOTIFY` no PostgreSQL. `publishUserEvent` recusa com erro a que passar, antes de chamar o banco, e a transação de quem chamou é desfeita: evento grande é erro de programação, não caso de uso. Como o evento leva só identificadores, o cliente busca o resto pela API.
 - Carga que a API não consegue ler (JSON inválido, formato errado, `kind` desconhecido) é descartada com aviso no log, sem repetir o conteúdo. `kind` desconhecido acontece quando o worker é mais novo que a API durante uma atualização.
+- Carga que a API lê, mas cujo evento não confere com o esquema `StreamEvent` do contrato, também é descartada: não é entregue nem guardada para o reenvio. O aviso no log traz `reason: contract_mismatch`, o nome do evento (`event`) e o caminho dos campos recusados (`fields`), nunca os valores. O cliente gerado confia no contrato, então evento fora dele não sai.
 - Evento de destinatário sem conexão aberta é guardado só para o reenvio (abaixo) e depois esquecido.
 
 | Evento | Dados | Quando |
@@ -110,6 +111,7 @@ Carga do `NOTIFY` (JSON):
 - Cliente que não lê: com mais de 256 KB pendentes de envio, a conexão é derrubada.
 - Presença: usuário é "online" enquanto tiver conexão SSE aberta; `profiles.last_seen_at` ([019](019-perfil-e-diretorio.md)) é atualizado no fechamento e a cada 60 s.
 - Sessão encerrada ou usuário com suspensão `full`: a conexão é fechada pelo servidor.
+- A rota existe só na `classroom-api`. No host do admin, `/api/v1/stream` responde `404`; por isso o e2e de fumaça cobre o fluxo apenas no host do classroom (sem sessão, `401 unauthenticated`).
 
 ### Base do fluxo
 
@@ -163,7 +165,7 @@ O estado de pagamento, as assinaturas e os direitos derivados são escritos pelo
 - [ ] Mensagem direta enviada chega por SSE ao destinatário em até 2 s.
 - [ ] `publishUserEvent` numa transação desfeita não entrega evento; com carga de 8000 bytes ou mais, lança erro.
 - [ ] Reconexão com `Last-Event-ID` dentro de 5 minutos recebe os eventos perdidos, em ordem e sem repetir os já vistos.
-- [ ] Carga inválida no canal é descartada sem derrubar a escuta.
+- [ ] Carga inválida no canal é descartada sem derrubar a escuta; evento que não confere com `StreamEvent` é descartado com `reason: contract_mismatch` no log, sem valores.
 - [ ] A resposta do fluxo traz `Cache-Control: no-store` e `X-Accel-Buffering: no`, e nenhum `Content-Encoding`.
 - [ ] Fechar a conexão pelo cliente baixa `sse_connections` e conta a requisição com `status="499"`; o `SIGTERM` com fluxos abertos encerra o serviço dentro do prazo.
 - [ ] 500 conexões SSE simultâneas mantidas em teste de carga, dentro de RNF-02.

@@ -37,6 +37,8 @@ Avatar, capa de perfil, capa de curso, pacote, ebook e evento, e a galeria dos c
 | `content_image` | `instructor`, `manager`, `admin` | 1600 (proporção original); usada em descrições e novidades |
 | `school_logo` | `admin` | 64, 256, 512 (proporção original) |
 
+O `logoUrl` do `/meta` ([003](003-admin-api.md)) aponta para a variante de 256 do `school_logo`; as de 64 e 512 ficam para quem precisar de outro tamanho (ícone, tela de alta densidade).
+
 Qualidade WebP 80; se a variante passar de 400 KB, a qualidade cai em passos de 10 até 50 e, se ainda passar, o envio é recusado com erro 422.
 
 ### Fluxo de envio
@@ -51,7 +53,7 @@ O processamento acontece na API (não na fila), porque o usuário espera o resul
 
 ### Entrega
 
-- URL: `/api/v1/images/{image_id}/{variant}.webp`, em que `variant` é a largura (`64`, `256`, `480`, `1280`, `1600`).
+- URL: `/api/v1/images/{image_id}/{variant}.webp`, em que `variant` é a largura (`64`, `256`, `480`, `512`, `1280`, `1600`). Cada imagem só tem as variantes da sua finalidade (tabela acima); pedir outra largura devolve 404.
 - O `image_id` nunca é reutilizado: trocar o avatar cria outra imagem e outra URL.
 - Resposta: `Content-Type: image/webp`, `Cache-Control: public, max-age=31536000, immutable`, `ETag` com o hash do conteúdo, `X-Content-Type-Options: nosniff`.
 - `If-None-Match` igual ao `ETag` devolve 304.
