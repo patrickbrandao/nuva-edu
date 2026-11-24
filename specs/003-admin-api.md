@@ -166,7 +166,7 @@ Não há parâmetro de cabeçalho para o token. Como parâmetro obrigatório, o 
 - Operação pendente **com** rota registrada também não impede a subida, mas gera aviso (`warn`) no log da subida e a cada conferência do contrato: a marca precisa sair do contrato.
 - No teste de contrato, a lista de divergências continua vazia com operação pendente, com ou sem rota: o teste passa. Os avisos saem numa lista à parte, cada linha começando por `aviso:`, que o teste imprime.
 - As demais regras valem para a operação pendente: `csrfToken` nas escritas e esquemas válidos.
-- `check-contract --no-pending` falha se o contrato tiver qualquer operação pendente, com ou sem rota, listando-as; é usado no `verify:full` e na release, e é o que impede a marca de ficar esquecida. Sem a opção, o comando só avisa. O comando confere rotas e contrato sem precisar de banco. Hoje existe na `admin-api` (`pnpm --filter @nuva-edu/admin-api check-contract`); o da `classroom-api` chega pela tarefa 065 e a chamada no `verify:full`, pela 035.
+- `check-contract --no-pending` falha se o contrato tiver qualquer operação pendente, com ou sem rota, listando-as; é usado no `verify:full` e na release, e é o que impede a marca de ficar esquecida. Sem a opção, o comando só avisa. O comando confere rotas e contrato sem precisar de banco. Hoje existe na `admin-api` (`pnpm --filter @nuva-edu/admin-api check-contract`); o da `classroom-api` chega pela tarefa 067 e a chamada no `verify:full`, pela 035.
 - O fluxo de trabalho que essa regra impõe está em [002](002-organizacao-do-trabalho.md), "Janela de contrato".
 
 ### Alcance do instrutor
