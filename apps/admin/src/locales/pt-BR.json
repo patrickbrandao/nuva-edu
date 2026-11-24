@@ -1,0 +1,97 @@
+{
+  "app": {
+    "name": "nuva-edu",
+    "admin": "Administração"
+  },
+  "common": {
+    "retry": "Tentar de novo",
+    "backHome": "Voltar ao painel",
+    "requestId": "Código da requisição: {{id}}"
+  },
+  "theme": {
+    "group": "Tema da página",
+    "system": { "label": "Sistema", "hint": "Usar o tema do sistema" },
+    "light": { "label": "Claro", "hint": "Tema claro" },
+    "dark": { "label": "Escuro", "hint": "Tema escuro" }
+  },
+  "shell": {
+    "collapseMenu": "Recolher o menu",
+    "expandMenu": "Expandir o menu",
+    "breadcrumb": "Trilha de navegação"
+  },
+  "menu": {
+    "groups": {
+      "overview": "Visão geral",
+      "people": "Pessoas",
+      "content": "Conteúdo",
+      "sales": "Vendas",
+      "community": "Comunidade",
+      "support": "Suporte",
+      "system": "Sistema"
+    },
+    "items": {
+      "dashboard": "Painel",
+      "students": "Alunos",
+      "team": "Equipe",
+      "courses": "Cursos",
+      "ebooks": "Ebooks",
+      "bundles": "Pacotes",
+      "events": "Calendário de eventos",
+      "news": "Novidades",
+      "orders": "Pedidos",
+      "subscriptions": "Assinaturas",
+      "plans": "Planos",
+      "coupons": "Cupons",
+      "forum": "Fórum",
+      "reports": "Denúncias",
+      "cases": "Cases",
+      "gamification": "Gamificação",
+      "tickets": "Chamados",
+      "mcpKeys": "Chaves MCP",
+      "audit": "Auditoria",
+      "operations": "Operação",
+      "settings": "Configurações"
+    }
+  },
+  "footer": {
+    "source": "Código-fonte",
+    "version": "Versão {{version}}"
+  },
+  "home": {
+    "title": "Painel",
+    "subtitle": "Visão geral da escola.",
+    "meta": {
+      "title": "Instalação",
+      "loading": "Carregando os dados da instalação…",
+      "errorTitle": "Não foi possível carregar os dados da instalação",
+      "errorText": "O servidor não respondeu como esperado. Confira a conexão e tente de novo.",
+      "schoolName": "Escola",
+      "version": "Versão",
+      "currency": "Moeda",
+      "locale": "Idioma",
+      "authProviders": "Login social",
+      "noAuthProviders": "Nenhum provedor configurado"
+    }
+  },
+  "providers": {
+    "google": "Google",
+    "facebook": "Facebook",
+    "apple": "Apple"
+  },
+  "login": {
+    "title": "Entrar",
+    "subtitle": "Acesse o painel de administração da escola.",
+    "email": "E-mail",
+    "password": "Senha",
+    "submit": "Entrar",
+    "unavailable": "O acesso ao painel ainda não está disponível nesta versão."
+  },
+  "underConstruction": {
+    "title": "Em construção",
+    "text": "A tela “{{page}}” ainda não está disponível nesta versão."
+  },
+  "notFound": {
+    "title": "Página não encontrada",
+    "text": "O endereço que você abriu não existe no painel."
+  }
+}
