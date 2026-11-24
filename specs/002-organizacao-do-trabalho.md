@@ -16,7 +16,7 @@ Vários agentes (Claude Code e OpenCode) trabalham no mesmo repositório, coorde
 - RF-05: Mudança de contrato, a rota que a atende, o cliente gerado e todo pacote que quebraria com eles formam uma janela, que chega à `main` por um único branch ([Janela de contrato](#janela-de-contrato)).
 - RF-06: Cada tarefa roda em um worktree e um branch próprios, abertos por `pnpm task:start` e encerrados por `pnpm task:finish`. Nenhum agente edita arquivo versionado no checkout principal. Exceção: as tarefas de uma janela de contrato trabalham no worktree da janela ([Janela de contrato](#janela-de-contrato)).
 - RF-07: A `main` só avança por fast-forward, a partir de um branch de tarefa que passou por rebase sobre a `main` e por `pnpm verify:quick`.
-- RNF-01: Nenhum commit contém arquivo fora das pastas do papel de quem o fez (verificável pelo histórico).
+- RNF-01: Nenhum commit contém arquivo fora das pastas do papel de quem o fez (verificável pelo histórico). Única exceção: o commit dos tipos gerados do banco, feito pela tarefa de migration ([Regras de propriedade](#papéis)).
 - RNF-02: O histórico da `main` é linear: sem merge commit (verificável por `git log --merges main`, que deve ser vazio).
 - RNF-03: Com nenhuma tarefa em andamento, `git status` no checkout principal não mostra alteração e `git worktree list` mostra só ele.
 
@@ -41,6 +41,7 @@ Regras de propriedade:
 
 - Só o `arquiteto` altera `specs/`, as ADRs e os `openapi.yaml`.
 - Só o `banco` cria ou altera migrations. As migrations são numeradas em sequência e criadas uma de cada vez.
+- **Migration leva os tipos gerados.** O passo `tipos-banco` do `verify:quick` reprova a migration que cria ou altera tabela enquanto os tipos do Kysely não descrevem o banco ([032](032-verificacao-e-ci.md)). Por isso a tarefa de migration do `banco` regenera os tipos (`pnpm --filter @nuva-edu/core db:types`) e commita, no mesmo branch e em commit separado, só o arquivo gerado `packages/core/src/db/generated/database.ts`, com escopo `nucleo`: `chore(nucleo): tipos do banco regenerados com a migration NNNN (task NNN)`. É a única escrita do `banco` fora da própria pasta, e o arquivo é gerado, nunca editado à mão. O `nucleo` não regenera os tipos por conta própria nem espera tarefa para isso; o código que passa a usar a tabela nova continua sendo dele, na tarefa seguinte.
 - Quem precisar de mudança em spec, contrato ou migration cria uma tarefa para o dono e segue em outra tarefa.
 - O `CHANGELOG.md` é alterado por qualquer papel, só acrescentando linhas em `## [Não lançado]`. Numa janela de contrato, só por quem a fecha.
 - Testes de unidade e de integração ficam junto do código e pertencem ao dono da pasta.
@@ -118,7 +119,7 @@ Os status são `aberta`, `em-andamento`, `bloqueada` e, só para tarefa de janel
 
 - Cada tarefa em andamento tem o próprio worktree; várias rodam ao mesmo tempo sem enxergar o trabalho pendente umas das outras. As tarefas de uma janela de contrato dividem um worktree e se enxergam: ali o paralelismo depende de pastas disjuntas e de commits com caminhos explícitos.
 - Duas tarefas rodam em paralelo quando os campos `arquivos` não se cruzam. O worktree não dispensa essa regra: com arquivos cruzados, a segunda a terminar para no rebase com conflito.
-- Dentro de um recurso a ordem é fixa: spec → migration → `packages/core` → contrato → APIs e `packages/api-client` → sites → e2e. A spec decide o contrato antes de tudo; o arquivo `openapi.yaml` só muda dentro de uma janela, junto de quem o alcança ([Janela de contrato](#janela-de-contrato)).
+- Dentro de um recurso a ordem é fixa: spec → migration (com os tipos gerados, [Regras de propriedade](#papéis)) → `packages/core` → contrato → APIs e `packages/api-client` → sites → e2e. A spec decide o contrato antes de tudo; o arquivo `openapi.yaml` só muda dentro de uma janela, junto de quem o alcança ([Janela de contrato](#janela-de-contrato)).
 - Mudança de contrato e migration são sempre sequenciais entre si. Migrations continuam uma tarefa por vez, também porque o Postgres local é compartilhado entre os worktrees.
 - O fim das tarefas é serializado: o `task:finish` só avança a `main` por fast-forward, e quem chega depois refaz rebase e verificação.
 - As frentes paralelas de cada fase estão no [PLAN](PLAN.md).
@@ -131,7 +132,8 @@ As APIs sobem em modo estrito ([003](003-admin-api.md), RF-04): operação do co
 
 - a do `interface`, para regenerar o cliente (sempre);
 - a da API dona da rota (`api-admin` ou `api-classroom`), e a da outra API quando ela compartilha o esquema ou a rota alterada;
-- as dos sites, quando o esquema alterado aparece no código ou nos dados de teste deles (a checagem de tipos quebra com o cliente regenerado). Site que só vai *passar a usar* uma operação nova não precisa entrar: a tarefa dele roda depois, no próprio worktree.
+- as dos sites, quando o esquema alterado aparece no código ou nos dados de teste deles (a checagem de tipos quebra com o cliente regenerado). Site que só vai *passar a usar* uma operação nova não precisa entrar: a tarefa dele roda depois, no próprio worktree;
+- a de cada API cujo contrato ganha operação de escrita sem `csrfToken` (login, callback de OAuth e afins), **mesmo que a operação entre com `x-nuva-pending`**: a conferência do `csrfToken` vale também para as operações pendentes ([003](003-admin-api.md#subida-estrita), "Subida estrita"), e a lista de exceções de CSRF fica no código da API. A tarefa acrescenta a exceção à lista; a rota continua para depois.
 
 O número da tarefa do contrato é o número da janela (`NNN`). As outras tarefas trazem `janela: NNN` no cabeçalho, além do `depende-de` normal entre elas (o site depende da do `interface`). Janela é pequena: um recurso, uma mudança.
 
@@ -162,6 +164,8 @@ Tarefa `pronta` está commitada no branch da janela e ainda não está na `main`
 Falha no fechamento (código 4 ou 5) em arquivo do papel de quem fecha: ele corrige no worktree e roda de novo. Em arquivo de outro papel: não corrige. Devolve a tarefa do dono a `aberta`, com o motivo no corpo, e a janela continua aberta até o dono resolver e a tarefa voltar a `pronta`. Push negado (código 7) segue a regra geral: relata e para.
 
 Abandonar a janela é `pnpm task:abort NNN --force`: descarta os commits de todos os papéis, devolve a `aberta` todas as tarefas da janela e exige a confirmação do humano.
+
+**Precedente: janela 131 (Fase 1).** A janela que publicou os contratos da Fase 1 foi fechada pelo orquestrador com `--join` das tarefas 132 (`interface`, cliente regenerado), 168 (`api-classroom`) e 169 (`api-admin`). As duas últimas não estavam previstas: nasceram durante a janela porque a conferência cobrava `csrfToken` das operações pendentes de escrita sem CSRF, e sem a exceção no código de cada API o teste de contrato ficava vermelho. A regra para as próximas janelas é a do último item de "O que entra na janela": essas exceções entram na própria janela, pelas tarefas das APIs, criadas pelo `arquiteto` na abertura.
 
 **Sem suporte do script.** Enquanto o `scripts/task.mjs` não aceitar `--join`, o procedimento é o mesmo, feito à mão: a tarefa da janela não roda `task:start` nem `task:finish`, edita o próprio arquivo em `tasks/` (`em-andamento` com `responsavel` ao entrar, `pronta` ao concluir), e quem fecha remove os arquivos das tarefas com `janela: NNN` depois que o `task:finish NNN` terminar sem erro.
 

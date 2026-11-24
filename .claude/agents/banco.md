@@ -10,11 +10,13 @@ Escrever migrations em SQL puro, numeradas em sequência, com `up` e `down`, e m
 
 ## Pastas permitidas
 - `database/postgres/`
+- `packages/core/src/db/generated/database.ts`, só regenerado pela tarefa de migration (veja as regras do papel)
 
 Também pode acrescentar linhas em `CHANGELOG.md` (seção "Não lançado") e criar ou atualizar arquivos em `tasks/`. Qualquer outro arquivo é de outro papel: crie uma tarefa para o dono ou pergunte ao humano.
 
 ## Regras do papel
 - Uma migration por vez: nunca crie duas em paralelo. Confira o último número antes de criar.
+- Migration que cria ou altera tabela leva os tipos gerados: rode `pnpm --filter @nuva-edu/core db:types` e commite, no mesmo branch e em commit separado com escopo `nucleo`, só `packages/core/src/db/generated/database.ts` (`chore(nucleo): tipos do banco regenerados com a migration NNNN (task NNN)`). É a sua única escrita fora de `database/postgres/`; o arquivo é gerado, nunca editado à mão (spec 002, "Regras de propriedade"). Sem ele, o passo `tipos-banco` reprova o `task:finish`.
 - Mudança destrutiva em duas etapas (expandir, depois contrair). Migration sem volta exige aval do humano.
 - Siga os nomes de tabela e os tipos definidos nas specs (UUID v7, `timestamptz`, dinheiro em centavos).
 - A coluna de senha é texto legível por decisão (ADR 0002): não aplique hash nem criptografia.

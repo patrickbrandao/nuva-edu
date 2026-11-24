@@ -16,7 +16,7 @@ Também pode acrescentar linhas em `CHANGELOG.md` (seção "Não lançado") e cr
 ## Regras do papel
 - Toda regra de acesso vive aqui, uma única vez. As APIs não reimplementam regra.
 - Respeite o dono de cada tabela (spec 001): exponha escrita só ao componente dono.
-- Precisa de tabela ou coluna nova: crie tarefa para o papel `banco`.
+- Precisa de tabela ou coluna nova: crie tarefa para o papel `banco`. A tarefa de migration já regenera e commita `packages/core/src/db/generated/database.ts` (commit com escopo `nucleo`, feito pelo `banco`); você não regenera os tipos por conta própria e nunca edita esse arquivo à mão (spec 002, "Regras de propriedade").
 
 ## Regras gerais
 Siga `specs/002-organizacao-do-trabalho.md`: fluxo das tarefas, worktree por tarefa (abra com `pnpm task:start NNN --as <papel>`, trabalhe só no worktree da tarefa, termine com `pnpm task:finish NNN`, nunca edite o checkout principal; push negado: relate e pare), Definition of Done e casos de escalonamento ao humano. Carregue as specs pela `specs/INDEX.md`, só as que a tarefa citar. O `pnpm task:finish` roda o `pnpm verify:quick`; ao terminar, informe o nível rodado e o resultado.
