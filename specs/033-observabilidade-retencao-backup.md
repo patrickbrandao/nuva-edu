@@ -42,6 +42,8 @@ Uma instalação é operada por uma escola pequena, sem equipe de infraestrutura
 
 API com migrations desatualizadas fica "não pronta" e registra o motivo.
 
+Nas APIs, `/healthz` responde `200` com `{ "status": "ok" }`. `/readyz` responde `200` ou `503` com `{ "status": "ready" | "not_ready", "checks": { "database": "ok" | "fail", "migrations": "ok" | "fail" } }`.
+
 ### Métricas
 
 Sem identificadores de usuário nos rótulos.
@@ -129,7 +131,7 @@ Antes da versão 1.0 (Fase 7 do plano), um roteiro k6 simula 500 usuários simul
 
 ## Interfaces e contratos
 
-- `/healthz`, `/readyz`, `/metrics` em cada serviço (fora do OpenAPI público; descritos aqui).
+- `/healthz` e `/readyz` das duas APIs: descritas nos `openapi.yaml`, na raiz, fora de `/api/v1`. As do worker e `/metrics` de todos os serviços ficam fora do OpenAPI e são descritas aqui.
 - Em `apps/admin-api/openapi.yaml`: `GET /api/v1/ops/summary`, `GET /api/v1/ops/jobs`, `POST /api/v1/ops/jobs/{id}/retry`, `DELETE /api/v1/ops/jobs/{id}`, `GET /api/v1/ops/emails`, `POST /api/v1/ops/emails/{id}/retry`, `GET /api/v1/ops/webhooks`, `POST /api/v1/ops/webhooks/{id}/reprocess`.
 - Variáveis de backup: `NUVA_BACKUP_CRON` (`30 2 * * *`), `NUVA_BACKUP_DIR` (vazio = volume), `NUVA_BACKUP_KEEP_DAILY` (`7`), `NUVA_BACKUP_KEEP_WEEKLY` (`4`).
 - Scripts: `scripts/backup.sh`, `scripts/restore.sh`.

@@ -21,7 +21,7 @@ Qualquer pessoa pode se cadastrar no classroom. A mesma conta serve a alunos e �
 - RF-10: Bloqueio temporário por tentativas erradas e aviso por e-mail de login em dispositivo novo.
 - RF-11: Sessões em tabela, revogáveis; o usuário vê e encerra as próprias sessões.
 - RF-12: Admin inicial criado por variáveis de ambiente na primeira subida; comando de linha para emergência.
-- RF-13: Métodos de login social só aparecem se as variáveis do provedor estiverem configuradas.
+- RF-13: Métodos de login social só aparecem se as variáveis do provedor estiverem configuradas. Os sites leem a lista em `authProviders` de `GET /api/v1/meta`.
 - RNF-01: Senha com 8 a 128 caracteres; sem outras regras de composição.
 - RNF-02: 5 erros de senha em 15 minutos bloqueiam por 15 minutos (por conta e por IP, contados separadamente).
 - RNF-03: Sessão expira com 30 dias sem uso (`NUVA_RETENTION_SESSION_DAYS`); links de confirmação e redefinição valem 24 h e uso único.

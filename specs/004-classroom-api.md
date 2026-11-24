@@ -10,13 +10,13 @@ A `classroom-api` é o backend do site do aluno (`https://<NUVA_CLASSROOM_HOST>`
 ## Requisitos
 
 - RF-01: Expor a API do aluno em `/api/v1`, descrita integralmente em `apps/classroom-api/openapi.yaml` (OpenAPI 3.1), incluindo o fluxo SSE.
-- RF-02: Servir sem login: vitrine, cases públicos, validação de certificado, termos vigentes e as rotas de autenticação.
+- RF-02: Servir sem login: vitrine, cases públicos, validação de certificado, termos vigentes, as rotas de autenticação e `GET /api/v1/meta`.
 - RF-03: Verificar o direito de acesso ([010](010-direitos-de-acesso.md)) em toda rota que entrega conteúdo de aula, link de ebook, fórum de curso ou evento restrito.
 - RF-04: Receber o webhook do Mercado Pago, validar a assinatura, gravar em `webhook_events` e enfileirar o processamento ([013](013-pagamentos-mercado-pago.md)).
 - RF-05: Manter `GET /api/v1/stream` (SSE) para entregar mensagens diretas e notificações sem recarregar a página.
 - RF-06: Validar toda requisição e toda resposta contra o contrato.
 - RF-07: Higienizar todo conteúdo escrito por usuário (fórum, cases, mensagens, perfil, chamados) antes de gravar e devolver apenas HTML permitido.
-- RF-08: Expor `/healthz`, `/readyz` e `/metrics` ([033](033-observabilidade-retencao-backup.md)).
+- RF-08: Expor `/healthz`, `/readyz` e `/metrics` ([033](033-observabilidade-retencao-backup.md)). `/healthz` e `/readyz` ficam na raiz, fora de `/api/v1`, e são descritas no contrato; `/metrics` é interna e não entra nele.
 - RNF-01: p95 abaixo de 300 ms com 500 usuários simultâneos em 2 vCPU / 4 GB.
 - RNF-02: Sustentar 500 conexões SSE abertas num único processo, com consumo adicional inferior a 200 MB de RAM.
 - RNF-03: Evento SSE entregue em até 2 s após a gravação da mensagem ou notificação.
@@ -35,7 +35,7 @@ A `classroom-api` é o backend do site do aluno (`https://<NUVA_CLASSROOM_HOST>`
 
 ### Convenções da API
 
-Iguais às da `admin-api` ([003](003-admin-api.md)): JSON em `camelCase`, erros em `application/problem+json` com `code` estável, paginação por cursor (`limit` padrão 25, máximo 100), `Idempotency-Key` em criação de pedido e de assinatura, `X-Request-Id` em toda resposta, IP do cliente por `TRUSTED_PROXIES`.
+Iguais às da `admin-api` ([003](003-admin-api.md)): caminhos completos no contrato, JSON em `camelCase`, erros em `application/problem+json` com `code` estável, paginação por cursor (`limit` padrão 25, máximo 100), `Idempotency-Key` em criação de pedido e de assinatura, `X-Request-Id` em toda resposta, IP do cliente por `TRUSTED_PROXIES`.
 
 Regra adicional: recurso que existe mas ao qual o aluno não tem direito responde `403` com `code: entitlement_required` e, no corpo, os produtos que o liberam (para a interface oferecer a compra). Produto `private` sem direito responde `404`.
 
@@ -43,6 +43,7 @@ Regra adicional: recurso que existe mas ao qual o aluno não tem direito respond
 
 | Prefixo em `/api/v1` | Login | Conteúdo | Spec |
 | --- | --- | --- | --- |
+| `/meta` | Não | Dados públicos da instalação, com os mesmos campos da `admin-api` | [003](003-admin-api.md) |
 | `/auth/*`, `/session` | Não | Cadastro, login, OAuth, confirmação, redefinição | [007](007-contas-e-autenticacao.md) |
 | `/catalog` | Não | Vitrine: produtos e planos não privados | [009](009-catalogo-e-conteudo.md) |
 | `/courses`, `/lessons`, `/ebooks`, `/library` | Sim (programa: não) | Programa, player, links, estante | [009](009-catalogo-e-conteudo.md), [014](014-aprendizado-e-progresso.md) |
@@ -79,14 +80,15 @@ Regra adicional: recurso que existe mas ao qual o aluno não tem direito respond
 | `dm.message.created` | `conversationId`, `messageId` | Nova mensagem direta recebida ([021](021-mensagens-diretas.md)) |
 | `dm.message.read` | `conversationId`, `messageId` | O destinatário leu a mensagem |
 | `dm.message.deleted` | `conversationId`, `messageId` | Mensagem apagada |
-| `notification.created` | `notificationId`, `type`, contador de não lidas | Nova notificação ([024](024-notificacoes-e-email.md)) |
+| `notification.created` | `notificationId`, `type`, `unreadCount` | Nova notificação ([024](024-notificacoes-e-email.md)) |
 | `forum.post.created` | `topicId`, `postId` | Nova resposta num tópico aberto na tela ([017](017-forum.md)) |
-| `announcement.published` | `announcementId`, contador de não lidas | Nova novidade publicada ([025](025-novidades.md)) |
+| `announcement.published` | `announcementId`, `unreadCount` | Nova novidade publicada ([025](025-novidades.md)) |
 | `presence` | `userId`, `online` | Mudança de presença de alguém numa conversa aberta |
-| `ping` | — | A cada 25 s, para manter a conexão viva |
+| `ping` | objeto vazio | A cada 25 s, para manter a conexão viva |
 
 - O evento carrega só identificadores; o conteúdo é buscado pela rota normal, que checa permissão.
-- Cada evento tem `id` crescente por usuário. Na reconexão, `Last-Event-ID` faz a API reenviar o que foi perdido nos últimos 5 minutos; além disso, a interface recarrega as listas.
+- No fio, cada evento usa os campos `id`, `event` (nome da tabela acima) e `data` (objeto JSON numa linha). No contrato, cada evento é um esquema `StreamEvent*`, reunidos em `StreamEvent`.
+- Cada evento tem `id` crescente por usuário, exceto `ping`, que não tem `id`. Na reconexão, `Last-Event-ID` faz a API reenviar o que foi perdido nos últimos 5 minutos; além disso, a interface recarrega as listas.
 - Limite de 3 conexões SSE por usuário; a quarta derruba a mais antiga.
 - Presença: usuário é "online" enquanto tiver conexão SSE aberta; `profiles.last_seen_at` ([019](019-perfil-e-diretorio.md)) é atualizado no fechamento e a cada 60 s.
 - Sessão encerrada ou usuário com suspensão `full`: a conexão é fechada pelo servidor.

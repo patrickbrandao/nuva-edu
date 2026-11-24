@@ -12,11 +12,12 @@ A `admin-api` é o backend do site de administração (`https://<NUVA_ADMIN_HOST
 - RF-01: Expor a API administrativa em `/api/v1`, descrita integralmente em `apps/admin-api/openapi.yaml` (OpenAPI 3.1).
 - RF-02: Expor o servidor MCP em `/mcp` no mesmo processo ([027](027-mcp.md)).
 - RF-03: Recusar com `403` qualquer sessão cujo papel seja apenas `student`.
-- RF-04: Validar toda requisição e toda resposta contra o contrato; rota fora do contrato não é registrada.
+- RF-04: Validar toda requisição e toda resposta contra o contrato; rota fora do contrato não é registrada. Única exceção: `/metrics`, que é interna e não entra no contrato.
 - RF-05: Registrar em `audit_log` toda requisição que altera dados e toda leitura sensível ([028](028-auditoria.md)).
 - RF-06: Aplicar as migrations pendentes não é função da API: ela só sobe se o banco estiver na versão esperada (caso contrário `/readyz` responde `503`).
 - RF-07: Criar o admin inicial na primeira subida, conforme [007](007-contas-e-autenticacao.md).
-- RF-08: Expor `/healthz`, `/readyz` e `/metrics` ([033](033-observabilidade-retencao-backup.md)).
+- RF-08: Expor `/healthz`, `/readyz` e `/metrics` ([033](033-observabilidade-retencao-backup.md)). `/healthz` e `/readyz` ficam na raiz, fora de `/api/v1`, e são descritas no contrato.
+- RF-09: Expor `GET /api/v1/meta`, sem sessão, com os dados públicos da instalação.
 - RNF-01: p95 de resposta abaixo de 300 ms para leituras paginadas com 50 usuários de equipe simultâneos, em 2 vCPU / 4 GB.
 - RNF-02: Corpo de requisição limitado a 1 MB, exceto envio de imagem, limitado a 5 MB ([029](029-imagens.md)); a imagem é processada na própria API que recebe o envio, não no worker.
 - RNF-03: Limite de taxa de 300 requisições por minuto por sessão e 20 por minuto por IP nas rotas de autenticação.
@@ -35,10 +36,11 @@ A `admin-api` é o backend do site de administração (`https://<NUVA_ADMIN_HOST
 
 | Assunto | Regra |
 | --- | --- |
+| Caminhos no contrato | O `servers` do contrato é a origem do site (`/`); cada caminho aparece completo (`/api/v1/...`, `/healthz`, `/readyz`), igual à rota registrada. |
 | Formato | JSON em UTF-8; campos em `camelCase`; datas ISO 8601 em UTC; dinheiro em centavos inteiros. |
 | Erros | `application/problem+json` (RFC 9457) com `type`, `title`, `status`, `detail`, `instance`, `code` (identificador estável, ex.: `permission_denied`) e, em validação, `errors[]` com `path` e `message`. |
 | Códigos | `400` validação, `401` sem sessão, `403` sem permissão, `404` inexistente ou fora do alcance do instrutor, `409` conflito de estado, `422` regra de negócio, `429` limite de taxa, `503` dependência indisponível. |
-| Paginação | Por cursor: `?limit=` (padrão 25, máximo 100) e `?cursor=`; resposta `{ items, nextCursor }`. |
+| Paginação | Por cursor: `?limit=` (padrão 25, máximo 100) e `?cursor=`; resposta `{ items, nextCursor }`, com `nextCursor` nulo na última página. |
 | Ordenação e filtro | `?sort=campo` ou `-campo`; filtros como parâmetros nomeados, todos listados no contrato. |
 | Busca | `?q=` com busca textual simples (`ILIKE` com índice trigram) onde o contrato indicar. |
 | Idempotência | `POST` que cria cobrança, estorno ou concessão aceita `Idempotency-Key`; repetição devolve a primeira resposta por 24 h. |
@@ -50,6 +52,7 @@ A `admin-api` é o backend do site de administração (`https://<NUVA_ADMIN_HOST
 
 | Prefixo em `/api/v1` | Conteúdo | Spec |
 | --- | --- | --- |
+| `/meta` | Dados públicos da instalação, sem sessão: `schoolName`, `version`, `currency`, `locale`, `authProviders` (provedores de login social configurados: `google`, `facebook`, `apple`) | esta spec, [007](007-contas-e-autenticacao.md) |
 | `/session`, `/auth/*` | Login, logout, sessão atual, token CSRF | [007](007-contas-e-autenticacao.md) |
 | `/users` | Alunos e equipe: listar, ver, editar, suspender, mudar papel, exibir senha, sessões | [007](007-contas-e-autenticacao.md), [008](008-papeis-e-permissoes.md) |
 | `/courses`, `/modules`, `/lessons`, `/ebooks`, `/bundles` | Catálogo e conteúdo | [009](009-catalogo-e-conteudo.md) |
@@ -100,7 +103,7 @@ Lê as demais tabelas. Retenção: [033](033-observabilidade-retencao-backup.md)
 ## Critérios de aceite
 
 - [ ] Toda rota registrada existe em `apps/admin-api/openapi.yaml` e vice-versa (teste de contrato).
-- [ ] Sessão de `student` recebe `403` em qualquer rota de `/api/v1`, exceto `/auth/*`.
+- [ ] Sessão de `student` recebe `403` em qualquer rota de `/api/v1`, exceto `/auth/*` e `/meta`.
 - [ ] `instructor` recebe `404` ao pedir curso, aula, tópico ou progresso de curso que não é seu.
 - [ ] Erros seguem `application/problem+json` com `code` estável.
 - [ ] Requisição que altera dados sem `X-CSRF-Token` válido recebe `403`.

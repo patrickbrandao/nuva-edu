@@ -9,6 +9,7 @@ Detalhe das decisões em `specs/decisions/`.
 - Specs 000 a 033, plano em 8 fases, ADRs 0001 a 0018.
 - Definições de papel para Claude Code e OpenCode.
 - Compose base: Postgres 18, Traefik opcional, Mailpit.
+- Contratos OpenAPI 3.1 iniciais das duas APIs: componentes comuns, saúde, `/api/v1/meta` e SSE.
 - Monorepo pnpm 12, TypeScript 7, Biome, lefthook (lint no pre-commit, commit validado).
 
 ### Decisões

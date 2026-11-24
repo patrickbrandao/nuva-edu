@@ -80,6 +80,8 @@ SSE em `GET /api/v1/stream` da `classroom-api`, alimentado por `LISTEN/NOTIFY` d
 - As ferramentas do MCP são descritas em [027](027-mcp.md).
 - Não há sistema de eventos, portanto não há AsyncAPI.
 - Não há API pública para terceiros além do MCP.
+- No contrato, o servidor é a origem do site (`/`) e cada caminho aparece completo, igual à rota registrada: as rotas de negócio sob `/api/v1`, e `/healthz` e `/readyz` na raiz, fora do prefixo. `/metrics` não entra no contrato ([033](033-observabilidade-retencao-backup.md)).
+- Os componentes comuns (erro `Problem`, paginação `Page`/`Limit`/`Cursor`, `Uuid`, `DateTime`, `Date`, `MoneyCents`, `Meta`, saúde e as respostas de erro) têm o mesmo nome e formato nos dois contratos; mudança em um é feita nos dois.
 - Versão das APIs no caminho (`/api/v1`). Mudança incompatível só em `/api/v2`, mantendo a v1 por uma versão menor.
 
 ## Dados
