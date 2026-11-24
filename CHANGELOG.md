@@ -96,6 +96,7 @@ Detalhe das decisões em `specs/decisions/`.
 
 ### Alterado
 - `@nuva-edu/core`: `NUVA_RETENTION_AUDIT_DAYS` abaixo de 365 impede a subida, em vez de fazer o `retention.purge` falhar (task 278).
+- Contratos `admin-api` e `classroom-api`: sai `x-nuva-pending` das 48 operações da Fase 1, todas com rota; `check-contract --no-pending` passa nas duas APIs (task 165).
 - `@nuva-edu/core`: `PendingHandlerJobType` volta a `never`; `JobHandlers` exige os manipuladores de `suspension.expire` e `image.cleanup` (task 276).
 - Admin: motivo da suspensão e texto dos termos usam o `AdminTextArea` de `@nuva-edu/ui` (contagem dos termos no `counter`); sai o `TextArea` local e o `.nuva-textarea` (task 222).
 - Banco modelo dos testes passa a ser um por conjunto de migrations (`<db>_tpl_<12 hex do hash>`): worktrees com migrations diferentes não refazem mais o modelo um do outro; criação sob trava do conjunto e expurgo dos modelos sem uso há 7 dias (`dropStaleTemplates`, guarda os 3 últimos) (task 182).

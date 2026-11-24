@@ -220,7 +220,6 @@ paths:
       operationId: register
       tags: [auth]
       summary: Cadastro por e-mail e senha
-      x-nuva-pending: true
       description: |
         Cria a conta `student` (`specs/007-contas-e-autenticacao.md`, "Cadastro por e-mail e
         senha"). **Não abre sessão**: responde `204` também quando o e-mail já tem conta (o dono
@@ -290,7 +289,6 @@ paths:
       operationId: login
       tags: [auth]
       summary: Login por e-mail e senha
-      x-nuva-pending: true
       description: |
         Abre a sessão do classroom (`specs/007-contas-e-autenticacao.md`, "Login por senha") e
         grava o cookie `nuva_classroom_session`.
@@ -351,7 +349,6 @@ paths:
       operationId: logout
       tags: [auth]
       summary: Sair
-      x-nuva-pending: true
       description: |
         Encerra a sessão atual e apaga o cookie. Aceita mesmo com termos pendentes.
       security:
@@ -382,7 +379,6 @@ paths:
       operationId: getSession
       tags: [auth]
       summary: Sessão atual
-      x-nuva-pending: true
       description: |
         Dono da sessão, token CSRF, ações permitidas e termos pendentes. Sem sessão válida:
         `401` `unauthenticated`, e o cookie é apagado.
@@ -415,7 +411,6 @@ paths:
       operationId: verifyEmail
       tags: [auth]
       summary: Confirmar o e-mail
-      x-nuva-pending: true
       description: |
         Confirma o e-mail com o token do link `<classroomUrl>/confirmar?token=<token>`
         (`specs/007-contas-e-autenticacao.md`, "Confirmação de e-mail"). Token vencido, já usado
@@ -455,7 +450,6 @@ paths:
       operationId: resendVerificationEmail
       tags: [auth]
       summary: Reenviar o link de confirmação
-      x-nuva-pending: true
       description: |
         Enfileira um novo link de confirmação; o anterior deixa de valer. Até 3 por hora por
         usuário (`429` `rate_limited`). E-mail já confirmado: `204` sem envio.
@@ -485,7 +479,6 @@ paths:
       operationId: requestPasswordReset
       tags: [auth]
       summary: Esqueci a senha
-      x-nuva-pending: true
       description: |
         Responde sempre `204`. Se a conta existir (e não estiver excluída), enfileira o e-mail
         `account.password_reset` com link de 24 h para `<classroomUrl>/redefinir?token=<token>`.
@@ -528,7 +521,6 @@ paths:
       operationId: resetPassword
       tags: [auth]
       summary: Redefinir a senha
-      x-nuva-pending: true
       description: |
         Define a senha com o token do link, confirma o e-mail, marca o token como usado e
         invalida os outros tokens de redefinição da conta; encerra todas as sessões do usuário.
@@ -579,7 +571,6 @@ paths:
       operationId: startOAuth
       tags: [auth]
       summary: Início do login social
-      x-nuva-pending: true
       description: |
         O site **navega** para esta URL (navegação de página, não `fetch`;
         `specs/007-contas-e-autenticacao.md`, "Fluxo do provedor"). A API gera `state`, `nonce` e
@@ -628,7 +619,6 @@ paths:
       operationId: oauthCallback
       tags: [auth]
       summary: Retorno do provedor (Google, Facebook)
-      x-nuva-pending: true
       description: |
         Retorno do provedor com `code` e `state` (ou `error`) na consulta. Parâmetros a mais que
         o provedor envie são ignorados. A API confere o `state` com o do cookie de retorno,
@@ -685,7 +675,6 @@ paths:
       operationId: oauthCallbackForm
       tags: [auth]
       summary: Retorno do provedor por formulário (Apple)
-      x-nuva-pending: true
       description: |
         Retorno da Apple com `response_mode=form_post`: `POST`
         `application/x-www-form-urlencoded` vindo do site da Apple. Mesmo tratamento e mesmos
@@ -744,7 +733,6 @@ paths:
       operationId: getSocialPending
       tags: [auth]
       summary: Cadastro social pendente
-      x-nuva-pending: true
       description: |
         O que o provedor informou, guardado no cookie de retorno (sem o identificador do
         provedor), e as versões vigentes dos termos. Sem cookie de retorno válido: `404`.
@@ -776,7 +764,6 @@ paths:
       operationId: completeSocialSignup
       tags: [auth]
       summary: Concluir o cadastro social
-      x-nuva-pending: true
       description: |
         Cria a conta e o vínculo com o provedor, grava os aceites, apaga o cookie de retorno e
         abre a sessão (`specs/007-contas-e-autenticacao.md`, "Cadastro pendente").
@@ -842,7 +829,6 @@ paths:
       operationId: setAccountPassword
       tags: [account]
       summary: Definir ou trocar a própria senha
-      x-nuva-pending: true
       description: |
         Conta sem senha: basta a sessão. Conta com senha: `currentPassword` é exigida; errada,
         `422` `current_password_invalid`, e a tentativa conta no bloqueio da conta (`429`
@@ -895,7 +881,6 @@ paths:
       operationId: listAccountIdentities
       tags: [account]
       summary: Métodos de acesso da conta
-      x-nuva-pending: true
       description: Se a conta tem senha e os provedores vinculados.
       responses:
         "200":
@@ -924,7 +909,6 @@ paths:
       operationId: unlinkAccountIdentity
       tags: [account]
       summary: Desvincular um provedor
-      x-nuva-pending: true
       description: |
         Remove o vínculo com o provedor. Provedor não vinculado: `404`. Remover o último método
         de acesso (sem senha e sem outro provedor): `422` `last_login_method`.
@@ -960,7 +944,6 @@ paths:
       operationId: listAccountSessions
       tags: [account]
       summary: Sessões abertas da conta
-      x-nuva-pending: true
       description: As sessões do usuário nos dois sites; `current` marca a desta requisição.
       responses:
         "200":
@@ -988,7 +971,6 @@ paths:
       operationId: revokeOtherAccountSessions
       tags: [account]
       summary: Encerrar as outras sessões
-      x-nuva-pending: true
       description: |
         Encerra todas as sessões do usuário, nos dois sites, exceto a desta requisição. Aceita
         mesmo com termos pendentes.
@@ -1018,7 +1000,6 @@ paths:
       operationId: revokeAccountSession
       tags: [account]
       summary: Encerrar uma sessão
-      x-nuva-pending: true
       description: |
         Encerra uma sessão do próprio usuário, em qualquer dos dois sites. Sessão de outro
         usuário ou inexistente: `404`. Aceita mesmo com termos pendentes.
@@ -1052,7 +1033,6 @@ paths:
       operationId: setAvatar
       tags: [account]
       summary: Definir ou remover o avatar
-      x-nuva-pending: true
       description: |
         Associa ao perfil uma imagem enviada antes por `POST /api/v1/images` com
         `purpose = avatar`; `imageId: null` remove o avatar (`specs/007-contas-e-autenticacao.md`,
@@ -1109,7 +1089,6 @@ paths:
       operationId: getLegalDocument
       tags: [legal]
       summary: Versão vigente de um documento legal
-      x-nuva-pending: true
       description: |
         A versão vigente (a publicada de maior `version`) dos Termos de Uso ou da Política de
         Privacidade, com o texto (`specs/030-lgpd.md`, "Termos na Fase 1"). Sem versão publicada:
@@ -1146,7 +1125,6 @@ paths:
       operationId: acceptTerms
       tags: [legal]
       summary: Aceitar os termos vigentes
-      x-nuva-pending: true
       description: |
         Grava um aceite por versão, com IP e navegador; aceitar de novo a mesma versão não
         duplica. `id` que não é o vigente do documento: `422` `terms_version_outdated`. É a
@@ -1199,7 +1177,6 @@ paths:
       operationId: uploadImage
       tags: [images]
       summary: Envio de imagem
-      x-nuva-pending: true
       description: |
         Recebe uma imagem em `multipart/form-data` (`specs/029-imagens.md`, "Fluxo de envio"):
         `purpose` primeiro, depois `file` (um arquivo só). Campo a mais, segundo arquivo ou
@@ -1284,7 +1261,6 @@ paths:
       operationId: deleteImage
       tags: [images]
       summary: Apagar uma imagem ainda sem uso
-      x-nuva-pending: true
       description: |
         Apaga uma imagem enviada pelo próprio usuário e ainda sem referência (por exemplo, um
         avatar enviado e não usado). Imagem inexistente, de outro usuário ou já em uso: `404`.
@@ -1318,7 +1294,6 @@ paths:
       operationId: getImageVariant
       tags: [images]
       summary: Entrega de uma variante de imagem
-      x-nuva-pending: true
       description: |
         Entrega pública de uma variante (`specs/029-imagens.md`, "Entrega"), sem sessão: o
         identificador é um UUID que não se adivinha. As duas APIs servem a mesma rota.

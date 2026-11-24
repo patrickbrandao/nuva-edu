@@ -150,7 +150,6 @@ paths:
       operationId: login
       tags: [auth]
       summary: Login da equipe por e-mail e senha
-      x-nuva-pending: true
       description: |
         Abre a sessão do site admin (`specs/007-contas-e-autenticacao.md`, "Login por senha") e
         grava o cookie `nuva_admin_session`.
@@ -211,7 +210,6 @@ paths:
       operationId: logout
       tags: [auth]
       summary: Sair
-      x-nuva-pending: true
       x-permission: admin.access
       description: Encerra a sessão atual do site admin e apaga o cookie.
       security:
@@ -242,7 +240,6 @@ paths:
       operationId: getSession
       tags: [auth]
       summary: Sessão atual
-      x-nuva-pending: true
       x-permission: admin.access
       description: |
         Dono da sessão, token CSRF e ações permitidas, que o site usa para montar o menu
@@ -277,7 +274,6 @@ paths:
       operationId: startOAuth
       tags: [auth]
       summary: Início do login social da equipe
-      x-nuva-pending: true
       description: |
         O site **navega** para esta URL (navegação de página, não `fetch`;
         `specs/007-contas-e-autenticacao.md`, "Fluxo do provedor"). A API gera `state`, `nonce` e
@@ -313,7 +309,6 @@ paths:
       operationId: oauthCallback
       tags: [auth]
       summary: Retorno do provedor (Google, Facebook)
-      x-nuva-pending: true
       description: |
         Retorno do provedor com `code` e `state` (ou `error`) na consulta. Parâmetros a mais que
         o provedor envie são ignorados. A identidade precisa já estar vinculada, ou casar por
@@ -366,7 +361,6 @@ paths:
       operationId: oauthCallbackForm
       tags: [auth]
       summary: Retorno do provedor por formulário (Apple)
-      x-nuva-pending: true
       description: |
         Retorno da Apple com `response_mode=form_post`: `POST`
         `application/x-www-form-urlencoded` vindo do site da Apple. Mesmo tratamento e mesmos
@@ -424,7 +418,6 @@ paths:
       operationId: listUsers
       tags: [users]
       summary: Listar alunos e equipe
-      x-nuva-pending: true
       x-permission: users.list
       description: |
         Busca por nome ou e-mail (`q`), filtros por papel e situação, paginação por cursor. Na
@@ -484,7 +477,6 @@ paths:
       operationId: createUser
       tags: [users]
       summary: Criar conta (equipe)
-      x-nuva-pending: true
       x-permission: staff.manage
       description: |
         Só `admin` (`specs/007-contas-e-autenticacao.md`, "Equipe criada pelo admin"). A conta
@@ -550,7 +542,6 @@ paths:
       operationId: getUser
       tags: [users]
       summary: Ficha de um usuário
-      x-nuva-pending: true
       x-permission: users.list
       description: |
         A ficha completa. `users.view` é a mesma ação de `users.list`
@@ -585,7 +576,6 @@ paths:
       operationId: updateUser
       tags: [users]
       summary: Editar dados de um usuário
-      x-nuva-pending: true
       x-permission: users.edit
       description: |
         Nome, nome completo e e-mail. Conta de aluno: `users.edit` (`manager` e `admin`); conta
@@ -658,7 +648,6 @@ paths:
       operationId: setUserRole
       tags: [users]
       summary: Mudar o papel
-      x-nuva-pending: true
       x-permission: staff.manage
       description: |
         Só `admin` (`specs/008-papeis-e-permissoes.md`, "Mudança de papel"). Encerra as sessões
@@ -717,7 +706,6 @@ paths:
       operationId: suspendUser
       tags: [users]
       summary: Suspender
-      x-nuva-pending: true
       x-permission: users.suspend
       description: |
         Aluno: `users.suspend` (`manager` e `admin`); equipe: `staff.manage` (só `admin`;
@@ -790,7 +778,6 @@ paths:
       operationId: reactivateUser
       tags: [users]
       summary: Reativar
-      x-nuva-pending: true
       x-permission: users.suspend
       description: |
         Encerra a suspensão vigente. Aluno: `users.suspend`; equipe: `staff.manage`. Sessões e
@@ -831,7 +818,6 @@ paths:
       operationId: revealUserPassword
       tags: [users]
       summary: Exibir a senha de um usuário
-      x-nuva-pending: true
       x-permission: users.password.view
       description: |
         Só `admin` (`specs/007-contas-e-autenticacao.md`, "Exibição da senha";
@@ -894,7 +880,6 @@ paths:
       operationId: setUserPassword
       tags: [users]
       summary: Definir a senha de um usuário
-      x-nuva-pending: true
       x-permission: users.password.set
       description: |
         Só `admin`. Encerra todas as sessões do usuário, grava `user.password_set` na auditoria
@@ -945,7 +930,6 @@ paths:
       operationId: listUserSessions
       tags: [users]
       summary: Sessões abertas de um usuário
-      x-nuva-pending: true
       x-permission: users.sessions.revoke
       description: |
         As sessões do usuário nos dois sites. Conta de aluno: `users.sessions.revoke`; conta da
@@ -980,7 +964,6 @@ paths:
       operationId: revokeUserSessions
       tags: [users]
       summary: Encerrar as sessões de um usuário
-      x-nuva-pending: true
       x-permission: users.sessions.revoke
       description: |
         Encerra todas as sessões do usuário, nos dois sites. Conta de aluno:
@@ -1015,7 +998,6 @@ paths:
       operationId: listAuditEntries
       tags: [audit]
       summary: Consultar a auditoria
-      x-nuva-pending: true
       x-permission: audit.view
       description: |
         Só `admin` (`specs/028-auditoria.md`, "Consulta"). Do mais novo para o mais antigo, sem
@@ -1097,7 +1079,6 @@ paths:
       operationId: getAuditEntry
       tags: [audit]
       summary: Um registro da auditoria
-      x-nuva-pending: true
       x-permission: audit.view
       description: O registro com `details`. Abrir um registro não grava `audit.search`.
       parameters:
@@ -1131,7 +1112,6 @@ paths:
       operationId: listTermsVersions
       tags: [terms]
       summary: Versões de um documento legal
-      x-nuva-pending: true
       x-permission: settings.manage
       description: |
         Só `admin` (`specs/030-lgpd.md`, "Termos na Fase 1"). Rascunhos e publicadas do
@@ -1168,7 +1148,6 @@ paths:
       operationId: createTermsDraft
       tags: [terms]
       summary: Criar um rascunho
-      x-nuva-pending: true
       x-permission: settings.manage
       description: |
         Cria um rascunho do documento. Rascunho não é editado: para mudar o texto, cria-se
@@ -1228,7 +1207,6 @@ paths:
       operationId: publishTermsVersion
       tags: [terms]
       summary: Publicar um rascunho
-      x-nuva-pending: true
       x-permission: settings.manage
       description: |
         O rascunho recebe o próximo `version` do documento, `effectiveAt = publishedAt = agora`,
@@ -1270,7 +1248,6 @@ paths:
       operationId: getImageVariant
       tags: [images]
       summary: Entrega de uma variante de imagem
-      x-nuva-pending: true
       description: |
         Entrega pública de uma variante (`specs/029-imagens.md`, "Entrega"), sem sessão: o
         identificador é um UUID que não se adivinha. As duas APIs servem a mesma rota.
