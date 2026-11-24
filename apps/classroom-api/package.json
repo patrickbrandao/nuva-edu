@@ -1,0 +1,25 @@
+{
+  "name": "@nuva-edu/classroom-api",
+  "version": "0.0.0",
+  "private": true,
+  "description": "API do site do aluno do nuva-edu, com o fluxo SSE.",
+  "license": "AGPL-3.0-only",
+  "type": "module",
+  "scripts": {
+    "dev": "node --env-file-if-exists=../../.env --env-file-if-exists=../../.env.local --watch src/main.ts",
+    "start": "node src/main.ts",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit -p tsconfig.json"
+  },
+  "dependencies": {
+    "@nuva-edu/api-kit": "workspace:*",
+    "@nuva-edu/core": "workspace:*",
+    "@nuva-edu/database": "workspace:*",
+    "pg": "8.23.1"
+  },
+  "devDependencies": {
+    "@types/node": "26.6.6",
+    "@types/pg": "8.23.1",
+    "vitest": "5.1.1"
+  }
+}
