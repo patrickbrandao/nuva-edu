@@ -141,7 +141,7 @@ A tela de configurações mostra o estado das integrações definidas por variá
 
 - `apps/admin` consome `apps/admin-api/openapi.yaml`; `apps/classroom` consome `apps/classroom-api/openapi.yaml`, ambos por `packages/api-client`.
 - Imagens servidas em `/api/v1/images/:id` ([029](029-imagens.md)).
-- Sites entregues como arquivos estáticos por Nginx sem privilégios (`proxy/nginx/`, igual nas duas imagens); qualquer rota desconhecida devolve `index.html`, sem cache, e os arquivos de `/assets/`, com hash no nome, têm cache longo ([031](031-infraestrutura-e-deploy.md)). Caminho de API ou de sonda que chegue ao Nginx do site (`/api/`, `/mcp`, `/healthz`, `/readyz`, `/metrics`) responde `404`, não o `index.html`.
+- Sites entregues como arquivos estáticos por lighttpd sem privilégios (`proxy/lighttpd/`, igual nas duas imagens; [0023](decisions/0023-lighttpd-nos-sites.md)); qualquer rota desconhecida devolve `index.html`, sem cache, e os arquivos de `/assets/`, com hash no nome, têm cache longo ([031](031-infraestrutura-e-deploy.md)). Caminho de API ou de sonda que chegue ao lighttpd do site (`/api/`, `/mcp`, `/healthz`, `/readyz`, `/metrics`) responde `404`, não o `index.html`.
 - `/config.json`: formato em [031](031-infraestrutura-e-deploy.md), "Configuração de execução dos sites".
 
 ## Dados
@@ -176,3 +176,4 @@ Os sites não são donos de dados. No navegador guardam apenas: tema (`nuva-them
 - [0018 — Vitrine como SPA](decisions/0018-vitrine-spa.md)
 - [0009 — Stack TypeScript, Fastify e Kysely](decisions/0009-stack-typescript-fastify-kysely.md)
 - [0017 — Escopo do MVP](decisions/0017-escopo-do-mvp.md)
+- [0023 — lighttpd como servidor de arquivos dos sites](decisions/0023-lighttpd-nos-sites.md)

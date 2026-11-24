@@ -38,7 +38,7 @@ O nuva-edu é distribuído como imagens Docker e um conjunto de arquivos Compose
 | `database/postgres/docker-compose.yml` | `postgres` e, no perfil `backup`, `backup` |
 | `database/postgres/migrations/` | Arquivos `.sql` numerados |
 | `proxy/traefik/docker-compose.yml` | `traefik` (perfil `traefik`) |
-| `proxy/nginx/` | Nginx dos dois sites, igual nas duas imagens: `nginx.conf`, `40-nuva-config.sh`, que gera o `/config.json` na subida ([Configuração de execução dos sites](#configuração-de-execução-dos-sites)), e `csp.mjs`, que no build calcula a `Content-Security-Policy` do site a partir do `index.html` ([033](033-observabilidade-retencao-backup.md)) |
+| `proxy/lighttpd/` | lighttpd dos dois sites, igual nas duas imagens ([0023](decisions/0023-lighttpd-nos-sites.md)): `lighttpd.conf`, o script de entrada, que gera o `/config.json` na subida ([Configuração de execução dos sites](#configuração-de-execução-dos-sites)), e o gerador da CSP, que no build calcula a `Content-Security-Policy` do site a partir do `index.html` ([033](033-observabilidade-retencao-backup.md)) |
 | `mail/mailpit/docker-compose.yml` | `mailpit` (perfil `mailpit`) |
 | `apps/<app>/docker-compose.yml` | Um por aplicação: `admin-api`, `classroom-api`, `worker`, `admin`, `classroom`. O da `admin-api` traz também o `migrate`, que usa a imagem e o `build` dela |
 | `apps/<app>/Dockerfile` | Build em stages, com a raiz do repositório como contexto |
@@ -97,9 +97,11 @@ Build em stages, na ordem que favorece o cache:
 
 1. `deps`: copia só `pnpm-lock.yaml`, `pnpm-workspace.yaml` e os `package.json`; instala dependências.
 2. `build`: copia o código. Nos sites, roda o `vite build`. Nas APIs e no worker não há compilação: o serviço roda TypeScript direto no Node 26 (`node src/main.ts`), e o estágio só junta o código às dependências de produção e grava a versão.
-3. `runtime`: imagem mínima (`node:26-slim` para APIs e worker; Nginx sem privilégios para os sites), sem pnpm e com usuário sem privilégios. A imagem das APIs e do worker mantém a árvore do workspace (`/app/apps`, `/app/packages`, `/app/database/postgres`), porque o Node só executa `.ts` fora de `node_modules`.
+3. `runtime`: imagem mínima (`node:26-slim` para APIs e worker; Alpine com o lighttpd do pacote da distribuição para os sites), sem pnpm e com usuário sem privilégios. A imagem das APIs e do worker mantém a árvore do workspace (`/app/apps`, `/app/packages`, `/app/database/postgres`), porque o Node só executa `.ts` fora de `node_modules`.
 
 Versão da imagem: o argumento de build `NUVA_VERSION` (SemVer, sem o `v` da tag) é gravado, no estágio `build`, no `package.json` do serviço dentro da imagem das APIs e do worker. É esse `package.json` que o `GET /api/v1/meta` lê para o campo `version` ([003](003-admin-api.md), "Meta"). Sem o argumento, vale a versão que está no repositório. A versão é da imagem, não da instalação: não existe variável de execução que a altere. As imagens dos sites não recebem o argumento; a versão que os sites mostram é a do `/meta`.
+
+Imagem dos sites ([0023](decisions/0023-lighttpd-nos-sites.md)): o estágio `runtime` parte do Alpine, aplica `apk upgrade` e instala o lighttpd do pacote da distribuição, sem imagem base de terceiros para o servidor; assim a correção de segurança do servidor entra a cada build. O lighttpd só entrega arquivos: roda com usuário sem privilégios, na porta 8080, com a raiz somente leitura. O que ele responde (`index.html` de reserva, `404` nos caminhos de API e de sonda, cache) está em [006](006-sites-e-interface.md), "Interfaces e contratos". O Traefik continua sendo o proxy.
 
 Os sites são estáticos: o que depende da instalação e não vem da API chega em tempo de execução pelo `/config.json`, gerado na subida do contêiner, não no build, para que a mesma imagem sirva a qualquer instalação ([Configuração de execução dos sites](#configuração-de-execução-dos-sites)).
 
@@ -119,7 +121,7 @@ Os sites são estáticos: o que depende da instalação e não vem da API chega 
 - Os rótulos do Traefik ficam no `docker-compose.yml` de cada aplicação e usam `TRAEFIK_NETWORK`, `TRAEFIK_ENTRYPOINTS` e `TRAEFIK_CERTRESOLVER`.
 - Com `TRAEFIK_CERTRESOLVER` vazio, os rótulos de TLS não são emitidos (desenvolvimento em HTTP).
 - Prioridade dos roteadores: 30 para o fluxo SSE, 20 para as APIs, 10 para os sites; assim o caminho mais específico vence no mesmo host.
-- `/metrics` e `/readyz` não são roteados pelo proxy; se chegarem ao Nginx de um site, a resposta é `404`, não o `index.html`.
+- `/metrics` e `/readyz` não são roteados pelo proxy; se chegarem ao lighttpd de um site, a resposta é `404`, não o `index.html`.
 
 ### SSE atrás do proxy
 
@@ -295,7 +297,7 @@ Os sites são arquivos estáticos e a mesma imagem serve a qualquer instalação
 | Provedores de login (`authProviders`) | `GET /api/v1/meta` | Dependem dos segredos, que só a API conhece |
 | Qual site é este e o endereço público dos dois sites | `/config.json` | A API de um site não é chamada pelo outro, e o endereço do outro site é necessário mesmo com a API fora do ar |
 
-`/config.json` é servido pelo Nginx do próprio site, na raiz, com `Content-Type: application/json` e `Cache-Control: no-store`:
+`/config.json` é servido pelo lighttpd do próprio site, na raiz, com `Content-Type: application/json` e `Cache-Control: no-store`:
 
 ```json
 {
@@ -312,7 +314,7 @@ Os sites são arquivos estáticos e a mesma imagem serve a qualquer instalação
 | `classroomUrl` | URL de origem, sem barra no fim | `NUVA_PUBLIC_SCHEME`, `NUVA_CLASSROOM_HOST`, `NUVA_PUBLIC_PORT` |
 
 - A URL segue a mesma regra de `packages/core`: a porta some quando está vazia ou é a padrão do esquema (80 em `http`, 443 em `https`).
-- O arquivo é gerado na subida do contêiner por `proxy/nginx/40-nuva-config.sh`, em `/run/nuva/config.json` (`tmpfs`). O script valida cada variável; valor fora do formato impede a subida, com a variável citada no log. Trocar `NUVA_ADMIN_HOST` e subir de novo muda o arquivo sem refazer a imagem.
+- O arquivo é gerado na subida do contêiner pelo script de entrada de `proxy/lighttpd/`, em `/run/nuva/config.json` (`tmpfs`). O script valida cada variável; valor fora do formato impede a subida, com a variável citada no log. Trocar `NUVA_ADMIN_HOST` e subir de novo muda o arquivo sem refazer a imagem.
 - O arquivo é público: nunca contém segredo nem dado de usuário. Campo novo só entra se não puder vir do `/meta`, e entra nesta tabela.
 - O `healthcheck` dos contêineres dos sites pede `/config.json`: site sem o arquivo não fica saudável.
 - Fora do contêiner (`vite dev`), o servidor de desenvolvimento de cada site responde `/config.json` com os mesmos campos, montados das mesmas variáveis e dos mesmos padrões.
@@ -320,7 +322,7 @@ Os sites são arquivos estáticos e a mesma imagem serve a qualquer instalação
 
 ### Padrão dos hosts
 
-O padrão de `NUVA_ADMIN_HOST` e de `NUVA_CLASSROOM_HOST` deriva de `NUVA_DOMAIN` em todo lugar que lê essas variáveis: `packages/core` (configuração das APIs e do worker), `proxy/nginx/40-nuva-config.sh` (`/config.json`), os rótulos do Traefik e o `environment` dos arquivos Compose. Definir só `NUVA_DOMAIN=escola.com.br` basta para os dois sites responderem em `edu-admin.escola.com.br` e `classroom.escola.com.br`; os dois hosts só precisam ser informados quando fogem desse formato.
+O padrão de `NUVA_ADMIN_HOST` e de `NUVA_CLASSROOM_HOST` deriva de `NUVA_DOMAIN` em todo lugar que lê essas variáveis: `packages/core` (configuração das APIs e do worker), o script de entrada de `proxy/lighttpd/` (`/config.json`), os rótulos do Traefik e o `environment` dos arquivos Compose. Definir só `NUVA_DOMAIN=escola.com.br` basta para os dois sites responderem em `edu-admin.escola.com.br` e `classroom.escola.com.br`; os dois hosts só precisam ser informados quando fogem desse formato.
 
 - No Compose, a forma é `${NUVA_ADMIN_HOST:-edu-admin.${NUVA_DOMAIN:-localhost}}` (idem `classroom`), a mesma expressão nos rótulos do Traefik e no ambiente dos serviços. Padrão fixo em `edu-admin.localhost` é erro: com `NUVA_DOMAIN` definido e os hosts não, as APIs montariam URLs de um domínio e o proxy rotearia outro.
 - Os arquivos Compose atuais ainda usam o padrão fixo (`edu-admin.localhost`, `classroom.localhost`); a tarefa 089 (`infra`) os corrige, com teste em `scripts/compose.test.mjs`. Até lá, fora do desenvolvimento, informe os dois hosts junto com `NUVA_DOMAIN`.
@@ -393,3 +395,4 @@ Regras:
 - [0004 — Duas APIs, um banco](decisions/0004-duas-apis-um-banco.md)
 - [0008 — Fila e SSE no PostgreSQL (provisória)](decisions/0008-fila-e-sse-no-postgres.md)
 - [0001 — Decisões iniciais](decisions/0001-decisoes-iniciais.md)
+- [0023 — lighttpd como servidor de arquivos dos sites](decisions/0023-lighttpd-nos-sites.md)

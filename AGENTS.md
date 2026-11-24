@@ -70,6 +70,6 @@ Disponíveis a partir da conclusão da Fase 0 do plano.
 - ./apps/: `admin-api`, `classroom-api`, `worker`, `admin`, `classroom` (cada API com seu `openapi.yaml`)
 - ./packages/: `core` (regras e dados), `api-kit` (base HTTP das APIs), `ui` (componentes), `api-client` (cliente gerado)
 - ./database/postgres/: compose do banco e migrations
-- ./proxy/: `traefik` (compose do proxy reverso) e `nginx` (configuração dos sites)
+- ./proxy/: `traefik` (compose do proxy reverso) e `lighttpd` (configuração dos sites)
 - ./e2e/: testes de ponta a ponta
 - ./scripts/: verificação, tarefas (`task.mjs`), deploy, backup

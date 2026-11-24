@@ -1,6 +1,6 @@
 # 0001 — Decisões iniciais
 
-Status: aceita
+Status: aceita (S-03, no trecho do servidor dos sites, substituída por [0023](0023-lighttpd-nos-sites.md))
 Data: 2026-11-24
 
 ## Contexto

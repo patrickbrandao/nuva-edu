@@ -124,6 +124,7 @@ Os testes e2e cobrem, no mínimo, os fluxos de medida de sucesso de [000](000-vi
 - Segredos no GitHub: apenas o token do Docker Hub. Nenhuma credencial do servidor de testes.
 - Se o `verify` da `main` falhar, vale a regra de [002](002-organizacao-do-trabalho.md): correção com prioridade máxima e nenhuma tarefa nova na área afetada.
 - Vulnerabilidade alta ou crítica no `pnpm audit` ou no Trivy falha o fluxo.
+- O Trivy examina as cinco imagens sem exceção: não há arquivo de vulnerabilidades ignoradas no repositório. A exceção temporária da tarefa 118 (nginx 1.30.6 da base dos sites) deixou de existir com a troca do servidor dos sites para o lighttpd (tarefa 121, [0023](decisions/0023-lighttpd-nos-sites.md)). Exceção nova só por decisão do usuário, registrada em ADR, com prazo e restrita à imagem atingida.
 - Dependência com licença incompatível com a AGPL-3.0 (lista de licenças permitidas versionada na raiz) falha o fluxo `security`.
 
 ## Interfaces e contratos

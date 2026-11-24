@@ -25,8 +25,8 @@ Define os componentes do nuva-edu, quem é dono de cada dado, as integrações, 
 | `admin-api` | `tmsoftbrasil/nuva-edu-admin-api` | API administrativa e servidor MCP | [003](003-admin-api.md), [027](027-mcp.md) |
 | `classroom-api` | `tmsoftbrasil/nuva-edu-classroom-api` | API do aluno, vitrine, checkout, webhook de pagamento, SSE | [004](004-classroom-api.md) |
 | `worker` | `tmsoftbrasil/nuva-edu-worker` | Fila, e-mails, reconciliação, vencimentos, certificados, expurgo | [005](005-worker-e-fila.md) |
-| `admin` | `tmsoftbrasil/nuva-edu-admin` | Site estático de administração | [006](006-sites-e-interface.md) |
-| `classroom` | `tmsoftbrasil/nuva-edu-classroom` | Site estático do aluno | [006](006-sites-e-interface.md) |
+| `admin` | `tmsoftbrasil/nuva-edu-admin` | Site estático de administração, servido por lighttpd ([0023](decisions/0023-lighttpd-nos-sites.md)) | [006](006-sites-e-interface.md) |
+| `classroom` | `tmsoftbrasil/nuva-edu-classroom` | Site estático do aluno, servido por lighttpd ([0023](decisions/0023-lighttpd-nos-sites.md)) | [006](006-sites-e-interface.md) |
 | `postgres` | `postgres:18` | Único armazenamento persistente | [031](031-infraestrutura-e-deploy.md) |
 | `traefik` | `traefik` | Proxy reverso e TLS (perfil opcional) | [031](031-infraestrutura-e-deploy.md) |
 | `backup` | — | `pg_dump` diário (perfil opcional) | [033](033-observabilidade-retencao-backup.md) |
@@ -147,3 +147,4 @@ Imagens enviadas (avatar, capas, galeria de cases) ficam no próprio banco ([029
 - [0012 — MCP: chaves herdam o papel](decisions/0012-mcp-chaves-herdam-papel.md)
 - [0015 — Traefik próprio opcional](decisions/0015-traefik-proprio-opcional.md)
 - [0018 — Vitrine como SPA](decisions/0018-vitrine-spa.md)
+- [0023 — lighttpd como servidor de arquivos dos sites](decisions/0023-lighttpd-nos-sites.md)
