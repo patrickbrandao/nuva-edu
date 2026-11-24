@@ -1,0 +1,44 @@
+# Fila de trabalho e temporários (obrigatório)
+/tasks/
+/tmp/
+
+# Segredos e configuração local
+.env.local
+.env.*.local
+*.pem
+*.key
+*.p8
+
+# Dependências e build
+node_modules/
+dist/
+build/
+.vite/
+*.tsbuildinfo
+.pnpm-store/
+
+# Testes
+coverage/
+playwright-report/
+test-results/
+e2e/.auth/
+
+# Dados locais e backups
+/backups/
+*.dump
+*.sql.gz
+/data/
+
+# Logs
+*.log
+logs/
+
+# Sistema e editores
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/*
+!.vscode/extensions.json
+
+# Configuração local das ferramentas de agente
+.claude/settings.local.json

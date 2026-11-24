@@ -1,0 +1,60 @@
+# Traefik próprio (perfil opcional `traefik`).
+# Use no Docker Desktop e em instalações novas. Onde já existe um Traefik, não ative o perfil:
+# defina TRAEFIK_NETWORK com a rede dele, TRAEFIK_NETWORK_EXTERNAL=true, e os serviços entram só com rótulos.
+
+services:
+  traefik:
+    image: ${TRAEFIK_IMAGE:-traefik:v3}
+    profiles: ["traefik"]
+    restart: unless-stopped
+    command:
+      - --global.checkNewVersion=false
+      - --global.sendAnonymousUsage=false
+      - --ping=true
+      - --ping.entryPoint=ping
+      - --entrypoints.ping.address=:8082
+      - --entrypoints.web.address=:8080
+      - --entrypoints.websecure.address=:8443
+      - --providers.docker=true
+      - --providers.docker.exposedbydefault=false
+      - --providers.docker.network=${TRAEFIK_NETWORK:-nuva-edu-proxy}
+      - --certificatesresolvers.letsencrypt.acme.email=${TRAEFIK_ACME_EMAIL:-admin@example.com}
+      - --certificatesresolvers.letsencrypt.acme.storage=/letsencrypt/acme.json
+      - --certificatesresolvers.letsencrypt.acme.httpchallenge=true
+      - --certificatesresolvers.letsencrypt.acme.httpchallenge.entrypoint=web
+      - --accesslog=false
+    ports:
+      - "${TRAEFIK_HTTP_PORT:-8080}:8080"
+      - "${TRAEFIK_HTTPS_PORT:-8443}:8443"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - traefik_letsencrypt:/letsencrypt
+    networks:
+      - public
+    read_only: true
+    tmpfs:
+      - /run
+      - /tmp
+    ulimits:
+      nofile:
+        soft: ${TRAEFIK_NOFILE:-8192}
+        hard: ${TRAEFIK_NOFILE:-8192}
+    deploy:
+      resources:
+        limits:
+          cpus: "${NUVA_TRAEFIK_CPUS:-1}"
+          memory: ${NUVA_TRAEFIK_MEMORY:-128m}
+    healthcheck:
+      test: ["CMD", "traefik", "healthcheck", "--ping", "--entrypoints.ping.address=:8082"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+    logging:
+      driver: json-file
+      options:
+        max-size: ${NUVA_LOG_MAX_SIZE:-10m}
+        max-file: "${NUVA_LOG_MAX_FILE:-5}"
+
+volumes:
+  traefik_letsencrypt:
+    name: traefik-acme

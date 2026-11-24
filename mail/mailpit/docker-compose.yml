@@ -1,0 +1,32 @@
+# Mailpit (perfil opcional `mailpit`): captura todo e-mail enviado em desenvolvimento.
+# Com o perfil ativo, use SMTP_HOST=mailpit e SMTP_PORT=1025. Interface em http://localhost:8025.
+
+services:
+  mailpit:
+    image: ${MAILPIT_IMAGE:-axllent/mailpit:latest}
+    profiles: ["mailpit"]
+    restart: unless-stopped
+    environment:
+      MP_MAX_MESSAGES: "${MAILPIT_MAX_MESSAGES:-500}"
+    ports:
+      - "127.0.0.1:${MAILPIT_UI_PORT:-8025}:8025"
+    networks:
+      - internal
+    read_only: true
+    tmpfs:
+      - /run
+      - /tmp
+    ulimits:
+      nofile:
+        soft: 4096
+        hard: 4096
+    deploy:
+      resources:
+        limits:
+          cpus: "${NUVA_MAILPIT_CPUS:-1}"
+          memory: ${NUVA_MAILPIT_MEMORY:-64m}
+    logging:
+      driver: json-file
+      options:
+        max-size: ${NUVA_LOG_MAX_SIZE:-10m}
+        max-file: "${NUVA_LOG_MAX_FILE:-5}"
