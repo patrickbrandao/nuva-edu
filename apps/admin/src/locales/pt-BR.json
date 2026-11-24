@@ -7,13 +7,30 @@
     "retry": "Tentar de novo",
     "newTab": "(abre em nova aba)",
     "backHome": "Voltar ao painel",
-    "requestId": "Código da requisição: {{id}}"
+    "requestId": "Código da requisição: {{id}}",
+    "dismiss": "Dispensar",
+    "notifications": "Avisos",
+    "showPassword": "Mostrar senha",
+    "hidePassword": "Ocultar senha",
+    "cancel": "Cancelar",
+    "close": "Fechar",
+    "save": "Salvar",
+    "saving": "Salvando…"
   },
   "theme": {
     "group": "Tema da página",
-    "system": { "label": "Sistema", "hint": "Usar o tema do sistema" },
-    "light": { "label": "Claro", "hint": "Tema claro" },
-    "dark": { "label": "Escuro", "hint": "Tema escuro" }
+    "system": {
+      "label": "Sistema",
+      "hint": "Usar o tema do sistema"
+    },
+    "light": {
+      "label": "Claro",
+      "hint": "Tema claro"
+    },
+    "dark": {
+      "label": "Escuro",
+      "hint": "Tema escuro"
+    }
   },
   "shell": {
     "collapseMenu": "Recolher o menu",
@@ -22,7 +39,9 @@
     "logoAlt": "Logotipo de {{name}}",
     "openMenu": "Abrir o menu",
     "closeMenu": "Fechar o menu",
-    "breadcrumb": "Trilha de navegação"
+    "breadcrumb": "Trilha de navegação",
+    "logout": "Sair",
+    "logoutError": "Não foi possível sair"
   },
   "menu": {
     "groups": {
@@ -89,7 +108,25 @@
     "email": "E-mail",
     "password": "Senha",
     "submit": "Entrar",
-    "unavailable": "O acesso ao painel ainda não está disponível nesta versão."
+    "submitting": "Entrando…",
+    "emailRequired": "Informe o e-mail.",
+    "passwordRequired": "Informe a senha.",
+    "forgotPassword": "Esqueci a senha",
+    "providersLabel": "Entrar com um provedor",
+    "orWith": "Ou entre com",
+    "withProvider": "Entrar com {{provider}}",
+    "errors": {
+      "invalidCredentials": "E-mail ou senha incorretos.",
+      "accountSuspended": "Sua conta está suspensa. Fale com a administração da escola.",
+      "validation": "Confira o e-mail e a senha.",
+      "tooManyAttempts": "Muitas tentativas erradas. A conta está bloqueada por alguns minutos.",
+      "tooManyAttemptsIn_one": "Muitas tentativas erradas. Tente de novo em {{count}} minuto.",
+      "tooManyAttemptsIn_other": "Muitas tentativas erradas. Tente de novo em {{count}} minutos.",
+      "oauthStateInvalid": "O login com o provedor expirou ou foi interrompido. Tente de novo.",
+      "oauthDenied": "O login foi cancelado no provedor.",
+      "oauthProviderError": "O provedor não respondeu como esperado. Tente de novo ou entre com e-mail e senha.",
+      "oauthUnknown": "Não foi possível entrar com o provedor. Tente de novo."
+    }
   },
   "noAccess": {
     "title": "Sem acesso ao painel",
@@ -103,5 +140,41 @@
   "notFound": {
     "title": "Página não encontrada",
     "text": "O endereço que você abriu não existe no painel."
+  },
+  "roles": {
+    "student": "Aluno",
+    "instructor": "Instrutor",
+    "manager": "Gerente",
+    "admin": "Administrador"
+  },
+  "errors": {
+    "network": "Sem conexão com o servidor. Confira a conexão e tente de novo.",
+    "permissionDenied": "Seu papel não permite esta ação.",
+    "csrf": "A sessão foi renovada em outra aba. Recarregue a página e tente de novo.",
+    "rateLimited": "Muitas requisições seguidas. Espere um pouco e tente de novo.",
+    "rateLimitedIn_one": "Muitas requisições seguidas. Tente de novo em {{count}} minuto.",
+    "rateLimitedIn_other": "Muitas requisições seguidas. Tente de novo em {{count}} minutos.",
+    "unexpected": "O servidor não respondeu como esperado. Tente de novo em instantes."
+  },
+  "forbidden": {
+    "title": "Sem permissão",
+    "text": "Seu papel não permite abrir esta tela."
+  },
+  "session": {
+    "loadingTitle": "Abrindo o painel",
+    "loading": "Conferindo a sessão…",
+    "errorTitle": "Não foi possível abrir o painel"
+  },
+  "terms": {
+    "documents": {
+      "terms": "Termos de Uso",
+      "privacy": "Política de Privacidade"
+    }
+  },
+  "termsNotice": {
+    "title": "Documentos legais sem versão publicada",
+    "text": "Falta publicar a primeira versão de: {{documents}}. Enquanto isso, o cadastro no site do aluno não pede aceite.",
+    "and": " e ",
+    "action": "Publicar os termos"
   }
 }

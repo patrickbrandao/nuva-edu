@@ -1,6 +1,7 @@
 import { screen, waitFor } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { CONFIG, jsonResponse, META, renderApp } from '../test/render';
+import { calls, defaultRoutes } from '../test/api';
+import { CONFIG, jsonResponse, META, queryAlerts, renderApp } from '../test/render';
 import { NoAccessPage } from './NoAccessPage';
 
 // A tela ainda não tem rota: quem a mostra é a guarda de sessão, que chega com a spec 007.
@@ -41,7 +42,7 @@ describe('tela "sem acesso ao painel"', () => {
     expect(configFetchMock).toHaveBeenCalledTimes(1);
     expect(screen.getByRole('heading', { level: 1, name: 'Sem acesso ao painel' })).toBeTruthy();
     expect(screen.queryByRole('link', LINK)).toBeNull();
-    expect(screen.queryByRole('alert')).toBeNull();
+    expect(queryAlerts()).toEqual([]);
   });
 
   it('sem o campo classroomUrl, a tela abre sem o link', async () => {
@@ -58,27 +59,28 @@ describe('tela "sem acesso ao painel"', () => {
 
     await waitFor(() => expect(warn).toHaveBeenCalledTimes(1));
     expect(screen.queryByRole('link', LINK)).toBeNull();
-    expect(screen.queryByRole('alert')).toBeNull();
+    expect(queryAlerts()).toEqual([]);
   });
 });
 
 describe('carga do site', () => {
-  it('busca o /config.json uma vez ao abrir, junto com o /api/v1/meta', async () => {
+  it('busca o /config.json uma vez ao abrir, junto com o /api/v1/meta e a sessão', async () => {
     const { fetchMock, configFetchMock } = renderApp('/');
 
     expect(await screen.findByText('0.1.0')).toBeTruthy();
     expect(configFetchMock).toHaveBeenCalledTimes(1);
     expect(configFetchMock.mock.calls[0]?.[0]).toBe('/config.json');
-    const request = fetchMock.mock.calls[0]?.[0] as Request;
-    expect(new URL(request.url).pathname).toBe('/api/v1/meta');
+    expect(calls(fetchMock)).toEqual(
+      expect.arrayContaining(['GET /api/v1/meta', 'GET /api/v1/session']),
+    );
   });
 
   it('abre o painel mesmo sem o /config.json', async () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
-    renderApp('/', () => jsonResponse(META), { config: () => new Response('', { status: 404 }) });
+    renderApp('/', defaultRoutes(), { config: () => new Response('', { status: 404 }) });
 
     expect(await screen.findByText('0.1.0')).toBeTruthy();
-    expect(screen.queryByRole('alert')).toBeNull();
+    expect(queryAlerts()).toEqual([]);
     await waitFor(() => expect(warn).toHaveBeenCalledTimes(1));
   });
 });

@@ -25,7 +25,8 @@ import {
 
 /*
  * Menu lateral do admin, na ordem do mapa de telas da spec 006. Os rótulos vêm das traduções:
- * `menu.groups.<id>` e `menu.items.<id>`. O filtro por papel (RF-10) entra junto com a sessão.
+ * `menu.groups.<id>` e `menu.items.<id>`. Cada item aparece só para quem tem a ação `permission`
+ * (spec 006, RF-10; identificadores de `x-permission` da spec 008) na lista `permissions` da sessão.
  */
 export type MenuGroupId =
   | 'overview'
@@ -63,6 +64,8 @@ export interface MenuItem {
   id: MenuItemId;
   path: string;
   icon: LucideIcon;
+  /** Ação da spec 008 exigida para ver o item e abrir a tela. */
+  permission: string;
 }
 
 export interface MenuGroup {
@@ -74,50 +77,65 @@ export const HOME_PATH = '/';
 export const LOGIN_PATH = '/entrar';
 
 export const MENU: readonly MenuGroup[] = [
-  { id: 'overview', items: [{ id: 'dashboard', path: HOME_PATH, icon: LayoutDashboard }] },
+  {
+    id: 'overview',
+    items: [
+      { id: 'dashboard', path: HOME_PATH, icon: LayoutDashboard, permission: 'dashboard.view' },
+    ],
+  },
   {
     id: 'people',
     items: [
-      { id: 'students', path: '/alunos', icon: Users },
-      { id: 'team', path: '/equipe', icon: ShieldCheck },
+      {
+        id: 'students',
+        path: '/alunos',
+        icon: Users,
+        // `users.list` do instrutor é parcial (◐, alunos dos seus cursos, nas rotas do curso): a
+        // lista geral é de quem vê os dados do aluno, como no mapa de telas da spec 006.
+        permission: 'users.view_private',
+      },
+      { id: 'team', path: '/equipe', icon: ShieldCheck, permission: 'staff.manage' },
     ],
   },
   {
     id: 'content',
     items: [
-      { id: 'courses', path: '/cursos', icon: GraduationCap },
-      { id: 'ebooks', path: '/ebooks', icon: BookOpen },
-      { id: 'bundles', path: '/pacotes', icon: Package },
-      { id: 'events', path: '/eventos', icon: CalendarDays },
-      { id: 'news', path: '/novidades', icon: Megaphone },
+      { id: 'courses', path: '/cursos', icon: GraduationCap, permission: 'course.edit' },
+      { id: 'ebooks', path: '/ebooks', icon: BookOpen, permission: 'ebook_bundle.manage' },
+      { id: 'bundles', path: '/pacotes', icon: Package, permission: 'ebook_bundle.manage' },
+      { id: 'events', path: '/eventos', icon: CalendarDays, permission: 'event.manage' },
+      { id: 'news', path: '/novidades', icon: Megaphone, permission: 'announcement.publish' },
     ],
   },
   {
     id: 'sales',
     items: [
-      { id: 'orders', path: '/pedidos', icon: ShoppingCart },
-      { id: 'subscriptions', path: '/assinaturas', icon: Repeat },
-      { id: 'plans', path: '/planos', icon: Tags },
-      { id: 'coupons', path: '/cupons', icon: TicketPercent },
+      { id: 'orders', path: '/pedidos', icon: ShoppingCart, permission: 'sales.view' },
+      { id: 'subscriptions', path: '/assinaturas', icon: Repeat, permission: 'sales.view' },
+      { id: 'plans', path: '/planos', icon: Tags, permission: 'plan.manage' },
+      { id: 'coupons', path: '/cupons', icon: TicketPercent, permission: 'coupon.manage' },
     ],
   },
   {
     id: 'community',
     items: [
-      { id: 'forum', path: '/forum', icon: MessagesSquare },
-      { id: 'reports', path: '/denuncias', icon: Flag },
-      { id: 'cases', path: '/cases', icon: Trophy },
-      { id: 'gamification', path: '/gamificacao', icon: Award },
+      { id: 'forum', path: '/forum', icon: MessagesSquare, permission: 'forum.moderate' },
+      { id: 'reports', path: '/denuncias', icon: Flag, permission: 'report.handle' },
+      { id: 'cases', path: '/cases', icon: Trophy, permission: 'case.moderate' },
+      { id: 'gamification', path: '/gamificacao', icon: Award, permission: 'badge.award' },
     ],
   },
-  { id: 'support', items: [{ id: 'tickets', path: '/chamados', icon: LifeBuoy }] },
+  {
+    id: 'support',
+    items: [{ id: 'tickets', path: '/chamados', icon: LifeBuoy, permission: 'ticket.handle' }],
+  },
   {
     id: 'system',
     items: [
-      { id: 'mcpKeys', path: '/chaves-mcp', icon: KeyRound },
-      { id: 'audit', path: '/auditoria', icon: ScrollText },
-      { id: 'operations', path: '/operacao', icon: Activity },
-      { id: 'settings', path: '/configuracoes', icon: Settings },
+      { id: 'mcpKeys', path: '/chaves-mcp', icon: KeyRound, permission: 'mcp_key.own' },
+      { id: 'audit', path: '/auditoria', icon: ScrollText, permission: 'audit.view' },
+      { id: 'operations', path: '/operacao', icon: Activity, permission: 'ops.manage' },
+      { id: 'settings', path: '/configuracoes', icon: Settings, permission: 'settings.manage' },
     ],
   },
 ];
@@ -131,4 +149,13 @@ export function menuItemForPath(pathname: string): MenuItem | undefined {
       ? pathname === HOME_PATH
       : pathname === item.path || pathname.startsWith(`${item.path}/`),
   );
+}
+
+/** Grupos com só os itens que a lista de ações permite; grupo vazio some. */
+export function menuFor(permissions: readonly string[]): MenuGroup[] {
+  const allowed = new Set(permissions);
+  return MENU.map((group) => ({
+    ...group,
+    items: group.items.filter((item) => allowed.has(item.permission)),
+  })).filter((group) => group.items.length > 0);
 }

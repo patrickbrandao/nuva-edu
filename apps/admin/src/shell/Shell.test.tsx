@@ -2,13 +2,13 @@ import { screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it } from 'vitest';
 import ptBR from '../locales/pt-BR.json';
-import { renderApp } from '../test/render';
+import { findMenu, renderApp } from '../test/render';
 import { MENU, MENU_ITEMS } from './menu';
 
 describe('casca do admin', () => {
-  it('mostra o menu da spec 006 em grupos, com os rótulos das traduções', () => {
+  it('mostra ao admin o menu inteiro da spec 006, em grupos, com os rótulos das traduções', async () => {
     renderApp('/');
-    const menu = screen.getByRole('navigation', { name: 'Menu' });
+    const menu = await findMenu();
 
     for (const group of MENU) {
       expect(within(menu).getByText(ptBR.menu.groups[group.id])).toBeTruthy();
@@ -25,7 +25,7 @@ describe('casca do admin', () => {
 
   it('usa o nome da escola vindo da API como marca e no título da aba', async () => {
     renderApp('/');
-    const menu = screen.getByRole('navigation', { name: 'Menu' });
+    const menu = await findMenu();
     expect(
       await within(menu.parentElement as HTMLElement).findByText('Escola Aurora'),
     ).toBeTruthy();
@@ -35,6 +35,7 @@ describe('casca do admin', () => {
   it('navega pelo menu sem recarregar e leva item sem tela à página em construção', async () => {
     const user = userEvent.setup();
     const { router } = renderApp('/');
+    await findMenu();
 
     await user.click(screen.getByRole('link', { name: 'Alunos' }));
 
@@ -52,11 +53,11 @@ describe('casca do admin', () => {
     expect(router.state.location.pathname).toBe('/');
   });
 
-  it('abre cada rota do menu por endereço direto', () => {
+  it('abre cada rota do menu por endereço direto', async () => {
     for (const item of MENU_ITEMS.filter((entry) => entry.path !== '/')) {
       const { unmount } = renderApp(item.path);
       expect(
-        screen.getByRole('heading', { level: 1, name: ptBR.menu.items[item.id] }),
+        await screen.findByRole('heading', { level: 1, name: ptBR.menu.items[item.id] }),
       ).toBeTruthy();
       unmount();
     }
@@ -65,6 +66,7 @@ describe('casca do admin', () => {
   it('troca o tema nos três modos e guarda a escolha em nuva-theme', async () => {
     const user = userEvent.setup();
     renderApp('/');
+    await findMenu();
     const theme = screen.getByRole('group', { name: 'Tema da página' });
 
     await user.click(within(theme).getByRole('button', { name: 'Tema escuro' }));
@@ -82,7 +84,7 @@ describe('casca do admin', () => {
   it('recolhe e expande o menu pelo botão da marca', async () => {
     const user = userEvent.setup();
     renderApp('/');
-    await user.click(screen.getByRole('button', { name: 'Recolher o menu' }));
+    await user.click(await screen.findByRole('button', { name: 'Recolher o menu' }));
     await user.click(screen.getByRole('button', { name: 'Expandir o menu' }));
     expect(screen.getByRole('button', { name: 'Recolher o menu' })).toBeTruthy();
   });
@@ -94,6 +96,7 @@ describe('casca do admin', () => {
       ({ ...original(query), matches: query.includes('max-width') }) as MediaQueryList;
     try {
       const { router } = renderApp('/');
+      await screen.findByRole('button', { name: 'Abrir o menu' });
       expect(screen.queryByRole('dialog')).toBeNull();
       expect(screen.queryByRole('button', { name: 'Recolher o menu' })).toBeNull();
       const open = screen.getByRole('button', { name: 'Abrir o menu' });
@@ -127,6 +130,7 @@ describe('casca do admin', () => {
 
   it('tem no rodapé o link "Código-fonte" para o repositório e a versão instalada', async () => {
     renderApp('/');
+    await findMenu();
     const link = screen.getByRole('link', { name: /^Código-fonte\s*\(abre em nova aba\)$/ });
     expect(link.getAttribute('target')).toBe('_blank');
     expect(link.getAttribute('href')).toBe('https://github.com/patrickbrandao/nuva-edu');
@@ -136,6 +140,7 @@ describe('casca do admin', () => {
   it('o botão "Voltar ao painel" navega pelo roteador, sem recarregar a página', async () => {
     const user = userEvent.setup();
     const { router } = renderApp('/alunos');
+    await findMenu();
     let reloads = 0;
     const onClick = (event: MouseEvent) => {
       if (!event.defaultPrevented) reloads += 1;
@@ -150,8 +155,9 @@ describe('casca do admin', () => {
     }
   });
 
-  it('mostra "página não encontrada" em endereço desconhecido, com volta ao painel', () => {
+  it('mostra "página não encontrada" em endereço desconhecido, com volta ao painel', async () => {
     renderApp('/nao-existe');
+    await findMenu();
     expect(screen.getAllByText('Página não encontrada').length).toBeGreaterThan(0);
     expect(screen.getByRole('link', { name: 'Voltar ao painel' }).getAttribute('href')).toBe('/');
   });

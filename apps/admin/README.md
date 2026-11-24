@@ -20,13 +20,15 @@ biblioteca, `createBrowserRouter`) e TanStack Query (spec 006).
 | --- | --- |
 | `src/locales/pt-BR.json` | Todos os textos visíveis. Nada de texto fixo em componente. |
 | `src/i18n/` | `i18next` + `react-i18next`, inicialização síncrona; as chaves são conferidas pelo TypeScript. |
-| `src/api/` | Cliente de `@nuva-edu/api-client/admin` por contexto (`useApi`), consultas (`useMeta`). |
+| `src/api/` | Cliente de `@nuva-edu/api-client/admin` por contexto (`useApi`), token CSRF em memória (`csrf.ts`), consultas (`useMeta`, termos) e textos de erro (`problems.tsx`). |
+| `src/session/` | Sessão (`GET /api/v1/session`), guarda das telas (`SessionGate`), `useSession`/`useCan`, `RequirePermission`, destino guardado. |
 | `src/runtime/` | Leitura do `/config.json` (`loadRuntimeConfig`, `useRuntimeConfig`): só `app`, `adminUrl` e `classroomUrl`. |
 | `vite/` | Plugin do Vite que responde `/config.json` no `dev` e no `preview`. |
 | `src/shell/` | Casca (`AdminShell` de `@nuva-edu/ui`), menu lateral (`menu.ts`), rodapé. |
 | `src/pages/` | Telas. Item do menu ainda sem tela usa `UnderConstructionPage`. |
 | `src/routes.tsx` | Rotas; uma por item de `menu.ts`. |
-| `src/test/render.tsx` | `renderApp(caminho, resposta, { config, routes })` para os testes. |
+| `src/test/render.tsx` | `renderApp(caminho, respostas, { config, routes })` para os testes; `findMenu`, `findAlert`, `queryAlerts`. |
+| `src/test/api.ts` | API simulada por rota (`apiRoutes`), sessão por papel (`sessionFor`, `PERMISSIONS` da spec 008), `problem(status, code)`. |
 
 ## Convenções
 
@@ -42,8 +44,16 @@ biblioteca, `createBrowserRouter`) e TanStack Query (spec 006).
   ausente, o link que dependia dele some e sai um aviso no console (só nome do campo e status).
   No desenvolvimento o arquivo vem de um middleware do Vite, que não grava nada: ele não entra no
   `dist/` nem na imagem.
-- `NoAccessPage` ("sem acesso ao painel") ainda não tem rota: quem a mostra é a guarda de sessão
-  (`403` por papel), que chega com a spec 007.
+- Sessão (spec 006, "Sessão"): `SessionGate` carrega `GET /api/v1/session` antes da casca. `401`
+  leva a `/entrar?destino=<caminho>`; `403` mostra `NoAccessPage`; outro erro (inclusive `404` de
+  rota ainda ausente) mostra erro com "tentar de novo". Um `401` em qualquer outra chamada confere a
+  sessão de novo. O token CSRF fica só na memória da página.
+- Menu e botões pelo papel (spec 006, RF-10): cada item de `menu.ts` tem a ação da spec 008 que o
+  libera (`permission`); botões usam `useCan()`. Isso só esconde: a API decide, e o `403` dela vira
+  "sem permissão" (`QueryErrorState`, `ForbiddenState`).
+- Login social: o site navega (`browser.assign`) para `adminOAuthStartUrl`, nunca por `fetch`.
+- Textos de erro por `code` da API; o que a tela não trata cai em `useProblemText` (rede, limite de
+  taxa, servidor), com o código da requisição.
 - Abaixo de 1024 px o menu lateral é uma gaveta (`drawerBelow` do `AdminShell`; spec 006, RNF-01).
 - O script de tema do `<head>` vem do `themeBootPlugin()` de `@nuva-edu/ui/theme-boot`, no
   `vite.config.ts`.

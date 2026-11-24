@@ -1,7 +1,8 @@
 import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it } from 'vitest';
-import { jsonResponse, META, renderApp } from '../test/render';
+import { defaultRoutes, withMeta } from '../test/api';
+import { findAlert, jsonResponse, META, queryAlerts, renderApp } from '../test/render';
 
 const PROBLEM = {
   type: 'about:blank',
@@ -17,9 +18,11 @@ describe('página inicial', () => {
     const pending = new Promise<Response>((resolve) => {
       release = resolve;
     });
-    const { fetchMock } = renderApp('/', () => pending);
+    const { fetchMock } = renderApp('/', { ...defaultRoutes(), 'GET /api/v1/meta': () => pending });
 
-    expect(screen.getByRole('status').textContent).toBe('Carregando os dados da instalação…');
+    expect(
+      (await screen.findByText('Carregando os dados da instalação…')).closest('[role="status"]'),
+    ).toBeTruthy();
 
     release(jsonResponse(META));
     const section = (await screen.findByRole('heading', { level: 2, name: 'Instalação' })).closest(
@@ -30,25 +33,27 @@ describe('página inicial', () => {
     expect(within(section).getByText('BRL')).toBeTruthy();
     expect(within(section).getByText('pt-BR')).toBeTruthy();
     expect(within(section).getByText('Google')).toBeTruthy();
-    expect(screen.queryByRole('status')).toBeNull();
+    expect(screen.queryByText('Carregando os dados da instalação…')).toBeNull();
 
-    const request = fetchMock.mock.calls[0]?.[0] as Request;
-    expect(new URL(request.url).pathname).toBe('/api/v1/meta');
+    const paths = fetchMock.mock.calls.map(([input]) => new URL((input as Request).url).pathname);
+    expect(paths).toContain('/api/v1/meta');
   });
 
   it('avisa quando não há login social configurado', async () => {
-    renderApp('/', () => jsonResponse({ ...META, authProviders: [] }));
+    renderApp('/', withMeta({ authProviders: [] }));
     expect(await screen.findByText('Nenhum provedor configurado')).toBeTruthy();
   });
 
   it('mostra o erro com o código da requisição e tenta de novo pelo botão', async () => {
     const user = userEvent.setup();
     let healthy = false;
-    renderApp('/', () =>
-      healthy ? jsonResponse(META) : jsonResponse(PROBLEM, 503, { 'X-Request-Id': 'req-123' }),
-    );
+    renderApp('/', {
+      ...defaultRoutes(),
+      'GET /api/v1/meta': () =>
+        healthy ? jsonResponse(META) : jsonResponse(PROBLEM, 503, { 'X-Request-Id': 'req-123' }),
+    });
 
-    const alert = await screen.findByRole('alert');
+    const alert = await findAlert();
     expect(
       within(alert).getByText('Não foi possível carregar os dados da instalação'),
     ).toBeTruthy();
@@ -57,7 +62,7 @@ describe('página inicial', () => {
     healthy = true;
     await user.click(within(alert).getByRole('button', { name: 'Tentar de novo' }));
 
-    await waitFor(() => expect(screen.queryByRole('alert')).toBeNull());
+    await waitFor(() => expect(queryAlerts()).toEqual([]));
     expect(await screen.findByText('0.1.0')).toBeTruthy();
   });
 });

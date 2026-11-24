@@ -1,5 +1,6 @@
 import { cleanup } from '@testing-library/react';
 import { afterEach } from 'vitest';
+import { setCsrfToken } from './src/api/csrf';
 
 // O jsdom não tem ResizeObserver nem matchMedia; os componentes só precisam que existam.
 class ResizeObserverStub {
@@ -30,5 +31,6 @@ Object.defineProperty(HTMLElement.prototype, 'clientWidth', {
 afterEach(() => {
   cleanup();
   localStorage.clear();
+  setCsrfToken(null);
   document.documentElement.removeAttribute('data-theme');
 });

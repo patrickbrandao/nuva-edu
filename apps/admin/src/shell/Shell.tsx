@@ -1,28 +1,46 @@
+import { isApiError } from '@nuva-edu/api-client/admin';
 import {
   AdminBreadcrumb,
+  AdminButton,
   AdminContent,
   AdminShell,
   AdminSidebar,
   AdminTopbar,
   ThemeSwitch,
   useTheme,
+  useToast,
 } from '@nuva-edu/ui';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { LogOut } from 'lucide-react';
 import { useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Outlet, useLocation } from 'react-router';
+import { Outlet, useLocation, useNavigate } from 'react-router';
+import { useApi } from '../api/client';
 import { useMeta } from '../api/meta';
+import { useProblemText } from '../api/problems';
+import { forgetSession, useSession } from '../session/session';
 import { BrandMark } from './BrandMark';
 import { validAccentColor } from './brand';
 import { Footer } from './Footer';
-import { HOME_PATH, MENU, menuItemForPath } from './menu';
+import { HOME_PATH, LOGIN_PATH, menuFor, menuItemForPath } from './menu';
+import { TermsNotice } from './TermsNotice';
 import { useThemeLabels } from './useThemeLabels';
 
 /** Abaixo desta largura de tela o menu lateral é uma gaveta (spec 006, RNF-01). */
 const DRAWER_BELOW = 1024;
 
-/** Casca do painel: menu lateral, barra superior com trilha e tema, conteúdo e rodapé. */
+/**
+ * Casca do painel: menu lateral (só os itens que o papel pode usar; spec 006, RF-10) com o
+ * usuário e o "Sair", barra superior com trilha e tema, aviso de termos, conteúdo e rodapé.
+ */
 export function Shell() {
   const { t } = useTranslation();
+  const api = useApi();
+  const navigate = useNavigate();
+  const queryClient = useQueryClient();
+  const toast = useToast();
+  const describe = useProblemText();
+  const session = useSession();
   const { pathname } = useLocation();
   const { data: meta } = useMeta();
   const [mode, setMode] = useTheme();
@@ -38,7 +56,23 @@ export function Shell() {
     document.title = `${pageTitle} · ${brandName}`;
   }, [pageTitle, brandName]);
 
-  const sections = MENU.map((group) => ({
+  const logout = useMutation({
+    mutationFn: async () => {
+      await api.POST('/api/v1/auth/logout');
+    },
+    onSettled: (_data, error) => {
+      // Sessão já encerrada (401) também é saída: o cookie não vale mais.
+      if (error && !(isApiError(error) && error.status === 401)) {
+        const { text, detail } = describe(error);
+        toast.error(detail ? `${text} ${detail}` : text, { title: t('shell.logoutError') });
+        return;
+      }
+      forgetSession(queryClient);
+      void navigate(LOGIN_PATH, { replace: true });
+    },
+  });
+
+  const sections = menuFor(session.permissions).map((group) => ({
     id: group.id,
     label: t(`menu.groups.${group.id}`),
     items: group.items.map((item) => ({
@@ -75,6 +109,22 @@ export function Shell() {
           active={current?.id}
           navLabel={t('shell.menu')}
           toggleLabel={[t('shell.collapseMenu'), t('shell.expandMenu')]}
+          user={{
+            name: session.user.name,
+            role: t(`roles.${session.user.role}`),
+            src: session.user.avatarUrl ?? undefined,
+          }}
+          userAction={
+            <AdminButton
+              variant="ghost"
+              size="sm"
+              icon={<LogOut size={15} aria-hidden="true" />}
+              aria-label={t('shell.logout')}
+              title={t('shell.logout')}
+              disabled={logout.isPending}
+              onClick={() => logout.mutate()}
+            />
+          }
         />
       }
     >
@@ -91,6 +141,7 @@ export function Shell() {
       >
         <AdminBreadcrumb items={crumbs} label={t('shell.breadcrumb')} />
       </AdminTopbar>
+      <TermsNotice />
       <AdminContent>
         <Outlet />
       </AdminContent>
