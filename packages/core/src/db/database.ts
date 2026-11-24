@@ -36,11 +36,51 @@ export function createDatabase(options: DatabaseOptions): Database {
     logger?.error({ err: summarizeDatabaseError(error) }, 'Conexão ociosa com o banco caiu');
   });
 
-  return new Kysely<DB>({
+  const db = new Kysely<DB>({
     dialect: new PostgresDialect({ pool }),
     plugins: [new CamelCasePlugin({ maintainNestedObjectKeys: true })],
     ...(logger ? { log: (event: LogEvent) => logQuery(logger, event) } : {}),
   });
+  pools.set(db, pool);
+  return db;
+}
+
+/** O pool de cada `Database` aberto por `createDatabase`; fica escondido de quem usa o Kysely. */
+const pools = new WeakMap<Database, pg.Pool>();
+
+export interface DatabasePoolStats {
+  /** Conexões abertas com o servidor: `active + idle`. */
+  total: number;
+  /** Abertas e sem uso. */
+  idle: number;
+  /** Emprestadas a uma consulta ou transação em andamento. */
+  active: number;
+  /** Pedidos esperando uma conexão livre: acima de zero por muito tempo, o pool está pequeno. */
+  waiting: number;
+  /** Teto do pool (`maxConnections`). */
+  max: number;
+}
+
+/**
+ * Estado do pool, para a métrica `db_pool_connections{state}` (spec 033). Leitura em memória,
+ * sem ir ao banco. Passe o `Database` devolvido por `createDatabase`, não uma transação.
+ */
+export function databasePoolStats(db: Database): DatabasePoolStats {
+  const pool = pools.get(db);
+  if (!pool) {
+    throw new TypeError(
+      'databasePoolStats espera o Database devolvido por createDatabase (não uma transação).',
+    );
+  }
+  const total = pool.totalCount;
+  const idle = pool.idleCount;
+  return {
+    total,
+    idle,
+    active: Math.max(total - idle, 0),
+    waiting: pool.waitingCount,
+    max: pool.options.max ?? 10,
+  };
 }
 
 /** `true` quando o banco responde; usado por `/readyz`. Nunca lança. */

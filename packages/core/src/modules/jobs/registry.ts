@@ -57,8 +57,23 @@ export type JobOf<T extends JobType> = Job & { type: T; payload: JobPayloads[T] 
 /** União discriminada por `type`: um `switch (job.type)` estreita o payload. */
 export type KnownJob = { [T in JobType]: JobOf<T> }[JobType];
 
-/** Manipuladores do worker: um por tipo do registro, cada um com o seu payload. */
-export type JobHandlers = { [T in JobType]: (job: JobOf<T>) => Promise<void> };
+/** O que o worker entrega ao manipulador além da tarefa. */
+export interface JobContext {
+  /**
+   * Abortado quando o worker começa a encerrar ou perde a trava da tarefa. Manipulador longo
+   * repassa o sinal ao que aceitar (`fetch`, esperas) e para cedo; a tarefa volta à fila e
+   * executa de novo, então parar no meio tem de ser seguro (idempotência, spec 005).
+   */
+  signal: AbortSignal;
+}
+
+/**
+ * Manipuladores do worker: um por tipo do registro, cada um com o seu payload. O contexto é o
+ * segundo argumento; manipulador que não precisa dele pode declarar só a tarefa.
+ */
+export type JobHandlers = {
+  [T in JobType]: (job: JobOf<T>, context: JobContext) => Promise<void>;
+};
 
 export function isJobType(type: string): type is JobType {
   return Object.hasOwn(JOB_DEFINITIONS, type);

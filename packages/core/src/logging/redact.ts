@@ -3,8 +3,8 @@ export const REDACTED = '[REDACTED]';
 
 /**
  * Trechos que tornam um campo proibido, comparados sem caixa e sem separadores: `password`
- * cobre `newPassword`, `key` cobre `apiKey` e `mcp_key`. Os nove primeiros são a lista da
- * spec 033; os demais são equivalentes em português e dados de cartão.
+ * cobre `newPassword`, `key` cobre `apiKey`, `mcp_key` e `keyId`. Os nove primeiros são a lista
+ * da spec 033; os demais são equivalentes em português e dados de cartão.
  * Mascarar a mais é aceitável; deixar passar, não.
  */
 export const SENSITIVE_KEY_PARTS: readonly string[] = [
@@ -25,11 +25,35 @@ export const SENSITIVE_KEY_PARTS: readonly string[] = [
   'cvv',
 ];
 
+/**
+ * Nomes com `key` que não guardam segredo, já sem caixa e sem separadores: a chave de unicidade
+ * de uma tarefa (`unique_key`), o nome de uma configuração (`setting_key`) e a chave de um texto
+ * traduzido (`translation_key`, `i18n_key`). Só o trecho `key` é perdoado, e só nestes nomes:
+ * `key` sozinho, `apiKey`, `secretKey`, `privateKey`, `accessKey` e `keyId` seguem mascarados, e
+ * um nome daqui que também contenha outro trecho proibido (`unique_key_token`) também.
+ * Nome novo só entra nesta lista se o valor nunca for credencial.
+ */
+export const NON_SENSITIVE_KEY_NAMES: readonly string[] = [
+  'uniquekey',
+  'settingskey',
+  'settingkey',
+  'translationkey',
+  'i18nkey',
+];
+
 const MAX_DEPTH = 8;
 
 export function isSensitiveKey(key: string): boolean {
   const normalized = key.toLowerCase().replace(/[^a-z0-9]/g, '');
-  return SENSITIVE_KEY_PARTS.some((part) => normalized.includes(part));
+  if (SENSITIVE_KEY_PARTS.some((part) => part !== 'key' && normalized.includes(part))) {
+    return true;
+  }
+  // Sobra `key`: vale em qualquer nome, menos dentro dos nomes sabidamente inofensivos.
+  let rest = normalized;
+  for (const name of NON_SENSITIVE_KEY_NAMES) {
+    rest = rest.replaceAll(name, ' ');
+  }
+  return rest.includes('key');
 }
 
 // O separador `:` só vale seguido de espaço ou depois de aspas, para não comer `arquivo.ts:10:5`
@@ -46,15 +70,17 @@ const BARE_DIGITS = /(?<![\w.])(\d{14}|\d{11})(?!\w)/g;
 
 /**
  * Mascara, dentro de um texto livre, o que é reconhecível pela forma: credencial em URL,
- * `Bearer`/`Basic`, pares `senha=valor`, CPF e CNPJ com pontuação, e sequências de 11 ou 14
- * dígitos com dígitos verificadores válidos. Uma senha solta no meio de uma frase não é
- * reconhecível: nunca a interpole numa mensagem.
+ * `Bearer`/`Basic`, pares `senha=valor` (com a mesma regra de nomes de `isSensitiveKey`), CPF e
+ * CNPJ com pontuação, e sequências de 11 ou 14 dígitos com dígitos verificadores válidos. Uma
+ * senha solta no meio de uma frase não é reconhecível: nunca a interpole numa mensagem.
  */
 export function redactString(text: string): string {
   return text
     .replace(URL_CREDENTIALS, `$1:${REDACTED}@`)
     .replace(AUTH_SCHEME, `$1 ${REDACTED}`)
-    .replace(KEY_VALUE, `$1$2${REDACTED}`)
+    .replace(KEY_VALUE, (match: string, name: string, separator: string) =>
+      isSensitiveKey(name) ? `${name}${separator}${REDACTED}` : match,
+    )
     .replace(CNPJ_FORMATTED, REDACTED)
     .replace(CPF_FORMATTED, REDACTED)
     .replace(BARE_DIGITS, (digits) => (isCpf(digits) || isCnpj(digits) ? REDACTED : digits));

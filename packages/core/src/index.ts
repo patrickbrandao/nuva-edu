@@ -11,10 +11,17 @@ export {
 } from './config/config.ts';
 export { ConfigError, type ConfigIssue } from './config/env-reader.ts';
 export {
+  type ChannelListener,
+  type ChannelListenerOptions,
+  listenChannel,
+} from './db/channel-listener.ts';
+export {
   closeDatabase,
   createDatabase,
   type Database,
   type DatabaseOptions,
+  type DatabasePoolStats,
+  databasePoolStats,
   pingDatabase,
   summarizeDatabaseError,
 } from './db/database.ts';
@@ -53,6 +60,7 @@ export {
 } from './logging/logger.ts';
 export {
   isSensitiveKey,
+  NON_SENSITIVE_KEY_NAMES,
   REDACTED,
   redact,
   redactString,
@@ -77,6 +85,7 @@ export {
   formatJobError,
   getJobCounts,
   getJobCountsByType,
+  getOldestPendingJobAgeSeconds,
   HEARTBEAT_INTERVAL_MS,
   heartbeatJobs,
   type JobCounts,
@@ -98,6 +107,7 @@ export {
   JOB_DEFINITIONS,
   JOB_STATUSES,
   type Job,
+  type JobContext,
   type JobDefinition,
   type JobHandlers,
   type JobOf,
@@ -106,3 +116,33 @@ export {
   type JobType,
   type KnownJob,
 } from './modules/jobs/registry.ts';
+export {
+  createSettingsReader,
+  getSchoolName,
+  getSchoolTimezone,
+  getSetting,
+  getSettings,
+  SCHOOL_NAME_MAX_LENGTH,
+  SETTING_DEFAULTS,
+  SETTING_KEYS,
+  SETTINGS_CACHE_TTL_MS,
+  type SettingKey,
+  type SettingsReader,
+  type SettingsReaderOptions,
+  type SettingValues,
+  setSetting,
+} from './modules/settings/settings.ts';
+export {
+  isUserEventKind,
+  nextUserEventId,
+  type PublishedUserEvent,
+  type PublishUserEventOptions,
+  publishUserEvent,
+  USER_EVENT_KINDS,
+  USER_EVENT_MAX_PAYLOAD_BYTES,
+  USER_EVENTS_CHANNEL,
+  USER_EVENTS_SEQUENCE,
+  type UserEventIdGenerator,
+  type UserEventInput,
+  type UserEventKind,
+} from './modules/stream/user-events.ts';

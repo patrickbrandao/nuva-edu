@@ -75,7 +75,7 @@ export async function enqueue<T extends JobType>(
 export interface EnqueueRecurringOptions {
   /**
    * Janela da execução, parte da chave: `2026-11-24` para a diária, `2026-11-24T10:15` para a
-   * de 15 em 15 minutos. Quem agenda calcula no fuso de `settings.timezone`.
+   * de 15 em 15 minutos. Quem agenda calcula no fuso da escola (`getSchoolTimezone`).
    */
   window: string;
   runAt?: Date;
@@ -323,6 +323,21 @@ export async function getJobCounts(db: Database): Promise<JobCounts> {
     }
   }
   return counts;
+}
+
+/**
+ * Há quantos segundos a tarefa pendente mais antiga espera, para a métrica
+ * `jobs_oldest_pending_seconds` (spec 033). Pendente é a `queued` que já pode executar; a espera
+ * conta de `run_at`, então tarefa agendada para depois e espera de nova tentativa não entram.
+ * Fila sem pendentes devolve 0.
+ */
+export async function getOldestPendingJobAgeSeconds(db: Database): Promise<number> {
+  const result = await sql<{ seconds: number | null }>`
+    SELECT EXTRACT(EPOCH FROM now() - min(run_at))::float8 AS seconds
+    FROM jobs
+    WHERE status = 'queued' AND run_at <= now() AND attempts < max_attempts
+  `.execute(db);
+  return Math.max(result.rows[0]?.seconds ?? 0, 0);
 }
 
 export type JobTypeCounts = { type: string } & Record<JobStatus, number>;

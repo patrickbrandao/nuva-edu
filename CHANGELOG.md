@@ -25,6 +25,7 @@ Detalhe das decisões em `specs/decisions/`.
 - `apps/admin-api` (`@nuva-edu/admin-api`): esqueleto do serviço sobre o api-kit, com `GET /api/v1/meta`, testes de integração e teste de contrato.
 - `apps/worker` (`@nuva-edu/worker`): laço de consumo da fila (`NOTIFY` + varredura, concorrência, batimento, tarefa presa, encerramento em `SIGTERM`), agendador das recorrentes no fuso da escola, tarefas `example.echo` e `retention.purge` (ainda vazia) e HTTP interno com `/healthz`, `/readyz` e `/metrics`.
 - `apps/classroom-api` (`@nuva-edu/classroom-api`): esqueleto do serviço sobre o api-kit, com `GET /api/v1/meta` e o fluxo SSE `GET /api/v1/stream` (uma escuta `LISTEN nuva_user_events` por processo, entrega por usuário, `ping` a cada 25 s, limite de 3 conexões, reenvio por `Last-Event-ID`, métrica `sse_connections`); sessão recusada com `401` até a Fase 1; testes de integração e de contrato.
+- `@nuva-edu/core`: configuração da escola (`school.name`, `school.timezone`) com leitor em cache, `publishUserEvent` e `listenChannel` para o SSE, `databasePoolStats`, `getOldestPendingJobAgeSeconds` e contexto com `AbortSignal` nos manipuladores de tarefa; a máscara do logger deixa passar `unique_key`, `setting_key` e chaves de tradução.
 
 ### Alterado
 - Contratos base: `Page` só com `nextCursor` (cada listagem declara `items`), CSRF como esquema de segurança `csrfToken` em vez de parâmetro, e códigos de erro gerais fixados na spec 003 e no esquema `Problem` (com `retryAfterSeconds`).

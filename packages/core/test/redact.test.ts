@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { isSensitiveKey, REDACTED, redact, redactString } from '../src/index.ts';
+import {
+  isSensitiveKey,
+  NON_SENSITIVE_KEY_NAMES,
+  REDACTED,
+  redact,
+  redactString,
+  SENSITIVE_KEY_PARTS,
+} from '../src/index.ts';
 
 describe('isSensitiveKey', () => {
   it.each([
@@ -22,8 +29,24 @@ describe('isSensitiveKey', () => {
     'document',
     'documentNumber',
     'key',
+    'Key',
+    'keys',
     'apiKey',
+    'api_key',
+    'apikey',
+    'secretKey',
+    'privateKey',
+    'private_key',
+    'accessKey',
+    'accessKeyId',
+    'keyId',
+    'APPLE_KEY_ID',
     'mcp_key',
+    'signingKey',
+    'encryption_key',
+    'idempotencyKey',
+    'unique_key_token',
+    'secretSettingKey',
     'senha',
     'credentials',
     'cardNumber',
@@ -32,12 +55,72 @@ describe('isSensitiveKey', () => {
     expect(isSensitiveKey(key)).toBe(true);
   });
 
-  it.each(['email', 'user_id', 'request_id', 'route', 'status', 'name', 'duration_ms'])(
-    'deixa %s passar',
-    (key) => {
-      expect(isSensitiveKey(key)).toBe(false);
-    },
-  );
+  it.each([
+    'email',
+    'user_id',
+    'request_id',
+    'route',
+    'status',
+    'name',
+    'duration_ms',
+    'unique_key',
+    'uniqueKey',
+    'UNIQUE_KEY',
+    'job.unique_key',
+    'setting_key',
+    'settingKey',
+    'settings_key',
+    'translation_key',
+    'translationKey',
+    'i18n_key',
+  ])('deixa %s passar', (key) => {
+    expect(isSensitiveKey(key)).toBe(false);
+  });
+
+  // Spec 033: a lista obrigatória não afrouxa, nem com a exceção de `unique_key` e afins.
+  const REQUIRED = [
+    'password',
+    'token',
+    'secret',
+    'authorization',
+    'cookie',
+    'cpf',
+    'cnpj',
+    'document',
+    'key',
+  ];
+
+  it('mantém os nove campos da spec 033 no começo da lista', () => {
+    expect(SENSITIVE_KEY_PARTS.slice(0, 9)).toEqual(REQUIRED);
+  });
+
+  it.each(REQUIRED)('campo obrigatório %s segue proibido em todas as grafias', (field) => {
+    const upper = field.toUpperCase();
+    const capital = `${upper.slice(0, 1)}${field.slice(1)}`;
+    for (const name of [
+      field,
+      upper,
+      capital,
+      `user_${field}`,
+      `new${capital}`,
+      `${field}_value`,
+      `${field}Hash`,
+      `x-${field}`,
+      `api${field}`,
+    ]) {
+      expect(isSensitiveKey(name), name).toBe(true);
+      expect(redact({ [name]: 'valor' }), name).toEqual({ [name]: REDACTED });
+      expect(redactString(`${name}=valor`), name).toBe(`${name}=${REDACTED}`);
+    }
+  });
+
+  it.each(NON_SENSITIVE_KEY_NAMES)('exceção %s não perdoa outro trecho proibido', (name) => {
+    expect(isSensitiveKey(name)).toBe(false);
+    for (const field of REQUIRED) {
+      expect(isSensitiveKey(`${name}_${field}`), `${name}_${field}`).toBe(true);
+      expect(isSensitiveKey(`${field}_${name}`), `${field}_${name}`).toBe(true);
+    }
+  });
 });
 
 describe('redact', () => {
@@ -59,6 +142,22 @@ describe('redact', () => {
       password: REDACTED,
       token: REDACTED,
       secret: REDACTED,
+      key: REDACTED,
+    });
+  });
+
+  it('deixa passar a chave de unicidade, o nome da configuração e a chave de tradução', () => {
+    const input = {
+      unique_key: 'retention.purge:2026-11-24',
+      uniqueKey: 'echo:42',
+      setting_key: 'school.name',
+      translationKey: 'checkout.title',
+      apiKey: 'k-1',
+      key: 'school.name',
+    };
+    expect(redact(input)).toEqual({
+      ...input,
+      apiKey: REDACTED,
       key: REDACTED,
     });
   });
@@ -168,6 +267,9 @@ describe('redactString', () => {
     ],
     ["senha: 'abc 123' recusada", `senha: ${REDACTED} recusada`],
     ['api_key=k-1; x', `api_key=${REDACTED}; x`],
+    ['key=abc123', `key=${REDACTED}`],
+    ['{"privateKey":"abc"}', `{"privateKey":${REDACTED}}`],
+    ['unique_key=a:1 e secret_key=s3', `unique_key=a:1 e secret_key=${REDACTED}`],
     ['CPF 529.982.247-25 inválido', `CPF ${REDACTED} inválido`],
     ['CNPJ 11.222.333/0001-81 inválido', `CNPJ ${REDACTED} inválido`],
     ['CNPJ 12.ABC.345/01DE-35 inválido', `CNPJ ${REDACTED} inválido`],
@@ -185,6 +287,9 @@ describe('redactString', () => {
     'id 019aa3f2-7b1c-7e55-9a10-52998224725a',
     'duplicate key value violates unique constraint "settings_key_unique"',
     'levou 0.52998224725 s',
+    'tarefa com unique_key=retention.purge:2026-11-24 já existe',
+    '{"uniqueKey":"echo:42","setting_key":"school.name"}',
+    'translation_key: checkout.title ausente',
   ])('não mexe em "%s"', (input) => {
     expect(redactString(input)).toBe(input);
   });

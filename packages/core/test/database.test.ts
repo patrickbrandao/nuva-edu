@@ -5,6 +5,7 @@ import {
   createDatabase,
   createLogger,
   type Database,
+  databasePoolStats,
   pingDatabase,
   summarizeDatabaseError,
 } from '../src/index.ts';
@@ -149,5 +150,56 @@ describe('summarizeDatabaseError', () => {
 
   it('aceita qualquer valor lançado', () => {
     expect(summarizeDatabaseError('texto')).toEqual({ type: 'UnknownError' });
+  });
+});
+
+describe('databasePoolStats', () => {
+  it('conta conexões abertas, em uso, ociosas e pedidos em espera', async () => {
+    const pool = createDatabase({ connectionString: inject('databaseUrl'), maxConnections: 2 });
+    try {
+      expect(databasePoolStats(pool)).toEqual({ total: 0, idle: 0, active: 0, waiting: 0, max: 2 });
+
+      await sql`select 1`.execute(pool);
+      expect(databasePoolStats(pool)).toEqual({ total: 1, idle: 1, active: 0, waiting: 0, max: 2 });
+
+      // Duas transações seguram o pool inteiro; a terceira consulta espera.
+      let release: () => void = () => {};
+      const gate = new Promise<void>((resolve) => {
+        release = resolve;
+      });
+      let holding = 0;
+      const hold = () =>
+        pool.transaction().execute(async (trx) => {
+          await sql`select 1`.execute(trx);
+          holding += 1;
+          await gate;
+        });
+      const held = [hold(), hold()];
+      const deadline = Date.now() + 4_000;
+      while (holding < 2 && Date.now() < deadline) {
+        await new Promise((resolve) => setTimeout(resolve, 5));
+      }
+      const waiter = sql`select 1`.execute(pool);
+      await new Promise((resolve) => setTimeout(resolve, 30));
+      expect(databasePoolStats(pool)).toEqual({ total: 2, idle: 0, active: 2, waiting: 1, max: 2 });
+
+      release();
+      await Promise.all([...held, waiter]);
+      expect(databasePoolStats(pool)).toMatchObject({ total: 2, active: 0, waiting: 0 });
+    } finally {
+      await closeDatabase(pool);
+    }
+  });
+
+  it('usa o teto padrão e recusa o que não veio de createDatabase', async () => {
+    const pool = createDatabase({ connectionString: inject('databaseUrl') });
+    try {
+      expect(databasePoolStats(pool).max).toBe(10);
+      await pool.transaction().execute(async (trx) => {
+        expect(() => databasePoolStats(trx)).toThrow(TypeError);
+      });
+    } finally {
+      await closeDatabase(pool);
+    }
   });
 });

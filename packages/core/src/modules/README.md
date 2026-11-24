@@ -1,6 +1,6 @@
 # Módulos do núcleo
 
-Uma pasta por área de negócio; só `jobs` está implementado, as demais ainda vazias. Cada módulo ganha seu código (entidades, regras, consultas Kysely) junto com a tarefa que o implementa, e exporta o que as APIs e o worker usam por `src/index.ts`.
+Uma pasta por área de negócio; `jobs`, `settings` e `stream` estão implementados, as demais ainda vazias. Cada módulo ganha seu código (entidades, regras, consultas Kysely) junto com a tarefa que o implementa, e exporta o que as APIs e o worker usam por `src/index.ts`.
 
 | Pasta | Conteúdo | Spec |
 | --- | --- | --- |
@@ -30,6 +30,7 @@ Uma pasta por área de negócio; só `jobs` está implementado, as demais ainda 
 | `images` | Imagens | 029 |
 | `privacy` | Termos, exportação e exclusão (LGPD) | 030 |
 | `jobs` | Fila de tarefas | 005 |
+| `stream` | Eventos em tempo real para o usuário (`NOTIFY nuva_user_events`) | 004 |
 
 Regras:
 

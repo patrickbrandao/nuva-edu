@@ -13,6 +13,7 @@ import {
   formatJobError,
   getJobCounts,
   getJobCountsByType,
+  getOldestPendingJobAgeSeconds,
   heartbeatJobs,
   isDomainError,
   isJobType,
@@ -599,6 +600,51 @@ describe('contagens', () => {
       { type: 'example.echo', queued: 2, running: 1, done: 0, failed: 0 },
       { type: 'retention.purge', queued: 0, running: 0, done: 1, failed: 0 },
     ]);
+  });
+});
+
+describe('getOldestPendingJobAgeSeconds', () => {
+  it('devolve 0 com a fila vazia ou só com tarefas que ainda não podem executar', async () => {
+    expect(await getOldestPendingJobAgeSeconds(db)).toBe(0);
+    await enqueue(
+      db,
+      'example.echo',
+      { message: 'depois' },
+      { runAt: new Date(Date.now() + 3_600_000) },
+    );
+    const running = await enqueue(
+      db,
+      'example.echo',
+      { message: 'em execução' },
+      { runAt: new Date(Date.now() - 600_000) },
+    );
+    await claimJobs(db, { workerId: 'w1', limit: 1 });
+    expect((await getJob(running?.id ?? '')).status).toBe('running');
+    expect(await getOldestPendingJobAgeSeconds(db)).toBe(0);
+  });
+
+  it('mede a espera da pendente mais antiga, a partir de run_at', async () => {
+    await enqueue(db, 'example.echo', { message: 'nova' });
+    await enqueue(
+      db,
+      'example.echo',
+      { message: 'velha' },
+      { runAt: new Date(Date.now() - 90_000) },
+    );
+    await enqueue(
+      db,
+      'example.echo',
+      { message: 'meio' },
+      { runAt: new Date(Date.now() - 30_000) },
+    );
+    const age = await getOldestPendingJobAgeSeconds(db);
+    expect(age).toBeGreaterThanOrEqual(89);
+    expect(age).toBeLessThan(120);
+    // Aceita transação, como as demais funções da fila.
+    const inTransaction = await db
+      .transaction()
+      .execute((trx) => getOldestPendingJobAgeSeconds(trx));
+    expect(inTransaction).toBeGreaterThanOrEqual(89);
   });
 });
 

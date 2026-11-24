@@ -7,11 +7,13 @@ Roda direto no Node 26, sem build: os imports levam `.ts` e a sintaxe é só a q
 | Caminho | Conteúdo |
 | --- | --- |
 | `src/config/` | Configuração lida e validada das variáveis de ambiente (spec 031) |
-| `src/db/` | Conexão Kysely e tipos gerados do banco (`generated/`, não edite à mão) |
+| `src/db/` | Conexão Kysely, estado do pool, escuta de canal (`LISTEN`) e tipos gerados do banco (`generated/`, não edite à mão) |
 | `src/logging/` | Logger JSON e máscara de campos proibidos (spec 033) |
 | `src/errors/` | Erro de domínio e conversão em problem+json (spec 003) |
 | `src/modules/` | Uma pasta por área de negócio (veja o README de lá) |
 | `src/modules/jobs/` | Fila de tarefas em segundo plano sobre a tabela `jobs` (spec 005) |
+| `src/modules/settings/` | Configuração da escola na tabela `settings`: nome e fuso |
+| `src/modules/stream/` | Eventos em tempo real para o usuário (`NOTIFY nuva_user_events`, spec 004) |
 | `scripts/db-types.ts` | Gera os tipos do Kysely a partir do banco |
 | `test/` | Testes (Vitest); os de banco usam um banco clonado do modelo |
 
@@ -43,6 +45,7 @@ reply.status(problem.status).type(PROBLEM_CONTENT_TYPE).send(problem);
 ## Logs: o que nunca sai
 
 - Campo cujo nome contém `password`, `token`, `secret`, `authorization`, `cookie`, `cpf`, `cnpj`, `document`, `key` (e `senha`, `credential`, `cardnumber`, `cvv`) é trocado por `[REDACTED]`, em qualquer profundidade.
+- Única exceção ao trecho `key`, por não guardarem segredo: `unique_key`, `setting_key`/`settings_key`, `translation_key` e `i18n_key`, em qualquer grafia (`uniqueKey`, `UNIQUE_KEY`). Um campo chamado só `key` continua mascarado (spec 033), assim como `apiKey`, `secretKey`, `privateKey`, `accessKey` e `keyId`: para registrar o nome de uma configuração, use o campo `setting_key`.
 - Em texto livre é mascarado o que tem forma reconhecível: credencial em URL, `Bearer`/`Basic`, pares `senha=valor`, CPF e CNPJ.
 - Uma senha solta no meio de uma frase não tem forma: **nunca interpole senha, token ou chave numa mensagem**. Passe como campo, que a máscara cobre.
 - O log de consultas traz só o SQL, sem parâmetros; `detail` e `where` dos erros do PostgreSQL são mascarados, porque reproduzem valores das linhas.
@@ -83,9 +86,60 @@ for (const job of jobs) {
 | `requeueStaleJobs(db)` | Tarefa `running` sem batimento há `STALE_AFTER_MS` volta à fila, ou falha se esgotou |
 | `retryJob(db, id)` | Reenfileira uma `failed` (tela `/ops`) |
 | `getJobCounts(db)` / `getJobCountsByType(db)` | Contagens para `/metrics` e `/ops` |
+| `getOldestPendingJobAgeSeconds(db)` | Espera da pendente mais antiga, para `jobs_oldest_pending_seconds`; 0 sem pendentes |
 | `listenForJobs({ connectionString, onNotify })` | `LISTEN nuva_jobs` em conexão dedicada, com reconexão |
 
+Os manipuladores (`JobHandlers`) recebem a tarefa e um contexto `{ signal }`: o worker aborta o `AbortSignal` no encerramento ou ao perder a trava, e manipulador longo o repassa a `fetch` e esperas.
+
 Tipo novo de tarefa: acrescente em `JobPayloads` e `JOB_DEFINITIONS` (`src/modules/jobs/registry.ts`), com o nome do catálogo da spec 005. Payload leva só identificadores.
+
+## Configuração da escola
+
+Tabela `settings`; a escrita é da admin-api, os demais só leem.
+
+| Chave | Valor | Padrão |
+| --- | --- | --- |
+| `school.name` | Nome da escola (texto, até 120 caracteres) | `nuva-edu` |
+| `school.timezone` | Fuso IANA | `America/Sao_Paulo` |
+
+```ts
+// Um leitor por processo: uma consulta a cada 30 s (SETTINGS_CACHE_TTL_MS) serve todas as chaves.
+const settings = createSettingsReader(db);
+const schoolName = await settings.schoolName();
+
+// admin-api, ao salvar: valor inválido lança validation_failed.
+await setSetting(db, 'school.name', body.value);
+settings.invalidate(); // os outros processos enxergam quando o cache deles vencer
+```
+
+Sem cache: `getSchoolName(db)`, `getSchoolTimezone(db)`, `getSetting(db, chave)`, `getSettings(db)`.
+
+## Eventos em tempo real e escuta de canal
+
+```ts
+// Quem grava a mudança publica na mesma transação; o aviso só sai no COMMIT.
+await publishUserEvent(trx, {
+  userId,
+  kind: 'dm.message.created',
+  data: { conversationId, messageId }, // só identificadores
+});
+
+// classroom-api: uma conexão dedicada por processo, com reconexão.
+const listener = listenChannel({
+  connectionString: config.databaseUrl,
+  channel: USER_EVENTS_CHANNEL,
+  onNotification: (payload) => hub.dispatch(payload),
+  logger,
+});
+```
+
+- A carga do `NOTIFY` é `{ userId, kind, id, data }`. O `id` vem da sequência `user_event_id_seq` (migration 0003); `{ nextId }` troca o gerador.
+- Carga que não cabe no NOTIFY (8000 bytes) lança `user_event_too_large` e nada é publicado.
+- `listenForJobs` é `listenChannel` com o canal da fila.
+
+## Estado do pool
+
+`databasePoolStats(db)` devolve `{ total, idle, active, waiting, max }` em memória, para o medidor `db_pool_connections{state}` (spec 033).
 
 ## Tipos do banco
 
