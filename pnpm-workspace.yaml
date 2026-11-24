@@ -1,0 +1,12 @@
+packages:
+  - "apps/*"
+  - "packages/*"
+  - "e2e"
+
+# Recusa instalar com Node fora da faixa de "engines".
+engineStrict: true
+
+# Dependências autorizadas a rodar scripts de instalação.
+allowBuilds:
+  lefthook: true
+  "@biomejs/biome": true

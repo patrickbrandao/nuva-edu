@@ -9,6 +9,7 @@ Detalhe das decisões em `specs/decisions/`.
 - Specs 000 a 033, plano em 8 fases, ADRs 0001 a 0018.
 - Definições de papel para Claude Code e OpenCode.
 - Compose base: Postgres 18, Traefik opcional, Mailpit.
+- Monorepo pnpm 12, TypeScript 7, Biome, lefthook (lint no pre-commit, commit validado).
 
 ### Decisões
 - Instalável, uma escola por instalação; AGPL-3.0.

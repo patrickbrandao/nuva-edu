@@ -1,0 +1,25 @@
+# Ganchos do Git (specs/032). Instalados por `pnpm install` (script "prepare").
+
+pre-commit:
+  parallel: true
+  jobs:
+    - name: biome
+      # Só confere os arquivos em stage; não corrige nem faz `git add` por conta própria.
+      run: pnpm exec biome check --no-errors-on-unmatched --files-ignore-unknown=true {staged_files}
+      glob:
+        - "*.{js,mjs,cjs,ts,mts,cts,jsx,tsx,json,jsonc,css}"
+
+    - name: arquivos-proibidos
+      run: 'echo "Arquivo proibido no Git: {staged_files}" && exit 1'
+      glob:
+        - ".env.local"
+        - ".env.*.local"
+        - "*.dump"
+        - "*.sql.gz"
+        - "*.pem"
+        - "*.p8"
+
+commit-msg:
+  jobs:
+    - name: conventional-commits
+      run: node scripts/check-commit-msg.mjs {1}
