@@ -88,8 +88,9 @@ O que acontece, nesta ordem. Até o passo 3, nada muda no servidor.
 2. **Imagens.** `docker manifest inspect` em cada imagem da etiqueta. Faltando alguma, para (código
    12) sem conectar ao servidor.
 3. **Conferência no servidor, só leitura.** Pasta e `.env.local` existem; o `.env.local` tem o
-   que o ambiente de teste exige; a rede do Traefik existe; o volume `postgres-data`, se existir,
-   é do projeto `nuva-edu`. Do `.env.local` o script lê apenas variáveis não secretas de uma
+   que o ambiente de teste exige; a rede do Traefik existe; o volume do banco, se existir, é do
+   projeto `nuva-edu`; e não há migração de volume pendente (veja "Migração do volume do banco").
+   Do `.env.local` o script lê apenas variáveis não secretas de uma
    lista fixa; da senha, só confere que existe.
 4. **Envio.** Um `tar` pela conexão SSH, só com estes arquivos:
    `docker-compose.yml`, `.env` e o `docker-compose.yml` de `database/postgres`, `proxy/traefik`,
@@ -98,7 +99,8 @@ O que acontece, nesta ordem. Até o passo 3, nada muda no servidor.
    `include:` da raiz os exige; os serviços deles ficam em perfis que o deploy não ativa.
 5. **Publicação.** No servidor, sempre com
    `docker compose -p nuva-edu -f docker-compose.yml --env-file .env --env-file .env.local`:
-   `pull` das imagens e `up -d --no-build --wait` (até 120 s). O `migrate` roda até o fim antes
+   `pull` das imagens, a cópia do volume do banco (só com `--migrate-volume` e quando necessária) e
+   `up -d --no-build --wait` (até 120 s). O `migrate` roda até o fim antes
    das APIs e do worker. `--no-build` garante que nada é construído no servidor, embora os
    composes declarem `build:`.
 6. **Conferência pública.** Desta máquina, por HTTPS e validando o certificado: `/healthz` dos
@@ -125,8 +127,48 @@ hosts, e o resto devolve 404 do Traefik.
   `prune`, reinício do Traefik nem mudança na rede `network_public`, além de ligar a ela os
   contêineres do próprio projeto.
 - Não envia, não sobrescreve e não imprime o `.env.local` do servidor.
-- Para antes de subir o banco se já houver um volume `postgres-data` de outro projeto (o nome do
-  volume é fixo no compose do banco).
+- Para antes de subir o banco se já houver, com o nome que o compose do banco declara, um volume
+  de outro projeto. O nome é lido do `docker compose config` desta máquina, não fixado no script.
+- Só copia volume com `--migrate-volume`, e nunca apaga o volume antigo.
+
+### Migração do volume do banco (`--migrate-volume`)
+
+Os volumes passaram a ter o prefixo do projeto (spec 031, "Volumes"): o banco sai de
+`postgres-data` para `nuva-edu-postgres-data`. Quando o compose enviado declara o nome novo, o
+servidor ainda não tem o volume novo e tem o `postgres-data` com o rótulo
+`com.docker.compose.project=nuva-edu`, subir sem copiar começaria com o banco vazio. Por isso,
+nesse caso, o deploy para na conferência (código 19), sem enviar nada, e mostra o comando com a
+opção. Rodar a cópia é decisão do humano:
+
+```bash
+pnpm deploy:test <etiqueta> --migrate-volume
+```
+
+Com a opção, depois do `pull` e antes do `up`, o `scripts/volume-migrate.sh` roda no servidor
+(levado pela própria conexão SSH, sem ser gravado lá):
+
+1. confere de novo as três condições; em qualquer outro caso não faz nada;
+2. para só o serviço `postgres` do projeto (`docker compose -p nuva-edu stop postgres`): o banco
+   fica fora do ar durante a cópia;
+3. confere que nenhum contêiner em execução usa o `postgres-data`;
+4. num `docker compose run --rm` do próprio `postgres` (mesma imagem e usuário), o Compose cria o
+   `nuva-edu-postgres-data` com os rótulos dele e a cópia é feita com `cp -a`, conferida com
+   `diff -r`; o `postgres-data` entra só para leitura;
+5. o `up` seguinte sobe o banco no volume novo.
+
+Se a cópia falhar, o volume novo, criado nessa execução, é removido; o `postgres-data` fica como
+estava e o deploy sai com 17. A opção sem migração pendente não faz nada; com `--only` só de
+sites, a migração não roda.
+
+Depois de conferir o banco novo (login no admin, dados presentes), o humano apaga o antigo à
+mão, no servidor:
+
+```bash
+docker volume rm postgres-data
+```
+
+O `nuva-edu-traefik-acme` e o `nuva-edu-backup-data` não são copiados: o servidor de testes não
+usa os perfis `traefik` nem `backup`.
 
 ### Códigos de saída
 
@@ -139,9 +181,11 @@ hosts, e o resto devolve 404 do Traefik.
 | 13 | Falha de SSH, ou servidor sem `docker compose` |
 | 14 | Falta a pasta ou o `.env.local` no servidor |
 | 15 | `.env.local` do servidor impróprio para o ambiente de teste |
-| 16 | Rede do Traefik ausente, ou volume `postgres-data` de outro projeto |
-| 17 | `pull` ou `up` falhou no servidor |
+| 16 | Rede do Traefik ausente, ou volume do banco de outro projeto |
+| 17 | `pull`, cópia do volume ou `up` falhou no servidor |
 | 18 | Serviços no ar, mas a URL pública não respondeu |
+| 19 | Migração do volume do banco necessária e `--migrate-volume` ausente (nada foi enviado) |
+| 20 | Não foi possível ler o volume do banco no `docker compose config` desta máquina |
 
 ## E-mail
 
@@ -161,7 +205,7 @@ docker compose -p nuva-edu --env-file .env --env-file .env.local down
 
 - **Remove:** os contêineres do projeto (`nuva-edu-*`) e a rede `nuva-edu-internal`. Os sites
   saem do ar e o Traefik deixa de rotear os dois hosts.
-- **Preserva:** o volume `postgres-data` (todos os dados), as imagens baixadas, a pasta
+- **Preserva:** o volume do banco (todos os dados), as imagens baixadas, a pasta
   `/opt/nuva-edu` com o `.env.local`, a rede `network_public`, o Traefik, os certificados e tudo
   dos outros projetos.
 

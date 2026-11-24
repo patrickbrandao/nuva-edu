@@ -404,3 +404,35 @@ test('nenhum serviço recebe PORT no environment', { skip }, () => {
     }
   }
 });
+
+test('volumes nomeados com o prefixo do projeto; o do banco é o que a migração lê', {
+  skip,
+}, () => {
+  const { name, services, volumes } = config();
+  assert.equal(name, 'nuva-edu');
+  // O nome do volume do banco vem do config (a tarefa 135 o troca) e é o mesmo que o
+  // scripts/volume-migrate.sh e o deploy:test leem.
+  const mount = services.postgres.volumes.find((item) => item.target === '/var/lib/postgresql');
+  assert.equal(mount?.type, 'volume');
+  const postgresVolume = volumes[mount.source].name;
+  const printed = spawnSync(
+    'bash',
+    [
+      'scripts/volume-migrate.sh',
+      '--print-name',
+      '--no-interpolate',
+      '--',
+      ...['-p', 'nuva-edu', '-f', 'docker-compose.yml', '--env-file', '.env'],
+    ],
+    { cwd: root, encoding: 'utf8' },
+  );
+  assert.equal(printed.status, 0, printed.stderr);
+  assert.equal(printed.stdout.trim(), postgresVolume);
+  // Todo volume tem nome fixo com o prefixo; o do banco ainda pode estar no nome antigo, que só
+  // muda junto com a migração (spec 031, "Volumes").
+  for (const [key, volume] of Object.entries(volumes)) {
+    if (key === mount.source && volume.name === 'postgres-data') continue;
+    assert.match(volume.name, /^nuva-edu-/, `volume ${key}: ${volume.name}`);
+  }
+  assert.equal(volumes.traefik_letsencrypt.name, 'nuva-edu-traefik-acme');
+});

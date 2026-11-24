@@ -2,7 +2,8 @@
 // Atalhos do Docker Compose com os arquivos de ambiente do projeto (spec 031).
 //
 //   pnpm compose <args>   docker compose --env-file .env --env-file .env.local <args>
-//   pnpm dev:up           sobe o ambiente local (perfis traefik e mailpit) e espera a saúde
+//   pnpm dev:up           migra o volume do banco, se preciso, e sobe o ambiente local
+//                         (perfis traefik e mailpit), esperando a saúde
 //   pnpm dev:down         derruba o ambiente local; os volumes ficam
 //
 // Os três incluem o `docker-compose.dev.yml` (porta do Postgres em 127.0.0.1) conforme
@@ -18,7 +19,8 @@ export const USAGE = `Uso: node scripts/dev.mjs <comando> [args]
 
 Comandos:
   compose <args>   docker compose com --env-file .env e .env.local (ex.: pnpm compose ps)
-  up [args]        sobe o ambiente local com os perfis ${DEV_PROFILES.join(' e ')} e espera a saúde
+  up [args]        migra o volume do banco, se preciso (scripts/volume-migrate.sh), e sobe o
+                   ambiente local com os perfis ${DEV_PROFILES.join(' e ')}, esperando a saúde
   down [args]      derruba o ambiente local sem remover os volumes`;
 
 /** `--env-file` na ordem em que o Compose deve ler: `.env` e depois `.env.local`, se existir. */
@@ -81,6 +83,16 @@ export function composeArgs(command, extra = [], { hasLocal = true, publish = fa
   }
 }
 
+/**
+ * Argumentos do `bash` que roda a migração de volume (spec 031, "Volumes") antes do `up`, com
+ * os mesmos arquivos de ambiente e de Compose do `up`. O script só para o `postgres` do projeto
+ * quando há cópia a fazer; nos outros casos não muda nada.
+ */
+export function volumeMigrateArgs({ hasLocal = true, publish = false } = {}) {
+  const files = publish ? DEV_COMPOSE_FILES.flatMap((file) => ['-f', file]) : [];
+  return ['scripts/volume-migrate.sh', '--', ...envFileArgs(hasLocal), ...files];
+}
+
 function main(argv) {
   const root = resolve(import.meta.dirname, '..');
   // O pnpm repassa o `--` de `pnpm compose -- <args>`; o docker não o entende.
@@ -102,6 +114,21 @@ function main(argv) {
   if (args === null || (command === 'compose' && extra.length === 0)) {
     console.error(USAGE);
     return 1;
+  }
+  if (command === 'up') {
+    const migrate = spawnSync(
+      'bash',
+      volumeMigrateArgs({ hasLocal: existsSync(join(root, '.env.local')), publish }),
+      { cwd: root, stdio: 'inherit' },
+    );
+    if (migrate.error || migrate.status !== 0) {
+      console.error(
+        migrate.error
+          ? `Não foi possível executar a migração de volume: ${migrate.error.message}`
+          : 'A migração de volume falhou; nada foi subido. Veja docs/ambiente-local.md.',
+      );
+      return migrate.status || 1;
+    }
   }
   const result = spawnSync('docker', ['compose', ...args], { cwd: root, stdio: 'inherit' });
   if (result.error) {

@@ -6,8 +6,8 @@ Derivado de `specs/031-infraestrutura-e-deploy.md`. Em caso de divergência, val
 
 ```bash
 cp .env.example .env.local   # preencha ao menos POSTGRES_PASSWORD
-pnpm dev:up                  # constrói as imagens, sobe tudo e espera a saúde
-pnpm dev:down                # derruba; os volumes (postgres-data) ficam
+pnpm dev:up                  # migra o volume do banco, se preciso; constrói, sobe e espera a saúde
+pnpm dev:down                # derruba; os volumes ficam
 ```
 
 | Endereço | O que é |
@@ -46,7 +46,7 @@ lida do ambiente do processo, do `.env.local` e do `.env`, nessa ordem:
   publica.
 - Ligar ou desligar: ponha `NUVA_POSTGRES_PUBLISH=true` (ou `false`) no `.env.local` e rode
   `pnpm compose up -d postgres`. O contêiner do banco é recriado (os dados ficam no volume
-  `postgres-data`), então avise quem estiver usando o banco.
+  do banco), então avise quem estiver usando o banco.
 - Quem passa `-f` próprio ao `pnpm compose` escolhe os arquivos: o de desenvolvimento não entra.
 - Use sempre o mesmo caminho (`pnpm compose` ou `docker compose` direto) na mesma máquina: alternar
   entre os dois com a publicação ligada recria o banco a cada troca.
@@ -75,8 +75,42 @@ Todo contêiner (aplicações, `postgres`, `traefik` e `mailpit`) roda com raiz 
 `ulimits.nofile` (65536 no `postgres`, no `traefik` e nas APIs; 4096 nos demais). O teste
 `scripts/compose.test.mjs` confere isso lendo o `docker compose config`.
 
+## Volumes e a migração do nome
+
+Os volumes têm nome fixo com o prefixo do projeto (spec 031, "Volumes"): `nuva-edu-postgres-data`
+(banco), `nuva-edu-backup-data` (perfil `backup`) e `nuva-edu-traefik-acme` (perfil `traefik`).
+Quem vem da Fase 0 tem `postgres-data` e `traefik-acme`.
+
+O `pnpm dev:up` roda antes o `scripts/volume-migrate.sh`, que copia `postgres-data` para o volume
+que o compose do banco declara só quando, ao mesmo tempo: o nome declarado é diferente do antigo;
+o volume declarado ainda não existe; e o `postgres-data` existe com o rótulo
+`com.docker.compose.project=nuva-edu`. Em qualquer outro caso não faz nada (volume antigo de outro
+projeto é ignorado; volume novo existente não é sobrescrito), e rodar de novo também não.
+
+Quando copia, o script:
+
+- para **só** o serviço `postgres` do projeto (`docker compose stop postgres`), e só nesse caso:
+  quem estiver usando o banco local perde a conexão até o `dev:up` terminar;
+- recusa copiar se outro contêiner em execução ainda usar o `postgres-data`;
+- deixa o Compose criar o volume novo num `docker compose run --rm` do próprio `postgres` e copia
+  com `cp -a` (conferido com `diff -r`); o antigo é montado só para leitura;
+- nunca apaga o volume antigo. Se a cópia falhar, remove só o volume novo dessa execução, e o
+  `dev:up` para sem subir nada.
+
+Para saber, sem mudar nada, se a cópia é necessária:
+
+```bash
+bash scripts/volume-migrate.sh --check -- --env-file .env --env-file .env.local   # 3 = necessária
+```
+
+Depois de conferir o banco novo, apague o antigo à mão: `docker volume rm postgres-data`. O
+`traefik-acme` não é copiado (no desenvolvimento não guarda nada que precise ficar): apague-o
+quando quiser com `docker volume rm traefik-acme`.
+
+## Usuário do Postgres
+
 O `postgres` roda como o usuário `postgres` da imagem, não como root: assim a entrada da imagem
-oficial não precisa de `chown` nem de troca de usuário. Um volume `postgres-data` criado antes
+oficial não precisa de `chown` nem de troca de usuário. Um volume do banco criado antes
 dessa mudança continua valendo (os dados já pertencem a esse usuário).
 
 `/readyz` e `/metrics` não passam pelo proxy. Para consultá-los:

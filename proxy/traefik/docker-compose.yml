@@ -72,4 +72,4 @@ services:
 
 volumes:
   traefik_letsencrypt:
-    name: traefik-acme
+    name: nuva-edu-traefik-acme

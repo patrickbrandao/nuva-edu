@@ -56,8 +56,37 @@ if grep -aq 'nuva-deploy: publicação' "$DOUBLE_DIR/ssh.stdin.$n"; then
 fi
 exit 0
 `,
+  // Volumes: VOLUME_OWNER responde por qualquer nome (o caso antigo); VOLUMES="nome=projeto ..."
+  // cria volumes por nome, guardados em $DOUBLE_DIR/volumes para o `compose run` da migração.
   docker: `#!/bin/bash
 echo "docker $*" >> "$DOUBLE_DIR/log"
+vols="$DOUBLE_DIR/volumes"
+if [ ! -d "$vols" ]; then
+  mkdir -p "$vols"
+  for pair in \${VOLUMES:-}; do printf '%s' "\${pair#*=}" > "$vols/\${pair%%=*}"; done
+fi
+volume="\${POSTGRES_VOLUME_NAME:-nuva-edu-postgres-data}"
+if [ "$1" = compose ]; then
+  for arg in "$@"; do
+    case "$arg" in
+      config)
+        printf 'name: nuva-edu\\nservices:\\n  postgres:\\n    volumes:\\n      - source: postgres_data\\n        target: /var/lib/postgresql\\nvolumes:\\n  postgres_data:\\n    name: %s\\n' "$volume"
+        exit 0
+        ;;
+      run) printf nuva-edu > "$vols/$volume"; exit "\${RUN_STATUS:-0}" ;;
+    esac
+  done
+fi
+case "$1 $2" in
+  'volume inspect')
+    if [ -z "\${VOLUME_OWNER:-}" ]; then
+      [ -f "$vols/$3" ] || exit 1
+      [[ "$*" == *--format* ]] && cat "$vols/$3" && echo
+      exit 0
+    fi
+    ;;
+  'volume rm') rm -f "$vols/$3" ;;
+esac
 case "$1 $2" in
   'manifest inspect')
     for name in \${MISSING_IMAGES:-}; do
@@ -189,7 +218,7 @@ test('imagem inexistente para antes de tocar no servidor, com código próprio',
   assert.equal(result.status, 12);
   assert.match(result.stderr, /imagem não encontrada para a etiqueta sha-abc1234: admin classroom/);
   assert.match(result.stderr, /--only/);
-  assert.equal(calls(result, 'docker').length, 5);
+  assert.equal(calls(result, 'docker manifest').length, 5);
   assert.deepEqual(calls(result, 'ssh'), []);
   assert.deepEqual(calls(result, 'curl'), []);
 });
@@ -199,7 +228,7 @@ test('--only publica só o pedido e não exige as imagens dos sites', () => {
     env: { MISSING_IMAGES: 'admin classroom', SSH_PREFLIGHT_OUT: PREFLIGHT_OK },
   });
   assert.equal(result.status, 0, result.output);
-  assert.equal(calls(result, 'docker').length, 3);
+  assert.equal(calls(result, 'docker manifest').length, 3);
   const deploy = readFileSync(join(result.dir, 'ssh.stdin.3'), 'utf8');
   assert.match(deploy, /^SERVICES='admin-api classroom-api worker'$/m);
   assert.match(deploy, /^export NUVA_IMAGE_TAG='main'$/m);
@@ -348,7 +377,9 @@ test('deploy completo: três conexões, só os arquivos da lista e nunca o .env.
   ]);
 
   // No "servidor", todo docker compose é do projeto nuva-edu, sem perfil e sem build.
-  const compose = calls(result, 'docker').filter((line) => / compose -p /.test(line));
+  const compose = calls(result, 'docker').filter(
+    (line) => / compose -p /.test(line) && !/ config /.test(line),
+  );
   const prefix =
     'docker compose -p nuva-edu -f docker-compose.yml --env-file .env --env-file .env.local ';
   const all = 'admin-api classroom-api worker admin classroom';
@@ -498,4 +529,118 @@ test('no servidor, o compose resolve hosts, rede externa, TLS e nenhuma porta pu
     assert.equal(services[name].environment.NUVA_PUBLIC_SCHEME, 'https', name);
     assert.equal(services[name].environment.NUVA_PUBLIC_PORT, '', name);
   }
+});
+
+// --- migração do volume do banco (spec 031, "Volumes") -------------------------------------------
+
+function remoteRun(args, env = {}) {
+  const dir = sandbox();
+  const remote = join(dir, 'remote');
+  mkdirSync(remote);
+  writeFileSync(join(remote, '.env.local'), TEST_ENV_LOCAL);
+  return run([...args, '--dir', remote], { dir, env: { SSH_EXEC: '1', ...env } });
+}
+const changed = (result) =>
+  calls(result, 'docker').filter((line) => / (stop|run|volume rm) /.test(line));
+
+test('o volume do banco vem do docker compose config local, não de nome fixo', () => {
+  const result = run(['main', '--dry-run'], { env: { POSTGRES_VOLUME_NAME: 'qualquer-nome' } });
+  assert.equal(result.status, 0, result.output);
+  assert.match(result.stdout, /^Volume do banco: qualquer-nome$/m);
+  assert.match(result.stdout, /^POSTGRES_VOLUME='qualquer-nome'$/m);
+  assert.ok(
+    calls(result, 'docker').includes(
+      'docker compose -p nuva-edu -f docker-compose.yml --env-file .env config --no-interpolate',
+    ),
+  );
+});
+
+test('sem --migrate-volume e com migração necessária, para com a instrução e nada enviado', () => {
+  const result = remoteRun(['sha-abc1234'], { VOLUMES: 'postgres-data=nuva-edu' });
+  assert.equal(result.status, 19, result.output);
+  assert.match(
+    result.stderr,
+    /PROBLEMA: é preciso copiar postgres-data para nuva-edu-postgres-data/,
+  );
+  assert.match(result.stderr, /pnpm deploy:test sha-abc1234 --migrate-volume/);
+  assert.equal(calls(result, 'ssh').length, 1);
+  assert.deepEqual(changed(result), []);
+  assert.deepEqual(readdirSync(join(result.dir, 'remote')), ['.env.local']);
+});
+
+test('com --migrate-volume, copia antes do up, só do projeto, sem apagar o antigo', () => {
+  const result = remoteRun(['sha-abc1234', '--migrate-volume'], {
+    VOLUMES: 'postgres-data=nuva-edu',
+  });
+  assert.equal(result.status, 0, result.output);
+  assert.match(result.stdout, /migração de volume: postgres-data para nuva-edu-postgres-data/);
+  const prefix =
+    'docker compose -p nuva-edu -f docker-compose.yml --env-file .env --env-file .env.local';
+  const docker = calls(result, 'docker');
+  const pull = docker.findIndex((line) => line.startsWith(`${prefix} pull `));
+  const stop = docker.indexOf(`${prefix} stop postgres`);
+  const copy = docker.findIndex((line) => line.startsWith(`${prefix} run --rm --no-deps `));
+  const up = docker.findIndex((line) => line.startsWith(`${prefix} up -d `));
+  assert.ok(pull >= 0 && pull < stop && stop < copy && copy < up, docker.join('\n'));
+  assert.equal(readFileSync(join(result.dir, 'volumes', 'postgres-data'), 'utf8'), 'nuva-edu');
+  assert.equal(
+    readFileSync(join(result.dir, 'volumes', 'nuva-edu-postgres-data'), 'utf8'),
+    'nuva-edu',
+  );
+  assert.ok(!docker.some((line) => / volume rm /.test(line)));
+  // O script de migração não é gravado no servidor.
+  assert.ok(
+    !readdirSync(join(result.dir, 'remote'), { recursive: true }).some((f) => f.endsWith('.sh')),
+  );
+});
+
+test('com --migrate-volume e migração que falha, para com código de publicação', () => {
+  const result = remoteRun(['sha-abc1234', '--migrate-volume'], {
+    VOLUMES: 'postgres-data=nuva-edu',
+    RUN_STATUS: '1',
+  });
+  assert.equal(result.status, 17, result.output);
+  assert.match(
+    result.stderr,
+    /migração do volume postgres-data para nuva-edu-postgres-data falhou/,
+  );
+  assert.ok(!calls(result, 'docker').some((line) => / up -d /.test(line)));
+  assert.equal(readFileSync(join(result.dir, 'volumes', 'postgres-data'), 'utf8'), 'nuva-edu');
+  assert.deepEqual(calls(result, 'curl'), []);
+});
+
+test('sem migração necessária o deploy segue igual, com ou sem a opção', () => {
+  for (const [env, label] of [
+    [{ VOLUMES: 'postgres-data=outro-projeto' }, 'antigo de outro projeto'],
+    [{ VOLUMES: 'postgres-data=nuva-edu nuva-edu-postgres-data=nuva-edu' }, 'novo já existe'],
+    [{ VOLUMES: 'postgres-data=nuva-edu', POSTGRES_VOLUME_NAME: 'postgres-data' }, 'nome antigo'],
+    [{}, 'sem volume'],
+  ]) {
+    for (const flag of [[], ['--migrate-volume']]) {
+      const result = remoteRun(['sha-abc1234', ...flag], env);
+      assert.equal(result.status, 0, `${label} ${flag}: ${result.output}`);
+      assert.deepEqual(changed(result), [], `${label} ${flag}`);
+    }
+  }
+});
+
+test('só sites: o volume do banco não é conferido nem migrado', () => {
+  const result = remoteRun(['sha-abc1234', '--only', 'admin,classroom'], {
+    VOLUMES: 'postgres-data=nuva-edu',
+  });
+  assert.equal(result.status, 0, result.output);
+  assert.deepEqual(changed(result), []);
+});
+
+test('--dry-run com --migrate-volume mostra a cópia; sem a opção, nada dela', () => {
+  const plain = run(['main', '--dry-run']);
+  assert.doesNotMatch(plain.stdout, /volume-migrate|stop postgres/);
+  const result = run(['main', '--dry-run', '--migrate-volume']);
+  assert.equal(result.status, 0, result.output);
+  assert.match(
+    result.stdout,
+    /Com --migrate-volume: copia postgres-data para nuva-edu-postgres-data/,
+  );
+  assert.match(result.stdout, /bash -c "\$VOLUME_MIGRATE" volume-migrate --from 'postgres-data'/);
+  assert.deepEqual(calls(result, 'ssh'), []);
 });

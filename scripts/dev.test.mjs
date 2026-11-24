@@ -1,6 +1,15 @@
 import assert from 'node:assert/strict';
-import { test } from 'node:test';
-import { composeArgs, envFileArgs, mergeEnv, publishPostgres } from './dev.mjs';
+import { spawnSync } from 'node:child_process';
+import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join, resolve } from 'node:path';
+import { after, test } from 'node:test';
+import { composeArgs, envFileArgs, mergeEnv, publishPostgres, volumeMigrateArgs } from './dev.mjs';
+
+const temps = [];
+after(() => {
+  for (const dir of temps) rmSync(dir, { recursive: true, force: true });
+});
 
 test('envFileArgs lê .env e depois .env.local', () => {
   assert.deepEqual(envFileArgs(true), ['--env-file', '.env', '--env-file', '.env.local']);
@@ -91,4 +100,68 @@ test('com a publicação ligada, os três comandos incluem o docker-compose.dev.
   ]) {
     assert.ok(!composeArgs('compose', own, { publish: true }).includes('docker-compose.dev.yml'));
   }
+});
+
+test('a migração de volume usa os mesmos arquivos de ambiente e de Compose do up', () => {
+  assert.deepEqual(volumeMigrateArgs({ hasLocal: true, publish: false }), [
+    'scripts/volume-migrate.sh',
+    '--',
+    '--env-file',
+    '.env',
+    '--env-file',
+    '.env.local',
+  ]);
+  assert.deepEqual(volumeMigrateArgs({ hasLocal: false, publish: true }).slice(2), [
+    '--env-file',
+    '.env',
+    '-f',
+    'docker-compose.yml',
+    '-f',
+    'docker-compose.dev.yml',
+  ]);
+});
+
+// `dev:up` com um dublê do docker: nada chega ao Docker de verdade.
+function devUp(configStatus) {
+  const dir = mkdtempSync(join(tmpdir(), 'nuva-dev-'));
+  temps.push(dir);
+  mkdirSync(join(dir, 'bin'));
+  writeFileSync(
+    join(dir, 'bin', 'docker'),
+    `#!/bin/bash
+echo "docker $*" >> "${join(dir, 'log')}"
+case " $* " in
+  *" config"*)
+    printf 'name: nuva-edu\nservices:\n  postgres:\n    volumes:\n      - source: d\n        target: /var/lib/postgresql\nvolumes:\n  d:\n    name: nuva-edu-postgres-data\n'
+    exit ${configStatus}
+    ;;
+  *" volume inspect "*) exit 0 ;;
+esac
+exit 0
+`,
+  );
+  chmodSync(join(dir, 'bin', 'docker'), 0o755);
+  writeFileSync(join(dir, 'log'), '');
+  const result = spawnSync(process.execPath, [resolve(import.meta.dirname, 'dev.mjs'), 'up'], {
+    encoding: 'utf8',
+    env: { ...process.env, PATH: `${join(dir, 'bin')}:${process.env.PATH}` },
+  });
+  const log = readFileSync(join(dir, 'log'), 'utf8').split('\n').filter(Boolean);
+  return { ...result, log };
+}
+
+test('dev:up roda a migração de volume antes de subir', () => {
+  const result = devUp(0);
+  assert.equal(result.status, 0, result.stderr);
+  const config = result.log.findIndex((line) => / config$/.test(line));
+  const up = result.log.findIndex((line) => / up -d --build --wait/.test(line));
+  assert.ok(config >= 0 && up > config, result.log.join('\n'));
+  assert.match(result.stdout, /já existe/);
+});
+
+test('dev:up não sobe nada quando a migração de volume falha', () => {
+  const result = devUp(1);
+  assert.notEqual(result.status, 0);
+  assert.ok(!result.log.some((line) => / up /.test(line)), result.log.join('\n'));
+  assert.match(result.stderr, /migração de volume falhou/);
 });

@@ -12,8 +12,9 @@ set -euo pipefail
 readonly PROJECT='nuva-edu'
 readonly IMAGE_PREFIX='tmsoftbrasil/nuva-edu-'
 readonly ALL_SERVICES='admin-api classroom-api worker admin classroom'
-# Volume de nome fixo declarado em database/postgres/docker-compose.yml.
-readonly POSTGRES_VOLUME='postgres-data'
+# Nome antigo do volume do banco (Fase 0). O nome atual é lido do `docker compose config`
+# (database/postgres/docker-compose.yml), não fixado aqui. Spec 031, "Volumes".
+readonly LEGACY_POSTGRES_VOLUME='postgres-data'
 readonly WAIT_SECONDS=120
 
 # Tudo o que vai para o servidor. Só arquivos Compose e o `.env` versionado: as imagens já trazem
@@ -33,26 +34,31 @@ apps/classroom/docker-compose.yml'
 
 # Códigos de saída.
 readonly E_USAGE=2 E_CONFIG=10 E_GIT=11 E_IMAGE=12 E_SSH=13 E_REMOTE_ENV=14 E_REMOTE_INVALID=15
-readonly E_REMOTE_CONFLICT=16 E_DEPLOY=17 E_HEALTH=18
+readonly E_REMOTE_CONFLICT=16 E_DEPLOY=17 E_HEALTH=18 E_MIGRATION=19 E_COMPOSE=20
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 readonly ROOT
 ENV_FILE="${NUVA_DEPLOY_ENV_FILE:-$ROOT/.env.local}"
 DEPLOY_DIR="${NUVA_DEPLOY_DIR:-/opt/nuva-edu}"
 DRY_RUN=false
+MIGRATE_VOLUME=false
 LIST_FILES=false
 ONLY=''
 TAG=''
 
 usage() {
   cat <<EOF
-Uso: pnpm deploy:test [etiqueta] [--only <serviços>] [--dry-run] [--dir <pasta>]
+Uso: pnpm deploy:test [etiqueta] [--only <serviços>] [--migrate-volume] [--dry-run] [--dir <pasta>]
 
   etiqueta           etiqueta das imagens no Docker Hub (ex.: sha-12c4423, main).
                      Padrão: sha-<7> do HEAD, que precisa ser igual a main e a origin/main.
   --only <serviços>  deploy parcial deliberado: lista separada por vírgula de
                      ${ALL_SERVICES// /, }.
                      Os demais serviços ficam como estão (ou fora, se nunca subiram).
+  --migrate-volume   copia o volume antigo do banco (postgres-data) para o nome novo, quando
+                     a spec 031 exige ("Volumes"). Para o postgres do projeto durante a cópia
+                     e nunca apaga o volume antigo. Sem a opção, o deploy para se a cópia
+                     for necessária. Decisão do humano.
   --dry-run          mostra os arquivos e os comandos remotos; não conecta ao servidor.
   --dir <pasta>      pasta no servidor (padrão: /opt/nuva-edu, ou NUVA_DEPLOY_DIR).
   --list-files       lista os arquivos que seriam enviados e sai.
@@ -76,6 +82,7 @@ die() {
 while [ $# -gt 0 ]; do
   case "$1" in
     --dry-run) DRY_RUN=true ;;
+    --migrate-volume) MIGRATE_VOLUME=true ;;
     --list-files) LIST_FILES=true ;;
     --only)
       [ $# -ge 2 ] || die "$E_USAGE" '--only precisa da lista de serviços'
@@ -251,6 +258,13 @@ git ls-files --error-unmatch -- "${FILES[@]}" >/dev/null 2>&1 ||
 git diff --quiet HEAD -- "${FILES[@]}" ||
   die "$E_GIT" 'há arquivo Compose ou .env com alteração não commitada; commite ou desfaça antes.'
 
+# Volume do banco que o compose enviado declara (sem interpolar: não precisa de segredo).
+POSTGRES_VOLUME="$(bash "$ROOT/scripts/volume-migrate.sh" --print-name --no-interpolate -- \
+  -p "$PROJECT" -f docker-compose.yml --env-file .env)" ||
+  die "$E_COMPOSE" 'não consegui ler o volume do banco no docker compose config desta máquina.'
+[[ "$POSTGRES_VOLUME" =~ ^[A-Za-z0-9][A-Za-z0-9_.-]*$ ]] ||
+  die "$E_COMPOSE" "nome de volume inválido no compose: $POSTGRES_VOLUME"
+
 # --- imagens ---------------------------------------------------------------------------------
 
 step "Imagens da etiqueta $TAG no Docker Hub"
@@ -281,7 +295,9 @@ preflight_script() {
 DEPLOY_DIR='$DEPLOY_DIR'
 PROJECT='$PROJECT'
 POSTGRES_VOLUME='$POSTGRES_VOLUME'
+LEGACY_POSTGRES_VOLUME='$LEGACY_POSTGRES_VOLUME'
 NEEDS_DB='$BACKEND'
+MIGRATE_VOLUME='$MIGRATE_VOLUME'
 EOF
   cat <<'EOF'
 set -u
@@ -322,13 +338,24 @@ docker network inspect "$network" >/dev/null 2>&1 || {
   echo "PROBLEMA: a rede $network não existe no servidor"
   exit 45
 }
+volume_owner() {
+  docker volume inspect "$1" --format '{{ index .Labels "com.docker.compose.project" }}' 2>/dev/null
+}
 if [ "$NEEDS_DB" = true ] && docker volume inspect "$POSTGRES_VOLUME" >/dev/null 2>&1; then
-  owner="$(docker volume inspect "$POSTGRES_VOLUME" \
-    --format '{{ index .Labels "com.docker.compose.project" }}' 2>/dev/null)"
+  owner="$(volume_owner "$POSTGRES_VOLUME")"
   if [ "$owner" != "$PROJECT" ]; then
     echo "PROBLEMA: o volume $POSTGRES_VOLUME já existe e é de outro projeto (${owner:-sem rótulo})"
     exit 46
   fi
+elif [ "$NEEDS_DB" = true ] && [ "$POSTGRES_VOLUME" != "$LEGACY_POSTGRES_VOLUME" ] &&
+  docker volume inspect "$LEGACY_POSTGRES_VOLUME" >/dev/null 2>&1 &&
+  [ "$(volume_owner "$LEGACY_POSTGRES_VOLUME")" = "$PROJECT" ]; then
+  # Volume antigo do projeto e nenhum novo: subir sem copiar começaria com o banco vazio.
+  if [ "$MIGRATE_VOLUME" != true ]; then
+    echo "PROBLEMA: é preciso copiar $LEGACY_POSTGRES_VOLUME para $POSTGRES_VOLUME"
+    exit 48
+  fi
+  echo "MIGRAR=$LEGACY_POSTGRES_VOLUME"
 fi
 admin_host="$(val NUVA_ADMIN_HOST)"
 classroom_host="$(val NUVA_CLASSROOM_HOST)"
@@ -364,6 +391,21 @@ compose() {
 }
 # shellcheck disable=SC2086
 compose pull --quiet --include-deps \$SERVICES
+EOF
+  if $MIGRATE_VOLUME && $BACKEND; then
+    # O scripts/volume-migrate.sh vai no próprio fluxo da conexão (não é gravado no servidor):
+    # só copia nas condições da spec e nunca apaga o volume antigo.
+    printf "IFS= read -r -d '' VOLUME_MIGRATE <<'NUVA_VOLUME_MIGRATE_EOF' || true\n"
+    cat "$ROOT/scripts/volume-migrate.sh"
+    printf 'NUVA_VOLUME_MIGRATE_EOF\n'
+    cat <<EOF
+if ! bash -c "\$VOLUME_MIGRATE" volume-migrate --from '$LEGACY_POSTGRES_VOLUME' --project $PROJECT -- \\
+  -p $PROJECT -f docker-compose.yml --env-file .env --env-file .env.local </dev/null; then
+  exit 49
+fi
+EOF
+  fi
+  cat <<EOF
 # shellcheck disable=SC2086
 if ! compose up -d --no-build --wait --wait-timeout $WAIT_SECONDS \$SERVICES; then
   compose ps --all || true
@@ -382,6 +424,10 @@ if $DRY_RUN; then
   say "Servidor: $SSH_USER@$SSH_HOST porta $SSH_PORT, pasta $DEPLOY_DIR"
   say "Etiqueta: $TAG"
   say "Serviços: $SERVICES"
+  say "Volume do banco: $POSTGRES_VOLUME"
+  if $MIGRATE_VOLUME; then
+    say "Com --migrate-volume: copia $LEGACY_POSTGRES_VOLUME para $POSTGRES_VOLUME, se necessário."
+  fi
   if [ "$SERVICES" != "$ALL_SERVICES" ]; then
     say 'Deploy parcial: os serviços fora da lista não são criados nem atualizados.'
   fi
@@ -449,6 +495,14 @@ case "$preflight_status" in
     die "$E_REMOTE_CONFLICT" "o volume $POSTGRES_VOLUME do servidor pertence a outro projeto.
 Nada foi enviado: subir o banco usaria os dados de terceiros. Leve ao humano."
     ;;
+  48)
+    die "$E_MIGRATION" "o servidor tem o volume antigo $LEGACY_POSTGRES_VOLUME do projeto e ainda não
+tem o $POSTGRES_VOLUME. Subir assim começaria com o banco vazio. Nada foi enviado.
+Para copiar (decisão do humano; o postgres do projeto fica parado durante a cópia e o volume
+antigo não é apagado), rode de novo com a opção:
+  pnpm deploy:test ${TAG} --migrate-volume
+Procedimento e remoção manual do volume antigo: docs/ambiente-de-teste.md."
+    ;;
   *) die "$E_SSH" "falha na conexão ou na conferência (ssh saiu com $preflight_status). Nada foi enviado." ;;
 esac
 
@@ -460,6 +514,9 @@ CLASSROOM_HOST="$(remote_value CLASSROOM_HOST)"
 host_pattern='^[A-Za-z0-9]([A-Za-z0-9.-]*[A-Za-z0-9])?$'
 [[ "$ADMIN_HOST" =~ $host_pattern ]] || die "$E_REMOTE_INVALID" 'host do admin inválido no servidor'
 [[ "$CLASSROOM_HOST" =~ $host_pattern ]] || die "$E_REMOTE_INVALID" 'host do classroom inválido no servidor'
+if [ -n "$(remote_value MIGRAR)" ]; then
+  say "  migração de volume: $LEGACY_POSTGRES_VOLUME para $POSTGRES_VOLUME (--migrate-volume)"
+fi
 say "  Docker $(remote_value DOCKER), Compose $(remote_value COMPOSE), rede $(remote_value REDE)"
 say "  hosts: $ADMIN_HOST e $CLASSROOM_HOST"
 
@@ -479,6 +536,10 @@ set +e
 deploy_script | ssh "${SSH_ARGS[@]}" bash -s
 deploy_status=$?
 set -e
+if [ "$deploy_status" -eq 49 ]; then
+  die "$E_DEPLOY" "a migração do volume $LEGACY_POSTGRES_VOLUME para $POSTGRES_VOLUME falhou no servidor.
+O volume antigo não foi alterado e o postgres do projeto pode ter ficado parado. Leve ao humano."
+fi
 if [ "$deploy_status" -ne 0 ]; then
   die "$E_DEPLOY" "a publicação falhou no servidor (saída $deploy_status). Os logs estão acima.
 Não há volta automática: corrija e rode de novo, ou publique a etiqueta anterior."
