@@ -102,3 +102,5 @@ e o `task:list` a mostra em `DEPENDE DE` com o sufixo `(pronta)`.
 - Banco e Docker são um só para todos os worktrees: `pnpm dev:up` só no checkout principal, e
   migrations continuam uma tarefa por vez.
 - `tasks/` e `tmp/` existem só no checkout principal.
+
+A janela foi provada no próprio repositório em 2026-11-24, com duas tarefas descartáveis (990 e 991).
