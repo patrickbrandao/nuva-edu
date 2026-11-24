@@ -59,4 +59,7 @@ services:
 
 volumes:
   postgres_data:
-    name: postgres-data
+    # Nome com o prefixo do projeto (spec 031, "Volumes"). Quem tem o antigo `postgres-data` recebe
+    # a cópia pelo `scripts/volume-migrate.sh` (no `pnpm dev:up`; no servidor, só com
+    # `pnpm deploy:test --migrate-volume`). O volume antigo é apagado à mão pelo humano.
+    name: nuva-edu-postgres-data

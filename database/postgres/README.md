@@ -128,4 +128,10 @@ pnpm --filter @nuva-edu/database test        # precisa do Postgres no ar
 pnpm --filter @nuva-edu/database typecheck
 ```
 
+Quem vem do `postgres-data` deve subir pela primeira vez com `pnpm dev:up`, não com o `docker compose up` acima: o Compose sozinho cria o `nuva-edu-postgres-data` vazio, e o script então não copia mais (volume novo já existente não é sobrescrito).
+
+### Volume
+
+Os dados ficam no volume `nuva-edu-postgres-data` (spec 031, "Volumes"). Até a Fase 0 o nome era `postgres-data`: quem ainda o tem não precisa fazer nada à mão, porque o `pnpm dev:up` roda antes o `scripts/volume-migrate.sh`, que para o `postgres`, cria o volume novo e copia o antigo para ele (só quando o novo ainda não existe e o antigo tem o rótulo do projeto `nuva-edu`). No servidor de testes a cópia só acontece com `pnpm deploy:test --migrate-volume`. O volume antigo nunca é apagado pelo script: depois de conferir o banco novo, o humano roda `docker volume rm postgres-data`. Para saber se a cópia ainda falta, sem mudar nada: `bash scripts/volume-migrate.sh --check`.
+
 O código roda direto no Node 26, que executa TypeScript sem build; por isso os imports levam `.ts` e a sintaxe é só a que o Node apaga (sem `enum`, sem propriedades de construtor). Os testes do mecanismo usam `node:test`, bancos `<db>_test_*` próprios e uma base `<db>_selftest_*` para o modelo, sem tocar no `nuva_edu_tpl` de quem estiver testando ao lado.
