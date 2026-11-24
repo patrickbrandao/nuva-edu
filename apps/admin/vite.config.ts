@@ -2,6 +2,7 @@ import { themeBootPlugin } from '@nuva-edu/ui/theme-boot';
 import tailwindcss from '@tailwindcss/vite';
 import react from '@vitejs/plugin-react';
 import { defineConfig } from 'vitest/config';
+import { devRuntimeConfigPlugin } from './vite/devRuntimeConfig.ts';
 
 // Em produção o proxy reverso entrega `/api` e `/healthz` do mesmo host à admin-api (spec 031).
 // Em desenvolvimento o Vite faz esse papel; a porta padrão é a da admin-api na spec 031.
@@ -13,12 +14,18 @@ const proxy = {
 
 export default defineConfig({
   // `themeBootPlugin` aplica o tema salvo antes da primeira pintura (script no <head>).
-  plugins: [react(), tailwindcss(), themeBootPlugin()],
+  // `devRuntimeConfigPlugin` responde `/config.json` no dev e no preview; no build não faz nada.
+  plugins: [
+    react(),
+    tailwindcss(),
+    themeBootPlugin(),
+    devRuntimeConfigPlugin('admin', process.env),
+  ],
   server: { host: '127.0.0.1', port: 5311, strictPort: true, proxy },
   preview: { host: '127.0.0.1', port: 5311, strictPort: true, proxy },
   test: {
     environment: 'jsdom',
     setupFiles: ['./vitest.setup.ts'],
-    include: ['src/**/*.test.{ts,tsx}'],
+    include: ['src/**/*.test.{ts,tsx}', 'vite/**/*.test.ts'],
   },
 });

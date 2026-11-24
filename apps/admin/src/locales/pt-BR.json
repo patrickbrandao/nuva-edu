@@ -90,6 +90,11 @@
     "submit": "Entrar",
     "unavailable": "O acesso ao painel ainda não está disponível nesta versão."
   },
+  "noAccess": {
+    "title": "Sem acesso ao painel",
+    "text": "Sua conta não faz parte da equipe desta escola. O painel é só para a equipe.",
+    "classroomLink": "Ir para a área do aluno"
+  },
   "underConstruction": {
     "title": "Em construção",
     "text": "A tela “{{page}}” ainda não está disponível nesta versão."

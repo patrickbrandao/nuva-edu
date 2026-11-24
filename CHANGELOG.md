@@ -40,6 +40,7 @@ Detalhe das decisões em `specs/decisions/`.
 - `check-contract [--no-pending]` (`runCheckContract` do `@nuva-edu/api-kit`, script `check-contract` na `admin-api`): confere rotas e contrato sem banco e falha com operação `x-nuva-pending`; HTTP malformado responde `400 validation_failed` em problem+json.
 - `scripts/task.mjs`: `pnpm task:start`, `task:finish`, `task:abort`, `task:path` e `task:list` (um worktree por tarefa em `.worktrees/task-NNN`, branch `task/NNN`); `CHANGELOG.md` com `merge=union`; base do `verify:quick` passa a ser a `main` local.
 - classroom-api: comando `check-contract [--no-pending]` (script `check-contract`), sem banco e sem porta; `buildClassroomApp` aceita `listenUserEvents: false`.
+- `@nuva-edu/admin`: leitura do `/config.json` ao abrir (`app`, `adminUrl`, `classroomUrl`), tela "sem acesso ao painel" com o link para o classroom vindo de `classroomUrl` (some se o arquivo faltar ou vier inválido) e `/config.json` respondido pelo Vite no desenvolvimento (task 063).
 
 ### Alterado
 - Infra: `postgres`, `traefik` e `mailpit` sem capacidades (`cap_drop: ALL`, `no-new-privileges`), Postgres sem root, `nofile` 65536 no banco e no proxy, `healthcheck` no Mailpit; sites com `Content-Security-Policy` sem `unsafe-inline` (hash do script do tema gerado no build da imagem); pre-commit confere YAML; `verify:quick` sobe o banco por `pnpm compose`.
