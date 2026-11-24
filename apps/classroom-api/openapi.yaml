@@ -58,6 +58,14 @@ tags:
     description: Dados públicos da instalação e da marca da escola.
   - name: stream
     description: Tempo real por SSE.
+  - name: auth
+    description: Cadastro, login, sessão, senha e login social (`specs/007-contas-e-autenticacao.md`).
+  - name: account
+    description: Métodos de acesso, sessões e avatar do próprio usuário.
+  - name: legal
+    description: Termos de Uso, Política de Privacidade e aceite (`specs/030-lgpd.md`).
+  - name: images
+    description: Envio e entrega de imagens (`specs/029-imagens.md`).
 security:
   - sessionCookie: []
 paths:
@@ -207,6 +215,1136 @@ paths:
           $ref: "#/components/responses/InternalError"
         "503":
           $ref: "#/components/responses/ServiceUnavailable"
+  /api/v1/auth/register:
+    post:
+      operationId: register
+      tags: [auth]
+      summary: Cadastro por e-mail e senha
+      x-nuva-pending: true
+      description: |
+        Cria a conta `student` (`specs/007-contas-e-autenticacao.md`, "Cadastro por e-mail e
+        senha"). **Não abre sessão**: responde `204` também quando o e-mail já tem conta (o dono
+        recebe o e-mail `account.exists` e nada muda na conta), para a resposta não revelar se o
+        e-mail existe. Em seguida o site chama `POST /api/v1/auth/login` com o mesmo e-mail e a
+        mesma senha.
+
+        Validação, nesta ordem: formato dos campos (`400`; senha fora de 8 a 128 caracteres é
+        `400` com `code: password_invalid`, conferida pela regra e não pelo esquema), aceite dos
+        termos vigentes quando houver versão publicada (`422` `terms_acceptance_required`, com
+        `errors[]` indicando o documento). Sem versão publicada, `acceptedTerms` vai vazio.
+
+        **Exceção de CSRF.** Não declara `csrfToken`: não há sessão, e portanto não há token. A
+        proteção é o corpo só em `application/json` (outro tipo: `415`; um formulário de outro
+        site não envia JSON sem CORS, que a API não habilita).
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, email, password, acceptedTerms]
+              properties:
+                name:
+                  type: string
+                  minLength: 1
+                  maxLength: 80
+                  description: Nome de exibição.
+                email:
+                  $ref: "#/components/schemas/Email"
+                password:
+                  type: string
+                  description: 8 a 128 caracteres, sem outra regra; fora disso, `password_invalid`.
+                acceptedTerms:
+                  type: array
+                  description: |
+                    `id` das versões vigentes (`terms` e `privacy`) que o usuário aceitou, como
+                    vêm em `GET /api/v1/legal/{document}`.
+                  items:
+                    $ref: "#/components/schemas/Uuid"
+                  uniqueItems: true
+                  maxItems: 2
+              additionalProperties: false
+      responses:
+        "204":
+          description: Pedido aceito (conta nova ou e-mail já cadastrado; a resposta é a mesma).
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/XRequestId"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "413":
+          $ref: "#/components/responses/PayloadTooLarge"
+        "415":
+          $ref: "#/components/responses/UnsupportedMediaType"
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+  /api/v1/auth/login:
+    post:
+      operationId: login
+      tags: [auth]
+      summary: Login por e-mail e senha
+      x-nuva-pending: true
+      description: |
+        Abre a sessão do classroom (`specs/007-contas-e-autenticacao.md`, "Login por senha") e
+        grava o cookie `nuva_classroom_session`.
+
+        - Qualquer falha de credencial (senha errada, vazia, só de espaços, conta sem senha,
+          e-mail inexistente ou conta excluída): `401` `invalid_credentials`, no mesmo tempo.
+        - Conta com suspensão `full`, só depois de a senha conferir: `403` `account_suspended`.
+        - Conta ou IP bloqueado por tentativas erradas: `429` `too_many_attempts`, com
+          `Retry-After`.
+
+        **Exceção de CSRF.** Não declara `csrfToken`: ainda não há sessão. A proteção é o corpo só
+        em `application/json` (outro tipo: `415`) e o cookie de sessão `SameSite=Lax`.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password]
+              properties:
+                email:
+                  $ref: "#/components/schemas/Email"
+                password:
+                  type: string
+                  description: Sem regra de tamanho aqui; qualquer valor errado é `invalid_credentials`.
+              additionalProperties: false
+      responses:
+        "200":
+          description: Sessão aberta.
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/XRequestId"
+            Set-Cookie:
+              $ref: "#/components/headers/SetCookie"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Session"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "413":
+          $ref: "#/components/responses/PayloadTooLarge"
+        "415":
+          $ref: "#/components/responses/UnsupportedMediaType"
+        "429":
+          $ref: "#/components/responses/TooManyAttempts"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+  /api/v1/auth/logout:
+    post:
+      operationId: logout
+      tags: [auth]
+      summary: Sair
+      x-nuva-pending: true
+      description: |
+        Encerra a sessão atual e apaga o cookie. Aceita mesmo com termos pendentes.
+      security:
+        - sessionCookie: []
+          csrfToken: []
+      responses:
+        "204":
+          description: Sessão encerrada; o cookie é apagado.
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/XRequestId"
+            Set-Cookie:
+              $ref: "#/components/headers/SetCookie"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+  /api/v1/session:
+    get:
+      operationId: getSession
+      tags: [auth]
+      summary: Sessão atual
+      x-nuva-pending: true
+      description: |
+        Dono da sessão, token CSRF, ações permitidas e termos pendentes. Sem sessão válida:
+        `401` `unauthenticated`, e o cookie é apagado.
+      responses:
+        "200":
+          description: A sessão atual.
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/XRequestId"
+            Cache-Control:
+              $ref: "#/components/headers/NoStore"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Session"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+  /api/v1/auth/email/verify:
+    post:
+      operationId: verifyEmail
+      tags: [auth]
+      summary: Confirmar o e-mail
+      x-nuva-pending: true
+      description: |
+        Confirma o e-mail com o token do link `<classroomUrl>/confirmar?token=<token>`
+        (`specs/007-contas-e-autenticacao.md`, "Confirmação de e-mail"). Token vencido, já usado
+        ou desconhecido: `410` `token_expired`.
+
+        **Exceção de CSRF.** Não declara `csrfToken`: quem abre o link pode não ter sessão. A
+        proteção é o corpo só em `application/json` (outro tipo: `415`) e o token de uso único.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/EmailTokenRequest"
+      responses:
+        "204":
+          description: E-mail confirmado.
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/XRequestId"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "410":
+          $ref: "#/components/responses/Gone"
+        "413":
+          $ref: "#/components/responses/PayloadTooLarge"
+        "415":
+          $ref: "#/components/responses/UnsupportedMediaType"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+  /api/v1/auth/email/resend:
+    post:
+      operationId: resendVerificationEmail
+      tags: [auth]
+      summary: Reenviar o link de confirmação
+      x-nuva-pending: true
+      description: |
+        Enfileira um novo link de confirmação; o anterior deixa de valer. Até 3 por hora por
+        usuário (`429` `rate_limited`). E-mail já confirmado: `204` sem envio.
+      security:
+        - sessionCookie: []
+          csrfToken: []
+      responses:
+        "204":
+          description: Pedido aceito.
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/XRequestId"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+  /api/v1/auth/password/forgot:
+    post:
+      operationId: requestPasswordReset
+      tags: [auth]
+      summary: Esqueci a senha
+      x-nuva-pending: true
+      description: |
+        Responde sempre `204`. Se a conta existir (e não estiver excluída), enfileira o e-mail
+        `account.password_reset` com link de 24 h para `<classroomUrl>/redefinir?token=<token>`.
+        Conta só com provedor também recebe o link: usá-lo define a primeira senha.
+
+        **Exceção de CSRF.** Não declara `csrfToken`: quem esqueceu a senha não tem sessão. A
+        proteção é o corpo só em `application/json` (outro tipo: `415`).
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email]
+              properties:
+                email:
+                  $ref: "#/components/schemas/Email"
+              additionalProperties: false
+      responses:
+        "204":
+          description: Pedido aceito (a resposta não diz se a conta existe).
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/XRequestId"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "413":
+          $ref: "#/components/responses/PayloadTooLarge"
+        "415":
+          $ref: "#/components/responses/UnsupportedMediaType"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+  /api/v1/auth/password/reset:
+    post:
+      operationId: resetPassword
+      tags: [auth]
+      summary: Redefinir a senha
+      x-nuva-pending: true
+      description: |
+        Define a senha com o token do link, confirma o e-mail, marca o token como usado e
+        invalida os outros tokens de redefinição da conta; encerra todas as sessões do usuário.
+        Não abre sessão: o site leva a `/entrar`.
+
+        - Senha fora de 8 a 128 caracteres: `400` `password_invalid`.
+        - Token vencido, já usado ou desconhecido: `410` `token_expired`.
+
+        **Exceção de CSRF.** Não declara `csrfToken`: quem redefine a senha não tem sessão. A
+        proteção é o corpo só em `application/json` (outro tipo: `415`) e o token de uso único.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [token, password]
+              properties:
+                token:
+                  $ref: "#/components/schemas/EmailToken"
+                password:
+                  type: string
+                  description: Nova senha, 8 a 128 caracteres; fora disso, `password_invalid`.
+              additionalProperties: false
+      responses:
+        "204":
+          description: Senha definida.
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/XRequestId"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "410":
+          $ref: "#/components/responses/Gone"
+        "413":
+          $ref: "#/components/responses/PayloadTooLarge"
+        "415":
+          $ref: "#/components/responses/UnsupportedMediaType"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+  /api/v1/auth/{provider}/start:
+    get:
+      operationId: startOAuth
+      tags: [auth]
+      summary: Início do login social
+      x-nuva-pending: true
+      description: |
+        O site **navega** para esta URL (navegação de página, não `fetch`;
+        `specs/007-contas-e-autenticacao.md`, "Fluxo do provedor"). A API gera `state`, `nonce` e
+        o verificador PKCE, grava o cookie de retorno `nuva_classroom_oauth` (10 minutos) e
+        redireciona para a autorização do provedor.
+
+        - `intent=login` (padrão): entra ou cadastra. `intent=link`: vincula o provedor à conta
+          da sessão; sem sessão válida, `401` `unauthenticated`. Por isso a operação é pública
+          no contrato: a sessão só é lida quando `intent=link`.
+        - Provedor desligado nesta instalação: `404`.
+      security: []
+      parameters:
+        - $ref: "#/components/parameters/AuthProviderPath"
+        - name: intent
+          in: query
+          description: "`login` entra ou cadastra; `link` vincula à conta da sessão."
+          schema:
+            type: string
+            enum: [login, link]
+            default: login
+        - $ref: "#/components/parameters/ReturnTo"
+      responses:
+        "302":
+          description: Redireciona para a autorização do provedor.
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/XRequestId"
+            Location:
+              $ref: "#/components/headers/Location"
+            Set-Cookie:
+              $ref: "#/components/headers/SetCookie"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+  /api/v1/auth/{provider}/callback:
+    get:
+      operationId: oauthCallback
+      tags: [auth]
+      summary: Retorno do provedor (Google, Facebook)
+      x-nuva-pending: true
+      description: |
+        Retorno do provedor com `code` e `state` (ou `error`) na consulta. Parâmetros a mais que
+        o provedor envie são ignorados. A API confere o `state` com o do cookie de retorno,
+        troca o código e aplica a tabela de "Login social e vínculo"
+        (`specs/007-contas-e-autenticacao.md`). Provedor desligado: `404`.
+
+        Com o provedor ligado, sempre responde `302` para o próprio site, nunca com corpo de
+        erro:
+
+        | Resultado | `Location` |
+        | --- | --- |
+        | Entrou (sessão aberta, `Set-Cookie` da sessão) ou vinculou | `returnTo` |
+        | Cadastro pendente (cookie de retorno regravado, 30 minutos) | `/cadastro/social` |
+        | Erro no login | `/entrar?erro=<code>` |
+        | Erro no vínculo | `/conta/acesso?erro=<code>` |
+
+        Códigos na URL: `oauth_state_invalid`, `oauth_denied`, `oauth_provider_error`,
+        `account_suspended`, `identity_in_use` (vínculo). O cookie de retorno é apagado, exceto
+        no cadastro pendente. A Apple volta por `POST` (`oauthCallbackForm`).
+      security: []
+      parameters:
+        - $ref: "#/components/parameters/AuthProviderPath"
+        - name: code
+          in: query
+          schema:
+            type: string
+            maxLength: 4096
+        - name: state
+          in: query
+          schema:
+            type: string
+            maxLength: 512
+        - name: error
+          in: query
+          description: Enviado pelo provedor quando o usuário recusa ou algo falha lá.
+          schema:
+            type: string
+            maxLength: 512
+      responses:
+        "302":
+          $ref: "#/components/responses/OAuthReturn"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+    post:
+      operationId: oauthCallbackForm
+      tags: [auth]
+      summary: Retorno do provedor por formulário (Apple)
+      x-nuva-pending: true
+      description: |
+        Retorno da Apple com `response_mode=form_post`: `POST`
+        `application/x-www-form-urlencoded` vindo do site da Apple. Mesmo tratamento e mesmos
+        destinos de `oauthCallback`. Só `apple` usa este método; outro provedor recebe `302` para
+        `/entrar?erro=oauth_provider_error`. `user` (JSON em texto, com o nome) só vem na
+        primeira autorização.
+
+        **Exceção de CSRF.** Não declara `csrfToken`: o `POST` vem de outro site, sem sessão nem
+        token. A proteção é o `state`, conferido em tempo constante com o do cookie de retorno
+        (`SameSite=None`, `Path=/api/v1/auth`).
+      security: []
+      parameters:
+        - $ref: "#/components/parameters/AuthProviderPath"
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              properties:
+                code:
+                  type: string
+                  maxLength: 4096
+                state:
+                  type: string
+                  maxLength: 512
+                id_token:
+                  type: string
+                  maxLength: 16384
+                user:
+                  type: string
+                  maxLength: 4096
+                  description: JSON em texto com `name` e `email`, enviado só na primeira vez.
+                error:
+                  type: string
+                  maxLength: 512
+      responses:
+        "302":
+          $ref: "#/components/responses/OAuthReturn"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "413":
+          $ref: "#/components/responses/PayloadTooLarge"
+        "415":
+          $ref: "#/components/responses/UnsupportedMediaType"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+  /api/v1/auth/social/pending:
+    get:
+      operationId: getSocialPending
+      tags: [auth]
+      summary: Cadastro social pendente
+      x-nuva-pending: true
+      description: |
+        O que o provedor informou, guardado no cookie de retorno (sem o identificador do
+        provedor), e as versões vigentes dos termos. Sem cookie de retorno válido: `404`.
+      security: []
+      responses:
+        "200":
+          description: O cadastro pendente.
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/XRequestId"
+            Cache-Control:
+              $ref: "#/components/headers/NoStore"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SocialPending"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+  /api/v1/auth/social/complete:
+    post:
+      operationId: completeSocialSignup
+      tags: [auth]
+      summary: Concluir o cadastro social
+      x-nuva-pending: true
+      description: |
+        Cria a conta e o vínculo com o provedor, grava os aceites, apaga o cookie de retorno e
+        abre a sessão (`specs/007-contas-e-autenticacao.md`, "Cadastro pendente").
+
+        - `email` só quando o provedor não enviou (`SocialPending.email` nulo); com e-mail do
+          provedor, é ignorado.
+        - Sem cookie de retorno válido: `404`.
+        - Termos vigentes fora de `acceptedTerms`: `422` `terms_acceptance_required`.
+        - E-mail informado que já pertence a outra conta: `409` `email_taken`.
+
+        **Exceção de CSRF.** Não declara `csrfToken`: a sessão ainda não existe. A proteção é o
+        corpo só em `application/json` (outro tipo: `415`) e o cookie de retorno assinado.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [acceptedTerms]
+              properties:
+                acceptedTerms:
+                  type: array
+                  items:
+                    $ref: "#/components/schemas/Uuid"
+                  uniqueItems: true
+                  maxItems: 2
+                email:
+                  $ref: "#/components/schemas/Email"
+              additionalProperties: false
+      responses:
+        "200":
+          description: Conta criada e sessão aberta.
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/XRequestId"
+            Set-Cookie:
+              $ref: "#/components/headers/SetCookie"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Session"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "413":
+          $ref: "#/components/responses/PayloadTooLarge"
+        "415":
+          $ref: "#/components/responses/UnsupportedMediaType"
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+  /api/v1/account/password:
+    put:
+      operationId: setAccountPassword
+      tags: [account]
+      summary: Definir ou trocar a própria senha
+      x-nuva-pending: true
+      description: |
+        Conta sem senha: basta a sessão. Conta com senha: `currentPassword` é exigida; errada,
+        `422` `current_password_invalid`, e a tentativa conta no bloqueio da conta (`429`
+        `too_many_attempts`). Nova senha fora de 8 a 128 caracteres: `400` `password_invalid`.
+        Encerra as outras sessões do usuário.
+      security:
+        - sessionCookie: []
+          csrfToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [newPassword]
+              properties:
+                newPassword:
+                  type: string
+                  description: 8 a 128 caracteres; fora disso, `password_invalid`.
+                currentPassword:
+                  type: string
+                  description: Exigida quando a conta já tem senha.
+              additionalProperties: false
+      responses:
+        "204":
+          description: Senha definida.
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/XRequestId"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "413":
+          $ref: "#/components/responses/PayloadTooLarge"
+        "415":
+          $ref: "#/components/responses/UnsupportedMediaType"
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
+        "429":
+          $ref: "#/components/responses/TooManyAttempts"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+  /api/v1/account/identities:
+    get:
+      operationId: listAccountIdentities
+      tags: [account]
+      summary: Métodos de acesso da conta
+      x-nuva-pending: true
+      description: Se a conta tem senha e os provedores vinculados.
+      responses:
+        "200":
+          description: Métodos de acesso.
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/XRequestId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/IdentityList"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+  /api/v1/account/identities/{provider}:
+    delete:
+      operationId: unlinkAccountIdentity
+      tags: [account]
+      summary: Desvincular um provedor
+      x-nuva-pending: true
+      description: |
+        Remove o vínculo com o provedor. Provedor não vinculado: `404`. Remover o último método
+        de acesso (sem senha e sem outro provedor): `422` `last_login_method`.
+      security:
+        - sessionCookie: []
+          csrfToken: []
+      parameters:
+        - $ref: "#/components/parameters/AuthProviderPath"
+      responses:
+        "204":
+          description: Vínculo removido.
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/XRequestId"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+  /api/v1/account/sessions:
+    get:
+      operationId: listAccountSessions
+      tags: [account]
+      summary: Sessões abertas da conta
+      x-nuva-pending: true
+      description: As sessões do usuário nos dois sites; `current` marca a desta requisição.
+      responses:
+        "200":
+          description: Sessões abertas.
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/XRequestId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SessionInfoList"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+    delete:
+      operationId: revokeOtherAccountSessions
+      tags: [account]
+      summary: Encerrar as outras sessões
+      x-nuva-pending: true
+      description: |
+        Encerra todas as sessões do usuário, nos dois sites, exceto a desta requisição. Aceita
+        mesmo com termos pendentes.
+      security:
+        - sessionCookie: []
+          csrfToken: []
+      responses:
+        "204":
+          description: Outras sessões encerradas.
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/XRequestId"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+  /api/v1/account/sessions/{id}:
+    delete:
+      operationId: revokeAccountSession
+      tags: [account]
+      summary: Encerrar uma sessão
+      x-nuva-pending: true
+      description: |
+        Encerra uma sessão do próprio usuário, em qualquer dos dois sites. Sessão de outro
+        usuário ou inexistente: `404`. Aceita mesmo com termos pendentes.
+      security:
+        - sessionCookie: []
+          csrfToken: []
+      parameters:
+        - $ref: "#/components/parameters/IdPath"
+      responses:
+        "204":
+          description: Sessão encerrada.
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/XRequestId"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+  /api/v1/me/profile/avatar:
+    put:
+      operationId: setAvatar
+      tags: [account]
+      summary: Definir ou remover o avatar
+      x-nuva-pending: true
+      description: |
+        Associa ao perfil uma imagem enviada antes por `POST /api/v1/images` com
+        `purpose = avatar`; `imageId: null` remove o avatar (`specs/007-contas-e-autenticacao.md`,
+        "Avatar"). Imagem inexistente ou de outro usuário: `404`. Imagem de outra finalidade:
+        `422` `image_purpose_mismatch`.
+      security:
+        - sessionCookie: []
+          csrfToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [imageId]
+              properties:
+                imageId:
+                  oneOf:
+                    - $ref: "#/components/schemas/Uuid"
+                    - type: "null"
+              additionalProperties: false
+      responses:
+        "200":
+          description: Avatar atualizado.
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/XRequestId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AvatarResult"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "413":
+          $ref: "#/components/responses/PayloadTooLarge"
+        "415":
+          $ref: "#/components/responses/UnsupportedMediaType"
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+  /api/v1/legal/{document}:
+    get:
+      operationId: getLegalDocument
+      tags: [legal]
+      summary: Versão vigente de um documento legal
+      x-nuva-pending: true
+      description: |
+        A versão vigente (a publicada de maior `version`) dos Termos de Uso ou da Política de
+        Privacidade, com o texto (`specs/030-lgpd.md`, "Termos na Fase 1"). Sem versão publicada:
+        `404`.
+      security: []
+      parameters:
+        - name: document
+          in: path
+          required: true
+          schema:
+            $ref: "#/components/schemas/TermsDocument"
+      responses:
+        "200":
+          description: A versão vigente.
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/XRequestId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LegalDocument"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+  /api/v1/me/terms-acceptance:
+    post:
+      operationId: acceptTerms
+      tags: [legal]
+      summary: Aceitar os termos vigentes
+      x-nuva-pending: true
+      description: |
+        Grava um aceite por versão, com IP e navegador; aceitar de novo a mesma versão não
+        duplica. `id` que não é o vigente do documento: `422` `terms_version_outdated`. É a
+        escrita que resolve `termsPending` da sessão, e é aceita com termos pendentes.
+      security:
+        - sessionCookie: []
+          csrfToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [termsVersionIds]
+              properties:
+                termsVersionIds:
+                  type: array
+                  minItems: 1
+                  maxItems: 2
+                  uniqueItems: true
+                  items:
+                    $ref: "#/components/schemas/Uuid"
+              additionalProperties: false
+      responses:
+        "204":
+          description: Aceites gravados.
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/XRequestId"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "413":
+          $ref: "#/components/responses/PayloadTooLarge"
+        "415":
+          $ref: "#/components/responses/UnsupportedMediaType"
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+  /api/v1/images:
+    post:
+      operationId: uploadImage
+      tags: [images]
+      summary: Envio de imagem
+      x-nuva-pending: true
+      description: |
+        Recebe uma imagem em `multipart/form-data` (`specs/029-imagens.md`, "Fluxo de envio"):
+        `purpose` primeiro, depois `file` (um arquivo só). Campo a mais, segundo arquivo ou
+        `purpose` ausente: `400` `validation_failed`. Na Fase 1 a única finalidade é `avatar`.
+
+        A API detecta o tipo pelo conteúdo, remove os metadados, gera as variantes em WebP e
+        responde com elas. A imagem só passa a ter referência quando usada (no avatar, por
+        `PUT /api/v1/me/profile/avatar`); sem referência, o expurgo a apaga em 24 h.
+
+        - Finalidade que o papel não pode enviar: `403` `permission_denied`.
+        - Corpo acima de 5 MB (`NUVA_IMAGE_MAX_UPLOAD_MB`): `413` `payload_too_large`, antes de
+          ler o corpo inteiro.
+        - Tipo que não é JPEG, PNG nem WebP (pelo conteúdo): `415` `image_type_unsupported`.
+          Corpo que não é `multipart/form-data`: `415` `unsupported_media_type`.
+        - Acima de 8000 px no maior lado ou de 40 megapixels: `422` `image_dimensions_exceeded`.
+          Variante acima de 400 KB mesmo na qualidade 50: `422` `image_too_heavy`.
+        - Mais de 30 envios na hora (`NUVA_IMAGE_UPLOADS_PER_HOUR`; a equipe não tem limite):
+          `429` `rate_limited`.
+        - Processamento sobrecarregado: `503` `image_processing_busy`, com `Retry-After`.
+      security:
+        - sessionCookie: []
+          csrfToken: []
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [purpose, file]
+              properties:
+                purpose:
+                  $ref: "#/components/schemas/ImagePurpose"
+                file:
+                  type: string
+                  contentMediaType: application/octet-stream
+                  description: O arquivo da imagem (JPEG, PNG ou WebP), até 5 MB.
+              additionalProperties: false
+            encoding:
+              file:
+                contentType: image/jpeg, image/png, image/webp
+      responses:
+        "201":
+          description: Imagem gravada.
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/XRequestId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Image"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "413":
+          $ref: "#/components/responses/PayloadTooLarge"
+        "415":
+          $ref: "#/components/responses/UnsupportedMediaType"
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          description: |
+            Processamento de imagens sobrecarregado (`image_processing_busy`, com `Retry-After`)
+            ou banco indisponível (`database_unavailable`).
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/XRequestId"
+            Retry-After:
+              $ref: "#/components/headers/RetryAfter"
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+  /api/v1/images/{imageId}:
+    delete:
+      operationId: deleteImage
+      tags: [images]
+      summary: Apagar uma imagem ainda sem uso
+      x-nuva-pending: true
+      description: |
+        Apaga uma imagem enviada pelo próprio usuário e ainda sem referência (por exemplo, um
+        avatar enviado e não usado). Imagem inexistente, de outro usuário ou já em uso: `404`.
+      security:
+        - sessionCookie: []
+          csrfToken: []
+      parameters:
+        - $ref: "#/components/parameters/ImageIdPath"
+      responses:
+        "204":
+          description: Imagem apagada.
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/XRequestId"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+  /api/v1/images/{imageId}/{variant}.webp:
+    get:
+      operationId: getImageVariant
+      tags: [images]
+      summary: Entrega de uma variante de imagem
+      x-nuva-pending: true
+      description: |
+        Entrega pública de uma variante (`specs/029-imagens.md`, "Entrega"), sem sessão: o
+        identificador é um UUID que não se adivinha. As duas APIs servem a mesma rota.
+
+        - `Cache-Control: public, max-age=31536000, immutable` e `ETag` com o hash do conteúdo;
+          `If-None-Match` igual ao `ETag` responde `304`.
+        - Imagem inexistente, ocultada pela moderação ou largura que a finalidade não tem: `404`.
+      security: []
+      parameters:
+        - $ref: "#/components/parameters/ImageIdPath"
+        - $ref: "#/components/parameters/ImageVariantPath"
+        - $ref: "#/components/parameters/IfNoneMatch"
+      responses:
+        "200":
+          $ref: "#/components/responses/ImageVariant"
+        "304":
+          $ref: "#/components/responses/ImageNotModified"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
 components:
   securitySchemes:
     sessionCookie:
@@ -259,6 +1397,54 @@ components:
         type: string
         minLength: 8
         maxLength: 128
+    IdPath:
+      name: id
+      in: path
+      required: true
+      description: Identificador do recurso.
+      schema:
+        $ref: "#/components/schemas/Uuid"
+    AuthProviderPath:
+      name: provider
+      in: path
+      required: true
+      description: |
+        Provedor de login social. Provedor sem as variáveis configuradas nesta instalação (fora de
+        `authProviders` em `GET /api/v1/meta`) responde `404`.
+      schema:
+        $ref: "#/components/schemas/AuthProvider"
+    ReturnTo:
+      name: returnTo
+      in: query
+      description: |
+        Caminho do próprio site para onde o navegador volta depois do login (começa com `/`, não
+        com `//`). Outro valor, ou ausente, vira `/`; nunca é recusado.
+      schema:
+        type: string
+        maxLength: 2048
+    ImageIdPath:
+      name: imageId
+      in: path
+      required: true
+      description: Identificador da imagem.
+      schema:
+        $ref: "#/components/schemas/Uuid"
+    ImageVariantPath:
+      name: variant
+      in: path
+      required: true
+      description: |
+        Largura da variante, em pixels. Cada imagem só tem as variantes da sua finalidade
+        (`specs/029-imagens.md`, "Finalidades e variantes"); outra largura responde `404`.
+      schema:
+        $ref: "#/components/schemas/ImageVariantWidth"
+    IfNoneMatch:
+      name: If-None-Match
+      in: header
+      description: |
+        `ETag` de uma entrega anterior. Igual ao atual, a resposta é `304`, sem corpo.
+      schema:
+        type: string
     # --- só classroom-api ---
     LastEventId:
       name: Last-Event-ID
@@ -279,6 +1465,38 @@ components:
       schema:
         type: integer
         minimum: 0
+    Location:
+      description: Endereço para onde o navegador é redirecionado.
+      schema:
+        type: string
+        format: uri-reference
+    SetCookie:
+      description: |
+        Grava ou apaga um cookie do site: o da sessão ou o de retorno do login social
+        (`specs/007-contas-e-autenticacao.md`, "Cookies"). Os dois são `HttpOnly`: o site não os
+        lê; o navegador os guarda e reenvia sozinho.
+      schema:
+        type: string
+    NoStore:
+      description: Sempre `no-store`; a resposta não é guardada em cache.
+      schema:
+        type: string
+        const: no-store
+    ETag:
+      description: Hash do conteúdo da variante; muda quando o conteúdo muda.
+      schema:
+        type: string
+    ImageCacheControl:
+      description: |
+        Sempre `public, max-age=31536000, immutable`: a URL de uma imagem nunca muda de conteúdo.
+      schema:
+        type: string
+        const: public, max-age=31536000, immutable
+    ContentTypeOptions:
+      description: Sempre `nosniff`.
+      schema:
+        type: string
+        const: nosniff
   responses:
     # --- comum ---
     BadRequest:
@@ -390,6 +1608,67 @@ components:
         application/problem+json:
           schema:
             $ref: "#/components/schemas/Problem"
+    TooManyAttempts:
+      description: |
+        Limite de taxa (`rate_limited`) ou bloqueio por tentativas erradas de senha, da conta ou
+        do IP (`too_many_attempts`; `specs/007-contas-e-autenticacao.md`, "Bloqueio e dispositivo
+        novo"). `Retry-After` e `retryAfterSeconds` trazem os segundos até poder tentar de novo.
+      headers:
+        X-Request-Id:
+          $ref: "#/components/headers/XRequestId"
+        Retry-After:
+          $ref: "#/components/headers/RetryAfter"
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+    ImageVariant:
+      description: A variante, em WebP.
+      headers:
+        X-Request-Id:
+          $ref: "#/components/headers/XRequestId"
+        ETag:
+          $ref: "#/components/headers/ETag"
+        Cache-Control:
+          $ref: "#/components/headers/ImageCacheControl"
+        X-Content-Type-Options:
+          $ref: "#/components/headers/ContentTypeOptions"
+      content:
+        image/webp:
+          schema:
+            type: string
+            contentMediaType: image/webp
+    ImageNotModified:
+      description: O `If-None-Match` é igual ao `ETag` atual; sem corpo.
+      headers:
+        X-Request-Id:
+          $ref: "#/components/headers/XRequestId"
+        ETag:
+          $ref: "#/components/headers/ETag"
+        Cache-Control:
+          $ref: "#/components/headers/ImageCacheControl"
+    # --- só classroom-api ---
+    Gone:
+      description: Link vencido, já usado ou desconhecido (`token_expired`).
+      headers:
+        X-Request-Id:
+          $ref: "#/components/headers/XRequestId"
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+    OAuthReturn:
+      description: |
+        Volta ao próprio site (`Location`), conforme a tabela da descrição da operação. Abre a
+        sessão (`Set-Cookie` de `nuva_classroom_session`) quando entrou, e regrava ou apaga o
+        cookie de retorno (`nuva_classroom_oauth`).
+      headers:
+        X-Request-Id:
+          $ref: "#/components/headers/XRequestId"
+        Location:
+          $ref: "#/components/headers/Location"
+        Set-Cookie:
+          $ref: "#/components/headers/SetCookie"
   schemas:
     # --- comum ---
     Uuid:
@@ -621,6 +1900,282 @@ components:
             Endereço do código-fonte desta instalação, exigido pela AGPL-3.0. Sempre presente;
             padrão `https://github.com/patrickbrandao/nuva-edu`.
           examples: [https://github.com/patrickbrandao/nuva-edu]
+      additionalProperties: false
+    Email:
+      type: string
+      format: email
+      maxLength: 254
+      description: |
+        Endereço de e-mail. A API o normaliza (minúsculas) antes de gravar ou comparar.
+      examples: [ana@example.com]
+    UserRole:
+      type: string
+      enum: [student, instructor, manager, admin]
+      description: Papel do usuário (`specs/008-papeis-e-permissoes.md`).
+    PermissionAction:
+      type: string
+      pattern: "^[a-z][a-z_]*(\\.[a-z][a-z_]*)*$"
+      description: |
+        Identificador de uma ação da matriz de permissões (`specs/008-papeis-e-permissoes.md`,
+        "Identificadores das ações"), o mesmo de `x-permission`. A lista é aberta: ação nova
+        entra pela spec 008.
+      examples: [users.list, account.self_service]
+    SessionSite:
+      type: string
+      enum: [classroom, admin]
+      description: Site em que a sessão foi aberta.
+    SessionUser:
+      type: object
+      description: Dono da sessão. Não tem campo de senha; `hasPassword` só diz se há uma definida.
+      required: [id, name, email, emailVerified, role, avatarUrl, hasPassword]
+      properties:
+        id:
+          $ref: "#/components/schemas/Uuid"
+        name:
+          type: string
+          description: Nome de exibição.
+        email:
+          $ref: "#/components/schemas/Email"
+        emailVerified:
+          type: boolean
+        role:
+          $ref: "#/components/schemas/UserRole"
+        avatarUrl:
+          type: [string, "null"]
+          format: uri-reference
+          description: |
+            Caminho da variante de 256 px do avatar na própria API; `null` sem avatar (o site
+            mostra as iniciais do nome).
+          examples: [/api/v1/images/0193a5b2-7c1e-7d3a-9f4b-2a6c8e1d5f70/256.webp, null]
+        hasPassword:
+          type: boolean
+          description: Verdadeiro quando a conta tem senha definida.
+      additionalProperties: false
+    SessionInfo:
+      type: object
+      description: Uma sessão aberta, nos dois sites.
+      required: [id, site, ip, browser, os, createdAt, lastUsedAt, current]
+      properties:
+        id:
+          $ref: "#/components/schemas/Uuid"
+          description: Identificador público da sessão (não é o valor do cookie).
+        site:
+          $ref: "#/components/schemas/SessionSite"
+        ip:
+          type: [string, "null"]
+          description: IP de onde a sessão foi aberta.
+          examples: [203.0.113.10]
+        browser:
+          type: [string, "null"]
+          description: Família do navegador, lida do `User-Agent`; `null` quando não reconhecida.
+          examples: [Chrome]
+        os:
+          type: [string, "null"]
+          description: Sistema, lido do `User-Agent`; `null` quando não reconhecido.
+          examples: [macOS]
+        createdAt:
+          $ref: "#/components/schemas/DateTime"
+        lastUsedAt:
+          $ref: "#/components/schemas/DateTime"
+        current:
+          type: boolean
+          description: Verdadeiro na sessão que fez a requisição.
+      additionalProperties: false
+    SessionInfoList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          description: Mais recente primeiro (`lastUsedAt`).
+          items:
+            $ref: "#/components/schemas/SessionInfo"
+      additionalProperties: false
+    Identity:
+      type: object
+      description: Provedor de login social vinculado à conta.
+      required: [provider, email, createdAt]
+      properties:
+        provider:
+          $ref: "#/components/schemas/AuthProvider"
+        email:
+          type: [string, "null"]
+          description: E-mail informado pelo provedor; `null` quando ele não enviou.
+        createdAt:
+          $ref: "#/components/schemas/DateTime"
+      additionalProperties: false
+    TermsDocument:
+      type: string
+      enum: [terms, privacy]
+      description: Documento legal (`specs/030-lgpd.md`), Termos de Uso ou Política de Privacidade.
+    ImageVariantWidth:
+      type: integer
+      enum: [64, 256, 480, 512, 1280, 1600]
+      description: Largura de uma variante de imagem, em pixels (`specs/029-imagens.md`).
+    # --- só classroom-api: contas, termos e imagens ---
+    EmailToken:
+      type: string
+      minLength: 1
+      maxLength: 128
+      description: Token do link enviado por e-mail (32 bytes em base64url), como veio na URL.
+    EmailTokenRequest:
+      type: object
+      required: [token]
+      properties:
+        token:
+          $ref: "#/components/schemas/EmailToken"
+      additionalProperties: false
+    TermsVersion:
+      type: object
+      description: Uma versão publicada de um documento legal, sem o texto (`specs/030-lgpd.md`).
+      required: [id, document, version, effectiveAt]
+      properties:
+        id:
+          $ref: "#/components/schemas/Uuid"
+        document:
+          $ref: "#/components/schemas/TermsDocument"
+        version:
+          type: integer
+          minimum: 1
+          description: Número sequencial da versão, por documento.
+        effectiveAt:
+          $ref: "#/components/schemas/DateTime"
+      additionalProperties: false
+    LegalDocument:
+      type: object
+      description: A versão vigente de um documento legal, com o texto.
+      required: [id, document, version, bodyMd, effectiveAt]
+      properties:
+        id:
+          $ref: "#/components/schemas/Uuid"
+        document:
+          $ref: "#/components/schemas/TermsDocument"
+        version:
+          type: integer
+          minimum: 1
+        bodyMd:
+          type: string
+          description: Texto em Markdown.
+        effectiveAt:
+          $ref: "#/components/schemas/DateTime"
+      additionalProperties: false
+    Session:
+      type: object
+      description: |
+        Sessão do classroom (`specs/007-contas-e-autenticacao.md`, "Esquemas comuns"). Com
+        `termsPending` não vazio, as escritas respondem `403` `terms_acceptance_pending`, exceto
+        `POST /api/v1/me/terms-acceptance`, `POST /api/v1/auth/logout` e as de
+        `/api/v1/account/sessions`.
+      required: [user, csrfToken, permissions, expiresAt, termsPending]
+      properties:
+        user:
+          $ref: "#/components/schemas/SessionUser"
+        csrfToken:
+          type: string
+          description: Valor do cabeçalho `X-CSRF-Token` nas escritas desta sessão.
+        permissions:
+          type: array
+          description: Ações de `specs/008-papeis-e-permissoes.md` que o papel permite.
+          items:
+            $ref: "#/components/schemas/PermissionAction"
+          uniqueItems: true
+        expiresAt:
+          $ref: "#/components/schemas/DateTime"
+        termsPending:
+          type: array
+          description: Versões vigentes que o usuário ainda precisa aceitar; vazia quando nenhuma.
+          items:
+            $ref: "#/components/schemas/TermsVersion"
+      additionalProperties: false
+    SocialPending:
+      type: object
+      description: |
+        Cadastro social pendente, com o que o provedor informou e os termos vigentes
+        (`specs/007-contas-e-autenticacao.md`, "Cadastro pendente").
+      required: [provider, email, emailVerified, name, terms]
+      properties:
+        provider:
+          $ref: "#/components/schemas/AuthProvider"
+        email:
+          type: [string, "null"]
+          description: |
+            E-mail informado pelo provedor; `null` quando ele não enviou: o site pede o e-mail e
+            o manda em `POST /api/v1/auth/social/complete`.
+        emailVerified:
+          type: boolean
+          description: Se o provedor atestou o e-mail como verificado.
+        name:
+          type: [string, "null"]
+        terms:
+          type: array
+          description: Versões vigentes a aceitar; vazia quando não há versão publicada.
+          items:
+            $ref: "#/components/schemas/TermsVersion"
+      additionalProperties: false
+    IdentityList:
+      type: object
+      required: [hasPassword, items]
+      properties:
+        hasPassword:
+          type: boolean
+          description: Verdadeiro quando a conta tem senha definida.
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/Identity"
+      additionalProperties: false
+    AvatarResult:
+      type: object
+      required: [avatarUrl]
+      properties:
+        avatarUrl:
+          type: [string, "null"]
+          format: uri-reference
+          description: Variante de 256 px do avatar; `null` quando removido.
+      additionalProperties: false
+    ImagePurpose:
+      type: string
+      enum: [avatar]
+      description: |
+        Finalidade da imagem (`specs/029-imagens.md`). Na Fase 1 só existe `avatar`; as demais
+        entram com os recursos que as usam.
+    ImageVariantInfo:
+      type: object
+      required: [width, height, url]
+      properties:
+        width:
+          $ref: "#/components/schemas/ImageVariantWidth"
+        height:
+          type: integer
+          minimum: 1
+        url:
+          type: string
+          format: uri-reference
+          description: Caminho de entrega (`/api/v1/images/{imageId}/{variant}.webp`).
+          examples: [/api/v1/images/0193a5b2-7c1e-7d3a-9f4b-2a6c8e1d5f70/64.webp]
+      additionalProperties: false
+    Image:
+      type: object
+      description: Imagem enviada, com as variantes geradas.
+      required: [id, purpose, width, height, variants]
+      properties:
+        id:
+          $ref: "#/components/schemas/Uuid"
+        purpose:
+          $ref: "#/components/schemas/ImagePurpose"
+        width:
+          type: integer
+          minimum: 1
+          description: Largura do arquivo enviado, em pixels.
+        height:
+          type: integer
+          minimum: 1
+          description: Altura do arquivo enviado, em pixels.
+        variants:
+          type: array
+          minItems: 1
+          items:
+            $ref: "#/components/schemas/ImageVariantInfo"
       additionalProperties: false
     # --- só classroom-api: eventos do fluxo SSE ---
     StreamEventId:

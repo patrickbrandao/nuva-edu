@@ -56,6 +56,16 @@ tags:
     description: Sondas do processo, fora de `/api/v1`.
   - name: meta
     description: Dados públicos da instalação e da marca da escola.
+  - name: auth
+    description: Login, sessão e login social da equipe (`specs/007-contas-e-autenticacao.md`).
+  - name: users
+    description: Alunos e equipe (`specs/007-contas-e-autenticacao.md`, `specs/008-papeis-e-permissoes.md`).
+  - name: audit
+    description: Consulta ao registro de auditoria (`specs/028-auditoria.md`).
+  - name: terms
+    description: Versões dos Termos de Uso e da Política de Privacidade (`specs/030-lgpd.md`).
+  - name: images
+    description: Entrega de imagens (`specs/029-imagens.md`).
 security:
   - sessionCookie: []
 paths:
@@ -135,6 +145,1159 @@ paths:
           $ref: "#/components/responses/InternalError"
         "503":
           $ref: "#/components/responses/ServiceUnavailable"
+  /api/v1/auth/login:
+    post:
+      operationId: login
+      tags: [auth]
+      summary: Login da equipe por e-mail e senha
+      x-nuva-pending: true
+      description: |
+        Abre a sessão do site admin (`specs/007-contas-e-autenticacao.md`, "Login por senha") e
+        grava o cookie `nuva_admin_session`.
+
+        - Qualquer falha de credencial: `401` `invalid_credentials`, no mesmo tempo.
+        - Conta com suspensão `full`, só depois de a senha conferir: `403` `account_suspended`.
+        - Senha certa de quem tem papel `student`: `403` `staff_only`, sem abrir sessão.
+        - Conta ou IP bloqueado por tentativas erradas: `429` `too_many_attempts`, com
+          `Retry-After`.
+
+        **Exceção de CSRF.** Não declara `csrfToken`: ainda não há sessão. A proteção é o corpo só
+        em `application/json` (outro tipo: `415`) e o cookie de sessão `SameSite=Lax`.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password]
+              properties:
+                email:
+                  $ref: "#/components/schemas/Email"
+                password:
+                  type: string
+                  description: Sem regra de tamanho aqui; qualquer valor errado é `invalid_credentials`.
+              additionalProperties: false
+      responses:
+        "200":
+          description: Sessão aberta.
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/XRequestId"
+            Set-Cookie:
+              $ref: "#/components/headers/SetCookie"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Session"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "413":
+          $ref: "#/components/responses/PayloadTooLarge"
+        "415":
+          $ref: "#/components/responses/UnsupportedMediaType"
+        "429":
+          $ref: "#/components/responses/TooManyAttempts"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+  /api/v1/auth/logout:
+    post:
+      operationId: logout
+      tags: [auth]
+      summary: Sair
+      x-nuva-pending: true
+      x-permission: admin.access
+      description: Encerra a sessão atual do site admin e apaga o cookie.
+      security:
+        - sessionCookie: []
+          csrfToken: []
+      responses:
+        "204":
+          description: Sessão encerrada; o cookie é apagado.
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/XRequestId"
+            Set-Cookie:
+              $ref: "#/components/headers/SetCookie"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+  /api/v1/session:
+    get:
+      operationId: getSession
+      tags: [auth]
+      summary: Sessão atual
+      x-nuva-pending: true
+      x-permission: admin.access
+      description: |
+        Dono da sessão, token CSRF e ações permitidas, que o site usa para montar o menu
+        (`specs/008-papeis-e-permissoes.md`). Sem sessão válida: `401` `unauthenticated`, e o
+        cookie é apagado.
+      responses:
+        "200":
+          description: A sessão atual.
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/XRequestId"
+            Cache-Control:
+              $ref: "#/components/headers/NoStore"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Session"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+  /api/v1/auth/{provider}/start:
+    get:
+      operationId: startOAuth
+      tags: [auth]
+      summary: Início do login social da equipe
+      x-nuva-pending: true
+      description: |
+        O site **navega** para esta URL (navegação de página, não `fetch`;
+        `specs/007-contas-e-autenticacao.md`, "Fluxo do provedor"). A API gera `state`, `nonce` e
+        o verificador PKCE, grava o cookie de retorno `nuva_admin_oauth` (10 minutos) e
+        redireciona para a autorização do provedor. No admin só existe login: não há cadastro
+        nem vínculo. Provedor desligado nesta instalação: `404`.
+      security: []
+      parameters:
+        - $ref: "#/components/parameters/AuthProviderPath"
+        - $ref: "#/components/parameters/ReturnTo"
+      responses:
+        "302":
+          description: Redireciona para a autorização do provedor.
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/XRequestId"
+            Location:
+              $ref: "#/components/headers/Location"
+            Set-Cookie:
+              $ref: "#/components/headers/SetCookie"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+  /api/v1/auth/{provider}/callback:
+    get:
+      operationId: oauthCallback
+      tags: [auth]
+      summary: Retorno do provedor (Google, Facebook)
+      x-nuva-pending: true
+      description: |
+        Retorno do provedor com `code` e `state` (ou `error`) na consulta. Parâmetros a mais que
+        o provedor envie são ignorados. A identidade precisa já estar vinculada, ou casar por
+        e-mail verificado com uma conta da equipe (`specs/007-contas-e-autenticacao.md`, "Login
+        social e vínculo"). Provedor desligado: `404`.
+
+        Com o provedor ligado, sempre responde `302` para o próprio site, nunca com corpo de erro:
+
+        | Resultado | `Location` |
+        | --- | --- |
+        | Entrou (sessão aberta, `Set-Cookie` da sessão) | `returnTo` |
+        | Erro | `/entrar?erro=<code>` |
+
+        Códigos na URL: `oauth_state_invalid`, `oauth_denied`, `oauth_provider_error`,
+        `account_suspended`, `staff_only` (sem conta da equipe). O cookie de retorno é apagado.
+        A Apple volta por `POST` (`oauthCallbackForm`).
+      security: []
+      parameters:
+        - $ref: "#/components/parameters/AuthProviderPath"
+        - name: code
+          in: query
+          schema:
+            type: string
+            maxLength: 4096
+        - name: state
+          in: query
+          schema:
+            type: string
+            maxLength: 512
+        - name: error
+          in: query
+          description: Enviado pelo provedor quando o usuário recusa ou algo falha lá.
+          schema:
+            type: string
+            maxLength: 512
+      responses:
+        "302":
+          $ref: "#/components/responses/OAuthReturn"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+    post:
+      operationId: oauthCallbackForm
+      tags: [auth]
+      summary: Retorno do provedor por formulário (Apple)
+      x-nuva-pending: true
+      description: |
+        Retorno da Apple com `response_mode=form_post`: `POST`
+        `application/x-www-form-urlencoded` vindo do site da Apple. Mesmo tratamento e mesmos
+        destinos de `oauthCallback`. Só `apple` usa este método; outro provedor recebe `302` para
+        `/entrar?erro=oauth_provider_error`.
+
+        **Exceção de CSRF.** Não declara `csrfToken`: o `POST` vem de outro site, sem sessão nem
+        token. A proteção é o `state`, conferido em tempo constante com o do cookie de retorno
+        (`SameSite=None`, `Path=/api/v1/auth`).
+      security: []
+      parameters:
+        - $ref: "#/components/parameters/AuthProviderPath"
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              properties:
+                code:
+                  type: string
+                  maxLength: 4096
+                state:
+                  type: string
+                  maxLength: 512
+                id_token:
+                  type: string
+                  maxLength: 16384
+                user:
+                  type: string
+                  maxLength: 4096
+                  description: JSON em texto com `name` e `email`, enviado só na primeira vez.
+                error:
+                  type: string
+                  maxLength: 512
+      responses:
+        "302":
+          $ref: "#/components/responses/OAuthReturn"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "413":
+          $ref: "#/components/responses/PayloadTooLarge"
+        "415":
+          $ref: "#/components/responses/UnsupportedMediaType"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+  /api/v1/users:
+    get:
+      operationId: listUsers
+      tags: [users]
+      summary: Listar alunos e equipe
+      x-nuva-pending: true
+      x-permission: users.list
+      description: |
+        Busca por nome ou e-mail (`q`), filtros por papel e situação, paginação por cursor. Na
+        Fase 1 exige `users.list` com alcance total (`manager` e `admin`); o `instructor` recebe
+        `403` (`specs/008-papeis-e-permissoes.md`).
+      parameters:
+        - name: q
+          in: query
+          description: Trecho do nome ou do e-mail.
+          schema:
+            type: string
+            minLength: 1
+            maxLength: 200
+        - name: role
+          in: query
+          schema:
+            $ref: "#/components/schemas/UserRole"
+        - name: status
+          in: query
+          description: |
+            `active` (sem suspensão), `suspended` (com suspensão vigente) ou `unverified` (e-mail
+            não confirmado).
+          schema:
+            type: string
+            enum: [active, suspended, unverified]
+        - name: sort
+          in: query
+          schema:
+            type: string
+            enum: [name, -createdAt, -lastLoginAt]
+            default: -createdAt
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Cursor"
+      responses:
+        "200":
+          description: Uma página de usuários.
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/XRequestId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserSummaryPage"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+    post:
+      operationId: createUser
+      tags: [users]
+      summary: Criar conta (equipe)
+      x-nuva-pending: true
+      x-permission: staff.manage
+      description: |
+        Só `admin` (`specs/007-contas-e-autenticacao.md`, "Equipe criada pelo admin"). A conta
+        nasce com o e-mail não confirmado e recebe `account.verify_email`; o admin informa a
+        senha à pessoa por fora do sistema.
+
+        - Senha fora de 8 a 128 caracteres: `400` `password_invalid`.
+        - E-mail já cadastrado: `409` `email_taken` (para promover uma conta existente, muda-se o
+          papel).
+      security:
+        - sessionCookie: []
+          csrfToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, email, role, password]
+              properties:
+                name:
+                  type: string
+                  minLength: 1
+                  maxLength: 80
+                email:
+                  $ref: "#/components/schemas/Email"
+                role:
+                  $ref: "#/components/schemas/UserRole"
+                password:
+                  type: string
+                  description: 8 a 128 caracteres; fora disso, `password_invalid`.
+              additionalProperties: false
+      responses:
+        "201":
+          description: Conta criada.
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/XRequestId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserDetail"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "413":
+          $ref: "#/components/responses/PayloadTooLarge"
+        "415":
+          $ref: "#/components/responses/UnsupportedMediaType"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+  /api/v1/users/{id}:
+    get:
+      operationId: getUser
+      tags: [users]
+      summary: Ficha de um usuário
+      x-nuva-pending: true
+      x-permission: users.list
+      description: |
+        A ficha completa. `users.view` é a mesma ação de `users.list`
+        (`specs/008-papeis-e-permissoes.md`, "Identificadores das ações").
+      parameters:
+        - $ref: "#/components/parameters/IdPath"
+      responses:
+        "200":
+          description: A ficha.
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/XRequestId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserDetail"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+    patch:
+      operationId: updateUser
+      tags: [users]
+      summary: Editar dados de um usuário
+      x-nuva-pending: true
+      x-permission: users.edit
+      description: |
+        Nome, nome completo e e-mail. Conta de aluno: `users.edit` (`manager` e `admin`); conta
+        da equipe: `staff.manage` (só `admin`). Trocar o e-mail anula a confirmação e envia
+        `account.verify_email` ao novo endereço.
+
+        - `version` diferente da gravada: `409` `version_conflict`.
+        - E-mail já cadastrado em outra conta: `409` `email_taken`.
+      security:
+        - sessionCookie: []
+          csrfToken: []
+      parameters:
+        - $ref: "#/components/parameters/IdPath"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [version]
+              properties:
+                name:
+                  type: string
+                  minLength: 1
+                  maxLength: 80
+                fullName:
+                  type: [string, "null"]
+                  minLength: 1
+                  maxLength: 160
+                  description: Nome completo, usado em pedidos e certificados; `null` apaga.
+                email:
+                  $ref: "#/components/schemas/Email"
+                version:
+                  type: integer
+                  minimum: 1
+                  description: O `version` da ficha lida.
+              additionalProperties: false
+      responses:
+        "200":
+          description: Ficha atualizada.
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/XRequestId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserDetail"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "413":
+          $ref: "#/components/responses/PayloadTooLarge"
+        "415":
+          $ref: "#/components/responses/UnsupportedMediaType"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+  /api/v1/users/{id}/role:
+    patch:
+      operationId: setUserRole
+      tags: [users]
+      summary: Mudar o papel
+      x-nuva-pending: true
+      x-permission: staff.manage
+      description: |
+        Só `admin` (`specs/008-papeis-e-permissoes.md`, "Mudança de papel"). Encerra as sessões
+        do usuário no site admin e o avisa por e-mail (`account.role_changed`).
+
+        - Rebaixar o último `admin` ativo: `422` `last_admin`.
+        - Mudar o próprio papel: `422` `self_action_not_allowed`.
+      security:
+        - sessionCookie: []
+          csrfToken: []
+      parameters:
+        - $ref: "#/components/parameters/IdPath"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [role]
+              properties:
+                role:
+                  $ref: "#/components/schemas/UserRole"
+              additionalProperties: false
+      responses:
+        "200":
+          description: Papel alterado.
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/XRequestId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserDetail"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "413":
+          $ref: "#/components/responses/PayloadTooLarge"
+        "415":
+          $ref: "#/components/responses/UnsupportedMediaType"
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+  /api/v1/users/{id}/suspend:
+    post:
+      operationId: suspendUser
+      tags: [users]
+      summary: Suspender
+      x-nuva-pending: true
+      x-permission: users.suspend
+      description: |
+        Aluno: `users.suspend` (`manager` e `admin`); equipe: `staff.manage` (só `admin`;
+        `manager` recebe `403` `permission_denied`). `full` encerra todas as sessões e recusa o
+        login; `posting` só impede publicar (`specs/008-papeis-e-permissoes.md`, "Suspensão").
+        `durationDays` nulo é por tempo indeterminado. O usuário é avisado por e-mail, sem o
+        motivo.
+
+        - Já suspenso: `409` `already_suspended` (para mudar tipo ou prazo, reativa e suspende).
+        - Último `admin` ativo: `422` `last_admin`. A si mesmo: `422` `self_action_not_allowed`.
+      security:
+        - sessionCookie: []
+          csrfToken: []
+      parameters:
+        - $ref: "#/components/parameters/IdPath"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [kind, reason, durationDays]
+              properties:
+                kind:
+                  $ref: "#/components/schemas/SuspensionKind"
+                reason:
+                  type: string
+                  minLength: 1
+                  maxLength: 500
+                  description: Motivo interno, visível só à equipe.
+                durationDays:
+                  type: [integer, "null"]
+                  enum: [1, 7, 30, null]
+                  description: Prazo em dias; `null` é por tempo indeterminado.
+              additionalProperties: false
+      responses:
+        "200":
+          description: Usuário suspenso.
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/XRequestId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserDetail"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "413":
+          $ref: "#/components/responses/PayloadTooLarge"
+        "415":
+          $ref: "#/components/responses/UnsupportedMediaType"
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+  /api/v1/users/{id}/reactivate:
+    post:
+      operationId: reactivateUser
+      tags: [users]
+      summary: Reativar
+      x-nuva-pending: true
+      x-permission: users.suspend
+      description: |
+        Encerra a suspensão vigente. Aluno: `users.suspend`; equipe: `staff.manage`. Sessões e
+        chaves MCP não voltam sozinhas. Sem suspensão vigente: `409` `not_suspended`.
+      security:
+        - sessionCookie: []
+          csrfToken: []
+      parameters:
+        - $ref: "#/components/parameters/IdPath"
+      responses:
+        "200":
+          description: Usuário reativado.
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/XRequestId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserDetail"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+  /api/v1/users/{id}/password/reveal:
+    post:
+      operationId: revealUserPassword
+      tags: [users]
+      summary: Exibir a senha de um usuário
+      x-nuva-pending: true
+      x-permission: users.password.view
+      description: |
+        Só `admin` (`specs/007-contas-e-autenticacao.md`, "Exibição da senha";
+        ADR 0002). É a **única** resposta de API com o campo de senha. Exige a senha do
+        próprio admin em `adminPassword`; errada, `422` `password_confirmation_invalid`, e a
+        tentativa conta no bloqueio da conta do admin (`429` `too_many_attempts`). Grava
+        `user.password_view` na auditoria, sem o valor. É `POST` para o valor não ficar em
+        cache nem em histórico.
+      security:
+        - sessionCookie: []
+          csrfToken: []
+      parameters:
+        - $ref: "#/components/parameters/IdPath"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [adminPassword]
+              properties:
+                adminPassword:
+                  type: string
+                  description: A senha do admin que pede a exibição.
+              additionalProperties: false
+      responses:
+        "200":
+          description: A senha do usuário, ou `null` quando ele não tem senha definida.
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/XRequestId"
+            Cache-Control:
+              $ref: "#/components/headers/NoStore"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PasswordReveal"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "413":
+          $ref: "#/components/responses/PayloadTooLarge"
+        "415":
+          $ref: "#/components/responses/UnsupportedMediaType"
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
+        "429":
+          $ref: "#/components/responses/TooManyAttempts"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+  /api/v1/users/{id}/password:
+    put:
+      operationId: setUserPassword
+      tags: [users]
+      summary: Definir a senha de um usuário
+      x-nuva-pending: true
+      x-permission: users.password.set
+      description: |
+        Só `admin`. Encerra todas as sessões do usuário, grava `user.password_set` na auditoria
+        e avisa o usuário por e-mail. Senha fora de 8 a 128 caracteres: `400` `password_invalid`.
+      security:
+        - sessionCookie: []
+          csrfToken: []
+      parameters:
+        - $ref: "#/components/parameters/IdPath"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [password]
+              properties:
+                password:
+                  type: string
+                  description: 8 a 128 caracteres; fora disso, `password_invalid`.
+              additionalProperties: false
+      responses:
+        "204":
+          description: Senha definida.
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/XRequestId"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "413":
+          $ref: "#/components/responses/PayloadTooLarge"
+        "415":
+          $ref: "#/components/responses/UnsupportedMediaType"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+  /api/v1/users/{id}/sessions:
+    get:
+      operationId: listUserSessions
+      tags: [users]
+      summary: Sessões abertas de um usuário
+      x-nuva-pending: true
+      x-permission: users.sessions.revoke
+      description: |
+        As sessões do usuário nos dois sites. Conta de aluno: `users.sessions.revoke`; conta da
+        equipe: `staff.manage`. `current` é sempre falso aqui (nenhuma é a do admin).
+      parameters:
+        - $ref: "#/components/parameters/IdPath"
+      responses:
+        "200":
+          description: Sessões abertas.
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/XRequestId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SessionInfoList"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+    delete:
+      operationId: revokeUserSessions
+      tags: [users]
+      summary: Encerrar as sessões de um usuário
+      x-nuva-pending: true
+      x-permission: users.sessions.revoke
+      description: |
+        Encerra todas as sessões do usuário, nos dois sites. Conta de aluno:
+        `users.sessions.revoke`; conta da equipe: `staff.manage`.
+      security:
+        - sessionCookie: []
+          csrfToken: []
+      parameters:
+        - $ref: "#/components/parameters/IdPath"
+      responses:
+        "204":
+          description: Sessões encerradas.
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/XRequestId"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+  /api/v1/audit:
+    get:
+      operationId: listAuditEntries
+      tags: [audit]
+      summary: Consultar a auditoria
+      x-nuva-pending: true
+      x-permission: audit.view
+      description: |
+        Só `admin` (`specs/028-auditoria.md`, "Consulta"). Do mais novo para o mais antigo, sem
+        `details`, com o nome do ator e do alvo quando são usuários (`usuário removido` se a
+        conta foi excluída). Sem `from` e `to`, os últimos 30 dias; janela acima de 366 dias:
+        `400` `validation_failed`. Cada chamada grava `audit.search`, com os filtros.
+      parameters:
+        - name: from
+          in: query
+          description: Início do período (inclusive).
+          schema:
+            $ref: "#/components/schemas/DateTime"
+        - name: to
+          in: query
+          description: Fim do período (exclusive).
+          schema:
+            $ref: "#/components/schemas/DateTime"
+        - name: actorId
+          in: query
+          schema:
+            $ref: "#/components/schemas/Uuid"
+        - name: action
+          in: query
+          description: Ação exata (`user.suspend`) ou prefixo terminado em `.*` (`user.*`).
+          schema:
+            type: string
+            pattern: "^[a-z][a-z_]*(\\.[a-z][a-z_]*)*(\\.\\*)?$"
+            maxLength: 100
+        - name: targetType
+          in: query
+          schema:
+            type: string
+            minLength: 1
+            maxLength: 64
+        - name: targetId
+          in: query
+          schema:
+            type: string
+            minLength: 1
+            maxLength: 128
+        - name: origin
+          in: query
+          schema:
+            $ref: "#/components/schemas/AuditOrigin"
+        - name: mcpKeyId
+          in: query
+          schema:
+            $ref: "#/components/schemas/Uuid"
+        - name: outcome
+          in: query
+          schema:
+            $ref: "#/components/schemas/AuditOutcome"
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Cursor"
+      responses:
+        "200":
+          description: Uma página de registros.
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/XRequestId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuditEntryPage"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+  /api/v1/audit/{id}:
+    get:
+      operationId: getAuditEntry
+      tags: [audit]
+      summary: Um registro da auditoria
+      x-nuva-pending: true
+      x-permission: audit.view
+      description: O registro com `details`. Abrir um registro não grava `audit.search`.
+      parameters:
+        - $ref: "#/components/parameters/IdPath"
+      responses:
+        "200":
+          description: O registro.
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/XRequestId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuditEntryDetail"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+  /api/v1/terms:
+    get:
+      operationId: listTermsVersions
+      tags: [terms]
+      summary: Versões de um documento legal
+      x-nuva-pending: true
+      x-permission: settings.manage
+      description: |
+        Só `admin` (`specs/030-lgpd.md`, "Termos na Fase 1"). Rascunhos e publicadas do
+        documento, mais nova primeiro, sem o texto.
+      parameters:
+        - name: document
+          in: query
+          required: true
+          schema:
+            $ref: "#/components/schemas/TermsDocument"
+      responses:
+        "200":
+          description: As versões do documento.
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/XRequestId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TermsVersionList"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+    post:
+      operationId: createTermsDraft
+      tags: [terms]
+      summary: Criar um rascunho
+      x-nuva-pending: true
+      x-permission: settings.manage
+      description: |
+        Cria um rascunho do documento. Rascunho não é editado: para mudar o texto, cria-se
+        outro. O número da versão só é dado na publicação.
+      security:
+        - sessionCookie: []
+          csrfToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [document, bodyMd, requiresReacceptance]
+              properties:
+                document:
+                  $ref: "#/components/schemas/TermsDocument"
+                bodyMd:
+                  type: string
+                  minLength: 1
+                  maxLength: 100000
+                  description: Texto em Markdown.
+                requiresReacceptance:
+                  type: boolean
+                  description: |
+                    Publicada, bloqueia no classroom quem aceitou uma versão anterior até aceitar
+                    esta.
+              additionalProperties: false
+      responses:
+        "201":
+          description: Rascunho criado.
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/XRequestId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TermsVersionEntry"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "413":
+          $ref: "#/components/responses/PayloadTooLarge"
+        "415":
+          $ref: "#/components/responses/UnsupportedMediaType"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+  /api/v1/terms/{id}/publish:
+    post:
+      operationId: publishTermsVersion
+      tags: [terms]
+      summary: Publicar um rascunho
+      x-nuva-pending: true
+      x-permission: settings.manage
+      description: |
+        O rascunho recebe o próximo `version` do documento, `effectiveAt = publishedAt = agora`,
+        vira a versão vigente e fica imutável. Grava `terms.publish` na auditoria. Já publicado:
+        `409` `terms_already_published`.
+      security:
+        - sessionCookie: []
+          csrfToken: []
+      parameters:
+        - $ref: "#/components/parameters/IdPath"
+      responses:
+        "200":
+          description: Versão publicada.
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/XRequestId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TermsVersionEntry"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+  /api/v1/images/{imageId}/{variant}.webp:
+    get:
+      operationId: getImageVariant
+      tags: [images]
+      summary: Entrega de uma variante de imagem
+      x-nuva-pending: true
+      description: |
+        Entrega pública de uma variante (`specs/029-imagens.md`, "Entrega"), sem sessão: o
+        identificador é um UUID que não se adivinha. As duas APIs servem a mesma rota.
+
+        - `Cache-Control: public, max-age=31536000, immutable` e `ETag` com o hash do conteúdo;
+          `If-None-Match` igual ao `ETag` responde `304`.
+        - Imagem inexistente, ocultada pela moderação ou largura que a finalidade não tem: `404`.
+      security: []
+      parameters:
+        - $ref: "#/components/parameters/ImageIdPath"
+        - $ref: "#/components/parameters/ImageVariantPath"
+        - $ref: "#/components/parameters/IfNoneMatch"
+      responses:
+        "200":
+          $ref: "#/components/responses/ImageVariant"
+        "304":
+          $ref: "#/components/responses/ImageNotModified"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
 components:
   securitySchemes:
     sessionCookie:
@@ -187,6 +1350,54 @@ components:
         type: string
         minLength: 8
         maxLength: 128
+    IdPath:
+      name: id
+      in: path
+      required: true
+      description: Identificador do recurso.
+      schema:
+        $ref: "#/components/schemas/Uuid"
+    AuthProviderPath:
+      name: provider
+      in: path
+      required: true
+      description: |
+        Provedor de login social. Provedor sem as variáveis configuradas nesta instalação (fora de
+        `authProviders` em `GET /api/v1/meta`) responde `404`.
+      schema:
+        $ref: "#/components/schemas/AuthProvider"
+    ReturnTo:
+      name: returnTo
+      in: query
+      description: |
+        Caminho do próprio site para onde o navegador volta depois do login (começa com `/`, não
+        com `//`). Outro valor, ou ausente, vira `/`; nunca é recusado.
+      schema:
+        type: string
+        maxLength: 2048
+    ImageIdPath:
+      name: imageId
+      in: path
+      required: true
+      description: Identificador da imagem.
+      schema:
+        $ref: "#/components/schemas/Uuid"
+    ImageVariantPath:
+      name: variant
+      in: path
+      required: true
+      description: |
+        Largura da variante, em pixels. Cada imagem só tem as variantes da sua finalidade
+        (`specs/029-imagens.md`, "Finalidades e variantes"); outra largura responde `404`.
+      schema:
+        $ref: "#/components/schemas/ImageVariantWidth"
+    IfNoneMatch:
+      name: If-None-Match
+      in: header
+      description: |
+        `ETag` de uma entrega anterior. Igual ao atual, a resposta é `304`, sem corpo.
+      schema:
+        type: string
   headers:
     # --- comum ---
     XRequestId:
@@ -198,6 +1409,38 @@ components:
       schema:
         type: integer
         minimum: 0
+    Location:
+      description: Endereço para onde o navegador é redirecionado.
+      schema:
+        type: string
+        format: uri-reference
+    SetCookie:
+      description: |
+        Grava ou apaga um cookie do site: o da sessão ou o de retorno do login social
+        (`specs/007-contas-e-autenticacao.md`, "Cookies"). Os dois são `HttpOnly`: o site não os
+        lê; o navegador os guarda e reenvia sozinho.
+      schema:
+        type: string
+    NoStore:
+      description: Sempre `no-store`; a resposta não é guardada em cache.
+      schema:
+        type: string
+        const: no-store
+    ETag:
+      description: Hash do conteúdo da variante; muda quando o conteúdo muda.
+      schema:
+        type: string
+    ImageCacheControl:
+      description: |
+        Sempre `public, max-age=31536000, immutable`: a URL de uma imagem nunca muda de conteúdo.
+      schema:
+        type: string
+        const: public, max-age=31536000, immutable
+    ContentTypeOptions:
+      description: Sempre `nosniff`.
+      schema:
+        type: string
+        const: nosniff
   responses:
     # --- comum ---
     BadRequest:
@@ -309,6 +1552,58 @@ components:
         application/problem+json:
           schema:
             $ref: "#/components/schemas/Problem"
+    TooManyAttempts:
+      description: |
+        Limite de taxa (`rate_limited`) ou bloqueio por tentativas erradas de senha, da conta ou
+        do IP (`too_many_attempts`; `specs/007-contas-e-autenticacao.md`, "Bloqueio e dispositivo
+        novo"). `Retry-After` e `retryAfterSeconds` trazem os segundos até poder tentar de novo.
+      headers:
+        X-Request-Id:
+          $ref: "#/components/headers/XRequestId"
+        Retry-After:
+          $ref: "#/components/headers/RetryAfter"
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+    ImageVariant:
+      description: A variante, em WebP.
+      headers:
+        X-Request-Id:
+          $ref: "#/components/headers/XRequestId"
+        ETag:
+          $ref: "#/components/headers/ETag"
+        Cache-Control:
+          $ref: "#/components/headers/ImageCacheControl"
+        X-Content-Type-Options:
+          $ref: "#/components/headers/ContentTypeOptions"
+      content:
+        image/webp:
+          schema:
+            type: string
+            contentMediaType: image/webp
+    ImageNotModified:
+      description: O `If-None-Match` é igual ao `ETag` atual; sem corpo.
+      headers:
+        X-Request-Id:
+          $ref: "#/components/headers/XRequestId"
+        ETag:
+          $ref: "#/components/headers/ETag"
+        Cache-Control:
+          $ref: "#/components/headers/ImageCacheControl"
+    # --- só admin-api ---
+    OAuthReturn:
+      description: |
+        Volta ao próprio site (`Location`), conforme a tabela da descrição da operação. Abre a
+        sessão (`Set-Cookie` de `nuva_admin_session`) quando entrou, e apaga o cookie de retorno
+        (`nuva_admin_oauth`).
+      headers:
+        X-Request-Id:
+          $ref: "#/components/headers/XRequestId"
+        Location:
+          $ref: "#/components/headers/Location"
+        Set-Cookie:
+          $ref: "#/components/headers/SetCookie"
   schemas:
     # --- comum ---
     Uuid:
@@ -540,4 +1835,495 @@ components:
             Endereço do código-fonte desta instalação, exigido pela AGPL-3.0. Sempre presente;
             padrão `https://github.com/patrickbrandao/nuva-edu`.
           examples: [https://github.com/patrickbrandao/nuva-edu]
+      additionalProperties: false
+    Email:
+      type: string
+      format: email
+      maxLength: 254
+      description: |
+        Endereço de e-mail. A API o normaliza (minúsculas) antes de gravar ou comparar.
+      examples: [ana@example.com]
+    UserRole:
+      type: string
+      enum: [student, instructor, manager, admin]
+      description: Papel do usuário (`specs/008-papeis-e-permissoes.md`).
+    PermissionAction:
+      type: string
+      pattern: "^[a-z][a-z_]*(\\.[a-z][a-z_]*)*$"
+      description: |
+        Identificador de uma ação da matriz de permissões (`specs/008-papeis-e-permissoes.md`,
+        "Identificadores das ações"), o mesmo de `x-permission`. A lista é aberta: ação nova
+        entra pela spec 008.
+      examples: [users.list, account.self_service]
+    SessionSite:
+      type: string
+      enum: [classroom, admin]
+      description: Site em que a sessão foi aberta.
+    SessionUser:
+      type: object
+      description: Dono da sessão. Não tem campo de senha; `hasPassword` só diz se há uma definida.
+      required: [id, name, email, emailVerified, role, avatarUrl, hasPassword]
+      properties:
+        id:
+          $ref: "#/components/schemas/Uuid"
+        name:
+          type: string
+          description: Nome de exibição.
+        email:
+          $ref: "#/components/schemas/Email"
+        emailVerified:
+          type: boolean
+        role:
+          $ref: "#/components/schemas/UserRole"
+        avatarUrl:
+          type: [string, "null"]
+          format: uri-reference
+          description: |
+            Caminho da variante de 256 px do avatar na própria API; `null` sem avatar (o site
+            mostra as iniciais do nome).
+          examples: [/api/v1/images/0193a5b2-7c1e-7d3a-9f4b-2a6c8e1d5f70/256.webp, null]
+        hasPassword:
+          type: boolean
+          description: Verdadeiro quando a conta tem senha definida.
+      additionalProperties: false
+    SessionInfo:
+      type: object
+      description: Uma sessão aberta, nos dois sites.
+      required: [id, site, ip, browser, os, createdAt, lastUsedAt, current]
+      properties:
+        id:
+          $ref: "#/components/schemas/Uuid"
+          description: Identificador público da sessão (não é o valor do cookie).
+        site:
+          $ref: "#/components/schemas/SessionSite"
+        ip:
+          type: [string, "null"]
+          description: IP de onde a sessão foi aberta.
+          examples: [203.0.113.10]
+        browser:
+          type: [string, "null"]
+          description: Família do navegador, lida do `User-Agent`; `null` quando não reconhecida.
+          examples: [Chrome]
+        os:
+          type: [string, "null"]
+          description: Sistema, lido do `User-Agent`; `null` quando não reconhecido.
+          examples: [macOS]
+        createdAt:
+          $ref: "#/components/schemas/DateTime"
+        lastUsedAt:
+          $ref: "#/components/schemas/DateTime"
+        current:
+          type: boolean
+          description: Verdadeiro na sessão que fez a requisição.
+      additionalProperties: false
+    SessionInfoList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          description: Mais recente primeiro (`lastUsedAt`).
+          items:
+            $ref: "#/components/schemas/SessionInfo"
+      additionalProperties: false
+    Identity:
+      type: object
+      description: Provedor de login social vinculado à conta.
+      required: [provider, email, createdAt]
+      properties:
+        provider:
+          $ref: "#/components/schemas/AuthProvider"
+        email:
+          type: [string, "null"]
+          description: E-mail informado pelo provedor; `null` quando ele não enviou.
+        createdAt:
+          $ref: "#/components/schemas/DateTime"
+      additionalProperties: false
+    TermsDocument:
+      type: string
+      enum: [terms, privacy]
+      description: Documento legal (`specs/030-lgpd.md`), Termos de Uso ou Política de Privacidade.
+    ImageVariantWidth:
+      type: integer
+      enum: [64, 256, 480, 512, 1280, 1600]
+      description: Largura de uma variante de imagem, em pixels (`specs/029-imagens.md`).
+    # --- só admin-api: contas, auditoria e termos ---
+    Session:
+      type: object
+      description: Sessão do site admin (`specs/007-contas-e-autenticacao.md`, "Esquemas comuns").
+      required: [user, csrfToken, permissions, expiresAt]
+      properties:
+        user:
+          $ref: "#/components/schemas/SessionUser"
+        csrfToken:
+          type: string
+          description: Valor do cabeçalho `X-CSRF-Token` nas escritas desta sessão.
+        permissions:
+          type: array
+          description: |
+            Ações de `specs/008-papeis-e-permissoes.md` que o papel permite; o site monta o menu
+            com elas. Ação permitida só em parte (◐) também vem na lista.
+          items:
+            $ref: "#/components/schemas/PermissionAction"
+          uniqueItems: true
+        expiresAt:
+          $ref: "#/components/schemas/DateTime"
+      additionalProperties: false
+    UserStatus:
+      type: string
+      enum: [active, suspended]
+      description: "`suspended` quando há suspensão vigente, de qualquer tipo."
+    UserSummary:
+      type: object
+      description: Um usuário na lista. Sem campo de senha.
+      required:
+        - id
+        - name
+        - email
+        - emailVerified
+        - role
+        - avatarUrl
+        - status
+        - createdAt
+        - lastLoginAt
+      properties:
+        id:
+          $ref: "#/components/schemas/Uuid"
+        name:
+          type: string
+        email:
+          $ref: "#/components/schemas/Email"
+        emailVerified:
+          type: boolean
+        role:
+          $ref: "#/components/schemas/UserRole"
+        avatarUrl:
+          type: [string, "null"]
+          format: uri-reference
+          description: Variante de 256 px do avatar; `null` sem avatar.
+        status:
+          $ref: "#/components/schemas/UserStatus"
+        createdAt:
+          $ref: "#/components/schemas/DateTime"
+        lastLoginAt:
+          oneOf:
+            - $ref: "#/components/schemas/DateTime"
+            - type: "null"
+          description: Último login; `null` se nunca entrou.
+      additionalProperties: false
+    UserSummaryPage:
+      allOf:
+        - $ref: "#/components/schemas/Page"
+        - type: object
+          required: [items]
+          properties:
+            items:
+              type: array
+              items:
+                $ref: "#/components/schemas/UserSummary"
+    SuspensionKind:
+      type: string
+      enum: [posting, full]
+      description: |
+        `posting` impede publicar; `full` encerra as sessões e recusa o login
+        (`specs/008-papeis-e-permissoes.md`, "Suspensão").
+    UserRef:
+      type: object
+      description: Um usuário citado por outro registro, com o nome atual (`usuário removido` se excluído).
+      required: [id, name]
+      properties:
+        id:
+          $ref: "#/components/schemas/Uuid"
+        name:
+          type: string
+      additionalProperties: false
+    UserSuspension:
+      type: object
+      description: A suspensão vigente.
+      required: [kind, reason, startsAt, endsAt, createdBy]
+      properties:
+        kind:
+          $ref: "#/components/schemas/SuspensionKind"
+        reason:
+          type: string
+          description: Motivo interno, visível só à equipe.
+        startsAt:
+          $ref: "#/components/schemas/DateTime"
+        endsAt:
+          oneOf:
+            - $ref: "#/components/schemas/DateTime"
+            - type: "null"
+          description: Fim do prazo; `null` é por tempo indeterminado.
+        createdBy:
+          oneOf:
+            - $ref: "#/components/schemas/UserRef"
+            - type: "null"
+          description: Quem suspendeu; `null` quando não há usuário (comando de linha).
+      additionalProperties: false
+    UserDetail:
+      type: object
+      description: |
+        Ficha do usuário: os campos de `UserSummary` e mais os da ficha. Sem campo de senha; a
+        senha só sai em `POST /api/v1/users/{id}/password/reveal`.
+      required:
+        - id
+        - name
+        - email
+        - emailVerified
+        - role
+        - avatarUrl
+        - status
+        - createdAt
+        - lastLoginAt
+        - fullName
+        - hasPassword
+        - identities
+        - suspension
+        - version
+      properties:
+        id:
+          $ref: "#/components/schemas/Uuid"
+        name:
+          type: string
+        email:
+          $ref: "#/components/schemas/Email"
+        emailVerified:
+          type: boolean
+        role:
+          $ref: "#/components/schemas/UserRole"
+        avatarUrl:
+          type: [string, "null"]
+          format: uri-reference
+          description: Variante de 256 px do avatar; `null` sem avatar.
+        status:
+          $ref: "#/components/schemas/UserStatus"
+        createdAt:
+          $ref: "#/components/schemas/DateTime"
+        lastLoginAt:
+          oneOf:
+            - $ref: "#/components/schemas/DateTime"
+            - type: "null"
+        fullName:
+          type: [string, "null"]
+          description: Nome completo, usado em pedidos e certificados.
+        hasPassword:
+          type: boolean
+          description: Verdadeiro quando a conta tem senha definida.
+        identities:
+          type: array
+          items:
+            $ref: "#/components/schemas/Identity"
+        suspension:
+          oneOf:
+            - $ref: "#/components/schemas/UserSuspension"
+            - type: "null"
+          description: A suspensão vigente; `null` sem suspensão.
+        version:
+          type: integer
+          minimum: 1
+          description: Versão da ficha, enviada de volta em `PATCH /api/v1/users/{id}`.
+      additionalProperties: false
+    PasswordReveal:
+      type: object
+      description: |
+        Única resposta da API com o campo de senha (`specs/007-contas-e-autenticacao.md`, RF-09;
+        ADR 0002). Não vai para log, auditoria nem cache.
+      required: [password]
+      properties:
+        password:
+          type: [string, "null"]
+          description: A senha em texto; `null` quando o usuário não tem senha definida.
+      additionalProperties: false
+    AuditOrigin:
+      type: string
+      enum: [admin_panel, mcp, classroom, worker, cli]
+      description: Por onde a ação foi feita (`specs/028-auditoria.md`).
+    AuditOutcome:
+      type: string
+      enum: [ok, denied, error]
+    AuditEntry:
+      type: object
+      description: |
+        Um registro da auditoria, sem `details`. `actor` e `target` trazem o nome atual quando o
+        alvo é um usuário (`usuário removido` se excluído).
+      required:
+        - id
+        - createdAt
+        - actor
+        - actorRole
+        - origin
+        - mcpKeyId
+        - action
+        - targetType
+        - targetId
+        - targetName
+        - outcome
+        - ip
+        - userAgent
+        - requestId
+      properties:
+        id:
+          $ref: "#/components/schemas/Uuid"
+        createdAt:
+          $ref: "#/components/schemas/DateTime"
+        actor:
+          oneOf:
+            - $ref: "#/components/schemas/UserRef"
+            - type: "null"
+          description: Quem agiu; `null` em `worker` e `cli`. No MCP, o emissor da chave.
+        actorRole:
+          oneOf:
+            - $ref: "#/components/schemas/UserRole"
+            - type: "null"
+          description: Papel do ator no momento da ação.
+        origin:
+          $ref: "#/components/schemas/AuditOrigin"
+        mcpKeyId:
+          oneOf:
+            - $ref: "#/components/schemas/Uuid"
+            - type: "null"
+        action:
+          type: string
+          description: Código da ação (`specs/028-auditoria.md`, "O que é registrado").
+          examples: [user.password_view]
+        targetType:
+          type: [string, "null"]
+          examples: [user]
+        targetId:
+          type: [string, "null"]
+        targetName:
+          type: [string, "null"]
+          description: Nome do alvo quando é um usuário; `null` nos demais.
+        outcome:
+          $ref: "#/components/schemas/AuditOutcome"
+        ip:
+          type: [string, "null"]
+          description: IP real do cliente; `null` depois da exclusão da conta.
+        userAgent:
+          type: [string, "null"]
+        requestId:
+          type: [string, "null"]
+      additionalProperties: false
+    AuditEntryDetail:
+      type: object
+      description: |
+        Um registro com `details` (antes e depois dos campos alterados, até 8 KB; campos
+        sensíveis aparecem como `"[alterado]"`).
+      required:
+        - id
+        - createdAt
+        - actor
+        - actorRole
+        - origin
+        - mcpKeyId
+        - action
+        - targetType
+        - targetId
+        - targetName
+        - outcome
+        - ip
+        - userAgent
+        - requestId
+        - details
+      properties:
+        id:
+          $ref: "#/components/schemas/Uuid"
+        createdAt:
+          $ref: "#/components/schemas/DateTime"
+        actor:
+          oneOf:
+            - $ref: "#/components/schemas/UserRef"
+            - type: "null"
+        actorRole:
+          oneOf:
+            - $ref: "#/components/schemas/UserRole"
+            - type: "null"
+        origin:
+          $ref: "#/components/schemas/AuditOrigin"
+        mcpKeyId:
+          oneOf:
+            - $ref: "#/components/schemas/Uuid"
+            - type: "null"
+        action:
+          type: string
+        targetType:
+          type: [string, "null"]
+        targetId:
+          type: [string, "null"]
+        targetName:
+          type: [string, "null"]
+        outcome:
+          $ref: "#/components/schemas/AuditOutcome"
+        ip:
+          type: [string, "null"]
+        userAgent:
+          type: [string, "null"]
+        requestId:
+          type: [string, "null"]
+        details:
+          type: [object, "null"]
+          description: |
+            JSON livre, conforme a ação; com `truncated: true` quando passou de 8 KB.
+          additionalProperties: true
+      additionalProperties: false
+    AuditEntryPage:
+      allOf:
+        - $ref: "#/components/schemas/Page"
+        - type: object
+          required: [items]
+          properties:
+            items:
+              type: array
+              items:
+                $ref: "#/components/schemas/AuditEntry"
+    TermsStatus:
+      type: string
+      enum: [draft, published]
+    TermsVersionEntry:
+      type: object
+      description: |
+        Uma versão de um documento legal na lista do admin, sem o texto (`specs/030-lgpd.md`,
+        "Termos na Fase 1"). Rascunho tem `version`, `effectiveAt` e `publishedAt` nulos.
+      required:
+        - id
+        - document
+        - version
+        - status
+        - requiresReacceptance
+        - effectiveAt
+        - publishedAt
+        - createdAt
+      properties:
+        id:
+          $ref: "#/components/schemas/Uuid"
+        document:
+          $ref: "#/components/schemas/TermsDocument"
+        version:
+          type: [integer, "null"]
+          minimum: 1
+          description: Número sequencial por documento, dado na publicação.
+        status:
+          $ref: "#/components/schemas/TermsStatus"
+        requiresReacceptance:
+          type: boolean
+        effectiveAt:
+          oneOf:
+            - $ref: "#/components/schemas/DateTime"
+            - type: "null"
+        publishedAt:
+          oneOf:
+            - $ref: "#/components/schemas/DateTime"
+            - type: "null"
+        createdAt:
+          $ref: "#/components/schemas/DateTime"
+      additionalProperties: false
+    TermsVersionList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          description: Mais nova primeiro.
+          items:
+            $ref: "#/components/schemas/TermsVersionEntry"
       additionalProperties: false
