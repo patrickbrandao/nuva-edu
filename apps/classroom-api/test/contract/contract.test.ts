@@ -28,6 +28,7 @@ describe('contrato da classroom-api', () => {
     const report = test.app.checkContract({ csrfExceptions: CSRF_EXCEPTIONS });
     // A mensagem lista cada divergência; vazia quando não há nenhuma.
     expect(formatContractReport(report)).toBe('');
+    expect(report.missingErrorResponses).toEqual([]);
     expect(report.ok).toBe(true);
   });
 

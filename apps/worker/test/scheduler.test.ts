@@ -1,15 +1,19 @@
-import { type Database, getJobCounts, recurringKey } from '@nuva-edu/core';
+import {
+  createSettingsReader,
+  type Database,
+  getJobCounts,
+  recurringKey,
+  SETTING_DEFAULTS,
+  setSetting,
+} from '@nuva-edu/core';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { createHandlers } from '../src/handlers.ts';
 import {
   createScheduler,
-  DEFAULT_TIMEZONE,
   dueWindow,
   localClock,
   RECURRING_JOBS,
-  resolveTimezone,
   type Schedule,
-  TIMEZONE_SETTING_KEY,
 } from '../src/scheduler.ts';
 import { createWorker } from '../src/worker.ts';
 import {
@@ -24,10 +28,14 @@ import {
 let db: Database;
 let other: Database;
 
-async function setTimezone(value: unknown): Promise<void> {
+const TIMEZONE_KEY = 'school.timezone';
+const INVALID_SETTING = 'Configuração com valor inválido no banco; usando o padrão';
+
+/** Grava direto na tabela, como quem escreve por fora da admin-api (sem a validação do núcleo). */
+async function storeRawTimezone(value: unknown): Promise<void> {
   await db
     .insertInto('settings')
-    .values({ key: TIMEZONE_SETTING_KEY, value: JSON.stringify(value) })
+    .values({ key: TIMEZONE_KEY, value: JSON.stringify(value) })
     .execute();
 }
 
@@ -46,7 +54,7 @@ beforeEach(async () => {
 });
 
 afterEach(async () => {
-  await db.deleteFrom('settings').where('key', '=', TIMEZONE_SETTING_KEY).execute();
+  await db.deleteFrom('settings').where('key', '=', TIMEZONE_KEY).execute();
 });
 
 const PURGE: Schedule = { kind: 'daily', hour: 3, minute: 30 };
@@ -69,32 +77,46 @@ describe('janela das recorrentes', () => {
     expect(dueWindow(PURGE, new Date('2026-11-24T20:00:00Z'), 'Asia/Tokyo')).toBe('2026-11-25');
   });
 
+  it('a semanal só é devida no dia marcado, a partir do horário, com a data local desse dia', () => {
+    const zone = 'America/Sao_Paulo';
+    const weekly: Schedule = { kind: 'weekly', weekday: 1, hour: 0, minute: 0 };
+    // 2026-11-23 é segunda-feira. Domingo 23:59 local ainda não; segunda 00:00 local já.
+    expect(dueWindow(weekly, new Date('2026-11-23T02:59:00Z'), zone)).toBeNull();
+    expect(dueWindow(weekly, new Date('2026-11-23T03:00:00Z'), zone)).toBe('2026-11-23');
+    expect(dueWindow(weekly, new Date('2026-11-24T02:59:00Z'), zone)).toBe('2026-11-23');
+    // Terça-feira local: a janela da semana não é recuperada.
+    expect(dueWindow(weekly, new Date('2026-11-24T03:00:00Z'), zone)).toBeNull();
+    // Segunda-feira antes do horário marcado.
+    const morning: Schedule = { kind: 'weekly', weekday: 1, hour: 8, minute: 30 };
+    expect(dueWindow(morning, new Date('2026-11-23T11:29:00Z'), zone)).toBeNull();
+    expect(dueWindow(morning, new Date('2026-11-23T11:30:00Z'), zone)).toBe('2026-11-23');
+  });
+
+  it('a de intervalo usa o início do intervalo em UTC, sem depender do fuso', () => {
+    const every15: Schedule = { kind: 'interval', everyMinutes: 15 };
+    for (const zone of ['America/Sao_Paulo', 'Asia/Tokyo']) {
+      expect(dueWindow(every15, new Date('2026-11-24T10:15:00Z'), zone)).toBe('2026-11-24T10:15');
+      expect(dueWindow(every15, new Date('2026-11-24T10:29:59Z'), zone)).toBe('2026-11-24T10:15');
+      expect(dueWindow(every15, new Date('2026-11-24T10:30:00Z'), zone)).toBe('2026-11-24T10:30');
+    }
+    const every6h: Schedule = { kind: 'interval', everyMinutes: 360 };
+    expect(dueWindow(every6h, new Date('2026-11-24T05:59:00Z'), 'UTC')).toBe('2026-11-24T00:00');
+    expect(dueWindow(every6h, new Date('2026-11-24T23:59:00Z'), 'UTC')).toBe('2026-11-24T18:00');
+    expect(dueWindow(every6h, new Date('2026-11-25T00:00:00Z'), 'UTC')).toBe('2026-11-25T00:00');
+  });
+
+  it('intervalo que não divide o dia é recusado', () => {
+    const now = new Date('2026-11-24T10:15:00Z');
+    expect(() => dueWindow({ kind: 'interval', everyMinutes: 7 }, now, 'UTC')).toThrow(RangeError);
+    expect(() => dueWindow({ kind: 'interval', everyMinutes: 0 }, now, 'UTC')).toThrow(RangeError);
+  });
+
   it('o expurgo diário está agendado para 03:30', () => {
     expect(RECURRING_JOBS).toContainEqual({
       type: 'retention.purge',
       schedule: { kind: 'daily', hour: 3, minute: 30 },
       payload: {},
     });
-  });
-});
-
-describe('fuso da escola', () => {
-  it('usa o padrão quando a chave não existe', async () => {
-    expect(await resolveTimezone(db)).toBe(DEFAULT_TIMEZONE);
-    expect(DEFAULT_TIMEZONE).toBe('America/Sao_Paulo');
-  });
-
-  it('usa settings.timezone quando é um fuso válido', async () => {
-    await setTimezone('Europe/Lisbon');
-    expect(await resolveTimezone(db)).toBe('Europe/Lisbon');
-  });
-
-  it('volta ao padrão, com aviso, quando o valor não é um fuso', async () => {
-    await setTimezone('Marte/Olympus');
-    const { logger, lines } = captureLogger();
-    expect(await resolveTimezone(db, logger)).toBe(DEFAULT_TIMEZONE);
-    expect(lines).toHaveLength(1);
-    expect(lines[0]?.level).toBe('warn');
   });
 });
 
@@ -125,15 +147,74 @@ describe('agendador', () => {
     expect((await getJobCounts(db)).queued).toBe(1);
   });
 
-  it('usa o fuso da escola para decidir a janela', async () => {
-    await setTimezone('Asia/Tokyo');
-    const scheduler = createScheduler({
-      db,
-      logger: captureLogger().logger,
-      now: at('2026-11-24T20:00:00Z'),
+  describe('fuso da escola (school.timezone)', () => {
+    // 20:00 UTC: 17:00 do mesmo dia em São Paulo, 05:00 do dia seguinte em Tóquio.
+    const now = at('2026-11-24T20:00:00Z');
+
+    it('sem a chave gravada, a janela diária segue o padrão America/Sao_Paulo', async () => {
+      expect(SETTING_DEFAULTS[TIMEZONE_KEY]).toBe('America/Sao_Paulo');
+      const { logger, lines } = captureLogger();
+      const created = await createScheduler({ db, logger, now }).runOnce();
+      expect(created[0]?.uniqueKey).toBe('retention.purge:2026-11-24');
+      expect(lines.find((line) => line.msg === 'Tarefa recorrente enfileirada')).toMatchObject({
+        window: '2026-11-24',
+        timezone: 'America/Sao_Paulo',
+      });
+      expect(lines.some((line) => line.level === 'warn')).toBe(false);
     });
-    const created = await scheduler.runOnce();
-    expect(created[0]?.uniqueKey).toBe('retention.purge:2026-11-25');
+
+    it('com a chave gravada, a janela diária segue o fuso da escola', async () => {
+      await setSetting(db, TIMEZONE_KEY, 'Asia/Tokyo');
+      const { logger, lines } = captureLogger();
+      const created = await createScheduler({ db, logger, now }).runOnce();
+      expect(created[0]?.uniqueKey).toBe('retention.purge:2026-11-25');
+      expect(lines.find((line) => line.msg === 'Tarefa recorrente enfileirada')).toMatchObject({
+        window: '2026-11-25',
+        timezone: 'Asia/Tokyo',
+      });
+    });
+
+    it('no fuso gravado, antes do horário local nada é enfileirado', async () => {
+      // 10:00 UTC: 07:00 em São Paulo (devida no padrão), mas 02:00 em Los Angeles.
+      await setSetting(db, TIMEZONE_KEY, 'America/Los_Angeles');
+      const scheduler = createScheduler({
+        db,
+        logger: captureLogger().logger,
+        now: at('2026-11-24T10:00:00Z'),
+      });
+      expect(await scheduler.runOnce()).toEqual([]);
+    });
+
+    it('valor inválido no banco cai no padrão, com aviso que leva só a chave', async () => {
+      await storeRawTimezone('Marte/Olympus');
+      const { logger, lines } = captureLogger();
+      const created = await createScheduler({ db, logger, now }).runOnce();
+      expect(created[0]?.uniqueKey).toBe('retention.purge:2026-11-24');
+      const warnings = lines.filter((line) => line.msg === INVALID_SETTING);
+      expect(warnings).toHaveLength(1);
+      expect(warnings[0]).toMatchObject({ level: 'warn', setting_key: TIMEZONE_KEY });
+      expect(JSON.stringify(lines)).not.toContain('Marte/Olympus');
+    });
+
+    it('valor que não é texto também cai no padrão', async () => {
+      await storeRawTimezone(42);
+      const { logger, lines } = captureLogger();
+      const created = await createScheduler({ db, logger, now }).runOnce();
+      expect(created[0]?.uniqueKey).toBe('retention.purge:2026-11-24');
+      expect(lines.filter((line) => line.msg === INVALID_SETTING)).toHaveLength(1);
+    });
+
+    it('usa o leitor recebido: o fuso vem do cache até ele vencer', async () => {
+      let clock = 0;
+      const settings = createSettingsReader(db, { ttlMs: 30_000, now: () => clock });
+      const scheduler = createScheduler({ db, logger: captureLogger().logger, now, settings });
+      expect((await scheduler.runOnce())[0]?.uniqueKey).toBe('retention.purge:2026-11-24');
+      await setSetting(db, TIMEZONE_KEY, 'Asia/Tokyo');
+      // Dentro da validade do cache, a mesma janela (já enfileirada): nada novo.
+      expect(await scheduler.runOnce()).toEqual([]);
+      clock = 30_000;
+      expect((await scheduler.runOnce())[0]?.uniqueKey).toBe('retention.purge:2026-11-25');
+    });
   });
 
   it('o expurgo agendado roda no worker e não volta para a mesma janela', async () => {

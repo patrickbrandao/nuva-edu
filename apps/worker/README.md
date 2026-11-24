@@ -10,7 +10,7 @@ Roda direto no Node 26, sem build. Métricas e verificações do `/readyz` vêm 
 | `src/app.ts` | Liga banco, laço de consumo, agendador e HTTP interno |
 | `src/worker.ts` | Laço: `NOTIFY` + varredura, concorrência, batimento, tarefa presa, encerramento |
 | `src/handlers.ts` | Um manipulador por tipo do registro do núcleo, todos idempotentes |
-| `src/scheduler.ts` | Recorrentes: janela no fuso de `settings.timezone`, `enqueueRecurring` |
+| `src/scheduler.ts` | Recorrentes: janela no fuso da escola (`school.timezone`, lido pelo `createSettingsReader` do núcleo), `enqueueRecurring` |
 | `src/http.ts` | `/healthz`, `/readyz`, `/metrics` em `node:http` |
 | `src/metrics.ts`, `src/queue-metrics.ts` | Métricas do laço e medidores da fila, do pool e do processo |
 

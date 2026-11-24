@@ -4,19 +4,21 @@ import {
   databaseReadiness,
   type FastifyInstance,
   type ReadinessChecks,
+  registerMetaRoute,
 } from '@nuva-edu/api-kit';
 import {
   type ChannelListener,
   type Config,
+  createSettingsReader,
   type Database,
   databasePoolStats,
   type Logger,
   listenChannel,
+  type SettingsReader,
   USER_EVENTS_CHANNEL,
 } from '@nuva-edu/core';
 import { loadClassroomContract } from './contract.ts';
 import { readServiceVersion } from './meta.ts';
-import { registerMetaRoutes } from './routes/meta.ts';
 import { registerStreamRoutes } from './routes/stream.ts';
 import { rejectEverySession, type SessionAuthenticator, session } from './session.ts';
 import { parseUserEventPayload, toStreamEvent } from './stream/events.ts';
@@ -47,6 +49,11 @@ export interface ClassroomAppOptions {
    * rotas e contrato. Padrão: `true`.
    */
   listenUserEvents?: boolean;
+  /**
+   * Leitor das configurações da escola (`settings`). Padrão: um por app, com o cache do núcleo
+   * e o `logger` do serviço. Só consulta o banco na primeira leitura, nunca na montagem.
+   */
+  settings?: SettingsReader;
 }
 
 /** O fluxo SSE deste processo, para a subida, os testes e quem precisar derrubar conexões. */
@@ -171,7 +178,16 @@ export function buildClassroomApp(options: ClassroomAppOptions): FastifyInstance
     listener = null;
   });
 
-  registerMetaRoutes(app, { config, version: options.version ?? readServiceVersion() });
+  // Um leitor por processo: o `/meta` não vai ao banco a cada requisição. Com o `logger`, valor
+  // inválido gravado em `settings` gera aviso e vale o padrão (spec 003, "Meta").
+  const settings = options.settings ?? createSettingsReader(db, { logger });
+
+  // `GET /api/v1/meta`: dados públicos da instalação e da marca, sem sessão (spec 004, RF-02).
+  registerMetaRoute(app, {
+    config,
+    version: options.version ?? readServiceVersion(),
+    settings,
+  });
   registerStreamRoutes(app, { hub, isListening: () => listener?.isConnected() ?? false });
   return app;
 }
