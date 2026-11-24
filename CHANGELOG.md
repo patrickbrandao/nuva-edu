@@ -37,6 +37,7 @@ Detalhe das decisões em `specs/decisions/`.
 - `verify`: passo `tipos-banco` (`db:types:check` do core) no completo e, no rápido, quando uma migration muda; contrato alterado também confere o cliente gerado (passo `cliente`); no completo os testes de contrato rodam uma vez só.
 - `@nuva-edu/api-kit`: requisição abortada pelo cliente registrada no log e nas métricas HTTP com status 499; base de SSE (`eventStreams`, cabeçalhos, `sse_connections`, fechamento no `preClose`); `413 payload_too_large` e `415 unsupported_media_type` no lugar de `400`; operação `x-nuva-pending` aceita sem rota; validação de esquema avulso; dados tipados por requisição; entradas `/metrics` e `/health` sem Fastify.
 - Specs pós-esqueletos (ADRs 0019 e 0020): janela de contrato e `x-nuva-pending`, erros `payload_too_large` (413) e `unsupported_media_type` (415), marca da escola no `/meta`, chaves `school.*` de `settings`, `PORT`, lista padrão de `TRUSTED_PROXIES` com CGNAT e link-local, carga e reenvio dos eventos do SSE, regras das recorrentes e da tabela `jobs`, métricas do worker, um arquivo de tradução por idioma; `Locale` dos contratos aceita o mesmo formato de `NUVA_LOCALE`.
+- Classroom: casca, rodapé, títulos e estados passam a usar `ClassroomShell`, `ShellFooter`, `PageTitle`, `LoadingState` e `ErrorState` de `@nuva-edu/ui`; links internos pelo `LinkProvider` (task 041).
 
 ### Decisões
 - Instalável, uma escola por instalação; AGPL-3.0.
