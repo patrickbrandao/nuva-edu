@@ -17,6 +17,7 @@ COPY package.json pnpm-lock.yaml pnpm-workspace.yaml .npmrc ./
 RUN npm install --global --no-fund --no-audit "$(node -p "require('./package.json').packageManager")"
 COPY database/postgres/package.json database/postgres/
 COPY packages/core/package.json packages/core/
+COPY packages/api-kit/package.json packages/api-kit/
 COPY apps/worker/package.json apps/worker/
 RUN --mount=type=cache,id=nuva-edu-pnpm-store,target=/pnpm/store \
     pnpm install --frozen-lockfile --prod --ignore-scripts --store-dir /pnpm/store \
@@ -28,6 +29,8 @@ FROM deps AS build
 COPY database/postgres/src database/postgres/src
 COPY database/postgres/migrations database/postgres/migrations
 COPY packages/core/src packages/core/src
+# Do api-kit o worker carrega só as entradas `/metrics` e `/health`: não sobe o Fastify.
+COPY packages/api-kit/src packages/api-kit/src
 COPY apps/worker/src apps/worker/src
 # Versão do serviço: a do package.json, trocada pela da release quando o CI passa NUVA_VERSION
 # (sem o "v" da tag).

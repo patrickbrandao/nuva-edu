@@ -1,7 +1,7 @@
 import type { Readable } from 'node:stream';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
-  formatEvent,
+  eventFrame,
   parseEventId,
   parseUserEventPayload,
   type UserEvent,
@@ -81,15 +81,15 @@ describe('parseEventId', () => {
   });
 });
 
-describe('formatEvent', () => {
+describe('eventFrame', () => {
   it('escreve id, event e data numa linha cada, com linha em branco no fim', () => {
-    expect(formatEvent(event(ALICE, 42, { userId: BRUNO, online: true }))).toBe(
+    expect(eventFrame(event(ALICE, 42, { userId: BRUNO, online: true }))).toBe(
       `id: 42\nevent: presence\ndata: {"userId":"${BRUNO}","online":true}\n\n`,
     );
   });
 
   it('quebra de linha no conteúdo não vira linha nova no fio', () => {
-    const frame = formatEvent(event(ALICE, 1, { type: 'a\nevent: ping' }));
+    const frame = eventFrame(event(ALICE, 1, { type: 'a\nevent: ping' }));
     expect(frame.split('\n')).toHaveLength(5);
   });
 });
@@ -151,7 +151,7 @@ describe('createStreamHub', () => {
     hub.publish(event(ALICE, 4));
 
     expect(drain(hub.open(ALICE, 1))).toBe(
-      `: ok\n\n${formatEvent(event(ALICE, 2))}${formatEvent(event(ALICE, 4))}`,
+      `: ok\n\n${eventFrame(event(ALICE, 2))}${eventFrame(event(ALICE, 4))}`,
     );
     // Sem Last-Event-ID nada é reenviado.
     expect(drain(hub.open(ALICE))).toBe(': ok\n\n');
@@ -159,7 +159,7 @@ describe('createStreamHub', () => {
     // O evento 1 passou dos 5 minutos; os outros dois, ainda não.
     clock += 150_000;
     expect(drain(hub.open(ALICE, 0))).toBe(
-      `: ok\n\n${formatEvent(event(ALICE, 2))}${formatEvent(event(ALICE, 4))}`,
+      `: ok\n\n${eventFrame(event(ALICE, 2))}${eventFrame(event(ALICE, 4))}`,
     );
     clock += 300_000;
     expect(drain(hub.open(ALICE, 0))).toBe(': ok\n\n');

@@ -1,21 +1,9 @@
-import {
-  type Config,
-  closeDatabase,
-  createDatabase,
-  type Logger,
-  pingDatabase,
-} from '@nuva-edu/core';
-import {
-  connect,
-  currentVersion,
-  defaultMigrationsDir,
-  latestVersion,
-  parseDatabaseUrl,
-} from '@nuva-edu/database';
+import { databaseReadiness } from '@nuva-edu/api-kit/health';
+import { type Config, closeDatabase, createDatabase, type Logger } from '@nuva-edu/core';
 import { createHandlers } from './handlers.ts';
 import { createHttpServer } from './http.ts';
 import { createWorkerMetrics } from './metrics.ts';
-import { collectMetrics } from './queue-metrics.ts';
+import { createMetricsCollector } from './queue-metrics.ts';
 import { createScheduler } from './scheduler.ts';
 import { createWorker, SHUTDOWN_TIMEOUT_MS } from './worker.ts';
 
@@ -33,17 +21,6 @@ export interface App {
   workerId: string;
   /** Encerramento ordenado; devolve quantas tarefas voltaram à fila sem terminar. */
   stop(): Promise<{ released: number }>;
-}
-
-/** `true` quando o banco está na versão de migration que este código espera (spec 033). */
-async function migrationsUpToDate(connectionString: string): Promise<boolean> {
-  const wanted = await latestVersion(defaultMigrationsDir);
-  const client = await connect(parseDatabaseUrl(connectionString));
-  try {
-    return (await currentVersion(client)) === wanted;
-  } finally {
-    await client.end().catch(() => {});
-  }
 }
 
 /** Sobe o worker inteiro: banco, laço de consumo, agendador e HTTP interno. */
@@ -70,12 +47,17 @@ export async function startApp(options: AppOptions): Promise<App> {
   const http = createHttpServer({
     logger,
     checks: {
-      database: () => pingDatabase(db),
-      migrations: () => migrationsUpToDate(config.databaseUrl),
-      queue: () => worker.isLoopActive(),
+      // `database` e `migrations`, as mesmas verificações das APIs (spec 033).
+      ...databaseReadiness({ db, connectionString: config.databaseUrl }),
+      queue: () =>
+        worker.isLoopActive() ? { ok: true } : { ok: false, reason: 'laço da fila parado' },
     },
-    metrics: () =>
-      collectMetrics({ db, metrics, concurrency, runningCount: () => worker.runningCount() }),
+    metrics: createMetricsCollector({
+      db,
+      metrics,
+      concurrency,
+      runningCount: () => worker.runningCount(),
+    }),
   });
 
   // A saúde responde antes de o banco responder: `/healthz` não depende dele.

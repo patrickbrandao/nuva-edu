@@ -1,49 +1,42 @@
 import { describe, expect, it } from 'vitest';
-import { Counter, Histogram, renderMetrics } from '../src/metrics.ts';
+import { createWorkerMetrics, DURATION_BUCKETS } from '../src/metrics.ts';
 
-describe('métricas no formato do Prometheus', () => {
-  it('soma o contador por conjunto de rótulos, sem depender da ordem deles', () => {
-    const counter = new Counter('jobs_total', 'Execuções.');
-    counter.inc({ type: 'example.echo', outcome: 'done' });
-    counter.inc({ outcome: 'done', type: 'example.echo' });
-    counter.inc({ type: 'example.echo', outcome: 'failed' });
+describe('métricas do laço de consumo', () => {
+  it('soma jobs_total por conjunto de rótulos, sem depender da ordem deles', () => {
+    const { registry, jobsTotal } = createWorkerMetrics();
+    jobsTotal.inc({ type: 'example.echo', outcome: 'done' });
+    jobsTotal.inc({ outcome: 'done', type: 'example.echo' });
+    jobsTotal.inc({ type: 'example.echo', outcome: 'failed' });
 
-    expect(counter.get({ type: 'example.echo', outcome: 'done' })).toBe(2);
-    expect(renderMetrics([counter.collect()])).toBe(
+    expect(jobsTotal.get({ type: 'example.echo', outcome: 'done' })).toBe(2);
+    // Os rótulos saem em ordem alfabética.
+    expect(registry.render()).toContain(
       [
-        '# HELP jobs_total Execuções.',
+        '# HELP jobs_total Execuções de tarefa por tipo e desfecho.',
         '# TYPE jobs_total counter',
-        'jobs_total{type="example.echo",outcome="done"} 2',
-        'jobs_total{type="example.echo",outcome="failed"} 1',
+        'jobs_total{outcome="done",type="example.echo"} 2',
+        'jobs_total{outcome="failed",type="example.echo"} 1',
         '',
       ].join('\n'),
     );
   });
 
-  it('acumula o histograma por faixa e fecha em +Inf, soma e contagem', () => {
-    const histogram = new Histogram('jobs_duration_seconds', 'Duração.', [0.1, 1]);
-    histogram.observe({ type: 'a' }, 0.05);
-    histogram.observe({ type: 'a' }, 0.5);
-    histogram.observe({ type: 'a' }, 3);
+  it('acumula jobs_duration_seconds por faixa e fecha em +Inf, soma e contagem', () => {
+    const { registry, jobDuration } = createWorkerMetrics();
+    jobDuration.observe(0.05, { type: 'a' });
+    jobDuration.observe(0.5, { type: 'a' });
+    jobDuration.observe(400, { type: 'a' });
 
-    const text = renderMetrics([histogram.collect()]);
+    const text = registry.render();
     expect(text).toContain('# TYPE jobs_duration_seconds histogram');
-    expect(text).toContain('jobs_duration_seconds_bucket{type="a",le="0.1"} 1');
-    expect(text).toContain('jobs_duration_seconds_bucket{type="a",le="1"} 2');
-    expect(text).toContain('jobs_duration_seconds_bucket{type="a",le="+Inf"} 3');
-    expect(text).toContain('jobs_duration_seconds_sum{type="a"} 3.55');
+    expect(text).toContain('jobs_duration_seconds_bucket{le="0.025",type="a"} 0');
+    expect(text).toContain('jobs_duration_seconds_bucket{le="0.05",type="a"} 1');
+    expect(text).toContain('jobs_duration_seconds_bucket{le="0.5",type="a"} 2');
+    // Faixas do worker, mais longas que as de requisição: vão até 5 min.
+    expect(text).toContain('jobs_duration_seconds_bucket{le="300",type="a"} 2');
+    expect(text).toContain('jobs_duration_seconds_bucket{le="+Inf",type="a"} 3');
+    expect(text).toContain('jobs_duration_seconds_sum{type="a"} 400.55');
     expect(text).toContain('jobs_duration_seconds_count{type="a"} 3');
-  });
-
-  it('escapa aspas, barra e quebra de linha no valor do rótulo', () => {
-    const text = renderMetrics([
-      {
-        name: 'x',
-        help: 'linha 1\nlinha 2',
-        type: 'gauge',
-        samples: [{ labels: { a: 'q"\\\n' }, value: 1 }, { value: 2 }],
-      },
-    ]);
-    expect(text).toBe('# HELP x linha 1\\nlinha 2\n# TYPE x gauge\nx{a="q\\"\\\\\\n"} 1\nx 2\n');
+    expect(DURATION_BUCKETS.at(-1)).toBe(300);
   });
 });

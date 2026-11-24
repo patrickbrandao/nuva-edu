@@ -320,4 +320,102 @@ describe('encerramento', () => {
     expect(calls).toBe(1);
     expect((await getJobCounts(db)).queued).toBe(2);
   });
+
+  it('aborta o sinal do manipulador ao encerrar; o que para cedo volta à fila sem contar tentativa', async () => {
+    const metrics = createWorkerMetrics();
+    const { logger, lines } = captureLogger();
+    let seen: AbortSignal | undefined;
+    const worker = makeWorker({
+      logger,
+      metrics,
+      handlers: handlersWith({
+        'example.echo': (_job, { signal }) => {
+          seen = signal;
+          // Manipulador longo que acompanha o sinal: rejeita com o motivo do aborto.
+          return new Promise<void>((_resolve, reject) => {
+            signal.addEventListener('abort', () => reject(signal.reason), { once: true });
+          });
+        },
+      }),
+    });
+    await worker.start();
+    const job = await enqueue(db, 'example.echo', { message: 'longa' });
+    const id = job?.id ?? '';
+    await waitFor(() => worker.runningCount() === 1);
+    expect(seen?.aborted).toBe(false);
+
+    const startedAt = performance.now();
+    const result = await worker.stop({ timeoutMs: 5_000 });
+
+    // Não esperou o prazo: o manipulador parou ao ver o sinal.
+    expect(performance.now() - startedAt).toBeLessThan(2_000);
+    expect(seen?.aborted).toBe(true);
+    expect(result.released).toBe(1);
+    const row = await getJob(db, id);
+    expect(row.status).toBe('queued');
+    expect(row.attempts).toBe(0);
+    expect(row.lastError).toBeNull();
+    expect(row.lockedBy).toBeNull();
+    expect(metrics.jobsTotal.get({ type: 'example.echo', outcome: 'released' })).toBe(1);
+    expect(metrics.jobsTotal.get({ type: 'example.echo', outcome: 'retry' })).toBe(0);
+    expect(lines.some((line) => line.msg === 'Tarefa falhou; nova tentativa')).toBe(false);
+  });
+
+  it('cada tarefa tem o próprio sinal, que segue inteiro quando ela termina sozinha', async () => {
+    const signals: AbortSignal[] = [];
+    const worker = makeWorker({
+      handlers: handlersWith({
+        'example.echo': async (_job, { signal }) => {
+          signals.push(signal);
+        },
+      }),
+    });
+    await worker.start();
+    await enqueue(db, 'example.echo', { message: 'a' });
+    await enqueue(db, 'example.echo', { message: 'b' });
+    await waitFor(async () => (await getJobCounts(db)).done === 2);
+    await worker.stop({ timeoutMs: 1_000 });
+
+    expect(signals).toHaveLength(2);
+    expect(signals[0]).not.toBe(signals[1]);
+    expect(signals.every((signal) => !signal.aborted)).toBe(true);
+  });
+
+  it('aborta o sinal da tarefa cuja trava foi perdida, e descarta o resultado', async () => {
+    const gate = deferred();
+    const metrics = createWorkerMetrics();
+    const { logger, lines } = captureLogger();
+    let seen: AbortSignal | undefined;
+    const worker = makeWorker({
+      logger,
+      metrics,
+      heartbeatIntervalMs: 30,
+      handlers: handlersWith({
+        'example.echo': (_job, { signal }) => {
+          seen = signal;
+          return gate.promise;
+        },
+      }),
+    });
+    await worker.start();
+    const job = await enqueue(db, 'example.echo', { message: 'tomada' });
+    const id = job?.id ?? '';
+    await waitFor(() => worker.runningCount() === 1);
+
+    // Outro worker ficou com a tarefa (ela foi dada como presa e pega de novo).
+    await db.updateTable('jobs').set({ lockedBy: 'outro:1' }).where('id', '=', id).execute();
+    await waitFor(() => seen?.aborted === true);
+    expect(seen?.reason).toMatchObject({ name: 'AbortError' });
+    // Vários batimentos depois, o aviso saiu uma vez só.
+    await new Promise((resolve) => setTimeout(resolve, 120));
+    expect(
+      lines.filter((line) => line.msg === 'Trava da tarefa perdida; o resultado será descartado'),
+    ).toHaveLength(1);
+
+    gate.resolve();
+    await waitFor(() => metrics.jobsTotal.get({ type: 'example.echo', outcome: 'lost' }) === 1);
+    const row = await getJob(db, id);
+    expect(row.status).toBe('running');
+    expect(row.lockedBy).toBe('outro:1');
+  });
 });

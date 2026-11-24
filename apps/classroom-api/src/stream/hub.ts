@@ -1,5 +1,5 @@
 import { PassThrough, type Readable } from 'node:stream';
-import { formatEvent, OPEN_FRAME, PING_FRAME, type UserEvent } from './events.ts';
+import { eventFrame, OPEN_FRAME, PING_FRAME, type UserEvent } from './events.ts';
 
 export interface StreamHubOptions {
   /** Intervalo do `ping`. Padrão: 25 s (spec 004). */
@@ -20,7 +20,8 @@ export interface StreamHub {
   /**
    * Abre o fluxo de um usuário: o texto SSE a enviar na resposta. Com `lastEventId`, começa
    * pelos eventos guardados de `id` maior. O fluxo termina quando o cliente desconecta, quando
-   * passa do limite de conexões do usuário ou num `disconnectUser`/`closeAll`/`stop`.
+   * passa do limite de conexões do usuário ou num `disconnectUser`/`closeAll`/`stop`. A rota o
+   * entrega por `app.eventStreams.open`, que também o encerra quando o serviço para.
    */
   open(userId: string, lastEventId?: number): Readable;
   /** Entrega o evento às conexões do destinatário e o guarda para reenvio. Devolve quantas. */
@@ -29,7 +30,10 @@ export interface StreamHub {
   disconnectUser(userId: string): void;
   /** Fecha todas as conexões (banco indisponível); o navegador reconecta sozinho. */
   closeAll(): void;
-  /** Conexões abertas agora (métrica `sse_connections`). */
+  /**
+   * Conexões que o hub mantém agora (limite por usuário, testes). O medidor `sse_connections`
+   * vem de `app.eventStreams.count()`, da base HTTP.
+   */
   connectionCount(): number;
   /** Fecha tudo e para o batimento. */
   stop(): void;
@@ -161,7 +165,7 @@ export function createStreamHub(options: StreamHubOptions = {}): StreamHub {
     },
 
     publish(event) {
-      const frame = formatEvent(event);
+      const frame = eventFrame(event);
       const stored = fresh(event.userId);
       stored.push({ id: event.id, frame, at: now() });
       if (stored.length > replayMax) {

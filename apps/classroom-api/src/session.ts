@@ -1,4 +1,4 @@
-import type { FastifyRequest } from '@nuva-edu/api-kit';
+import { createRequestState, type FastifyRequest } from '@nuva-edu/api-kit';
 import { unauthenticated } from '@nuva-edu/core';
 
 /** Quem a sessão identifica. Cresce com a sessão real (Fase 1, spec 007). */
@@ -22,16 +22,8 @@ export const rejectEverySession: SessionAuthenticator = () => {
   throw unauthenticated();
 };
 
-// Guardado fora do `request`: declarar um campo novo nele exigiria estender os tipos do
-// Fastify, que é dependência do `@nuva-edu/api-kit`, não deste serviço.
-const sessions = new WeakMap<FastifyRequest, SessionUser>();
-
-/** Guarda o usuário identificado pelo tratador de `sessionCookie`. */
-export function setSessionUser(request: FastifyRequest, user: SessionUser): void {
-  sessions.set(request, user);
-}
-
-/** Usuário da sessão; `null` em operação pública. */
-export function getSessionUser(request: FastifyRequest): SessionUser | null {
-  return sessions.get(request) ?? null;
-}
+/**
+ * O usuário que o tratador de `sessionCookie` identificou, por requisição: `set` no tratador,
+ * `get` na rota (`undefined` em operação pública).
+ */
+export const session = createRequestState<SessionUser>('session');

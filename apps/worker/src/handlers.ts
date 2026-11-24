@@ -18,7 +18,7 @@ export function createHandlers({ logger }: HandlerDependencies): JobHandlers {
     // seguintes. Quando entrarem, apagar por prazo é idempotente por natureza.
     'retention.purge': async (job) => {
       logger.info(
-        { job_id: job.id, recurrence: job.uniqueKey },
+        { job_id: job.id, unique_key: job.uniqueKey },
         'Expurgo diário executado (nenhuma regra de retenção nesta fase)',
       );
     },

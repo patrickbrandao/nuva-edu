@@ -1,21 +1,5 @@
-/** Canal do `NOTIFY` de quem grava mensagem ou notificação (spec 004, "Fluxo SSE"). */
-export const USER_EVENTS_CHANNEL = 'nuva_user_events';
-
-/**
- * Eventos que chegam pelo canal, com os nomes do esquema `StreamEvent` do contrato. `ping` fica
- * de fora: é gerado pela própria API. O teste de contrato confere esta lista com o contrato.
- */
-export const USER_EVENT_NAMES = [
-  'dm.message.created',
-  'dm.message.read',
-  'dm.message.deleted',
-  'notification.created',
-  'forum.post.created',
-  'announcement.published',
-  'presence',
-] as const;
-
-export type UserEventName = (typeof USER_EVENT_NAMES)[number];
+import { formatSseComment, formatSseEvent } from '@nuva-edu/api-kit';
+import { isUserEventKind, type UserEventKind } from '@nuva-edu/core';
 
 /** Um evento destinado a um usuário, já conferido. */
 export interface UserEvent {
@@ -24,7 +8,7 @@ export interface UserEvent {
   /** Campo `id` do SSE: inteiro crescente por usuário. */
   id: number;
   /** Campo `event` do SSE. */
-  event: UserEventName;
+  event: UserEventKind;
   /** Campo `data` do SSE: só identificadores. */
   data: Record<string, unknown>;
 }
@@ -34,7 +18,6 @@ export type ParsedUserEvent =
   | { ok: false; reason: 'invalid_json' | 'invalid_shape' | 'unknown_kind' };
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-const NAMES: ReadonlySet<string> = new Set(USER_EVENT_NAMES);
 
 /**
  * Lê a carga do `NOTIFY nuva_user_events`: `{ userId, kind, id, data? }`, em que `kind` é o
@@ -64,13 +47,10 @@ export function parseUserEventPayload(payload: string): ParsedUserEvent {
   ) {
     return { ok: false, reason: 'invalid_shape' };
   }
-  if (!NAMES.has(kind)) {
+  if (!isUserEventKind(kind)) {
     return { ok: false, reason: 'unknown_kind' };
   }
-  return {
-    ok: true,
-    event: { userId: userId.toLowerCase(), id: eventId, event: kind as UserEventName, data },
-  };
+  return { ok: true, event: { userId: userId.toLowerCase(), id: eventId, event: kind, data } };
 }
 
 /** Lê um `id` de evento (ou o cabeçalho `Last-Event-ID`): inteiro não negativo, ou nada. */
@@ -84,19 +64,28 @@ export function parseEventId(value: unknown): number | undefined {
   return Number.isSafeInteger(parsed) && parsed >= 0 ? parsed : undefined;
 }
 
-/**
- * O evento no fio: campos `id`, `event` e `data` (JSON numa linha), fechado por linha em branco.
- * O `JSON.stringify` escapa quebras de linha, então `data` nunca ocupa mais de uma linha.
- */
-export function formatEvent(event: Pick<UserEvent, 'id' | 'event' | 'data'>): string {
-  return `id: ${event.id}\nevent: ${event.event}\ndata: ${JSON.stringify(event.data)}\n\n`;
+/** O evento como o contrato o descreve (esquema `StreamEvent`): o `id` vai em texto. */
+export interface StreamEventBody {
+  id: string;
+  event: UserEventKind;
+  data: Record<string, unknown>;
+}
+
+/** O que o cliente lê do fio; é o valor conferido com `app.contractSchema('StreamEvent')`. */
+export function toStreamEvent(event: UserEvent): StreamEventBody {
+  return { id: String(event.id), event: event.event, data: event.data };
+}
+
+/** O evento no fio: campos `id`, `event` e `data` (JSON numa linha), fechado por linha em branco. */
+export function eventFrame(event: UserEvent): string {
+  return formatSseEvent(toStreamEvent(event));
 }
 
 /** Batimento: sem `id`, para não alterar o `Last-Event-ID` do navegador. */
-export const PING_FRAME = 'event: ping\ndata: {}\n\n';
+export const PING_FRAME = formatSseEvent({ event: 'ping' });
 
 /** Comentário SSE enviado ao abrir: faz os cabeçalhos saírem já e é ignorado pelo cliente. */
-export const OPEN_FRAME = ': ok\n\n';
+export const OPEN_FRAME = formatSseComment();
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);

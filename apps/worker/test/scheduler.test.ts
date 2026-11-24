@@ -164,7 +164,7 @@ describe('agendador', () => {
       await worker.stop({ timeoutMs: 1_000 });
     }
     const ran = lines.find((line) => String(line.msg).startsWith('Expurgo diário executado'));
-    expect(ran?.recurrence).toBe('retention.purge:2026-11-24');
+    expect(ran?.unique_key).toBe('retention.purge:2026-11-24');
     const job = await getJob(db, String(ran?.job_id));
     expect(job.status).toBe('done');
   });

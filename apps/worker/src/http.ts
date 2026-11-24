@@ -1,19 +1,20 @@
 import { createServer, type Server, type ServerResponse } from 'node:http';
 import type { AddressInfo } from 'node:net';
+import {
+  createReadinessLogger,
+  type ReadinessChecks,
+  runReadinessChecks,
+} from '@nuva-edu/api-kit/health';
 import type { Logger } from '@nuva-edu/core';
 import { METRICS_CONTENT_TYPE } from './metrics.ts';
 
-export type CheckResult = 'ok' | 'fail';
-
-export interface ReadinessReport {
-  status: 'ready' | 'not_ready';
-  checks: Record<string, CheckResult>;
-}
-
 export interface HttpServerOptions {
   logger: Logger;
-  /** Verificações do `/readyz`, pelo nome que aparece em `checks`. Lançar conta como falha. */
-  checks: Record<string, () => Promise<boolean> | boolean>;
+  /**
+   * Verificações do `/readyz`, pelo nome que aparece em `checks`. Lançar ou passar do prazo
+   * conta como falha.
+   */
+  checks: ReadinessChecks;
   /** Texto do `/metrics`, no formato do Prometheus. */
   metrics: () => Promise<string>;
 }
@@ -22,22 +23,6 @@ export interface HttpServer {
   /** Devolve a porta em que ficou escutando (útil com porta 0 nos testes). */
   listen(port: number, host?: string): Promise<number>;
   close(): Promise<void>;
-}
-
-export async function runChecks(checks: HttpServerOptions['checks']): Promise<ReadinessReport> {
-  const entries = await Promise.all(
-    Object.entries(checks).map(async ([name, check]): Promise<[string, CheckResult]> => {
-      try {
-        return [name, (await check()) ? 'ok' : 'fail'];
-      } catch {
-        return [name, 'fail'];
-      }
-    }),
-  );
-  return {
-    status: entries.every(([, result]) => result === 'ok') ? 'ready' : 'not_ready',
-    checks: Object.fromEntries(entries),
-  };
 }
 
 function sendJson(response: ServerResponse, status: number, body: unknown): void {
@@ -51,7 +36,8 @@ function sendJson(response: ServerResponse, status: number, body: unknown): void
  */
 export function createHttpServer(options: HttpServerOptions): HttpServer {
   const { logger } = options;
-  let lastReadiness: string | undefined;
+  // Só a mudança de estado é registrada, com o motivo; não cada sondagem.
+  const logReadiness = createReadinessLogger(logger);
 
   const server: Server = createServer((request, response) => {
     const path = (request.url ?? '/').split('?')[0];
@@ -64,17 +50,13 @@ export function createHttpServer(options: HttpServerOptions): HttpServer {
       return;
     }
     if (path === '/readyz') {
-      void runChecks(options.checks).then((report) => {
-        const signature = JSON.stringify(report);
-        if (signature !== lastReadiness) {
-          lastReadiness = signature;
-          if (report.status === 'ready') {
-            logger.info({ checks: report.checks }, 'Worker pronto');
-          } else {
-            logger.warn({ checks: report.checks }, 'Worker não está pronto');
-          }
-        }
-        sendJson(response, report.status === 'ready' ? 200 : 503, report);
+      void runReadinessChecks(options.checks).then((report) => {
+        logReadiness(report);
+        // Os motivos ficam no log: a resposta leva só `status` e `checks`.
+        sendJson(response, report.status === 'ready' ? 200 : 503, {
+          status: report.status,
+          checks: report.checks,
+        });
       });
       return;
     }

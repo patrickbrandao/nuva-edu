@@ -4,14 +4,21 @@ import {
   type FastifyInstance,
   type ReadinessChecks,
 } from '@nuva-edu/api-kit';
-import type { Config, Database, Logger } from '@nuva-edu/core';
+import {
+  type ChannelListener,
+  type Config,
+  type Database,
+  databasePoolStats,
+  type Logger,
+  listenChannel,
+  USER_EVENTS_CHANNEL,
+} from '@nuva-edu/core';
 import { loadClassroomContract } from './contract.ts';
 import { readServiceVersion } from './meta.ts';
 import { registerMetaRoutes } from './routes/meta.ts';
 import { registerStreamRoutes } from './routes/stream.ts';
-import { rejectEverySession, type SessionAuthenticator, setSessionUser } from './session.ts';
-import { type ChannelListener, listenChannel } from './stream/channel-listener.ts';
-import { parseUserEventPayload, USER_EVENTS_CHANNEL } from './stream/events.ts';
+import { rejectEverySession, type SessionAuthenticator, session } from './session.ts';
+import { parseUserEventPayload, toStreamEvent } from './stream/events.ts';
 import { createStreamHub, type StreamHub, type StreamHubOptions } from './stream/hub.ts';
 
 export const SERVICE = 'classroom-api';
@@ -69,27 +76,52 @@ export function buildClassroomApp(options: ClassroomAppOptions): FastifyInstance
     readiness: options.readiness ?? databaseReadiness({ db, connectionString: config.databaseUrl }),
     security: {
       sessionCookie: async (request) => {
-        setSessionUser(request, await authenticate(request));
+        session.set(request, await authenticate(request));
       },
       // `csrfToken` entra com a primeira operação de escrita (Fase 1, spec 007).
     },
+    // Medidor `sse_connections` e fechamento dos fluxos abertos no encerramento do serviço.
+    eventStreams: true,
   });
 
   const hub = createStreamHub(options.stream);
   let listener: ChannelListener | null = null;
 
   app.metrics.gauge({
-    name: 'sse_connections',
-    help: 'Conexões SSE abertas neste processo.',
-    collect: () => hub.connectionCount(),
+    name: 'db_pool_connections',
+    help: 'Conexões do pool do PostgreSQL neste processo, por estado.',
+    collect: () => {
+      const pool = databasePoolStats(db);
+      return [
+        { labels: { state: 'active' }, value: pool.active },
+        { labels: { state: 'idle' }, value: pool.idle },
+        { labels: { state: 'waiting' }, value: pool.waiting },
+      ];
+    },
   });
 
+  const streamEventErrors = app.contractSchema('StreamEvent');
   const onNotification = (payload: string): void => {
     const parsed = parseUserEventPayload(payload);
     if (!parsed.ok) {
       // Só o motivo: a carga pode trazer identificadores de usuário.
       logger.warn(
         { channel: USER_EVENTS_CHANNEL, reason: parsed.reason },
+        'Aviso de evento fora do formato; descartado',
+      );
+      return;
+    }
+    // O cliente gerado confia no contrato: evento que não confere com `StreamEvent` não sai.
+    const errors = streamEventErrors(toStreamEvent(parsed.event));
+    if (errors.length > 0) {
+      // Só o tipo do evento e o caminho dos campos recusados, nunca os valores.
+      logger.warn(
+        {
+          channel: USER_EVENTS_CHANNEL,
+          reason: 'contract_mismatch',
+          event: parsed.event.event,
+          fields: errors.map((error) => error.path),
+        },
         'Aviso de evento fora do formato; descartado',
       );
       return;
@@ -120,12 +152,9 @@ export function buildClassroomApp(options: ClassroomAppOptions): FastifyInstance
       onDisconnected: () => hub.closeAll(),
     });
   });
-  // Antes de o servidor parar de aceitar conexões: sem isto, os fluxos abertos seguram o
-  // encerramento até o prazo do SIGTERM.
-  app.addHook('preClose', async () => {
-    hub.stop();
-  });
+  // Os fluxos abertos já foram encerrados pela base no `preClose`; sobra parar o batimento.
   app.addHook('onClose', async () => {
+    hub.stop();
     await listener?.close();
     listener = null;
   });

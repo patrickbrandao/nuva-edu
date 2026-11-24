@@ -1,6 +1,6 @@
 import type { FastifyInstance } from '@nuva-edu/api-kit';
 import { unauthenticated, unavailable } from '@nuva-edu/core';
-import { getSessionUser } from '../session.ts';
+import { session } from '../session.ts';
 import { parseEventId } from '../stream/events.ts';
 import type { StreamHub } from '../stream/hub.ts';
 
@@ -18,7 +18,7 @@ export function registerStreamRoutes(app: FastifyInstance, options: StreamRouteO
   const { hub } = options;
 
   app.operation('openStream', (request, reply) => {
-    const user = getSessionUser(request);
+    const user = session.get(request);
     if (!user) {
       throw unauthenticated();
     }
@@ -27,21 +27,9 @@ export function registerStreamRoutes(app: FastifyInstance, options: StreamRouteO
       throw unavailable('database_unavailable', 'O fluxo de eventos está indisponível.');
     }
     const stream = hub.open(user.userId, parseEventId(request.headers['last-event-id']));
-    // A linha de log da base só sai quando a resposta termina pelo servidor; o fluxo quase
-    // sempre acaba pelo cliente, então o fim é registrado aqui. Sem o usuário: basta o
-    // `request_id` para cruzar com o proxy.
-    const openedAt = performance.now();
-    stream.once('close', () => {
-      request.log.info(
-        { route: request.routeOptions.url, duration_ms: Math.round(performance.now() - openedAt) },
-        'Fluxo SSE encerrado',
-      );
-    });
-    reply
-      .header('Content-Type', 'text/event-stream')
-      .header('Cache-Control', 'no-store')
-      // Proxies que seguram a resposta para juntar ou comprimir (nginx e afins) não o fazem.
-      .header('X-Accel-Buffering', 'no');
-    return stream;
+    // Cabeçalhos de SSE, contagem em `sse_connections` e fechamento no encerramento do serviço
+    // ficam com a base; o fim do fluxo sai na linha de log da própria requisição (499 quando é
+    // o cliente que fecha), sem o usuário.
+    return app.eventStreams.open(reply, stream);
   });
 }

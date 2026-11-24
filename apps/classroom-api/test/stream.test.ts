@@ -1,9 +1,8 @@
-import { unauthenticated } from '@nuva-edu/core';
+import { USER_EVENTS_CHANNEL, unauthenticated } from '@nuva-edu/core';
 import pg from 'pg';
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 import { type ClassroomAppOptions, userEventStream } from '../src/app.ts';
 import type { SessionAuthenticator } from '../src/session.ts';
-import { USER_EVENTS_CHANNEL } from '../src/stream/events.ts';
 import { createTestApp, type TestApp } from './helpers.ts';
 import { openSse, type SseConnection } from './sse-client.ts';
 
@@ -11,6 +10,11 @@ const ALICE = '0193a5b2-7c1e-7d3a-9f4b-2a6c8e1d5f70';
 const BRUNO = '0193a5b2-8e2f-7a11-b0c3-5d7e9f1a2b3c';
 const CONVERSATION = '0193a5b2-9a3b-7c22-8d14-6e8f0a2b4c5d';
 const MESSAGE = '0193a5b2-ab4c-7d33-9e25-7f9a1b3c5d6e';
+
+/** Cargas `data` válidas pelo contrato (`StreamEvent`): evento fora dele não é entregue. */
+const PRESENCE = { userId: BRUNO, online: true };
+const FORUM_POST = { topicId: CONVERSATION, postId: MESSAGE };
+const NOTIFICATION = { notificationId: MESSAGE, type: 'forum.reply', unreadCount: 1 };
 
 /** Sessão falsa, só dos testes: o cabeçalho diz quem é o usuário. */
 const fakeSession: SessionAuthenticator = (request) => {
@@ -162,7 +166,7 @@ describe('GET /api/v1/stream', () => {
     const first = await api.connect(ALICE);
     const second = await api.connect(ALICE);
     await until(() => first.frames.length > 0 && second.frames.length > 0);
-    await notify({ userId: ALICE, kind: 'forum.post.created', id: 50, data: {} });
+    await notify({ userId: ALICE, kind: 'forum.post.created', id: 50, data: FORUM_POST });
     expect(await first.next()).toMatchObject({ id: '50' });
     expect(await second.next()).toMatchObject({ id: '50' });
   });
@@ -177,7 +181,7 @@ describe('GET /api/v1/stream', () => {
     await first.ended();
     expect(userEventStream(api.app).hub.connectionCount()).toBe(3);
 
-    await notify({ userId: BRUNO, kind: 'presence', id: 90, data: {} });
+    await notify({ userId: BRUNO, kind: 'presence', id: 90, data: PRESENCE });
     for (const stream of [second, third, fourth]) {
       expect(await stream.next()).toMatchObject({ id: '90' });
     }
@@ -187,19 +191,19 @@ describe('GET /api/v1/stream', () => {
     const user = '0193a5b2-bc5d-7e44-af36-8a0b2c4d6e7f';
     const before = await api.connect(user);
     await until(() => before.frames.length > 0);
-    await notify({ userId: user, kind: 'presence', id: 1, data: {} });
+    await notify({ userId: user, kind: 'presence', id: 1, data: PRESENCE });
     expect(await before.next()).toMatchObject({ id: '1' });
     before.close();
     await until(() => userEventStream(api.app).hub.connectionCount() === 0);
 
     // Chegam com o cliente desconectado.
-    await notify({ userId: user, kind: 'presence', id: 2, data: {} });
-    await notify({ userId: user, kind: 'notification.created', id: 3, data: {} });
+    await notify({ userId: user, kind: 'presence', id: 2, data: PRESENCE });
+    await notify({ userId: user, kind: 'notification.created', id: 3, data: NOTIFICATION });
     // Evento de outro usuário entre os dois: nunca é reenviado a este.
-    await notify({ userId: ALICE, kind: 'presence', id: 99, data: {} });
+    await notify({ userId: ALICE, kind: 'presence', id: 99, data: PRESENCE });
     // Barreira: quando o evento 4 chegar a uma conexão nova, os anteriores já foram guardados.
     const barrier = await api.connect(user);
-    await notify({ userId: user, kind: 'presence', id: 4, data: {} });
+    await notify({ userId: user, kind: 'presence', id: 4, data: PRESENCE });
     expect(await barrier.next()).toMatchObject({ id: '4' });
 
     const after = await api.connect(user, { 'last-event-id': '1' });
@@ -210,7 +214,7 @@ describe('GET /api/v1/stream', () => {
     // Sem o cabeçalho, nada é reenviado.
     const clean = await api.connect(user);
     await until(() => clean.frames.length > 0);
-    await notify({ userId: user, kind: 'presence', id: 5, data: {} });
+    await notify({ userId: user, kind: 'presence', id: 5, data: PRESENCE });
     expect(await clean.next()).toMatchObject({ id: '5' });
   });
 
@@ -227,8 +231,8 @@ describe('GET /api/v1/stream', () => {
     await until(() => stream.frames.length > 0);
     await notify('isto-nao-e-json segredo-na-carga');
     await notify({ userId: ALICE, kind: 'tipo.desconhecido', id: 1, data: {} });
-    await notify({ userId: 'sem-uuid', kind: 'presence', id: 1, data: {} });
-    await notify({ userId: ALICE, kind: 'presence', id: 123, data: {} });
+    await notify({ userId: 'sem-uuid', kind: 'presence', id: 1, data: PRESENCE });
+    await notify({ userId: ALICE, kind: 'presence', id: 123, data: PRESENCE });
 
     expect(await stream.next()).toMatchObject({ id: '123' });
     const warnings = api.lines.filter(
@@ -242,13 +246,58 @@ describe('GET /api/v1/stream', () => {
     expect(api.logText()).not.toContain('segredo-na-carga');
   });
 
+  it('evento que não confere com o StreamEvent do contrato não é entregue', async () => {
+    const stream = await api.connect(ALICE);
+    await until(() => stream.frames.length > 0);
+    const before = api.lines.length;
+    // Falta `messageId`, e há um campo que o contrato não descreve.
+    await notify({
+      userId: ALICE,
+      kind: 'dm.message.created',
+      id: 200,
+      data: { conversationId: CONVERSATION, text: 'conteudo-que-nao-pode-vazar' },
+    });
+    await notify({ userId: ALICE, kind: 'presence', id: 201, data: {} });
+    await notify({ userId: ALICE, kind: 'presence', id: 202, data: PRESENCE });
+
+    expect(await stream.next()).toMatchObject({ id: '202' });
+    const warnings = api.lines
+      .slice(before)
+      .filter((line) => line.msg === 'Aviso de evento fora do formato; descartado');
+    expect(warnings).toHaveLength(2);
+    expect(warnings[0]).toMatchObject({
+      level: 'warn',
+      reason: 'contract_mismatch',
+      event: 'dm.message.created',
+    });
+    expect(warnings[1]).toMatchObject({ reason: 'contract_mismatch', event: 'presence' });
+    expect(api.logText()).not.toContain('conteudo-que-nao-pode-vazar');
+    expect(api.logText()).not.toContain(CONVERSATION);
+
+    // O descartado também não fica guardado para reenvio.
+    const again = await api.connect(ALICE, { 'last-event-id': '199' });
+    expect(await again.next()).toMatchObject({ id: '202' });
+  });
+
   it('expõe as conexões abertas em sse_connections', async () => {
-    await until(() => userEventStream(api.app).hub.connectionCount() === 0);
+    await until(() => api.app.eventStreams.count() === 0);
     await api.connect(ALICE);
     await api.connect(BRUNO);
     const metrics = await api.app.inject({ method: 'GET', url: '/metrics' });
-    expect(metrics.body).toContain('# TYPE sse_connections gauge');
+    // Registrado uma vez só, pela base (`eventStreams: true`).
+    expect(metrics.body.match(/^# TYPE sse_connections gauge$/gm)).toHaveLength(1);
     expect(metrics.body).toContain('sse_connections 2\n');
+    expect(api.app.eventStreams.count()).toBe(userEventStream(api.app).hub.connectionCount());
+  });
+
+  it('expõe o estado do pool do banco em db_pool_connections', async () => {
+    const metrics = await api.app.inject({ method: 'GET', url: '/metrics' });
+    expect(metrics.body).toContain('# TYPE db_pool_connections gauge');
+    for (const state of ['active', 'idle', 'waiting']) {
+      expect(metrics.body).toMatch(
+        new RegExp(`^db_pool_connections\\{state="${state}"\\} \\d+$`, 'm'),
+      );
+    }
   });
 
   it('registra o fim do fluxo fechado pelo cliente, com a rota e sem o usuário', async () => {
@@ -256,11 +305,20 @@ describe('GET /api/v1/stream', () => {
     await until(() => stream.frames.length > 0);
     stream.close();
     await until(() => api.lines.some((line) => line.request_id === 'req-stream-log'));
-    expect(api.lines.find((line) => line.request_id === 'req-stream-log')).toMatchObject({
-      msg: 'Fluxo SSE encerrado',
+    // Uma linha só por requisição, a da base: nada de linha própria do fluxo.
+    const logged = api.lines.filter((line) => line.request_id === 'req-stream-log');
+    expect(logged).toHaveLength(1);
+    expect(logged[0]).toMatchObject({
+      msg: 'Requisição encerrada pelo cliente',
       route: '/api/v1/stream',
+      status: 499,
+      aborted: true,
     });
     expect(api.logText()).not.toContain(ALICE);
+    const metrics = await api.app.inject({ method: 'GET', url: '/metrics' });
+    expect(metrics.body).toContain(
+      'http_requests_total{method="GET",route="/api/v1/stream",status="499"}',
+    );
   });
 });
 
@@ -286,6 +344,7 @@ describe('batimento e encerramento', () => {
     await stream.ended();
     expect(performance.now() - startedAt).toBeLessThan(2_000);
     expect(userEventStream(api.app).hub.connectionCount()).toBe(0);
+    expect(api.app.eventStreams.count()).toBe(0);
     expect(userEventStream(api.app).isListening()).toBe(false);
   });
 

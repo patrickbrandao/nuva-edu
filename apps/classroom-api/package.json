@@ -14,12 +14,12 @@
   "dependencies": {
     "@nuva-edu/api-kit": "workspace:*",
     "@nuva-edu/core": "workspace:*",
-    "@nuva-edu/database": "workspace:*",
-    "pg": "8.23.1"
+    "@nuva-edu/database": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "26.6.6",
     "@types/pg": "8.23.1",
+    "pg": "8.23.1",
     "vitest": "5.1.1"
   }
 }

@@ -12,6 +12,7 @@
     "typecheck": "tsc --noEmit -p tsconfig.json"
   },
   "dependencies": {
+    "@nuva-edu/api-kit": "workspace:*",
     "@nuva-edu/core": "workspace:*",
     "@nuva-edu/database": "workspace:*"
   },

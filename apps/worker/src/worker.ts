@@ -8,6 +8,7 @@ import {
   heartbeatJobs,
   isKnownJob,
   type Job,
+  type JobContext,
   type JobHandlers,
   type JobListener,
   type KnownJob,
@@ -80,8 +81,16 @@ export function createWorker(options: WorkerOptions): Worker {
 
   let state: 'idle' | 'running' | 'stopping' | 'stopped' = 'idle';
   const running = new Map<string, Promise<void>>();
+  /** Um por tarefa em execução: é o `signal` que o manipulador recebe no contexto. */
+  const controllers = new Map<string, AbortController>();
   /** Devolvidas à fila no encerramento: o resultado tardio do manipulador não é gravado. */
   const released = new Set<string>();
+  /** Devolvidas à fila antes do prazo, por manipulador que parou ao ver o sinal. */
+  let releasedEarly = 0;
+  // Motivos do aborto: o manipulador que repassa o sinal (a `fetch`, a uma espera) os recebe
+  // como o erro lançado.
+  const shutdownReason = new DOMException('O worker está encerrando.', 'AbortError');
+  const lostLockReason = new DOMException('A trava da tarefa foi perdida.', 'AbortError');
   let listener: JobListener | null = null;
   let sweepTimer: NodeJS.Timeout | null = null;
   let heartbeatTimer: NodeJS.Timeout | null = null;
@@ -91,10 +100,10 @@ export function createWorker(options: WorkerOptions): Worker {
   let failures = 0;
   let lastRoundOkAt = 0;
 
-  const dispatch = (job: KnownJob): Promise<void> =>
-    (handlers[job.type] as (job: KnownJob) => Promise<void>)(job);
+  const dispatch = (job: KnownJob, context: JobContext): Promise<void> =>
+    (handlers[job.type] as (job: KnownJob, context: JobContext) => Promise<void>)(job, context);
 
-  const runJob = async (job: Job): Promise<void> => {
+  const runJob = async (job: Job, signal: AbortSignal): Promise<void> => {
     const log = logger.child({ job_id: job.id, job_type: job.type, attempt: job.attempts });
     const lock = { jobId: job.id, workerId };
     const typeLabel = isKnownJob(job) ? job.type : UNKNOWN_TYPE_LABEL;
@@ -104,13 +113,13 @@ export function createWorker(options: WorkerOptions): Worker {
       if (!isKnownJob(job)) {
         throw new Error(`Tipo de tarefa desconhecido: ${job.type}`);
       }
-      await dispatch(job);
+      await dispatch(job, { signal });
     } catch (error) {
       failure = { error };
     }
     const seconds = (performance.now() - started) / 1000;
     const durationMs = Math.round(seconds * 1000);
-    metrics?.jobDuration.observe({ type: typeLabel }, seconds);
+    metrics?.jobDuration.observe(seconds, { type: typeLabel });
 
     if (released.has(job.id)) {
       // Já voltou à fila no encerramento; outro worker vai executá-la de novo (idempotente).
@@ -120,6 +129,15 @@ export function createWorker(options: WorkerOptions): Worker {
     try {
       if (failure === null) {
         outcome = (await completeJob(db, lock)) ? 'done' : 'lost';
+      } else if (signal.reason === shutdownReason) {
+        // Parou porque o worker está encerrando: não é falha da tarefa (spec 005). Volta à
+        // fila sem contar a tentativa, como as que não terminam no prazo.
+        if (await releaseJob(db, lock)) {
+          releasedEarly += 1;
+          outcome = 'released';
+        } else {
+          outcome = 'lost';
+        }
       } else {
         const updated = await failJob(db, { ...lock, error: failure.error });
         outcome = updated === null ? 'lost' : updated.status === 'failed' ? 'failed' : 'retry';
@@ -133,6 +151,11 @@ export function createWorker(options: WorkerOptions): Worker {
     metrics?.jobsTotal.inc({ type: typeLabel, outcome });
     if (outcome === 'done') {
       log.info({ duration_ms: durationMs }, 'Tarefa concluída');
+    } else if (outcome === 'released') {
+      log.info(
+        { duration_ms: durationMs },
+        'Tarefa interrompida pelo encerramento; devolvida à fila',
+      );
     } else if (outcome === 'retry') {
       log.warn({ err: failure?.error, duration_ms: durationMs }, 'Tarefa falhou; nova tentativa');
     } else if (outcome === 'failed') {
@@ -146,8 +169,11 @@ export function createWorker(options: WorkerOptions): Worker {
   };
 
   const startJob = (job: Job): void => {
-    const promise = runJob(job).finally(() => {
+    const controller = new AbortController();
+    controllers.set(job.id, controller);
+    const promise = runJob(job, controller.signal).finally(() => {
       running.delete(job.id);
+      controllers.delete(job.id);
       // Vaga aberta: busca a próxima sem esperar a varredura.
       wake();
     });
@@ -238,8 +264,11 @@ export function createWorker(options: WorkerOptions): Worker {
     try {
       const alive = new Set(await heartbeatJobs(db, { workerId, jobIds }));
       for (const jobId of jobIds) {
-        if (!alive.has(jobId) && running.has(jobId)) {
+        const controller = controllers.get(jobId);
+        if (!alive.has(jobId) && controller && !controller.signal.aborted) {
           logger.warn({ job_id: jobId }, 'Trava da tarefa perdida; o resultado será descartado');
+          // Outro worker já pode estar com a tarefa: avisa o manipulador para parar cedo.
+          controller.abort(lostLockReason);
         }
       }
     } catch (error) {
@@ -279,6 +308,14 @@ export function createWorker(options: WorkerOptions): Worker {
       listener = null;
       await round;
 
+      // Avisa os manipuladores: o que acompanha o sinal para cedo e a tarefa volta à fila; os
+      // demais têm até o prazo para terminar.
+      for (const controller of controllers.values()) {
+        if (!controller.signal.aborted) {
+          controller.abort(shutdownReason);
+        }
+      }
+
       const timeoutMs = stopOptions.timeoutMs ?? SHUTDOWN_TIMEOUT_MS;
       if (running.size > 0) {
         logger.info(
@@ -314,7 +351,8 @@ export function createWorker(options: WorkerOptions): Worker {
         logger.warn({ count }, 'Tarefas não concluídas no prazo devolvidas à fila');
       }
       state = 'stopped';
-      return { released: count };
+      // Conta também as que pararam pelo sinal e já tinham voltado à fila.
+      return { released: count + releasedEarly };
     },
     wake,
     runningCount: () => running.size,
