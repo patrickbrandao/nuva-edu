@@ -1,0 +1,54 @@
+.minui-badge {
+  --minui-badge-ring: var(--minui-surface-base);
+  --minui-baseline: 12.156px;
+  display: inline-block;
+  box-sizing: border-box;
+  min-width: 17px;
+  height: 17px;
+  padding: 0 4.5px;
+  border-radius: 8.5px;
+  position: relative;
+  /* contorno de 2px centrado na borda: 1px para fora (sombra) + 1px para dentro (fundo) */
+  background: var(--minui-badge-ring);
+  box-shadow: 0 0 0 1px var(--minui-badge-ring);
+  color: #fff;
+  font-size: 10.5px;
+  font-weight: 650;
+  text-align: center;
+  vertical-align: top;
+}
+
+.minui-badge::before {
+  content: "";
+  position: absolute;
+  inset: 1px;
+  border-radius: 7.5px;
+  background: var(--minui-badge);
+}
+
+.minui-badge__text {
+  position: relative;
+  display: block;
+}
+
+.minui-dot {
+  position: relative;
+  display: block;
+  flex: none;
+  border-radius: 50%;
+  background: var(--minui-dot, var(--minui-blue));
+}
+
+/* contorno de 2px centrado na borda (ponto "online") */
+.minui-dot--ring {
+  background: var(--minui-dot-ring);
+  box-shadow: 0 0 0 1px var(--minui-dot-ring);
+}
+
+.minui-dot--ring::before {
+  content: "";
+  position: absolute;
+  inset: 1px;
+  border-radius: 50%;
+  background: var(--minui-dot);
+}

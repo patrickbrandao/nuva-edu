@@ -1,0 +1,67 @@
+.minui-field {
+  --minui-field-r: 8px;
+  --minui-field-ring: var(--minui-field-line);
+  position: relative;
+  box-sizing: border-box;
+  border-radius: var(--minui-field-r);
+  background: var(--minui-field);
+}
+
+.minui-field--filled {
+  background: var(--minui-field-on);
+}
+
+/* Contorno de 1px centrado na borda (0,5px para dentro e 0,5px para fora). */
+.minui-field::before {
+  content: "";
+  position: absolute;
+  inset: -0.5px;
+  box-sizing: border-box;
+  border: 1px solid var(--minui-field-ring);
+  border-radius: calc(var(--minui-field-r) + 0.5px);
+  pointer-events: none;
+}
+
+.minui-field__clip {
+  position: absolute;
+  left: 2px;
+  top: 0;
+  height: 100%;
+  overflow: hidden;
+}
+
+.minui-word {
+  white-space: pre;
+}
+
+.minui-caret {
+  position: absolute;
+  display: block;
+  width: 1.5px;
+  pointer-events: none;
+}
+
+.minui-send {
+  --minui-baseline: 11.8px;
+  position: absolute;
+  top: 5px;
+  right: 6px;
+  box-sizing: border-box;
+  width: 40px;
+  border-radius: 6px;
+  background: var(--minui-send);
+  color: var(--minui-text-faint);
+  font-size: 11px;
+  font-weight: 600;
+  text-align: center;
+}
+
+.minui-send--on {
+  background: #3b7cf0;
+  color: #fff;
+}
+
+.minui-send--hot {
+  background: #e5483b;
+  color: #fff;
+}

@@ -1,0 +1,1595 @@
+/*
+ * AdminUI — o estilo de painel administrativo claro ("admin-ui-white").
+ *
+ * .minui-adm é o escopo: define os tokens --adm-* (com light-dark(), valem nos
+ * dois temas) e a tipografia. Tudo o que é do kit fica dentro dele: a janela
+ * (.minui-adm-shell), o menu lateral, a barra do topo, os controles e os
+ * cartões. Dois tons:
+ *   - padrão ("cool"): cinza frio, menu acinzentado e área principal branca;
+ *   - .minui-adm--warm: cinza quente, menu e área principal na mesma cor,
+ *     cartões brancos.
+ */
+.minui-adm {
+  /* superfícies */
+  --adm-bg: light-dark(#ffffff, #0f0f11);
+  --adm-side: light-dark(#f6f6f7, #141416);
+  --adm-sunken: light-dark(#f5f5f6, #151518);
+  --adm-card: light-dark(#ffffff, #1b1b1f);
+  --adm-pop: light-dark(#ffffff, #212126);
+  --adm-tag: light-dark(#f7f7f8, #232327);
+  --adm-hover: light-dark(rgba(0, 0, 0, 0.04), rgba(255, 255, 255, 0.05));
+  --adm-active: light-dark(rgba(0, 0, 0, 0.07), rgba(255, 255, 255, 0.09));
+
+  /* linhas */
+  --adm-line: light-dark(rgba(0, 0, 0, 0.09), rgba(255, 255, 255, 0.09));
+  --adm-line-soft: light-dark(rgba(0, 0, 0, 0.06), rgba(255, 255, 255, 0.06));
+  --adm-line-strong: light-dark(rgba(0, 0, 0, 0.16), rgba(255, 255, 255, 0.18));
+
+  /* texto */
+  --adm-ink: light-dark(#18181b, #ededee);
+  --adm-ink-2: light-dark(#3f3f46, #c4c4c9);
+  --adm-ink-3: light-dark(#6f6f78, #94949b);
+  --adm-ink-4: light-dark(#a1a1aa, #5f5f66);
+
+  /* ação principal (botão cheio) */
+  --adm-primary: light-dark(#1c1c1e, #f4f4f5);
+  --adm-primary-hover: light-dark(#34343a, #ffffff);
+  --adm-primary-ink: light-dark(#ffffff, #18181b);
+
+  /* estados e acentos */
+  --adm-red: light-dark(#dc2626, #f2553e);
+  --adm-green: light-dark(#1a8a36, #4ccf8a);
+  --adm-amber: light-dark(#c28306, #e8b23a);
+  --adm-orange: light-dark(#f2733a, #ff9566);
+  --adm-blue: light-dark(#2f6fed, #6ea2ff);
+  --adm-indigo: light-dark(#3d3fd6, #7b7dff);
+  --adm-cyan: light-dark(#0e8fb8, #38bdf8);
+  --adm-pink: light-dark(#e0286f, #f472b6);
+  --adm-rose: light-dark(#ee8f95, #fda4af);
+  --adm-violet: light-dark(#7c3aed, #a78bfa);
+  --adm-focus: var(--minui-focus-ring);
+
+  /* forma */
+  --adm-r-window: 16px;
+  --adm-r-panel: 12px;
+  --adm-r-card: 9px;
+  --adm-r-ctl: 8px;
+  --adm-r-tag: 6px;
+  --adm-shadow-card: 0 1px 2px light-dark(rgba(0, 0, 0, 0.05), rgba(0, 0, 0, 0.4));
+  --adm-shadow-ctl: 0 1px 2px light-dark(rgba(0, 0, 0, 0.05), rgba(0, 0, 0, 0.35));
+  --adm-shadow-pop:
+    0 0 0 1px var(--adm-line), 0 10px 30px light-dark(rgba(0, 0, 0, 0.12), rgba(0, 0, 0, 0.6));
+  --adm-shadow-window:
+    0 1px 2px light-dark(rgba(0, 0, 0, 0.05), rgba(0, 0, 0, 0.5)),
+    0 24px 60px light-dark(rgba(24, 24, 32, 0.1), rgba(0, 0, 0, 0.55));
+
+  /* medidas */
+  --adm-side-w: 232px;
+  --adm-side-w-min: 56px;
+  --adm-top-h: 56px;
+  --adm-ctl-h: 32px;
+  --adm-gutter: 22px;
+
+  color: var(--adm-ink);
+  font-family: var(--minui-font);
+  font-size: 14px;
+  line-height: 1.4;
+  letter-spacing: -0.006em;
+  -webkit-font-smoothing: antialiased;
+}
+
+.minui-adm--warm {
+  --adm-bg: light-dark(#f5f4f2, #111110);
+  --adm-side: light-dark(#f5f4f2, #111110);
+  --adm-sunken: light-dark(#eceae6, #1a1a18);
+  --adm-card: light-dark(#ffffff, #1c1c1a);
+  --adm-pop: light-dark(#ffffff, #232321);
+  --adm-tag: light-dark(#f3f2ef, #262624);
+  --adm-hover: light-dark(rgba(40, 30, 10, 0.045), rgba(255, 250, 240, 0.05));
+  --adm-active: light-dark(rgba(40, 30, 10, 0.075), rgba(255, 250, 240, 0.09));
+  --adm-line: light-dark(rgba(40, 30, 10, 0.11), rgba(255, 250, 240, 0.1));
+  --adm-line-soft: light-dark(rgba(40, 30, 10, 0.07), rgba(255, 250, 240, 0.06));
+  --adm-ink-2: light-dark(#45433e, #c9c7c1);
+  --adm-ink-3: light-dark(#75726b, #98958d);
+  --adm-top-h: 44px;
+  --adm-side-w: 204px;
+}
+
+.minui-adm *,
+.minui-adm *::before,
+.minui-adm *::after {
+  box-sizing: border-box;
+}
+
+.minui-adm :focus-visible {
+  outline: 2px solid var(--adm-focus);
+  outline-offset: 2px;
+}
+
+.minui-adm svg {
+  flex: none;
+}
+
+/* =================== Janela =================== */
+.minui-adm-shell {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  height: var(--adm-height, 780px);
+  overflow: hidden;
+  border: 1px solid var(--adm-line);
+  border-radius: var(--adm-r-window);
+  background: var(--adm-bg);
+  box-shadow: var(--adm-shadow-window);
+}
+
+.minui-adm-main {
+  container-type: inline-size;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  background: var(--adm-bg);
+}
+
+.minui-adm-content {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: var(--adm-gutter);
+  scrollbar-width: thin;
+  scrollbar-color: var(--adm-line-strong) transparent;
+}
+
+.minui-adm-content--flush {
+  padding: 0;
+}
+
+/* =================== Menu lateral =================== */
+.minui-adm-side {
+  display: flex;
+  flex-direction: column;
+  width: var(--adm-side-w);
+  min-height: 0;
+  overflow: hidden;
+  border-right: 1px solid var(--adm-line);
+  background: var(--adm-side);
+  transition: width 0.2s ease;
+}
+
+.minui-adm-side__brand {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: none;
+  height: var(--adm-top-h);
+  padding: 0 12px 0 18px;
+  border-bottom: 1px solid var(--adm-line);
+}
+
+.minui-adm-side--flat .minui-adm-side__brand {
+  height: 60px;
+  border-bottom-color: transparent;
+}
+
+.minui-adm-brand {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+  margin-right: auto;
+  font-size: 18px;
+  font-weight: 620;
+  letter-spacing: -0.035em;
+  white-space: nowrap;
+}
+
+.minui-adm-brand__mark {
+  display: grid;
+  place-items: center;
+  color: var(--adm-brand, var(--adm-ink));
+}
+
+.minui-adm-brand sup {
+  margin-left: 1px;
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0;
+  vertical-align: 0.9em;
+}
+
+.minui-adm-side__scroll {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden auto;
+  padding: 12px 9px;
+  scrollbar-width: none;
+}
+
+.minui-adm-side--flat .minui-adm-side__scroll {
+  padding-top: 2px;
+}
+
+.minui-adm-nav {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.minui-adm-nav--bottom {
+  margin-top: auto;
+  padding-top: 16px;
+}
+
+.minui-adm-nav__label {
+  margin: 18px 0 6px;
+  padding: 0 8px;
+  color: var(--adm-ink-3);
+  font-size: 13px;
+  font-weight: 450;
+  white-space: nowrap;
+}
+
+.minui-adm-nav__item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  height: 32px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: var(--adm-r-ctl);
+  background: none;
+  color: var(--adm-ink-2);
+  font: inherit;
+  font-weight: 450;
+  letter-spacing: inherit;
+  text-align: left;
+  text-decoration: none;
+  white-space: nowrap;
+  cursor: pointer;
+  transition:
+    background 0.12s ease,
+    color 0.12s ease;
+}
+
+.minui-adm-nav__item:hover {
+  background: var(--adm-hover);
+  color: var(--adm-ink);
+}
+
+.minui-adm-nav__item[aria-current="page"] {
+  background: var(--adm-active);
+  color: var(--adm-ink);
+  font-weight: 520;
+}
+
+.minui-adm-nav__item > svg {
+  width: 16px;
+  height: 16px;
+}
+
+.minui-adm-nav__text {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* subitens: recuados, com o filete vertical à esquerda */
+.minui-adm-nav__sub {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 2px 0 2px 17px;
+  padding: 0 0 0 7px;
+  border-left: 1px solid var(--adm-line);
+  list-style: none;
+}
+
+/* ---------- menu recolhido: só os ícones ---------- */
+.minui-adm-side[data-collapsed] {
+  width: var(--adm-side-w-min);
+}
+
+.minui-adm-side[data-collapsed] .minui-adm-side__brand {
+  justify-content: center;
+  padding: 0;
+}
+
+.minui-adm-side[data-collapsed]
+  :is(.minui-adm-brand, .minui-adm-nav__text, .minui-adm-user__text, .minui-adm-user__action) {
+  display: none;
+}
+
+.minui-adm-side[data-collapsed] .minui-adm-nav__item {
+  position: relative;
+  justify-content: center;
+  padding: 0;
+}
+
+.minui-adm-side[data-collapsed] .minui-adm-nav__label {
+  height: 1px;
+  margin: 12px 8px;
+  padding: 0;
+  overflow: hidden;
+  background: var(--adm-line);
+  color: transparent;
+}
+
+.minui-adm-side[data-collapsed] .minui-adm-nav__sub {
+  margin-left: 0;
+  padding-left: 0;
+  border-left: 0;
+}
+
+.minui-adm-side[data-collapsed] .minui-adm-nav__item .minui-adm-badge {
+  position: absolute;
+  top: 3px;
+  right: 6px;
+  min-width: 8px;
+  width: 8px;
+  height: 8px;
+  padding: 0;
+  border-radius: 50%;
+  color: transparent;
+}
+
+.minui-adm-side[data-collapsed] .minui-adm-user {
+  justify-content: center;
+  padding-inline: 0;
+}
+
+/* ---------- usuário, no pé do menu ---------- */
+.minui-adm-user {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: none;
+  padding: 14px 14px 14px 16px;
+  border-top: 1px solid var(--adm-line);
+}
+
+.minui-adm-side--flat .minui-adm-user {
+  border-top-color: transparent;
+}
+
+.minui-adm-user__text {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+  line-height: 1.3;
+  white-space: nowrap;
+}
+
+.minui-adm-user__text strong {
+  overflow: hidden;
+  font-weight: 500;
+  text-overflow: ellipsis;
+}
+
+.minui-adm-user__text span {
+  color: var(--adm-ink-3);
+  font-size: 12px;
+}
+
+/* =================== Barra do topo e trilha =================== */
+.minui-adm-top {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: none;
+  height: var(--adm-top-h);
+  padding: 0 var(--adm-gutter);
+  border-bottom: 1px solid var(--adm-line);
+}
+
+.minui-adm .minui-adm-top__title {
+  margin: 0 auto 0 0;
+  font-size: 17px;
+  font-weight: 500;
+  letter-spacing: -0.015em;
+  white-space: nowrap;
+}
+
+.minui-adm-top__actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  min-width: 0;
+  margin-left: auto;
+}
+
+.minui-adm-crumbs {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 13.5px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.minui-adm-crumbs li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.minui-adm-crumbs :is(a, button, span.minui-adm-crumbs__here) {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--adm-ink-2);
+  font: inherit;
+  letter-spacing: inherit;
+  text-decoration: none;
+}
+
+.minui-adm-crumbs :is(a, button) {
+  cursor: pointer;
+}
+
+.minui-adm-crumbs :is(a, button):hover,
+.minui-adm-crumbs__here {
+  color: var(--adm-ink) !important;
+}
+
+.minui-adm-crumbs__sep {
+  color: var(--adm-ink-4);
+}
+
+/* =================== Controles =================== */
+.minui-adm-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  flex: none;
+  height: var(--adm-ctl-h);
+  padding: 0 12px;
+  border: 1px solid var(--adm-line);
+  border-radius: var(--adm-r-ctl);
+  background: var(--adm-card);
+  box-shadow: var(--adm-shadow-ctl);
+  color: var(--adm-ink);
+  font: inherit;
+  font-size: 13.5px;
+  font-weight: 500;
+  letter-spacing: inherit;
+  text-decoration: none;
+  white-space: nowrap;
+  cursor: pointer;
+  transition:
+    background 0.12s ease,
+    border-color 0.12s ease,
+    color 0.12s ease;
+}
+
+.minui-adm-btn:hover {
+  border-color: var(--adm-line-strong);
+  background: color-mix(in srgb, var(--adm-card), var(--adm-ink) 3%);
+}
+
+.minui-adm-btn > svg {
+  width: 15px;
+  height: 15px;
+  color: var(--adm-ink-2);
+}
+
+.minui-adm-btn--primary {
+  border-color: transparent;
+  background: var(--adm-primary);
+  color: var(--adm-primary-ink);
+}
+
+.minui-adm-btn--primary:hover {
+  border-color: transparent;
+  background: var(--adm-primary-hover);
+}
+
+.minui-adm-btn--primary > svg {
+  color: inherit;
+}
+
+.minui-adm-btn--ghost {
+  border-color: transparent;
+  background: none;
+  box-shadow: none;
+  color: var(--adm-ink-2);
+}
+
+.minui-adm-btn--ghost:hover {
+  border-color: transparent;
+  background: var(--adm-hover);
+  color: var(--adm-ink);
+}
+
+.minui-adm-btn--icon {
+  width: var(--adm-ctl-h);
+  padding: 0;
+}
+
+.minui-adm-btn--sm {
+  --adm-ctl-h: 26px;
+  padding-inline: 9px;
+  border-radius: 7px;
+  font-size: 12.5px;
+}
+
+.minui-adm-btn--sm.minui-adm-btn--icon {
+  padding: 0;
+}
+
+.minui-adm-btn:disabled,
+.minui-adm-btn[aria-disabled="true"] {
+  opacity: 0.45;
+  pointer-events: none;
+}
+
+/* ---------- busca e campo de texto ---------- */
+.minui-adm-search,
+.minui-adm-input {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: var(--adm-ctl-h);
+  padding: 0 10px;
+  border: 1px solid var(--adm-line);
+  border-radius: var(--adm-r-ctl);
+  background: var(--adm-card);
+  box-shadow: var(--adm-shadow-ctl);
+  color: var(--adm-ink-2);
+  transition: border-color 0.12s ease;
+}
+
+.minui-adm-search {
+  flex: 0 1 190px;
+  min-width: 110px;
+}
+
+.minui-adm-search > svg {
+  width: 15px;
+  height: 15px;
+}
+
+.minui-adm-search:focus-within,
+.minui-adm-input:focus-within {
+  border-color: var(--adm-line-strong);
+  outline: 2px solid var(--adm-focus);
+  outline-offset: 1px;
+}
+
+.minui-adm-search input,
+.minui-adm-input input {
+  flex: 1;
+  width: 100%;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  outline: 0;
+  background: none;
+  color: var(--adm-ink);
+  font: inherit;
+  font-size: 13.5px;
+  letter-spacing: inherit;
+}
+
+.minui-adm-search input::placeholder,
+.minui-adm-input input::placeholder {
+  color: var(--adm-ink-3);
+}
+
+.minui-adm-search input::-webkit-search-cancel-button {
+  appearance: none;
+}
+
+.minui-adm-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+  font-size: 13px;
+}
+
+.minui-adm-field__label {
+  font-weight: 500;
+}
+
+.minui-adm-field__hint {
+  color: var(--adm-ink-3);
+  font-size: 12.5px;
+}
+
+.minui-adm-field--error .minui-adm-input {
+  border-color: var(--adm-red);
+}
+
+.minui-adm-field--error .minui-adm-field__hint {
+  color: var(--adm-red);
+}
+
+/* ---------- menu suspenso ---------- */
+.minui-adm-menu {
+  position: relative;
+  display: inline-flex;
+  flex: none;
+}
+
+.minui-adm-menu__chev {
+  margin-left: 1px;
+  margin-right: -2px;
+}
+
+.minui-adm-menu__pop {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  z-index: 20;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: max(100%, 168px);
+  margin: 0;
+  padding: 4px;
+  border-radius: 10px;
+  background: var(--adm-pop);
+  box-shadow: var(--adm-shadow-pop);
+  list-style: none;
+  animation: minui-adm-pop 0.12s ease;
+}
+
+.minui-adm-menu--end .minui-adm-menu__pop {
+  right: 0;
+  left: auto;
+}
+
+@keyframes minui-adm-pop {
+  from {
+    opacity: 0;
+    translate: 0 -3px;
+  }
+}
+
+.minui-adm-menu__option {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  width: 100%;
+  height: 30px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: 6px;
+  background: none;
+  color: var(--adm-ink-2);
+  font: inherit;
+  font-size: 13.5px;
+  letter-spacing: inherit;
+  text-align: left;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.minui-adm-menu__option:hover,
+.minui-adm-menu__option:focus-visible {
+  background: var(--adm-hover);
+  color: var(--adm-ink);
+}
+
+.minui-adm-menu__option > svg {
+  width: 15px;
+  height: 15px;
+}
+
+.minui-adm-menu__option[aria-selected="true"] {
+  color: var(--adm-ink);
+  font-weight: 500;
+}
+
+.minui-adm-menu__check {
+  margin-left: auto;
+  padding-left: 12px;
+}
+
+.minui-adm-menu__sep {
+  height: 1px;
+  border: 0;
+  margin: 4px -4px;
+  background: var(--adm-line);
+}
+
+.minui-adm-menu__option--danger,
+.minui-adm-menu__option--danger:hover {
+  color: var(--adm-red);
+}
+
+/* ---------- caixa de seleção e chave ---------- */
+.minui-adm-check,
+.minui-adm-switch {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  font-size: 13.5px;
+  cursor: pointer;
+}
+
+.minui-adm-check input,
+.minui-adm-switch input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.minui-adm-check__box {
+  display: grid;
+  place-items: center;
+  width: 16px;
+  height: 16px;
+  border: 1px solid var(--adm-line-strong);
+  border-radius: 5px;
+  background: var(--adm-card);
+  box-shadow: var(--adm-shadow-ctl);
+  color: transparent;
+}
+
+.minui-adm-check input:checked + .minui-adm-check__box {
+  border-color: var(--adm-primary);
+  background: var(--adm-primary);
+  color: var(--adm-primary-ink);
+}
+
+.minui-adm-switch__track {
+  position: relative;
+  width: 30px;
+  height: 18px;
+  border-radius: 999px;
+  background: var(--adm-line-strong);
+  transition: background 0.15s ease;
+}
+
+.minui-adm-switch__track::after {
+  content: "";
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: #ffffff;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.25);
+  transition: translate 0.15s ease;
+}
+
+.minui-adm-switch input:checked + .minui-adm-switch__track {
+  background: var(--adm-primary);
+}
+
+.minui-adm-switch input:checked + .minui-adm-switch__track::after {
+  translate: 12px 0;
+  background: var(--adm-primary-ink);
+}
+
+.minui-adm :is(.minui-adm-check, .minui-adm-switch) input:focus-visible + span {
+  outline: 2px solid var(--adm-focus);
+  outline-offset: 2px;
+}
+
+/* ---------- abas ---------- */
+.minui-adm-tabs {
+  display: flex;
+  gap: 18px;
+  border-bottom: 1px solid var(--adm-line);
+}
+
+.minui-adm-tabs__tab {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  height: 36px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--adm-ink-3);
+  font: inherit;
+  font-size: 13.5px;
+  font-weight: 500;
+  letter-spacing: inherit;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.minui-adm-tabs__tab:hover {
+  color: var(--adm-ink);
+}
+
+.minui-adm-tabs__tab[aria-selected="true"] {
+  color: var(--adm-ink);
+}
+
+.minui-adm-tabs__tab[aria-selected="true"]::after {
+  content: "";
+  position: absolute;
+  inset: auto 0 -1px;
+  height: 2px;
+  border-radius: 2px 2px 0 0;
+  background: var(--adm-ink);
+}
+
+.minui-adm-tabs__count {
+  color: var(--adm-ink-3);
+  font-weight: 450;
+}
+
+/* =================== Peças de dado =================== */
+.minui-adm-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 20px;
+  padding: 0 6px;
+  border: 1px solid var(--adm-line);
+  border-radius: var(--adm-r-tag);
+  background: var(--adm-tag);
+  color: var(--adm-ink-2);
+  font-size: 12px;
+  font-weight: 450;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.minui-adm-badge {
+  display: inline-grid;
+  place-items: center;
+  flex: none;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  border-radius: 5px;
+  background: var(--adm-red);
+  color: #ffffff;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+
+.minui-adm-badge--muted {
+  background: var(--adm-active);
+  color: var(--adm-ink-2);
+}
+
+/* bolinha de estado (cabeçalho das colunas do quadro) */
+.minui-adm-dot {
+  display: inline-block;
+  flex: none;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--adm-tone, var(--adm-ink-3));
+}
+
+/* estado: tracinho vertical colorido + rótulo na mesma cor */
+.minui-adm-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--adm-tone, var(--adm-ink-3));
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.minui-adm-status::before {
+  content: "";
+  width: 3px;
+  height: 0.85em;
+  border-radius: 2px;
+  background: currentColor;
+}
+
+.minui-adm-status--dot {
+  color: var(--adm-ink);
+  font-weight: 450;
+}
+
+.minui-adm-status--dot::before {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--adm-tone, var(--adm-ink-3));
+}
+
+[data-tone="green"] {
+  --adm-tone: var(--adm-green);
+}
+[data-tone="amber"] {
+  --adm-tone: var(--adm-amber);
+}
+[data-tone="red"] {
+  --adm-tone: var(--adm-red);
+}
+[data-tone="orange"] {
+  --adm-tone: var(--adm-orange);
+}
+[data-tone="blue"] {
+  --adm-tone: var(--adm-blue);
+}
+[data-tone="indigo"] {
+  --adm-tone: var(--adm-indigo);
+}
+[data-tone="cyan"] {
+  --adm-tone: var(--adm-cyan);
+}
+[data-tone="pink"] {
+  --adm-tone: var(--adm-pink);
+}
+[data-tone="rose"] {
+  --adm-tone: var(--adm-rose);
+}
+[data-tone="violet"] {
+  --adm-tone: var(--adm-violet);
+}
+[data-tone="gray"] {
+  --adm-tone: var(--adm-ink-3);
+}
+
+/* ---------- avatar ---------- */
+.minui-adm-avatar {
+  position: relative;
+  display: inline-grid;
+  place-items: center;
+  flex: none;
+  width: var(--adm-av, 22px);
+  height: var(--adm-av, 22px);
+  overflow: hidden;
+  border-radius: 50%;
+  background: var(--adm-av-bg, var(--adm-active));
+  color: #ffffff;
+  font-size: calc(var(--adm-av, 22px) * 0.5);
+  font-weight: 500;
+  line-height: 1;
+  letter-spacing: 0;
+}
+
+.minui-adm-avatar--square {
+  border-radius: 26%;
+  font-size: calc(var(--adm-av, 22px) * 0.42);
+  font-weight: 700;
+  letter-spacing: -0.04em;
+}
+
+.minui-adm-avatar--soft {
+  background: var(--adm-active);
+  color: var(--adm-ink-2);
+}
+
+.minui-adm-avatars {
+  display: inline-flex;
+}
+
+.minui-adm-avatars > * + * {
+  margin-left: -6px;
+}
+
+.minui-adm-avatars > * {
+  box-shadow: 0 0 0 2px var(--adm-card);
+}
+
+/* ---------- cartão, bloco numérico e seção ---------- */
+.minui-adm-card {
+  border: 1px solid var(--adm-line);
+  border-radius: var(--adm-r-card);
+  background: var(--adm-card);
+  box-shadow: var(--adm-shadow-card);
+}
+
+.minui-adm-card--pad {
+  padding: 14px;
+}
+
+.minui-adm-card--link {
+  display: block;
+  width: 100%;
+  color: inherit;
+  font: inherit;
+  letter-spacing: inherit;
+  text-align: left;
+  text-decoration: none;
+  cursor: pointer;
+  transition:
+    border-color 0.12s ease,
+    box-shadow 0.12s ease;
+}
+
+.minui-adm-card--link:hover {
+  border-color: var(--adm-line-strong);
+  box-shadow: 0 2px 8px light-dark(rgba(0, 0, 0, 0.07), rgba(0, 0, 0, 0.5));
+}
+
+.minui-adm-stats {
+  display: grid;
+  grid-template-columns: repeat(var(--adm-cols, 4), minmax(0, 1fr));
+  gap: 12px;
+}
+
+.minui-adm-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 14px 14px 13px;
+}
+
+.minui-adm-stat__value {
+  color: var(--adm-tone, var(--adm-ink));
+  font-size: 19px;
+  font-weight: 500;
+  letter-spacing: -0.02em;
+  line-height: 1.25;
+  font-variant-numeric: tabular-nums;
+}
+
+.minui-adm-stat__label {
+  color: var(--adm-ink-3);
+  font-size: 13px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.minui-adm-section + .minui-adm-section {
+  margin-top: 30px;
+}
+
+.minui-adm-section__head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+.minui-adm .minui-adm-section__title {
+  margin: 0 auto 0 0;
+  font-size: 15px;
+  font-weight: 500;
+  letter-spacing: -0.01em;
+}
+
+.minui-adm-rule {
+  height: 1px;
+  margin: 0;
+  border: 0;
+  background: var(--adm-line);
+}
+
+/* ---------- cabeçalho de página ---------- */
+.minui-adm-pagehead {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px 16px;
+  padding-bottom: 20px;
+  border-bottom: 1px solid var(--adm-line);
+}
+
+.minui-adm-pagehead__text {
+  flex: 1 1 200px;
+  min-width: 0;
+}
+
+.minui-adm .minui-adm-pagehead h1 {
+  margin: 0;
+  font-size: 21px;
+  font-weight: 500;
+  letter-spacing: -0.02em;
+  line-height: 1.3;
+}
+
+.minui-adm .minui-adm-pagehead p {
+  margin: 4px 0 0;
+  color: var(--adm-ink-3);
+  font-size: 13px;
+}
+
+.minui-adm-pagehead__actions {
+  display: flex;
+  gap: 6px;
+}
+
+/* ---------- linha de metadado: ícone + texto ---------- */
+.minui-adm-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 13px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  color: var(--adm-ink-2);
+  font-size: 13.5px;
+}
+
+.minui-adm-meta li {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  white-space: nowrap;
+}
+
+.minui-adm-meta svg {
+  width: 15px;
+  height: 15px;
+}
+
+.minui-adm-meta [data-tone] {
+  color: var(--adm-tone);
+}
+
+/* ---------- lista de detalhes: ícone, rótulo e valor ---------- */
+.minui-adm-details {
+  display: grid;
+  grid-template-columns: minmax(96px, auto) minmax(0, 1fr);
+  gap: 13px 16px;
+  margin: 0;
+  font-size: 13.5px;
+}
+
+.minui-adm-details dt {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  color: var(--adm-ink-3);
+  white-space: nowrap;
+}
+
+.minui-adm-details dt svg {
+  width: 15px;
+  height: 15px;
+  color: var(--adm-ink-2);
+}
+
+.minui-adm-details dd {
+  margin: 0;
+  overflow: hidden;
+  font-weight: 500;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ---------- lista em cartão: linhas separadas por filete ---------- */
+.minui-adm-list {
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  list-style: none;
+}
+
+.minui-adm-list > li + li {
+  border-top: 1px solid var(--adm-line);
+}
+
+.minui-adm-list__row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 43px;
+  padding: 8px 14px;
+  font-size: 13.5px;
+}
+
+.minui-adm-list__main {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  flex: 1;
+  min-width: 0;
+  white-space: nowrap;
+}
+
+.minui-adm-list__main strong {
+  font-weight: 500;
+}
+
+.minui-adm-list__main span {
+  overflow: hidden;
+  color: var(--adm-ink-2);
+  text-overflow: ellipsis;
+}
+
+.minui-adm-list__aside {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  flex: none;
+  color: var(--adm-ink-3);
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+.minui-adm-sep::before {
+  content: "·";
+  color: var(--adm-ink-4);
+}
+
+/* ---------- mensagens recentes ---------- */
+.minui-adm-msg {
+  display: block;
+  width: 100%;
+  padding: 14px;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  letter-spacing: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.minui-adm-msg:hover {
+  background: var(--adm-hover);
+}
+
+.minui-adm-msg__head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13.5px;
+}
+
+.minui-adm-msg__head strong {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  font-weight: 500;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.minui-adm-msg__head time {
+  color: var(--adm-ink-3);
+  font-size: 11.5px;
+  white-space: nowrap;
+}
+
+.minui-adm-msg__text {
+  display: block;
+  margin-top: 9px;
+  overflow: hidden;
+  color: var(--adm-ink-2);
+  font-size: 13px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ---------- linha do tempo ---------- */
+.minui-adm-timeline {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.minui-adm-timeline li {
+  position: relative;
+  display: flex;
+  gap: 14px;
+  padding-bottom: 14px;
+  font-size: 13.5px;
+}
+
+.minui-adm-timeline li:not(:last-child)::before {
+  content: "";
+  position: absolute;
+  top: 30px;
+  bottom: 2px;
+  left: 13.5px;
+  width: 1px;
+  background: var(--adm-line-strong);
+}
+
+.minui-adm-timeline__icon {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: var(--adm-sunken);
+  color: var(--adm-ink-2);
+}
+
+.minui-adm-timeline__icon svg {
+  width: 14px;
+  height: 14px;
+}
+
+.minui-adm .minui-adm-timeline p {
+  margin: 0;
+  color: var(--adm-ink-3);
+  line-height: 1.45;
+}
+
+.minui-adm-timeline p strong {
+  color: var(--adm-ink);
+  font-weight: 500;
+}
+
+.minui-adm-timeline time {
+  display: block;
+  margin-top: 4px;
+  color: var(--adm-ink-3);
+  font-size: 13px;
+}
+
+/* ---------- tabela ---------- */
+.minui-adm-tablewrap {
+  overflow: auto;
+}
+
+.minui-adm-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13.5px;
+  white-space: nowrap;
+}
+
+.minui-adm-table th {
+  height: 36px;
+  padding: 0 14px;
+  border-bottom: 1px solid var(--adm-line);
+  background: var(--adm-sunken);
+  color: var(--adm-ink-3);
+  font-size: 12.5px;
+  font-weight: 500;
+  text-align: left;
+}
+
+.minui-adm-table td {
+  height: 44px;
+  padding: 0 14px;
+  border-bottom: 1px solid var(--adm-line-soft);
+  color: var(--adm-ink-2);
+}
+
+.minui-adm-table tr:last-child td {
+  border-bottom: 0;
+}
+
+.minui-adm-table tbody tr:hover td {
+  background: var(--adm-hover);
+}
+
+.minui-adm-table__main {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  color: var(--adm-ink);
+  font-weight: 500;
+}
+
+.minui-adm-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 36px 16px;
+  color: var(--adm-ink-3);
+  font-size: 13.5px;
+  text-align: center;
+}
+
+.minui-adm-empty svg {
+  width: 20px;
+  height: 20px;
+  margin-bottom: 6px;
+}
+
+.minui-adm-empty strong {
+  color: var(--adm-ink);
+  font-weight: 500;
+}
+
+/* =================== CasesBoard: o quadro =================== */
+.minui-adm-board {
+  display: flex;
+  align-items: stretch;
+  gap: 8px;
+  height: 100%;
+  padding: var(--adm-gutter) var(--adm-gutter) 0;
+  overflow: auto hidden;
+  scrollbar-width: none;
+}
+
+/* há mais colunas à direita: a borda some num degradê */
+.minui-adm-board[data-more] {
+  mask-image: linear-gradient(to right, #000 calc(100% - 110px), transparent);
+}
+
+.minui-adm-col {
+  display: flex;
+  flex: 0 0 282px;
+  flex-direction: column;
+  min-height: 0;
+  border-radius: var(--adm-r-panel) var(--adm-r-panel) 0 0;
+  background: var(--adm-sunken);
+  transition: box-shadow 0.12s ease;
+}
+
+.minui-adm-col[data-over] {
+  box-shadow: inset 0 0 0 1.5px var(--adm-tone, var(--adm-line-strong));
+}
+
+.minui-adm-col__head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: none;
+  height: 42px;
+  padding: 2px 16px 0 22px;
+  font-size: 13.5px;
+  font-weight: 500;
+}
+
+.minui-adm-col__count {
+  margin-left: auto;
+  color: var(--adm-ink-3);
+  font-weight: 450;
+  font-variant-numeric: tabular-nums;
+}
+
+.minui-adm-col__list {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 8px;
+  min-height: 0;
+  margin: 0;
+  padding: 1px 8px 16px;
+  overflow: hidden auto;
+  list-style: none;
+  scrollbar-width: none;
+}
+
+.minui-adm-case {
+  padding: 14px 14px 16px;
+  cursor: grab;
+  transition:
+    border-color 0.12s ease,
+    box-shadow 0.12s ease,
+    opacity 0.12s ease;
+}
+
+.minui-adm-case:hover {
+  border-color: var(--adm-line-strong);
+}
+
+.minui-adm-case[data-dragging] {
+  opacity: 0.45;
+}
+
+.minui-adm .minui-adm-case__name {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  font-size: 16px;
+  font-weight: 500;
+  letter-spacing: -0.012em;
+  white-space: nowrap;
+}
+
+.minui-adm-case__name span:last-child {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.minui-adm-case .minui-adm-tag {
+  margin-top: 10px;
+}
+
+.minui-adm-case .minui-adm-rule {
+  margin: 13px 0 15px;
+}
+
+/* =================== ClientOverview =================== */
+.minui-adm-client__stats {
+  margin: 26px 0 28px;
+}
+
+.minui-adm-client__body {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 286px;
+}
+
+.minui-adm-client__left {
+  min-width: 0;
+  padding-right: 20px;
+}
+
+.minui-adm-client__right {
+  min-width: 0;
+  padding-left: 20px;
+  border-left: 1px solid var(--adm-line);
+}
+
+.minui-adm-campaigns {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.minui-adm-campaign {
+  padding: 13px 14px 14px;
+  font-size: 13.5px;
+}
+
+.minui-adm-campaign strong {
+  display: block;
+  overflow: hidden;
+  font-weight: 500;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.minui-adm-campaign__line {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin-top: 5px;
+  color: var(--adm-ink-3);
+  white-space: nowrap;
+}
+
+.minui-adm-campaign__line > span:first-child {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+@container (max-width: 760px) {
+  .minui-adm-client__body {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 30px;
+  }
+
+  .minui-adm-client__left {
+    padding-right: 0;
+  }
+
+  .minui-adm-client__right {
+    padding-left: 0;
+    border-left: 0;
+  }
+}
+
+@container (max-width: 620px) {
+  .minui-adm-stats {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .minui-adm-campaigns {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .minui-adm-list__main span {
+    display: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .minui-adm *,
+  .minui-adm-side {
+    transition: none !important;
+    animation: none !important;
+  }
+}

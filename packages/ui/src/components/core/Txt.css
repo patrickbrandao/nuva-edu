@@ -1,0 +1,49 @@
+.minui-txt {
+  position: absolute;
+  margin: 0;
+  padding: 0;
+  white-space: pre;
+  line-height: 0;
+  font-family: var(--minui-font);
+  font-style: normal;
+  letter-spacing: normal;
+  font-feature-settings: normal;
+  font-variant-ligatures: normal;
+  font-kerning: auto;
+  text-align: left;
+  text-transform: none;
+}
+
+/* Escora: a linha de base fica exatamente --minui-strut abaixo do topo da caixa. */
+.minui-txt::before {
+  content: "";
+  display: inline-block;
+  width: 0;
+  height: var(--minui-strut, 1.5em);
+}
+
+.minui-txt--mono {
+  font-family: var(--minui-mono);
+}
+
+.minui-txt--clip {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  padding-bottom: 0.5em; /* não corta as descendentes (g, p, y…) */
+}
+
+/* Escora genérica para caixas com texto centralizado (pílulas, botões). */
+.minui-baseline {
+  white-space: pre;
+  line-height: 0;
+  font-family: var(--minui-font);
+  font-feature-settings: normal;
+  letter-spacing: normal;
+}
+
+.minui-baseline::before {
+  content: "";
+  display: inline-block;
+  width: 0;
+  height: var(--minui-baseline, 1em);
+}

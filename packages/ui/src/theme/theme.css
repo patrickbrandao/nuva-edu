@@ -1,0 +1,64 @@
+/* Seletor de tema (Sistema, Claro, Escuro). Portado de .sc-theme do showcase do minui. */
+.minui-theme {
+  display: inline-flex;
+  flex: none;
+  gap: 2px;
+  min-width: 0;
+  margin: 0;
+  padding: 3px;
+  border: 1px solid var(--minui-surface-ring);
+  border-radius: 999px;
+  background: var(--minui-surface-base);
+  font-family: var(--minui-font);
+}
+
+.minui-theme button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-width: 34px;
+  height: 30px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--minui-text-muted);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.minui-theme button:hover {
+  color: var(--minui-text);
+}
+
+.minui-theme button:focus-visible {
+  outline: 2px solid var(--minui-blue);
+  outline-offset: 2px;
+}
+
+.minui-theme button[aria-pressed="true"] {
+  background: var(--minui-text);
+  color: var(--minui-surface-base);
+}
+
+.minui-theme svg {
+  flex: none;
+  width: 15px;
+  height: 15px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.7px;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.minui-theme--compact .minui-theme__label {
+  display: none;
+}
+
+.minui-theme--compact button {
+  padding: 0;
+}

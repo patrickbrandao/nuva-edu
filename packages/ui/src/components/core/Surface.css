@@ -1,0 +1,48 @@
+.minui-surface {
+  --minui-r: 14px;
+  --minui-ring: var(--minui-surface-ring);
+  position: relative;
+  box-sizing: border-box;
+  flex: none;
+  border-radius: var(--minui-r);
+  background: linear-gradient(var(--minui-surface-top), var(--minui-surface-bottom));
+  box-shadow: var(--minui-surface-shadow);
+  color: var(--minui-text);
+  font-family: var(--minui-font);
+  font-feature-settings: normal;
+  font-synthesis: none;
+  letter-spacing: normal;
+  text-align: left;
+  text-rendering: auto;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  -webkit-user-select: none;
+  user-select: none;
+  cursor: default;
+}
+
+/* Aro de 1px + brilho horizontal de 1px logo abaixo da borda superior. */
+.minui-surface::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  box-sizing: border-box;
+  border: 1px solid var(--minui-ring);
+  border-radius: inherit;
+  background: linear-gradient(var(--minui-surface-sheen), var(--minui-surface-sheen)) no-repeat;
+  background-origin: border-box;
+  background-clip: border-box;
+  background-size: calc(100% - var(--minui-r) * 2) 1px;
+  background-position: var(--minui-r) 0.5px;
+  pointer-events: none;
+}
+
+.minui-surface--panel {
+  --minui-ring: var(--minui-panel-ring);
+  background: var(--minui-panel);
+  box-shadow: var(--minui-panel-shadow);
+}
+
+.minui-surface--panel::before {
+  background: none;
+}

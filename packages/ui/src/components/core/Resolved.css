@@ -1,0 +1,49 @@
+.minui-resolved {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+/* Traço de 1,5px centrado a 0,5px da borda, sempre com raio 14 (SVG = mesma suavização do canvas). */
+.minui-resolved__ring {
+  position: absolute;
+  inset: 0;
+  display: block;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+
+.minui-resolved__ring rect {
+  width: calc(100% - 1px);
+  height: calc(100% - 1px);
+  fill: none;
+  stroke: var(--minui-resolved-ring);
+  stroke-width: 1.5px;
+}
+
+.minui-resolved__bar {
+  position: absolute;
+  left: 12px;
+  right: 12px;
+  bottom: 9px;
+  height: 28px;
+  border-radius: 8px;
+  background: var(--minui-resolved-bar);
+}
+
+.minui-resolved__bar::before {
+  content: "";
+  position: absolute;
+  inset: -0.5px;
+  box-sizing: border-box;
+  border: 1px solid var(--minui-resolved-line);
+  border-radius: 8.5px;
+}
+
+.minui-resolved__check {
+  position: absolute;
+  left: 10px;
+  top: 6px;
+  display: block;
+}

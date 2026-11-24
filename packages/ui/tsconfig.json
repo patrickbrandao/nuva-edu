@@ -1,0 +1,17 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "lib": ["ES2024", "DOM", "DOM.Iterable"],
+    "module": "preserve",
+    "moduleResolution": "bundler",
+    "jsx": "react-jsx",
+    "allowJs": true,
+    "checkJs": false,
+    "types": ["vite/client"],
+    "composite": false,
+    "declaration": false,
+    "sourceMap": false,
+    "noEmit": true
+  },
+  "include": ["src", "catalog", "vite.config.ts", "vitest.setup.ts"]
+}

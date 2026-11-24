@@ -1,0 +1,7 @@
+.minui-avatar {
+  position: relative;
+  display: block;
+  flex: none;
+  overflow: hidden;
+  background-repeat: no-repeat;
+}

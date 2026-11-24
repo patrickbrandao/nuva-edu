@@ -1,0 +1,17 @@
+{
+  "$schema": "https://biomejs.dev/schemas/2.6.8/schema.json",
+  "root": false,
+  "extends": "//",
+  "overrides": [
+    {
+      "includes": ["src/components/**/*.css", "src/styles/tokens.css"],
+      "linter": {
+        "rules": {
+          "style": { "noDescendingSpecificity": "off" },
+          "complexity": { "noImportantStyles": "off" },
+          "correctness": { "noInvalidDirectionInLinearGradient": "off" }
+        }
+      }
+    }
+  ]
+}

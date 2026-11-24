@@ -1,0 +1,831 @@
+/*
+ * Páginas de exemplo — DownloadPage, MarketingWaitlist e PricingPage.
+ *
+ * .minui-expage é a base comum: tokens --ex-* (com light-dark(), valem nos
+ * dois temas), título, subtítulo, filete e destaques. Cada página acrescenta
+ * a sua classe (.minui-dlpage, .minui-waitlist, .minui-pricing) e troca o
+ * que precisar, como a cor de destaque. A largura vem do contêiner (container queries), não da
+ * janela: a página se ajeita dentro de qualquer moldura.
+ */
+.minui-expage {
+  --ex-bg: light-dark(#ffffff, #0b0b0c);
+  --ex-glow: light-dark(rgba(0, 0, 0, 0.022), rgba(255, 255, 255, 0.035));
+  --ex-ink: var(--minui-text);
+  --ex-soft: light-dark(#6b6b70, #9a9aa0);
+  --ex-card: light-dark(#ffffff, #141416);
+  --ex-card-hover: light-dark(#ffffff, #1a1a1d);
+  --ex-card-ring: light-dark(rgba(0, 0, 0, 0.09), rgba(255, 255, 255, 0.08));
+  --ex-card-ring-hover: light-dark(rgba(0, 0, 0, 0.16), rgba(255, 255, 255, 0.16));
+  --ex-card-shadow:
+    0 1px 2px light-dark(rgba(0, 0, 0, 0.04), rgba(0, 0, 0, 0.4)),
+    0 4px 14px light-dark(rgba(0, 0, 0, 0.035), rgba(0, 0, 0, 0.3));
+  --ex-card-shadow-hover:
+    0 2px 4px light-dark(rgba(0, 0, 0, 0.05), rgba(0, 0, 0, 0.45)),
+    0 12px 28px light-dark(rgba(0, 0, 0, 0.08), rgba(0, 0, 0, 0.5));
+  --ex-rule: light-dark(rgba(0, 0, 0, 0.1), rgba(255, 255, 255, 0.1));
+  --ex-accent: light-dark(#3b76d9, #78a8ff);
+  --ex-badge: light-dark(#eaf1fc, rgba(120, 168, 255, 0.12));
+  --ex-focus: var(--minui-focus-ring);
+
+  container-type: inline-size;
+  position: relative;
+  box-sizing: border-box;
+  overflow: hidden;
+  padding: clamp(48px, 9cqi, 112px) 20px clamp(48px, 7cqi, 88px);
+  background:
+    radial-gradient(ellipse 58% 46% at 50% 30%, var(--ex-glow), transparent 70%), var(--ex-bg);
+  color: var(--ex-ink);
+  font-family: var(--minui-font);
+  -webkit-font-smoothing: antialiased;
+}
+
+.minui-expage__inner {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  max-width: 660px;
+  margin: 0 auto;
+}
+
+/* ---------- Título ---------- */
+.minui-expage__head {
+  text-align: center;
+}
+
+.minui-expage__title {
+  margin: 0;
+  font-size: clamp(34px, 7.2cqi, 60px);
+  font-weight: 700;
+  letter-spacing: -0.05em;
+  line-height: 1.08;
+  text-wrap: balance;
+}
+
+.minui-expage__lead {
+  margin: clamp(16px, 2.4cqi, 26px) auto 0;
+  color: var(--ex-soft);
+  font-size: clamp(15px, 1.9cqi, 18.5px);
+  letter-spacing: -0.01em;
+  line-height: 1.75;
+  text-wrap: balance;
+}
+
+.minui-expage__lead span {
+  display: block;
+}
+
+/* ---------- Destaques ---------- */
+.minui-expage__rule {
+  width: 100%;
+  height: 1px;
+  margin: clamp(40px, 6cqi, 62px) 0 0;
+  border: 0;
+  background: var(--ex-rule);
+}
+
+.minui-expage__features {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 24px;
+  width: 100%;
+  margin: 32px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.minui-expage__feature {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+}
+
+.minui-expage__badge {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  background: var(--ex-badge);
+  color: var(--ex-accent);
+}
+
+.minui-expage__badge > svg {
+  width: 19px;
+  height: 19px;
+}
+
+.minui-expage__feature strong {
+  margin-top: 18px;
+  font-size: 14.5px;
+  font-weight: 500;
+  letter-spacing: -0.005em;
+  line-height: 1.25;
+}
+
+.minui-expage__feature span:last-child {
+  max-width: 200px;
+  margin-top: 8px;
+  color: var(--ex-soft);
+  font-size: 12.5px;
+  letter-spacing: 0.01em;
+  line-height: 1.6;
+  text-wrap: pretty;
+}
+
+@container (max-width: 560px) {
+  .minui-expage__features {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 28px;
+  }
+}
+
+/* =================== DownloadPage =================== */
+.minui-dlpage {
+  --dl-dot: light-dark(rgba(0, 0, 0, 0.2), rgba(255, 255, 255, 0.14));
+  --dl-free: light-dark(#16804a, #4ccf8a);
+}
+
+/* fundo pontilhado e o clarão suave atrás do título */
+.minui-dlpage--dots {
+  background:
+    radial-gradient(ellipse 58% 46% at 50% 30%, var(--ex-glow), transparent 70%),
+    radial-gradient(circle at center, var(--dl-dot) 0.9px, transparent 1.3px) 0 0 / 25px 25px,
+    var(--ex-bg);
+}
+
+/* ---------- Cartões de plataforma ---------- */
+.minui-dlpage__platforms {
+  display: grid;
+  grid-template-columns: repeat(var(--dl-cols, 3), minmax(0, 186px));
+  justify-content: center;
+  gap: 11px;
+  width: 100%;
+  margin-top: clamp(32px, 5cqi, 46px);
+}
+
+.minui-dlpage__card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  box-sizing: border-box;
+  min-width: 0;
+  padding: 20px 14px 19px;
+  border: 1px solid var(--ex-card-ring);
+  border-radius: 15px;
+  background: var(--ex-card);
+  box-shadow: var(--ex-card-shadow);
+  color: inherit;
+  font: inherit;
+  text-align: center;
+  text-decoration: none;
+  cursor: pointer;
+  transition:
+    translate 0.2s ease,
+    box-shadow 0.2s ease,
+    border-color 0.2s ease,
+    background 0.2s ease;
+}
+
+.minui-dlpage__card:hover {
+  translate: 0 -2px;
+  border-color: var(--ex-card-ring-hover);
+  background: var(--ex-card-hover);
+  box-shadow: var(--ex-card-shadow-hover);
+}
+
+.minui-dlpage__card:focus-visible {
+  outline: 2px solid var(--ex-focus);
+  outline-offset: 3px;
+}
+
+.minui-dlpage__logo {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  color: var(--ex-ink);
+}
+
+.minui-dlpage__logo > svg {
+  width: 100%;
+  height: 100%;
+}
+
+/* olhos e bico do pinguim: recortados na cor do cartão */
+.minui-dlpage__cutout {
+  fill: var(--ex-card);
+  transition: fill 0.2s ease;
+}
+
+.minui-dlpage__card:hover .minui-dlpage__cutout {
+  fill: var(--ex-card-hover);
+}
+
+.minui-dlpage__name {
+  margin-top: 14px;
+  font-size: 15px;
+  font-weight: 500;
+  letter-spacing: -0.01em;
+  line-height: 1.2;
+}
+
+.minui-dlpage__detail {
+  margin-top: 6px;
+  color: var(--ex-soft);
+  font-size: 12.5px;
+  letter-spacing: 0.01em;
+  line-height: 1.3;
+}
+
+.minui-dlpage__action {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  margin-top: 15px;
+  color: var(--ex-soft);
+  font-size: 13.5px;
+  font-weight: 500;
+  letter-spacing: 0.01em;
+  line-height: 1;
+  transition: color 0.2s ease;
+}
+
+.minui-dlpage__action svg {
+  flex: none;
+  transition: translate 0.2s ease;
+}
+
+.minui-dlpage__card:hover .minui-dlpage__action {
+  color: var(--ex-ink);
+}
+
+.minui-dlpage__card:hover .minui-dlpage__action svg {
+  translate: 0 1.5px;
+}
+
+/* ---------- Versão · tamanho · preço ---------- */
+.minui-dlpage__meta {
+  display: inline-flex;
+  align-items: center;
+  margin: 22px 0 0;
+  padding: 7px 16px;
+  border: 1px solid var(--ex-card-ring);
+  border-radius: 999px;
+  background: var(--ex-card);
+  color: var(--ex-soft);
+  font-size: 12.5px;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.02em;
+  line-height: 1.2;
+}
+
+.minui-dlpage__meta > span + span {
+  margin-left: 9px;
+  padding-left: 9px;
+  border-left: 1px solid var(--ex-rule);
+}
+
+.minui-dlpage__version {
+  color: var(--ex-ink);
+  opacity: 0.8;
+}
+
+.minui-dlpage__price {
+  color: var(--dl-free);
+  font-weight: 500;
+}
+
+/* ---------- Estreito: cartões e destaques empilhados ---------- */
+@container (max-width: 560px) {
+  .minui-dlpage__platforms {
+    grid-template-columns: minmax(0, 300px);
+  }
+
+  .minui-dlpage__card {
+    display: grid;
+    grid-template-columns: auto 1fr auto;
+    grid-template-rows: auto auto;
+    column-gap: 14px;
+    align-items: center;
+    padding: 14px 16px;
+    text-align: left;
+  }
+
+  .minui-dlpage__logo {
+    grid-row: 1 / 3;
+    width: 26px;
+    height: 26px;
+  }
+
+  .minui-dlpage__name {
+    margin-top: 0;
+  }
+
+  .minui-dlpage__detail {
+    grid-column: 2;
+    margin-top: 3px;
+  }
+
+  .minui-dlpage__action {
+    grid-column: 3;
+    grid-row: 1 / 3;
+    margin-top: 0;
+  }
+}
+
+/* =================== MarketingWaitlist =================== */
+.minui-waitlist {
+  --ex-accent: light-dark(#d07a2c, #f0a35e);
+  --ex-badge: light-dark(#f8ece2, rgba(240, 163, 94, 0.13));
+  --wl-button: light-dark(#18181b, #f4f4f5);
+  --wl-button-hover: light-dark(#2e2e33, #ffffff);
+  --wl-button-text: light-dark(#ffffff, #0b0b0c);
+  --wl-done: light-dark(#16804a, #4ccf8a);
+  --wl-done-bg: light-dark(rgba(22, 128, 74, 0.08), rgba(76, 207, 138, 0.1));
+  --wl-error: light-dark(#c2382b, #ff8a7a);
+
+  padding-top: clamp(56px, 12cqi, 140px);
+  background:
+    radial-gradient(ellipse 62% 52% at 50% 36%, var(--ex-glow), transparent 72%), var(--ex-bg);
+}
+
+/* o título ocupa a largura do filete (~11,6em a 56px ≈ 650px) */
+.minui-waitlist .minui-expage__title {
+  font-size: clamp(30px, 7.6cqi, 56px);
+}
+
+.minui-waitlist .minui-expage__lead {
+  max-width: 450px;
+  text-wrap: pretty;
+}
+
+.minui-waitlist__sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/* ---------- Campo de e-mail ---------- */
+.minui-waitlist__form {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  box-sizing: border-box;
+  width: 100%;
+  max-width: 450px;
+  margin-top: clamp(28px, 4.4cqi, 40px);
+  padding: 8px 8px 8px 18px;
+  border: 1px solid var(--ex-card-ring);
+  border-radius: 14px;
+  background: var(--ex-card);
+  box-shadow: var(--ex-card-shadow);
+  transition:
+    border-color 0.2s ease,
+    box-shadow 0.2s ease;
+}
+
+.minui-waitlist__form:focus-within {
+  border-color: var(--ex-card-ring-hover);
+  box-shadow:
+    var(--ex-card-shadow),
+    0 0 0 3px light-dark(rgba(0, 0, 0, 0.05), rgba(255, 255, 255, 0.07));
+}
+
+.minui-waitlist__input {
+  flex: 1;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--ex-ink);
+  font: inherit;
+  font-size: 15px;
+  letter-spacing: 0.005em;
+}
+
+.minui-waitlist__input::placeholder {
+  color: var(--ex-soft);
+  opacity: 0.9;
+}
+
+.minui-waitlist__button {
+  flex: none;
+  height: 32px;
+  padding: 0 13px;
+  border: 0;
+  border-radius: 8px;
+  background: var(--wl-button);
+  color: var(--wl-button-text);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 500;
+  letter-spacing: 0.005em;
+  cursor: pointer;
+  transition:
+    background 0.15s ease,
+    opacity 0.15s ease;
+}
+
+.minui-waitlist__button:hover {
+  background: var(--wl-button-hover);
+}
+
+.minui-waitlist__button:focus-visible {
+  outline: 2px solid var(--ex-focus);
+  outline-offset: 2px;
+}
+
+.minui-waitlist__button:disabled {
+  cursor: progress;
+  opacity: 0.7;
+}
+
+.minui-waitlist__error {
+  margin: 10px 0 0;
+  color: var(--wl-error);
+  font-size: 13px;
+}
+
+/* confirmação depois de entrar */
+.minui-waitlist__done {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  box-sizing: border-box;
+  min-height: 50px;
+  margin: clamp(28px, 4.4cqi, 40px) 0 0;
+  padding: 10px 20px 10px 12px;
+  border: 1px solid color-mix(in srgb, var(--wl-done) 25%, transparent);
+  border-radius: 14px;
+  background: var(--wl-done-bg);
+  color: var(--ex-ink);
+  font-size: 14.5px;
+  animation: minui-waitlist-in 0.35s ease both;
+}
+
+.minui-waitlist__check {
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: var(--wl-done);
+  color: var(--ex-bg);
+}
+
+@keyframes minui-waitlist-in {
+  from {
+    opacity: 0;
+    translate: 0 4px;
+  }
+}
+
+/* ---------- Rostos + contagem ---------- */
+.minui-waitlist__social {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  margin: 22px 0 0;
+  color: var(--ex-soft);
+  font-size: 15px;
+  letter-spacing: 0.005em;
+}
+
+.minui-waitlist__social strong {
+  color: var(--ex-ink);
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+}
+
+.minui-waitlist__faces {
+  display: inline-flex;
+}
+
+.minui-waitlist__face {
+  box-shadow: 0 0 0 2px var(--ex-bg);
+}
+
+.minui-waitlist__face + .minui-waitlist__face {
+  margin-left: -10px;
+}
+
+@container (max-width: 420px) {
+  .minui-waitlist__form {
+    padding-left: 14px;
+  }
+
+  .minui-waitlist__input {
+    font-size: 14px;
+  }
+}
+
+/* =================== PricingPage =================== */
+.minui-pricing {
+  --pr-featured: light-dark(#f8f8f8, #121214);
+  --pr-line: var(--ex-card-ring);
+  --pr-solid: light-dark(#0b0b0c, #f4f4f5);
+  --pr-solid-hover: light-dark(#2a2a2e, #ffffff);
+  --pr-solid-text: light-dark(#ffffff, #0b0b0c);
+  --pr-toggle-on: light-dark(#f1f1f1, #222226);
+  --pr-save: light-dark(#1f9d57, #4ccf8a);
+
+  padding-top: clamp(28px, 4cqi, 44px);
+  background:
+    radial-gradient(ellipse 60% 26% at 50% 0%, var(--ex-glow), transparent 75%), var(--ex-bg);
+}
+
+.minui-pricing .minui-expage__inner {
+  max-width: 1040px;
+}
+
+.minui-pricing .minui-expage__head {
+  margin-bottom: clamp(28px, 4cqi, 40px);
+}
+
+/* ---------- Chave Mensal / Anual ---------- */
+.minui-pricing__toggle {
+  position: relative;
+  display: inline-flex;
+  padding: 4px;
+  border: 1px solid var(--pr-line);
+  border-radius: 999px;
+  background: var(--ex-card);
+}
+
+.minui-pricing__pill {
+  position: absolute;
+  top: 4px;
+  bottom: 4px;
+  left: 0;
+  border-radius: 999px;
+  background: var(--pr-toggle-on);
+  transition:
+    translate 0.28s cubic-bezier(0.3, 0.7, 0.2, 1),
+    width 0.28s cubic-bezier(0.3, 0.7, 0.2, 1);
+}
+
+.minui-pricing__option {
+  position: relative;
+  display: inline-flex;
+  align-items: baseline;
+  gap: 7px;
+  padding: 7px 17px;
+  border-radius: 999px;
+  color: var(--ex-soft);
+  font-size: 14.5px;
+  letter-spacing: 0.005em;
+  line-height: 1.3;
+  cursor: pointer;
+  user-select: none;
+  transition: color 0.2s ease;
+}
+
+.minui-pricing__option:hover,
+.minui-pricing__option.is-active {
+  color: var(--ex-ink);
+}
+
+.minui-pricing__option:has(:focus-visible) {
+  outline: 2px solid var(--ex-focus);
+  outline-offset: 1px;
+}
+
+.minui-pricing__radio {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.minui-pricing__discount {
+  color: var(--pr-save);
+  font-size: 12.5px;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+}
+
+/* ---------- Planos ---------- */
+.minui-pricing__plans {
+  display: grid;
+  grid-template-columns: repeat(var(--pr-cols, 3), minmax(0, 1fr));
+  width: 100%;
+  margin-top: clamp(40px, 6.4cqi, 66px);
+  overflow: hidden;
+  border: 1px solid var(--pr-line);
+  border-radius: 18px;
+  background: var(--ex-bg);
+}
+
+.minui-pricing__plan {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  padding: clamp(26px, 4cqi, 42px) clamp(22px, 4cqi, 41px) clamp(30px, 4.4cqi, 44px);
+}
+
+.minui-pricing__plan + .minui-pricing__plan {
+  border-left: 1px solid var(--pr-line);
+}
+
+.minui-pricing__plan--featured {
+  background: var(--pr-featured);
+}
+
+.minui-pricing__name {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 22px;
+}
+
+.minui-pricing__name h2 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 500;
+  letter-spacing: -0.005em;
+  line-height: 1.2;
+}
+
+.minui-pricing__badge {
+  display: inline-flex;
+  align-items: center;
+  height: 21px;
+  padding: 0 10px;
+  border-radius: 999px;
+  background: var(--pr-solid);
+  color: var(--pr-solid-text);
+  font-size: 11.5px;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+}
+
+.minui-pricing__price {
+  display: flex;
+  align-items: baseline;
+  gap: 3px;
+  margin: 26px 0 0;
+  line-height: 1;
+}
+
+.minui-pricing__amount {
+  font-size: clamp(40px, 5cqi, 52px);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.035em;
+  animation: minui-pricing-in 0.32s ease both;
+}
+
+.minui-pricing__period {
+  color: var(--ex-soft);
+  font-size: 14px;
+  letter-spacing: 0.01em;
+}
+
+@keyframes minui-pricing-in {
+  from {
+    opacity: 0;
+    translate: 0 6px;
+  }
+}
+
+/* duas linhas reservadas: os botões ficam na mesma altura nas três colunas */
+.minui-pricing__desc {
+  min-height: calc(2 * 1.55em);
+  margin: 18px 0 0;
+  color: var(--ex-soft);
+  font-size: 14.5px;
+  letter-spacing: 0.005em;
+  line-height: 1.55;
+  text-wrap: pretty;
+}
+
+.minui-pricing__cta {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  box-sizing: border-box;
+  height: 41px;
+  margin-top: 26px;
+  padding: 0 18px;
+  border: 1px solid var(--ex-card-ring-hover);
+  border-radius: 999px;
+  background: var(--ex-card);
+  color: var(--ex-ink);
+  font: inherit;
+  font-size: 14.5px;
+  font-weight: 500;
+  letter-spacing: 0.005em;
+  text-decoration: none;
+  cursor: pointer;
+  transition:
+    background 0.15s ease,
+    border-color 0.15s ease;
+}
+
+.minui-pricing__cta svg {
+  flex: none;
+  transition: translate 0.18s ease;
+}
+
+.minui-pricing__cta:hover {
+  border-color: light-dark(rgba(0, 0, 0, 0.26), rgba(255, 255, 255, 0.26));
+  background: light-dark(#fafafa, #1a1a1d);
+}
+
+.minui-pricing__cta:hover svg {
+  translate: 2px 0;
+}
+
+.minui-pricing__cta:focus-visible {
+  outline: 2px solid var(--ex-focus);
+  outline-offset: 2px;
+}
+
+.minui-pricing__cta--solid {
+  border-color: var(--pr-solid);
+  background: var(--pr-solid);
+  color: var(--pr-solid-text);
+}
+
+.minui-pricing__cta--solid:hover {
+  border-color: var(--pr-solid-hover);
+  background: var(--pr-solid-hover);
+}
+
+.minui-pricing__rule {
+  width: 100%;
+  height: 1px;
+  margin: 32px 0 0;
+  border: 0;
+  background: var(--pr-line);
+}
+
+.minui-pricing__features {
+  display: flex;
+  flex-direction: column;
+  gap: 13px;
+  margin: 28px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.minui-pricing__features li {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  color: var(--ex-soft);
+  font-size: 14.5px;
+  letter-spacing: 0.005em;
+  line-height: 1.25;
+}
+
+.minui-pricing__features svg {
+  flex: none;
+  margin-top: -1px;
+  color: var(--ex-ink);
+}
+
+/* ---------- Estreito: planos empilhados ---------- */
+@container (max-width: 720px) {
+  .minui-pricing__plans {
+    grid-template-columns: minmax(0, 1fr);
+    max-width: 440px;
+  }
+
+  .minui-pricing__plan + .minui-pricing__plan {
+    border-top: 1px solid var(--pr-line);
+    border-left: 0;
+  }
+
+  .minui-pricing__desc {
+    min-height: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .minui-dlpage__card,
+  .minui-dlpage__card:hover,
+  .minui-dlpage__action svg {
+    translate: none;
+    transition: none;
+  }
+
+  .minui-waitlist__done,
+  .minui-pricing__amount {
+    animation: none;
+  }
+
+  .minui-pricing__pill,
+  .minui-pricing__cta svg {
+    transition: none;
+  }
+}

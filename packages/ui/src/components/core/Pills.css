@@ -1,0 +1,45 @@
+.minui-label {
+  --minui-baseline: 12.5px;
+  display: inline-block;
+  box-sizing: border-box;
+  flex: none;
+  height: 17px;
+  padding: 0 7px;
+  border-radius: 8.5px;
+  /* a cor nasce do matiz (--minui-hue): fundo translúcido + texto na mesma família */
+  background: light-dark(
+    hsl(var(--minui-hue, 0) 72% 46% / 0.13),
+    hsl(var(--minui-hue, 0) 70% 55% / 0.18)
+  );
+  color: light-dark(hsl(var(--minui-hue, 0) 72% 33%), hsl(var(--minui-hue, 0) 80% 72%));
+  font-size: 10.5px;
+  font-weight: 500;
+  vertical-align: top;
+}
+
+.minui-action {
+  --minui-baseline: 17.807px;
+  display: inline-block;
+  box-sizing: border-box;
+  flex: none;
+  width: 50px;
+  height: 28px;
+  border-radius: 7px;
+  background: var(--minui-action);
+  color: var(--minui-text-soft);
+  font-size: 11px;
+  font-weight: 600;
+  text-align: center;
+  vertical-align: top;
+}
+
+.minui-action--primary {
+  background: var(--minui-action-primary);
+  color: var(--minui-action-primary-text);
+}
+
+.minui-diffblock {
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+}

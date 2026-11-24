@@ -1,0 +1,103 @@
+/* Página de catálogo: só para desenvolvimento, não é exportada pelo pacote. */
+body {
+  margin: 0;
+  background: var(--minui-stage);
+  color: var(--minui-text);
+  font-family: var(--minui-font);
+}
+
+.cat {
+  max-width: 1280px;
+  margin: 0 auto;
+  padding: 0 24px 80px;
+}
+
+.cat__top {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 14px 0;
+  border-bottom: 1px solid var(--minui-stage-line);
+  background: var(--minui-stage);
+}
+
+.cat__top h1 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.cat__top small {
+  color: var(--minui-text-muted);
+  font-size: 12.5px;
+  font-weight: 400;
+}
+
+.cat section {
+  margin-top: 40px;
+}
+
+.cat h2 {
+  margin: 0 0 4px;
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.cat__note {
+  margin: 0 0 16px;
+  color: var(--minui-text-muted);
+  font-size: 13px;
+}
+
+.cat__pair {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.cat__pane {
+  min-width: 0;
+  padding: 20px;
+  border: 1px solid var(--minui-stage-line);
+  border-radius: 14px;
+  background: var(--minui-stage);
+  color: var(--minui-text);
+}
+
+.cat__pane > h3 {
+  margin: 0 0 16px;
+  color: var(--minui-text-muted);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.cat__row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 14px;
+  margin-bottom: 16px;
+}
+
+.cat__stack {
+  display: grid;
+  gap: 16px;
+}
+
+.cat__frame {
+  overflow: hidden;
+  border: 1px solid var(--minui-stage-line);
+  border-radius: 14px;
+}
+
+@media (max-width: 900px) {
+  .cat__pair {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

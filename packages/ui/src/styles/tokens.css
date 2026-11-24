@@ -1,0 +1,254 @@
+/*
+ * Tokens do MinUI — tema claro e escuro.
+ *
+ * Cada cor é escrita como light-dark(claro, escuro). O valor ESCURO é sempre o
+ * do código que desenha os cartões no canvas original, então o tema escuro
+ * continua idêntico ao site. O valor claro é a versão para fundo claro.
+ *
+ * Qual tema vale:
+ *   - por padrão, o do sistema operacional (color-scheme: light dark);
+ *   - data-theme="light" ou data-theme="dark" em <html> (ou em qualquer
+ *     elemento) força um tema para tudo o que estiver dentro dele.
+ */
+@font-face {
+  font-family: "Inter Variable";
+  font-style: normal;
+  font-display: swap;
+  font-weight: 100 900;
+  src: url("../assets/fonts/inter-latin-wght-normal.woff2") format("woff2-variations");
+}
+
+:root {
+  color-scheme: light dark;
+
+  /* As mesmas pilhas de fonte usadas em ctx.font no canvas. */
+  --minui-font: "Inter Variable", ui-sans-serif, system-ui;
+  --minui-mono: ui-monospace, "SF Mono", Menlo, monospace;
+
+  /* Palco */
+  --minui-stage: light-dark(#f5f5f2, #070707);
+  --minui-stage-line: light-dark(rgba(0, 0, 0, 0.08), rgba(255, 255, 255, 0.06));
+
+  /* Superfície dos cartões */
+  --minui-surface-top: light-dark(#ffffff, #1f1f23);
+  --minui-surface-bottom: light-dark(#fafaf9, #161619);
+  --minui-surface-base: light-dark(#ffffff, #18181b);
+  --minui-surface-ring: light-dark(rgba(0, 0, 0, 0.1), rgba(255, 255, 255, 0.085));
+  --minui-surface-sheen: light-dark(rgba(255, 255, 255, 0.9), rgba(255, 255, 255, 0.07));
+  --minui-surface-shadow: 0 5px 13px light-dark(rgba(24, 24, 32, 0.13), rgba(0, 0, 0, 0.6));
+
+  /* Painel do OpenCode */
+  --minui-panel: light-dark(#fcfcfb, #0c0c0e);
+  --minui-panel-ring: light-dark(rgba(0, 0, 0, 0.1), rgba(255, 255, 255, 0.08));
+  --minui-panel-shadow: 0 6px 15px light-dark(rgba(24, 24, 32, 0.15), rgba(0, 0, 0, 0.7));
+  --minui-panel-chip: light-dark(#f0f0ee, #1b1b1e);
+  --minui-panel-chip-line: light-dark(rgba(0, 0, 0, 0.08), rgba(255, 255, 255, 0.08));
+  --minui-panel-well: light-dark(#f3f3f1, #1a1a1d);
+  --minui-panel-well-line: light-dark(rgba(0, 0, 0, 0.08), rgba(255, 255, 255, 0.07));
+  --minui-panel-well-focus: light-dark(rgba(0, 0, 0, 0.28), rgba(255, 255, 255, 0.18));
+  --minui-panel-grid: light-dark(#8a8a93, #9a9aa0);
+  --minui-panel-loud: light-dark(#c2410c, #ffd2c4);
+  --minui-panel-status: light-dark(#6b6b74, #9a9aa0);
+  --minui-panel-glow: light-dark(rgb(22, 163, 74), rgb(80, 220, 140));
+  --minui-panel-send: light-dark(#18181b, #f4f4f5);
+  --minui-panel-send-off: light-dark(#cfcfd5, #4a4a50);
+  --minui-panel-send-arrow: light-dark(#ffffff, #0c0c0e);
+  --minui-panel-pulse: light-dark(rgb(24, 24, 27), rgb(255, 255, 255));
+
+  /* Texto */
+  --minui-text: light-dark(#18181b, #ededed);
+  --minui-text-body: light-dark(#3f3f46, #c4c4c9);
+  --minui-text-soft: light-dark(#52525b, #a0a0a6);
+  --minui-text-muted: light-dark(#6b6b74, #8e8e94);
+  --minui-text-dim: light-dark(#71717a, #7c7c82);
+  --minui-text-faint: light-dark(#85858e, #6a6a70);
+  --minui-text-ghost: light-dark(#9a9aa3, #5e5e64);
+  --minui-placeholder: light-dark(#a1a1aa, #5c5c62);
+  --minui-text-mail: light-dark(#52525b, #a8a8ae);
+  --minui-text-post: light-dark(#27272a, #d8d8dc);
+  --minui-icon: light-dark(#3f3f46, #c4c4c9);
+  --minui-icon-ring: light-dark(rgba(0, 0, 0, 0.16), transparent);
+
+  /* Acentos */
+  --minui-blue: light-dark(#2f6fed, #4c8dff);
+  --minui-mention: light-dark(#1d6fe0, #4c9dff);
+  --minui-green: light-dark(#1f9d57, #3ec37a);
+  --minui-red: light-dark(#dc3b26, #f2553e);
+  --minui-badge: #ff453a;
+  --minui-mint: light-dark(#15803d, #7fe0a8);
+  --minui-mint-text: light-dark(#14693a, #c9f5da);
+  --minui-diff-rest: light-dark(#d4d4d8, #3a3a40);
+  --minui-presence-ring: light-dark(#ffffff, #1c1c20);
+
+  /* Campo de resposta */
+  --minui-field: light-dark(rgba(0, 0, 0, 0.035), rgba(255, 255, 255, 0.035));
+  --minui-field-on: light-dark(rgba(0, 0, 0, 0.055), rgba(255, 255, 255, 0.06));
+  --minui-field-line: light-dark(rgba(0, 0, 0, 0.09), rgba(255, 255, 255, 0.07));
+  --minui-focus: light-dark(rgba(0, 0, 0, 0.42), rgba(255, 255, 255, 0.35));
+  --minui-focus-hot: light-dark(rgba(226, 72, 34, 0.62), rgba(255, 105, 65, 0.35));
+  --minui-ink-hot: light-dark(#d9381e, rgb(255, 117, 77));
+  --minui-caret: light-dark(#2f6fed, #7aa7ff);
+  --minui-caret-hot: light-dark(#e5483b, #ff7a5a);
+  --minui-reply-caret: light-dark(#2f6fed, #9dbcff);
+  --minui-reply-caret-loud: light-dark(#e5483b, #ff9a7a);
+  --minui-send: light-dark(rgba(0, 0, 0, 0.05), rgba(255, 255, 255, 0.06));
+
+  /* Palavras do ditado: chegam "quentes" com halo e esfriam */
+  --minui-word-loud: light-dark(#b93815, rgb(255, 226, 212));
+  --minui-word-hot: light-dark(#ea580c, rgb(255, 247, 226));
+  --minui-word-glow: light-dark(rgba(245, 158, 11, 0.5), rgb(255, 210, 60));
+  --minui-word-glow-hot: light-dark(rgba(234, 88, 12, 0.5), rgb(255, 120, 60));
+
+  /* Botões, balões e faixa de resolvido */
+  --minui-action: light-dark(rgba(0, 0, 0, 0.05), rgba(255, 255, 255, 0.05));
+  --minui-action-primary: light-dark(rgba(47, 111, 237, 0.12), rgba(76, 141, 255, 0.18));
+  --minui-action-primary-text: light-dark(#1d5fd6, #8fb6ff);
+  --minui-bubble-in: light-dark(#e9e9eb, #2c2c31);
+  --minui-bubble-out: light-dark(rgba(0, 0, 0, 0.05), rgba(255, 255, 255, 0.05));
+  --minui-bubble-caret: light-dark(#18181b, #ffffff);
+  --minui-resolved-ring: light-dark(rgba(22, 163, 74, 0.7), rgba(80, 220, 140, 0.75));
+  --minui-resolved-bar: light-dark(#e4f6ea, #123d27);
+  --minui-resolved-line: light-dark(rgba(22, 163, 74, 0.4), rgba(80, 220, 140, 0.5));
+
+  /* Palco: palavras faladas, legenda e efeitos */
+  --minui-speech: light-dark(#1c1c1f, rgb(240, 240, 237));
+  --minui-speech-hot: light-dark(#d9480f, rgb(255, 247, 235));
+  --minui-speech-glow: light-dark(rgba(255, 150, 40, 0.45), rgb(255, 150, 40));
+  --minui-speech-glow-hot: light-dark(rgba(255, 105, 40, 0.45), rgb(255, 105, 40));
+  --minui-caption: light-dark(rgba(255, 255, 255, 0.96), rgba(8, 10, 14, 0.9));
+  --minui-caption-line: light-dark(rgba(217, 119, 6, 0.6), rgba(255, 196, 72, 0.62));
+  --minui-caption-shadow: light-dark(rgba(24, 24, 32, 0.18), rgba(0, 0, 0, 0.82));
+  --minui-caption-idle: light-dark(rgba(63, 63, 70, 0.5), rgba(205, 210, 220, 0.52));
+  --minui-caption-spoken: light-dark(#18181b, rgb(249, 250, 251));
+  --minui-caption-active: light-dark(#d97706, rgb(255, 203, 71));
+  --minui-caption-glow: light-dark(rgba(245, 158, 11, 0.6), rgba(255, 188, 46, 0.8));
+  --minui-fx-ring: light-dark(rgb(234, 110, 40), rgb(255, 245, 230));
+  --minui-fx-ring-mint: light-dark(rgb(22, 163, 74), rgb(120, 255, 190));
+  --minui-fx-ring-gold: light-dark(rgb(217, 150, 10), rgb(255, 225, 120));
+  --minui-fx-burst: light-dark(rgba(255, 160, 70, 0.8), rgba(255, 247, 235, 0.95));
+  --minui-fx-check: light-dark(rgb(22, 163, 74), rgb(56, 248, 158));
+  --minui-fx-spark: light-dark(rgb(230, 100, 30), rgb(255, 150, 70));
+  --minui-fx-spark-mint: light-dark(rgb(22, 163, 74), rgb(90, 245, 166));
+  --minui-fx-spark-gold: light-dark(rgb(202, 138, 4), rgb(255, 215, 90));
+  --minui-fx-spark-ash: light-dark(rgb(120, 124, 134), rgb(140, 145, 158));
+  --minui-sprite-mint-in: light-dark(rgba(22, 163, 74, 0.5), rgba(56, 245, 158, 0.55));
+  --minui-sprite-mint-out: light-dark(rgba(22, 163, 74, 0.2), rgba(56, 245, 158, 0.22));
+
+  /* Controles da cena e dica da tecla */
+  --minui-control: light-dark(rgba(255, 255, 255, 0.92), rgba(24, 24, 27, 0.85));
+  --minui-control-hover: light-dark(#ffffff, rgba(40, 40, 46, 0.95));
+  --minui-control-line: light-dark(rgba(0, 0, 0, 0.14), rgba(255, 255, 255, 0.1));
+  --minui-control-text: light-dark(#18181b, #ededed);
+  --minui-control-muted: light-dark(#6b6b74, #9b9da3);
+  --minui-focus-ring: light-dark(#3b5bdb, #a9b9ff);
+  --minui-key-hint: light-dark(rgba(24, 24, 27, 0.55), rgba(244, 244, 246, 0.48));
+  --minui-key-hint-hover: light-dark(rgba(24, 24, 27, 0.9), rgba(244, 244, 246, 0.82));
+  --minui-key-shadow: light-dark(rgba(0, 0, 0, 0.3), rgba(0, 0, 0, 0.82));
+  --minui-key-shadow-near: light-dark(rgba(0, 0, 0, 0.24), rgba(0, 0, 0, 0.75));
+
+  /* Metal líquido (MetalFx) e as peças da demonstração dele */
+  --minui-metal-surface: light-dark(#ffffff, #272727);
+  --minui-metal-ink: light-dark(#1d1d1d, #f8f8f8);
+  --minui-metal-hairline: light-dark(rgba(0, 0, 0, 0.06), rgba(255, 255, 255, 0.1));
+  --minui-metal-pill: light-dark(#ffffff, #1d1d1d);
+  --minui-metal-pill-line: light-dark(transparent, rgba(44, 47, 54, 0.52));
+  --minui-metal-pill-ink: light-dark(#121212, #f8f8f8);
+  --minui-metal-pill-shadow:
+    0 0 0 1px light-dark(rgba(0, 0, 0, 0.06), transparent),
+    0 2px 6px 0 light-dark(rgba(0, 0, 0, 0.05), transparent),
+    inset 0 0 50px 0 light-dark(transparent, rgba(255, 255, 255, 0.02));
+  --minui-metal-composer: light-dark(#ffffff, rgba(29, 29, 29, 0.7));
+  --minui-metal-composer-shadow:
+    0 1px 2px light-dark(rgba(0, 0, 0, 0.04), transparent),
+    0 0 0 1px light-dark(rgba(0, 0, 0, 0.06), transparent),
+    inset 0 0 0 1px light-dark(transparent, rgba(44, 47, 54, 0.52)),
+    inset 0 0 50px 0 light-dark(transparent, rgba(255, 255, 255, 0.02));
+  --minui-metal-composer-ink: light-dark(#1a1a1a, #fbfbfb);
+  --minui-metal-composer-placeholder: light-dark(#9a9a9a, #4e4e4e);
+  --minui-metal-chip: light-dark(rgba(0, 0, 0, 0.04), rgba(255, 255, 255, 0.04));
+  --minui-metal-chip-ink: light-dark(#555555, #caccd2);
+  --minui-metal-chip-icon: #8e8e8e;
+  --minui-metal-chip-shadow:
+    inset 0 0 0 1px light-dark(rgba(0, 0, 0, 0.06), rgba(255, 255, 255, 0.02)),
+    inset 0 1px 0 0 light-dark(rgba(0, 0, 0, 0.04), rgba(255, 255, 255, 0.04));
+  /* A página e o Playground do metal-fx */
+  --minui-metal-page: light-dark(#ffffff, #070707);
+  --minui-metal-page-title: light-dark(#1a1a1a, #ffffff);
+  --minui-metal-page-sub: light-dark(rgba(7, 7, 7, 0.6), #cacaca);
+  --minui-metal-page-heading: light-dark(#1a1a1a, #f0f0f0);
+  --minui-metal-page-heading-muted: light-dark(rgba(7, 7, 7, 0.55), #cacaca);
+  --minui-metal-stage: light-dark(rgba(0, 0, 0, 0.04), rgba(217, 217, 217, 0.05));
+  --minui-metal-panel: light-dark(#ebebeb, #121212);
+  --minui-metal-code-ink: light-dark(#1a1a1a, #ffffff);
+  --minui-metal-muted: light-dark(rgba(7, 7, 7, 0.6), rgba(251, 251, 251, 0.6));
+  --minui-metal-hover: light-dark(rgba(0, 0, 0, 0.06), rgba(255, 255, 255, 0.06));
+  --minui-metal-tab: light-dark(rgba(0, 0, 0, 0.04), rgba(255, 255, 255, 0.03));
+  --minui-metal-tab-ink: light-dark(rgba(7, 7, 7, 0.55), rgba(251, 251, 251, 0.5));
+  --minui-metal-tab-hover: light-dark(rgba(0, 0, 0, 0.07), rgba(255, 255, 255, 0.06));
+  --minui-metal-tab-hover-ink: light-dark(rgba(26, 26, 26, 0.75), rgba(251, 251, 251, 0.7));
+  --minui-metal-tab-on: light-dark(rgba(0, 0, 0, 0.06), rgba(255, 255, 255, 0.07));
+  --minui-metal-tab-on-ink: light-dark(#1a1a1a, #fbfbfb);
+  --minui-metal-tab-shadow:
+    inset 0 0 0 0.5px light-dark(rgba(0, 0, 0, 0.02), rgba(255, 255, 255, 0.02)),
+    inset 0 0.5px 0 0 light-dark(rgba(0, 0, 0, 0.06), rgba(255, 255, 255, 0.06));
+  --minui-metal-strength: light-dark(rgba(0, 0, 0, 0.04), rgba(255, 255, 255, 0.07));
+  --minui-metal-strength-hover: light-dark(rgba(0, 0, 0, 0.06), rgba(255, 255, 255, 0.09));
+  --minui-metal-strength-fill: light-dark(rgba(0, 0, 0, 0.07), rgba(255, 255, 255, 0.1));
+  --minui-metal-toggle: light-dark(rgba(0, 0, 0, 0.06), rgba(255, 255, 255, 0.07));
+  --minui-metal-toggle-ink: light-dark(rgba(7, 7, 7, 0.7), rgba(251, 251, 251, 0.7));
+  --minui-metal-toggle-hover: light-dark(rgba(0, 0, 0, 0.1), rgba(255, 255, 255, 0.1));
+  --minui-metal-toggle-hover-ink: light-dark(#1a1a1a, #fbfbfb);
+  --minui-metal-icon-btn: light-dark(rgba(0, 0, 0, 0.06), rgba(255, 255, 255, 0.07));
+  --minui-metal-icon-btn-hover: light-dark(rgba(0, 0, 0, 0.1), rgba(255, 255, 255, 0.1));
+  --minui-metal-icon-fill: light-dark(#1a1a1a, #fbfbfb);
+  --minui-metal-footer: light-dark(rgba(7, 7, 7, 0.45), rgba(251, 251, 251, 0.4));
+  --minui-metal-footer-name: light-dark(rgba(7, 7, 7, 0.65), rgba(251, 251, 251, 0.7));
+  --minui-metal-footer-name-hover: light-dark(rgba(7, 7, 7, 0.85), rgba(251, 251, 251, 0.9));
+}
+
+[data-theme="light"] {
+  color-scheme: light;
+}
+
+[data-theme="dark"] {
+  color-scheme: dark;
+}
+
+/*
+ * Modos de mistura não são cores, então não cabem em light-dark().
+ * No escuro os clarões SOMAM luz; no claro são pintados normalmente.
+ */
+:root,
+[data-theme="dark"] {
+  --minui-blend-add: plus-lighter;
+  --minui-blend-screen: screen;
+}
+
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme="dark"]) {
+    --minui-blend-add: normal;
+    --minui-blend-screen: normal;
+  }
+}
+
+[data-theme="light"] {
+  --minui-blend-add: normal;
+  --minui-blend-screen: normal;
+}
+
+/* Snippets: cartões de receita, etiquetas com brilho e botões de seta */
+:root {
+  --minui-snip-card: light-dark(#f4f4f3, #1c1c1e);
+  --minui-snip-card-ring: light-dark(rgba(0, 0, 0, 0.08), rgba(255, 255, 255, 0.06));
+  --minui-snip-card-shadow: 0 10px 28px light-dark(rgba(24, 24, 32, 0.1), rgba(0, 0, 0, 0.55));
+  --minui-snip-inset: light-dark(#ffffff, #232326);
+  --minui-snip-inset-ring: light-dark(rgba(0, 0, 0, 0.08), rgba(255, 255, 255, 0.07));
+  --minui-snip-inset-shadow: 0 6px 14px light-dark(rgba(24, 24, 32, 0.08), rgba(0, 0, 0, 0.45));
+  --minui-snip-divider: light-dark(rgba(0, 0, 0, 0.08), rgba(0, 0, 0, 0.55));
+  --minui-snip-divider-sheen: light-dark(rgba(255, 255, 255, 0.9), rgba(255, 255, 255, 0.05));
+  --minui-snip-tag: light-dark(#ffffff, #101012);
+  --minui-snip-button: light-dark(#f4f4f5, #1a1a1d);
+  --minui-snip-button-ring: light-dark(rgba(0, 0, 0, 0.12), rgba(255, 255, 255, 0.12));
+  --minui-snip-button-hover: light-dark(#e9e9ec, #26262a);
+  --minui-snip-path: light-dark(#71717a, #8a8a90);
+}
