@@ -71,8 +71,8 @@ Os testes que dependem de banco rodam contra o Postgres local já no ar (o do am
 
 - O Postgres local é um só para todos os worktrees; o isolamento entre execuções vem do banco por execução, descrito abaixo.
 - `NUVA_TEST_DB=local` liga esse modo no setup global dos testes; o `verify:quick` define a variável sozinho.
-- Banco modelo `nuva_edu_tpl`: contém todas as migrations aplicadas. O hash da pasta `database/postgres/migrations` fica gravado no `COMMENT` do banco. O modelo só é refeito quando o hash muda.
-- Cada execução recria o banco dos testes copiando o modelo (`CREATE DATABASE nuva_edu_test_<id> TEMPLATE nuva_edu_tpl`), então começa limpo em menos de um segundo. O `<id>` é único por execução, para que dois agentes possam testar ao mesmo tempo.
+- Banco modelo `nuva_edu_tpl_<hash>`, um por conjunto de migrations (`<hash>`: os 12 primeiros hex do SHA-256 da pasta `database/postgres/migrations`), com todas as migrations aplicadas. O hash completo e o último uso ficam no `COMMENT`; modelo pronto nunca é refeito; modelos sem uso há 7 dias saem, guardando sempre os 3 usados por último. Assim, worktrees com migrations diferentes não refazem o modelo um do outro (comportamento em `database/postgres/README.md`, "Banco modelo dos testes").
+- Cada execução recria o banco dos testes copiando o modelo do seu conjunto (`CREATE DATABASE nuva_edu_test_<id> TEMPLATE nuva_edu_tpl_<hash>`), então começa limpo em menos de um segundo. O `<id>` é único por execução, para que dois agentes possam testar ao mesmo tempo.
 - Ao fim, o banco da execução é apagado; bancos `nuva_edu_test_*` com mais de 1 hora são removidos no início da execução seguinte.
 - Se o Postgres local estiver fora do ar, o script tenta subi-lo (`pnpm compose up -d postgres`) e, se não conseguir, mostra esse comando e marca os passos de banco como falha.
 
@@ -151,7 +151,7 @@ Exemplo de resumo:
 
 ## Dados
 
-- Bancos locais `nuva_edu_tpl` e `nuva_edu_test_<id>`, só no Postgres de desenvolvimento.
+- Bancos locais `nuva_edu_tpl_<hash>` e `nuva_edu_test_<id>`, só no Postgres de desenvolvimento.
 - Relatórios de cobertura e de Playwright em `tmp/` (fora do Git); no CI, anexados à execução por 14 dias.
 
 ## Critérios de aceite
