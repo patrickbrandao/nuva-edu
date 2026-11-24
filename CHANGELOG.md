@@ -6,6 +6,7 @@ Detalhe das decisões em `specs/decisions/`.
 ## [Não lançado]
 
 ### Adicionado
+- Migration 0007: `email_outbox` (spec 024; `subject` nulo até o envio, índices da tela de operação e do expurgo), `terms_versions` (número único por documento entre as publicadas, versão publicada recusa `UPDATE` e `DELETE`) e `terms_acceptances` (um aceite por usuário e versão) (task 140).
 - Migration 0006: `audit_log` (spec 028) com os cinco índices e imutabilidade por gatilhos (`UPDATE` só anula `ip` e `user_agent`; `DELETE` só por `audit_log_purge`, que exige 365 dias ou mais e apaga em lotes de 5.000; `TRUNCATE` recusado) (task 139).
 - Migration 0005: `users` (senha de 8 a 128 ou nula, e-mail único entre ativos, busca trigram), `profiles`, `oauth_identities`, `sessions`, `email_tokens`, `login_attempts`, `user_devices` e `user_suspensions` (specs 007 e 026), e chave estrangeira de `images.owner_user_id` (task 138).
 - Migration 0004: tabelas `images` e `image_variants` (spec 029), com as sete finalidades, larguras e limites de 400 KB e 1600 px em `CHECK`, `data` em armazenamento `EXTERNAL` e índice do expurgo por `created_at` (task 137).

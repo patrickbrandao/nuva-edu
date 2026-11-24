@@ -58,6 +58,9 @@ describe('migrations reais', () => {
       'tabela audit_log',
       'função audit_log_purge',
       'função audit_log_guard_update',
+      'tabela email_outbox',
+      'tabela terms_versions',
+      'tabela terms_acceptances',
     ]) {
       assert.ok(full.includes(item), item);
     }
