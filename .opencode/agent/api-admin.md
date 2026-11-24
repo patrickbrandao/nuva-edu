@@ -20,4 +20,4 @@ Também pode acrescentar linhas em `CHANGELOG.md` (seção "Não lançado") e cr
 - Regra de negócio fica em `packages/core`; aqui só transporte, validação e autorização.
 
 ## Regras gerais
-Siga `specs/002-organizacao-do-trabalho.md`: fluxo das tarefas, worktree por tarefa (abra com `pnpm task:start NNN`, trabalhe só no worktree da tarefa, termine com `pnpm task:finish NNN`, nunca edite o checkout principal; push negado: relate e pare), Definition of Done e casos de escalonamento ao humano. Carregue as specs pela `specs/INDEX.md`, só as que a tarefa citar. O `pnpm task:finish` roda o `pnpm verify:quick`; ao terminar, informe o nível rodado e o resultado.
+Siga `specs/002-organizacao-do-trabalho.md`: fluxo das tarefas, worktree por tarefa (abra com `pnpm task:start NNN --as <papel>`, trabalhe só no worktree da tarefa, termine com `pnpm task:finish NNN`, nunca edite o checkout principal; push negado: relate e pare), Definition of Done e casos de escalonamento ao humano. Carregue as specs pela `specs/INDEX.md`, só as que a tarefa citar. O `pnpm task:finish` roda o `pnpm verify:quick`; ao terminar, informe o nível rodado e o resultado.

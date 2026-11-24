@@ -13,6 +13,7 @@ Com muitos agentes entregando tarefas pequenas, rodar a suíte inteira a cada mu
 
 - `pnpm verify:quick` é o padrão durante o desenvolvimento e ao concluir cada tarefa. Roda lint só nos arquivos alterados, checagem de tipos dos pacotes afetados e dos que dependem deles, os testes ligados ao que mudou (o arquivo de teste alterado ou o de mesmo nome do fonte) e os testes de banco alterados. Não roda build, e2e nem a suíte inteira. Aceita testes explícitos depois de `--` e `--files <caminhos>` para limitar aos arquivos da tarefa.
 - Como o trabalho é direto na `main` ([0013](0013-commit-direto-na-main-diretorio-compartilhado.md)), "o que mudou" é: arquivos alterados e não commitados mais os commits ainda não enviados (`origin/main..HEAD`).
+- Nota de 2026-11-24: a [0021](0021-worktree-por-tarefa.md) substituiu a 0013. No worktree da tarefa, "o que mudou" passou a ser tudo desde `git merge-base HEAD main`, mais o que ainda não foi commitado; o restante desta decisão segue valendo.
 - `pnpm verify:full` roda lint, tipos, todos os testes, build e todos os testes de banco; `--e2e` acrescenta o Playwright. Roda só sob pedido, antes de release, e sempre no CI.
 - Ferramentas: Vitest para unidade e integração, teste de contrato contra os `openapi.yaml`, Playwright para e2e.
 - Cobertura mínima de 80% de linhas em `packages/core`; sem meta numérica no restante.

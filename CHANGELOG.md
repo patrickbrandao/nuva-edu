@@ -47,6 +47,7 @@ Detalhe das decisões em `specs/decisions/`.
 - Classroom: casca, rodapé, títulos e estados passam a usar `ClassroomShell`, `ShellFooter`, `PageTitle`, `LoadingState` e `ErrorState` de `@nuva-edu/ui`; links internos pelo `LinkProvider` (task 041).
 
 ### Decisões
+- Textos de processo alinhados ao `scripts/task.mjs` (`--as`, `task:list`, push negado, conflito de rebase).
 - Instalável, uma escola por instalação; AGPL-3.0.
 - `admin-api` (com MCP) e `classroom-api` sobre um Postgres; worker com fila no banco; SSE.
 - Senha em texto legível, exibida só ao admin.

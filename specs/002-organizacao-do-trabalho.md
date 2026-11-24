@@ -62,11 +62,11 @@ Regras de propriedade:
 
 | Comando | O que faz |
 | --- | --- |
-| `pnpm task:start NNN` | Roda no checkout principal. Cria o branch e o worktree, liga o `.env.local` do checkout principal por link simbólico, roda `pnpm install --frozen-lockfile` no worktree, marca a tarefa como `em-andamento` e imprime o caminho do worktree. Recusa se a tarefa já está `em-andamento` ou se o worktree existe. |
+| `pnpm task:start NNN --as <papel>` | Roda no checkout principal. Cria o branch e o worktree, liga o `.env.local` do checkout principal por link simbólico, roda `pnpm install --frozen-lockfile` no worktree, marca a tarefa como `em-andamento`, preenche `responsavel` com o papel e imprime o caminho do worktree. Recusa se a tarefa não está `aberta`, se tem dependência ainda na fila ou se o branch ou o worktree já existem. |
 | `pnpm task:finish NNN` | Roda no worktree ou no checkout principal. Leva a tarefa à `main` (passos abaixo). |
-| `pnpm task:abort NNN` | Remove worktree e branch e devolve a tarefa a `aberta`. Só com o worktree limpo; com alterações pendentes exige `--force`, que é ação destrutiva e depende de confirmação do humano. |
+| `pnpm task:abort NNN` | Remove worktree e branch e devolve a tarefa a `aberta`. Só com o worktree limpo e sem commit fora da `main`; com alteração pendente ou commit não integrado exige `--force`, que é ação destrutiva e depende de confirmação do humano. |
 | `pnpm task:path` | Imprime o caminho do checkout principal. |
-| `pnpm task:list` | Lista as tarefas com worktree aberto. |
+| `pnpm task:list` | Lista a fila inteira: status, papel, responsável, dependências pendentes e se há worktree aberto. |
 
 Os cinco comandos são implementados por `scripts/task.mjs`.
 
@@ -87,7 +87,7 @@ Dentro do worktree, o agente:
 6. remove o worktree e o branch;
 7. remove o arquivo da tarefa.
 
-Se o push for negado, o script termina com aviso claro e código de saída próprio, e a `main` local fica já avançada. O agente relata o fato e para: não repete o push, não tenta outro caminho e não pede a outro agente que o faça.
+Se o push for negado, o script conclui a limpeza local (worktree, branch e arquivo da tarefa removidos), imprime o comando de envio que falta e termina com o código de saída 7; a `main` local fica já avançada. Conflito no rebase (código 4) deixa o rebase em andamento no worktree: o agente o resolve ali quando o conflito é em arquivo da própria tarefa e roda o `task:finish` de novo; conflito em arquivo de outro papel é caso de escalonamento. O agente relata o fato e para: não repete o push, não tenta outro caminho e não pede a outro agente que o faça.
 
 Arquivos com regra própria:
 
@@ -105,7 +105,7 @@ A fila fica em `tasks/` do checkout principal, fora do Git, no formato do templa
 
 1. Um problema encontrado por inspeção vira uma tarefa nova (qualquer papel pode criar; o `arquiteto` cria as de cada fase do plano). Tarefa nova é sempre gravada em `tasks/` do checkout principal, mesmo quando quem a cria está num worktree.
 2. O agente pega uma tarefa `aberta`, do seu papel, cujas dependências já foram removidas da fila.
-3. Para começar, roda `pnpm task:start NNN` no checkout principal. O comando marca a tarefa como `em-andamento`; o agente preenche `responsavel`. Ninguém pega tarefa `em-andamento`.
+3. Para começar, roda `pnpm task:start NNN --as <papel>` no checkout principal. O comando marca a tarefa como `em-andamento` e preenche `responsavel`. Ninguém pega tarefa `em-andamento`.
 4. Trabalha e commita no worktree, citando o ID em cada commit.
 5. Ao concluir, atende a Definition of Done e roda `pnpm task:finish NNN`, que leva os commits à `main`, envia e remove o worktree, o branch e o arquivo da tarefa.
 6. Tarefa abandonada: `pnpm task:abort NNN` remove o worktree e o branch e devolve a tarefa a `aberta`. Tarefa descartada também é removida da fila; se o descarte for uma decisão, o `arquiteto` registra uma ADR.
@@ -181,7 +181,7 @@ O agente para e pergunta quando houver:
 - Comandos de tarefa, implementados em `scripts/task.mjs`:
 
 ```
-pnpm task:start <NNN>
+pnpm task:start <NNN> --as <papel>
 pnpm task:finish <NNN>
 pnpm task:abort <NNN> [--force]
 pnpm task:path
@@ -200,11 +200,11 @@ pnpm task:list
 - [ ] Existe uma definição por papel nas duas ferramentas.
 - [ ] Todo commit de entrega cita uma tarefa.
 - [ ] Nenhum commit mistura pastas de papéis diferentes, salvo `CHANGELOG.md`.
-- [ ] `pnpm task:start NNN` cria `.worktrees/task-NNN/` no branch `task/NNN` e marca a tarefa como `em-andamento`; repetido, recusa.
+- [ ] `pnpm task:start NNN --as <papel>` cria `.worktrees/task-NNN/` no branch `task/NNN` e marca a tarefa como `em-andamento`; repetido, recusa.
 - [ ] `pnpm task:finish NNN` com alteração não commitada, conflito no rebase ou `verify:quick` vermelho para sem tocar a `main`.
 - [ ] Depois de um `pnpm task:finish NNN` bem-sucedido, a `main` contém os commits da tarefa sem merge commit, e o worktree, o branch e o arquivo da tarefa não existem mais.
 - [ ] Push negado no `task:finish` termina com código de saída próprio e a `main` local avançada.
-- [ ] `pnpm task:abort NNN` com alteração pendente recusa sem `--force`.
+- [ ] `pnpm task:abort NNN` com alteração pendente ou com commit fora da `main` recusa sem `--force`.
 - [ ] Duas tarefas que acrescentam linhas ao `CHANGELOG.md` terminam sem conflito de rebase.
 - [ ] Toda mudança de `openapi.yaml` que altera o cliente gerado tem, criadas antes do commit, a tarefa da API e a do `interface`.
 - [ ] Nenhuma tag de release contém operação com `x-nuva-pending`.

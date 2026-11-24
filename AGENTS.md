@@ -17,22 +17,22 @@ A senha do usuário é guardada em texto legível (ADR 0002). Essa decisão não
 
 ## Fluxo de trabalho
 - Pegue tarefas em ./tasks/ do checkout principal com status "aberta", do seu papel e sem dependências pendentes.
-- Comece com `pnpm task:start NNN` (marca "em-andamento" e abre o worktree) e preencha "responsavel".
+- Comece com `pnpm task:start NNN --as <papel>` (marca "em-andamento", preenche "responsavel" e abre o worktree).
 - Altere apenas os arquivos listados na tarefa e as pastas do seu papel, sempre dentro do worktree da tarefa.
 - Commits no padrão Conventional Commits, em português, citando o ID: `feat(api-admin): ... (task 012)`.
 - Ao concluir, atenda a Definition of Done e rode `pnpm task:finish NNN`: ele verifica, leva os commits à `main`, envia e remove worktree, branch e arquivo da tarefa.
 
 ## Worktree por tarefa
 Cada tarefa roda em um worktree próprio (ADR 0021). O checkout principal (este diretório, o primeiro de `git worktree list`) fica sempre na `main` e limpo.
-- No checkout principal: `pnpm task:start NNN`. Cria `.worktrees/task-NNN/` no branch `task/NNN` e imprime o caminho.
+- No checkout principal: `pnpm task:start NNN --as <papel>`. Cria `.worktrees/task-NNN/` no branch `task/NNN` e imprime o caminho.
 - Trabalhe só no worktree, pelo caminho absoluto impresso. Edite e commite ali; `git add -A` é permitido ali.
 - Nunca edite arquivo versionado no checkout principal. Não faça `git push` nem `git merge` à mão.
 - Termine com `pnpm task:finish NNN` (rebase na `main`, `pnpm verify:quick`, fast-forward, push, limpeza). Se a verificação falhar, corrija no worktree e rode de novo.
-- Push negado: relate e pare. Não repita, não tente outro caminho, não peça a outro agente.
+- Push negado (o `task:finish` sai com código 7, já com a limpeza local feita): relate e pare. Não repita, não tente outro caminho, não peça a outro agente.
 - A fila `tasks/` e o `tmp/` existem só no checkout principal; do worktree, `pnpm task:path` imprime o caminho dele.
 - Banco e Docker são compartilhados: `pnpm dev:up` só no checkout principal, nunca num worktree. Migrations, uma tarefa por vez.
 - `pnpm-lock.yaml` em conflito no rebase: refaça `pnpm install` no worktree, nunca à mão. `CHANGELOG.md`: só acrescente linhas.
-- Abandonar: `pnpm task:abort NNN`. Com `--force`, só com confirmação do humano.
+- Abandonar: `pnpm task:abort NNN`. Recusa se houver alteração não commitada ou commit fora da `main`; `--force` só com confirmação do humano.
 - Necessidade de mexer em arquivo de outro papel: pare e pergunte ao humano.
 
 ## Verificação
@@ -44,7 +44,7 @@ Cada tarefa roda em um worktree próprio (ADR 0021). O checkout principal (este 
 ## Comandos
 Disponíveis a partir da conclusão da Fase 0 do plano.
 - Instalar: `pnpm install`
-- Tarefas: `pnpm task:start NNN` · `pnpm task:finish NNN` · `pnpm task:abort NNN` · `pnpm task:path` · `pnpm task:list`
+- Tarefas: `pnpm task:start NNN --as <papel>` · `pnpm task:finish NNN` · `pnpm task:abort NNN` · `pnpm task:path` · `pnpm task:list`
 - Rodar (no checkout principal): `pnpm dev:up` (sites em http://edu-admin.localhost:8080 e http://classroom.localhost:8080) · parar: `pnpm dev:down`
 - Migrations: `pnpm db:migrate`
 - Testar: `pnpm verify:quick` · `pnpm verify:full` · `pnpm verify:full --e2e`
