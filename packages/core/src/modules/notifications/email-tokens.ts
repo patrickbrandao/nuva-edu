@@ -67,6 +67,35 @@ export async function issueEmailToken(
   return { token, expiresAt };
 }
 
+/** Ordem fixa das travas ao tomar mais de um propósito: evita impasse entre duas trocas. */
+const INVALIDATION_ORDER: readonly EmailTokenPurpose[] = ['verify', 'reset'];
+
+/**
+ * Invalida (`used_at = now()`) todos os tokens não usados da conta, dos propósitos `verify` e
+ * `reset`: a troca de e-mail pela equipe (spec 007, "Tokens de e-mail"). Exige transação e toma
+ * a mesma trava de `issueEmailToken` para cada propósito, em ordem fixa: token emitido antes da
+ * troca morre nela; a emissão que chega depois espera a troca terminar. Devolve quantos tokens
+ * foram invalidados.
+ */
+export async function invalidateEmailTokens(trx: Database, userId: string): Promise<number> {
+  if (!trx.isTransaction) {
+    throw new TypeError('invalidateEmailTokens exige uma transação aberta (db.transaction()).');
+  }
+  for (const purpose of INVALIDATION_ORDER) {
+    await sql`SELECT pg_advisory_xact_lock(hashtextextended(${`email_tokens:${userId}:${purpose}`}, 0))`.execute(
+      trx,
+    );
+  }
+  const result = await trx
+    .updateTable('emailTokens')
+    .set({ usedAt: sql<Date>`now()` })
+    .where('userId', '=', userId)
+    .where('purpose', 'in', INVALIDATION_ORDER)
+    .where('usedAt', 'is', null)
+    .executeTakeFirst();
+  return Number(result.numUpdatedRows);
+}
+
 /**
  * Usa o token: uma vez só, dentro da validade e do propósito pedido. Devolve o dono. Vencido,
  * já usado, de outro propósito, malformado ou desconhecido: lança `410 token_expired`, sem

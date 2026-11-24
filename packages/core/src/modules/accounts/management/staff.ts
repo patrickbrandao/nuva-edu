@@ -2,6 +2,7 @@ import { sql } from 'kysely';
 import type { Database } from '../../../db/database.ts';
 import { conflict, type FieldError, validationFailed } from '../../../errors/domain-error.ts';
 import { recordAudit } from '../../audit/record.ts';
+import { invalidateEmailTokens } from '../../notifications/email-tokens.ts';
 import { enqueueEmail } from '../../notifications/outbox.ts';
 import { assertUserManagement } from '../../permissions/management.ts';
 import { isRole, type Role } from '../../permissions/roles.ts';
@@ -114,8 +115,9 @@ type ProfileField = 'name' | 'fullName' | 'email';
  * `PATCH /users/{id}`: nome, nome completo e e-mail. Aluno: `users.edit` (`manager` e `admin`);
  * equipe: `staff.manage` (só `admin`), com a negação gravada na auditoria. `version` diferente
  * da gravada: `409 version_conflict`; e-mail de outra conta: `409 email_taken`. Trocar o e-mail
- * anula a confirmação e envia `account.verify_email` ao novo endereço. Grava `user.update` com
- * o antes e o depois dos campos alterados; sem alteração, só devolve a ficha.
+ * anula a confirmação, invalida os links `verify` e `reset` pendentes e envia
+ * `account.verify_email` ao novo endereço. Grava `user.update` com o antes e o depois dos campos
+ * alterados; sem alteração, só devolve a ficha.
  */
 export async function updateUser(
   db: Database,
@@ -211,6 +213,9 @@ export async function updateUser(
       throw versionConflict();
     }
     if (emailChanged) {
+      // Link enviado ao endereço anterior não confirma o novo nem redefine a senha (spec 007,
+      // "Tokens de e-mail"): o `account.verify_email` abaixo gera o link novo.
+      await invalidateEmailTokens(trx, current.id);
       // `enqueueEmail` lê o endereço na transação: vai para o novo.
       await enqueueEmail(trx, { userId: current.id, type: 'account.verify_email', data: {} });
     }

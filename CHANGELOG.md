@@ -120,6 +120,7 @@ Detalhe das decisões em `specs/decisions/`.
 - Spec 006: mapa de telas do admin ganha a ação do menu por item e segue a 008; instrutor vê eventos, novidades, gamificação e chamados (task 192).
 - `scripts/verify.mjs`: a nota do passo `postgres` mostra o modelo do conjunto de migrations (`<base>_tpl_<hash>`) e conta os modelos antigos removidos por `dropStaleTemplates`; comentário do `scripts/test-db.mjs` com o nome novo do modelo (task 197).
 - `scripts/volume-migrate.sh`: a ajuda e a falha do `docker compose config` dizem que os segredos vêm dos `--env-file` depois de `--` (o `.env.local` não é carregado sozinho) e mostram o comando local (task 220).
+- `@nuva-edu/core`: `updateUser` com troca de e-mail invalida, na mesma transação, os tokens `verify` e `reset` pendentes da conta (`invalidateEmailTokens`, com a trava da emissão) (task 270).
 
 ### Decisões
 - Textos de processo alinhados ao `scripts/task.mjs` (`--as`, `task:list`, push negado, conflito de rebase).

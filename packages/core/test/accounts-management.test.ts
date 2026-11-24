@@ -13,6 +13,7 @@ import {
   expireSuspensions,
   getUser,
   isDomainError,
+  issueEmailToken,
   LOGIN_MAX_FAILURES,
   listUserSessions,
   listUsers,
@@ -22,12 +23,14 @@ import {
   type Role,
   reactivateUser,
   readUserDetail,
+  resetPassword,
   revealUserPassword,
   revokeAllUserSessions,
   setUserPassword,
   setUserRole,
   suspendUser,
   updateUser,
+  verifyEmail,
 } from '../src/index.ts';
 
 // Gestão de usuários pela equipe (tarefa 149; specs 007 e 008). Banco próprio deste arquivo: a
@@ -472,6 +475,57 @@ describe('edição dos dados', () => {
       'not_found',
       404,
     );
+  });
+
+  it('trocar o e-mail invalida os links verify e reset pendentes; o novo verify vale', async () => {
+    const student = await makeUser('student', { verified: false });
+    const other = await makeUser('student', { verified: false });
+    const issue = (userId: string, purpose: 'verify' | 'reset') =>
+      db.transaction().execute((trx) => issueEmailToken(trx, userId, purpose));
+    const oldVerify = await issue(student.id, 'verify');
+    const oldReset = await issue(student.id, 'reset');
+    const otherVerify = await issue(other.id, 'verify');
+
+    const newEmail = uniqueEmail('trocado');
+    await updateUser(db, as(manager), student.id, { email: newEmail, version: 1 });
+
+    await rejects(verifyEmail(db, oldVerify.token), 'token_expired', 410);
+    await rejects(
+      resetPassword(db, { token: oldReset.token, password: NEW_PASSWORD, context: ctx() }),
+      'token_expired',
+      410,
+    );
+    expect((await getUser(db, as(manager), student.id)).emailVerified).toBe(false);
+    // A outra conta não é afetada.
+    await expect(verifyEmail(db, otherVerify.token)).resolves.toEqual({ userId: other.id });
+
+    // O `account.verify_email` enfileirado pela troca vai ao endereço novo; o token que o worker
+    // emite ao montá-lo confirma a conta.
+    expect((await outbox(student.id, 'account.verify_email')).map((m) => m.to)).toEqual([newEmail]);
+    const fresh = await issue(student.id, 'verify');
+    await expect(verifyEmail(db, fresh.token)).resolves.toEqual({ userId: student.id });
+    expect((await getUser(db, as(manager), student.id)).emailVerified).toBe(true);
+  });
+
+  it('editar só nome e nome completo não mexe em email_tokens', async () => {
+    const student = await makeUser();
+    const reset = await db
+      .transaction()
+      .execute((trx) => issueEmailToken(trx, student.id, 'reset'));
+    await updateUser(db, as(manager), student.id, {
+      name: 'Só o Nome',
+      fullName: 'Nome Completo',
+      version: 1,
+    });
+    const pending = await db
+      .selectFrom('emailTokens')
+      .select('usedAt')
+      .where('userId', '=', student.id)
+      .execute();
+    expect(pending).toEqual([{ usedAt: null }]);
+    await expect(
+      resetPassword(db, { token: reset.token, password: NEW_PASSWORD, context: ctx() }),
+    ).resolves.toEqual({ userId: student.id });
   });
 
   it('conta de equipe exige staff.manage: manager recebe 403 (auditado); admin edita', async () => {

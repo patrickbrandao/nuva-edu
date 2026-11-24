@@ -12,6 +12,7 @@ import {
   type EmailType,
   enqueueEmail,
   hashEmailToken,
+  invalidateEmailTokens,
   isDomainError,
   isEmailType,
   issueEmailToken,
@@ -315,6 +316,44 @@ describe('tokens de e-mail', () => {
 
   it('exige transação para emitir', async () => {
     await expect(issueEmailToken(db, crypto.randomUUID(), 'verify')).rejects.toThrow(/transação/);
+  });
+
+  it('invalidateEmailTokens mata verify e reset pendentes da conta, não os de outra', async () => {
+    await inRollback(async (trx) => {
+      const userId = await createUser(trx);
+      const otherId = await createUser(trx);
+      const verify = await issueEmailToken(trx, userId, 'verify');
+      const reset = await issueEmailToken(trx, userId, 'reset');
+      const used = await issueEmailToken(trx, userId, 'reset');
+      await consumeEmailToken(trx, used.token, 'reset');
+      const otherVerify = await issueEmailToken(trx, otherId, 'verify');
+      const otherReset = await issueEmailToken(trx, otherId, 'reset');
+
+      // O `used` já tinha invalidado o primeiro reset; sobra o `verify` pendente.
+      expect(await invalidateEmailTokens(trx, userId)).toBe(1);
+      expect(await invalidateEmailTokens(trx, userId)).toBe(0);
+      for (const [token, purpose] of [
+        [verify.token, 'verify'],
+        [reset.token, 'reset'],
+        [used.token, 'reset'],
+      ] as const) {
+        await expect(consumeEmailToken(trx, token, purpose)).rejects.toMatchObject({
+          code: 'token_expired',
+          status: 410,
+        });
+      }
+      expect(await consumeEmailToken(trx, otherVerify.token, 'verify')).toEqual({
+        userId: otherId,
+      });
+      expect(await consumeEmailToken(trx, otherReset.token, 'reset')).toEqual({ userId: otherId });
+      // Token emitido depois da invalidação vale.
+      const fresh = await issueEmailToken(trx, userId, 'verify');
+      expect(await consumeEmailToken(trx, fresh.token, 'verify')).toEqual({ userId });
+    });
+  });
+
+  it('invalidateEmailTokens exige transação', async () => {
+    await expect(invalidateEmailTokens(db, crypto.randomUUID())).rejects.toThrow(/transação/);
   });
 
   it('nunca grava o token em claro em jobs, email_outbox ou no log', async () => {
