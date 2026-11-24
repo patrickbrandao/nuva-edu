@@ -441,6 +441,15 @@ importers:
 
   packages/api-kit:
     dependencies:
+      '@fastify/busboy':
+        specifier: 3.2.6
+        version: 3.2.6
+      '@fastify/cookie':
+        specifier: 11.1.5
+        version: 11.1.5
+      '@fastify/formbody':
+        specifier: 9.0.2
+        version: 9.0.2
       '@nuva-edu/core':
         specifier: workspace:*
         version: link:../core
@@ -656,6 +665,12 @@ packages:
   '@fastify/ajv-compiler@4.0.8':
     resolution: {integrity: sha512-xYcAFYoyP/NELMgj6I7LmMAmiqeXMal0wsM2SgueN9OyMr6bVKHomO9OxuStC7bIAEl4Z3JXBbDPwpXRp59NPQ==}
 
+  '@fastify/busboy@3.2.6':
+    resolution: {integrity: sha512-UPXdyAMbz/gNvjS8HONpJR2TDaHM3wQKMtSRPFkoh2LTeRRtnm+ICVYKgBYkTwlPOVzDNynOd34EH8qapwfelQ==}
+
+  '@fastify/cookie@11.1.5':
+    resolution: {integrity: sha512-hs7e0otf7n/lJMpt63EFdQb5/u8kO6DeexEtLPVTybSdItC6SwJ1O0vtTyWvKNR70LZcHLlsUr/y3jFpqtyWRA==}
+
   '@fastify/deepmerge@3.2.4':
     resolution: {integrity: sha512-kc8GQq5gX9RRhw0rov3DMrN8wS8yRlxJRdDzsYwwdBV/wazuVgc/1K7CKL90tlvu3RlHan6Y0R0aE3nJtBz2eQ==}
 
@@ -664,6 +679,9 @@ packages:
 
   '@fastify/fast-json-stringify-compiler@5.2.0':
     resolution: {integrity: sha512-LPTVA0w4oPITWHAvox9NgI1rDSrjUnjxX6QN5MCb9FY+HqvDsUmgLucbj9eQakqC8lYwO7UgkDPHEQLJNl9vtg==}
+
+  '@fastify/formbody@9.0.2':
+    resolution: {integrity: sha512-VJdbcbFlsp7xTAY5/Qrc8SZPyuke0YymWCe11INALPTQfRh2+0y1lnaosJwWIN7GtFfcBa+RBo4VnhxjW2kDNQ==}
 
   '@fastify/forwarded@3.1.2':
     resolution: {integrity: sha512-89WiRG+hW3VQSfCwg4Hb8b43PeyEX15K5+lEfsZ4EUth/FyOjS/lv8HsVuswUNXWiSnxMGNouE/fq/0w3VumHQ==}
@@ -1606,6 +1624,9 @@ packages:
 
   fast-uri@4.2.3:
     resolution: {integrity: sha512-I1PXwP5eAhlNlcdpjt9CgB59op2ZvZfxw+BkqGFVIUOgNpCVTcTqp3HhTX7brxj5vsip+nSY4nTvff+eIA76hg==}
+
+  fastify-plugin@6.0.1:
+    resolution: {integrity: sha512-4wW4RxSmvPXLrh5mgQEiu43qU3bw44N2ss4FTkTkQIbprUhE+/s43QX0j/ttcztdWK7PEkHqVthdc5GdEGDvjA==}
 
   fastify@5.12.8:
     resolution: {integrity: sha512-moP8exb2sCHLUbJkwp+I6C0padhy4D8lp0SdmzY7HhSdZuqm7O/u3o2aq7u8okaQ//33QDzj3G/u+FsSdB8Qzw==}
@@ -2768,6 +2789,13 @@ snapshots:
       ajv-formats: 3.0.1(ajv@8.20.0)
       fast-uri: 4.2.3
 
+  '@fastify/busboy@3.2.6': {}
+
+  '@fastify/cookie@11.1.5':
+    dependencies:
+      cookie: 2.0.2
+      fastify-plugin: 6.0.1
+
   '@fastify/deepmerge@3.2.4': {}
 
   '@fastify/error@4.3.0': {}
@@ -2775,6 +2803,11 @@ snapshots:
   '@fastify/fast-json-stringify-compiler@5.2.0':
     dependencies:
       fast-json-stringify: 7.3.10
+
+  '@fastify/formbody@9.0.2':
+    dependencies:
+      fast-querystring: 1.1.2
+      fastify-plugin: 6.0.1
 
   '@fastify/forwarded@3.1.2': {}
 
@@ -3583,6 +3616,8 @@ snapshots:
   fast-uri@3.1.9: {}
 
   fast-uri@4.2.3: {}
+
+  fastify-plugin@6.0.1: {}
 
   fastify@5.12.8:
     dependencies:

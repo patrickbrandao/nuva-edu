@@ -1,0 +1,323 @@
+# Contrato de teste da base HTTP da Fase 1: formulário, multipart, 302, cookies e x-permission.
+openapi: 3.1.0
+info:
+  title: api-kit fase 1 (teste)
+  version: 0.0.0
+security:
+  - sessionCookie: []
+paths:
+  /healthz:
+    get:
+      operationId: getHealth
+      security: []
+      responses:
+        "200":
+          description: Vivo.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [status]
+                properties:
+                  status:
+                    const: ok
+  /api/v1/session:
+    get:
+      operationId: getSession
+      responses:
+        "200":
+          description: Sessão atual.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [userId]
+                properties:
+                  userId:
+                    type: string
+                additionalProperties: false
+        "400":
+          $ref: "#/components/responses/Problem"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "403":
+          $ref: "#/components/responses/Problem"
+        "429":
+          $ref: "#/components/responses/Problem"
+        "500":
+          $ref: "#/components/responses/Problem"
+        "503":
+          $ref: "#/components/responses/Problem"
+  /api/v1/auth/login:
+    post:
+      operationId: login
+      description: Exceção ao CSRF, porque ainda não há sessão.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email]
+              properties:
+                email:
+                  type: string
+              additionalProperties: false
+      responses:
+        "204":
+          description: Sessão criada.
+        "400":
+          $ref: "#/components/responses/Problem"
+        "413":
+          $ref: "#/components/responses/Problem"
+        "415":
+          $ref: "#/components/responses/Problem"
+        "429":
+          $ref: "#/components/responses/Problem"
+        "500":
+          $ref: "#/components/responses/Problem"
+        "503":
+          $ref: "#/components/responses/Problem"
+  /api/v1/auth/{provider}/callback:
+    parameters:
+      - name: provider
+        in: path
+        required: true
+        schema:
+          type: string
+          enum: [google, facebook, apple]
+    get:
+      operationId: oauthCallback
+      security: []
+      parameters:
+        - name: code
+          in: query
+          schema:
+            type: string
+        - name: state
+          in: query
+          schema:
+            type: string
+      responses:
+        "302":
+          description: Volta ao site.
+          headers:
+            Location:
+              schema:
+                type: string
+        "400":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+        "429":
+          $ref: "#/components/responses/Problem"
+        "500":
+          $ref: "#/components/responses/Problem"
+        "503":
+          $ref: "#/components/responses/Problem"
+    post:
+      operationId: oauthCallbackForm
+      description: Exceção ao CSRF; protegido pelo state.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: "#/components/schemas/AppleCallback"
+      responses:
+        "302":
+          description: Volta ao site.
+        "400":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+        "413":
+          $ref: "#/components/responses/Problem"
+        "415":
+          $ref: "#/components/responses/Problem"
+        "429":
+          $ref: "#/components/responses/Problem"
+        "500":
+          $ref: "#/components/responses/Problem"
+        "503":
+          $ref: "#/components/responses/Problem"
+  /api/v1/images:
+    post:
+      operationId: uploadImage
+      security:
+        - sessionCookie: []
+          csrfToken: []
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              $ref: "#/components/schemas/ImageUpload"
+      responses:
+        "201":
+          description: Imagem criada.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [purpose, size]
+                properties:
+                  purpose:
+                    type: string
+                  size:
+                    type: integer
+                additionalProperties: false
+        "400":
+          $ref: "#/components/responses/Problem"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "403":
+          $ref: "#/components/responses/Problem"
+        "413":
+          $ref: "#/components/responses/Problem"
+        "415":
+          $ref: "#/components/responses/Problem"
+        "429":
+          $ref: "#/components/responses/Problem"
+        "500":
+          $ref: "#/components/responses/Problem"
+        "503":
+          $ref: "#/components/responses/Problem"
+  /api/v1/users/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+    patch:
+      operationId: updateUser
+      x-permission: [users.edit, staff.manage]
+      security:
+        - sessionCookie: []
+          csrfToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+              additionalProperties: false
+      responses:
+        "200":
+          description: Usuário.
+          content:
+            application/json:
+              schema:
+                type: object
+        "400":
+          $ref: "#/components/responses/Problem"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "403":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+        "413":
+          $ref: "#/components/responses/Problem"
+        "415":
+          $ref: "#/components/responses/Problem"
+        "429":
+          $ref: "#/components/responses/Problem"
+        "500":
+          $ref: "#/components/responses/Problem"
+        "503":
+          $ref: "#/components/responses/Problem"
+  /api/v1/users/{id}/password/reveal:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+    post:
+      operationId: revealUserPassword
+      x-permission: users.password.view
+      security:
+        - sessionCookie: []
+          csrfToken: []
+      responses:
+        "200":
+          description: A senha.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [password]
+                properties:
+                  password:
+                    type: string
+        "400":
+          $ref: "#/components/responses/Problem"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "403":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+        "429":
+          $ref: "#/components/responses/Problem"
+        "500":
+          $ref: "#/components/responses/Problem"
+        "503":
+          $ref: "#/components/responses/Problem"
+components:
+  securitySchemes:
+    sessionCookie:
+      type: apiKey
+      in: cookie
+      name: nuva_admin_session
+    csrfToken:
+      type: apiKey
+      in: header
+      name: X-CSRF-Token
+  responses:
+    Problem:
+      description: Erro.
+      content:
+        application/problem+json:
+          schema:
+            type: object
+            required: [type, title, status, code]
+            properties:
+              code:
+                type: string
+              retryAfterSeconds:
+                type: integer
+  schemas:
+    AppleCallback:
+      type: object
+      required: [state]
+      properties:
+        code:
+          type: string
+        state:
+          type: string
+        id_token:
+          type: string
+        user:
+          type: string
+        error:
+          type: string
+      additionalProperties: false
+    ImageUpload:
+      type: object
+      required: [purpose, file]
+      properties:
+        purpose:
+          type: string
+          enum: [avatar]
+        file:
+          type: string
+          format: binary
+      additionalProperties: false

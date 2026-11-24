@@ -9,10 +9,20 @@ export {
   createApiApp,
   type OperationHandler,
   type OperationOptions,
+  type PermissionDeniedContext,
+  type PermissionDeniedHandler,
   type SecurityContext,
   type SecurityHandler,
   type SecurityHandlers,
 } from './app.ts';
+export {
+  FORM_MEDIA_TYPE,
+  JSON_MEDIA_TYPE,
+  MULTIPART_MEDIA_TYPE,
+  type MultipartBody,
+  readMultipart,
+  UploadedFile,
+} from './bodies.ts';
 export {
   CHECK_CONTRACT_EXIT,
   type CheckContractCommandOptions,
@@ -36,6 +46,7 @@ export {
   type HttpMethod,
   loadContract,
   PENDING_EXTENSION,
+  PERMISSION_EXTENSION,
   parseContract,
   READ_METHODS,
   type SecurityRequirement,
@@ -57,6 +68,17 @@ export {
   type RegisteredRoute,
   requiredErrorResponses,
 } from './contract-check.ts';
+export {
+  type ApiCookieAttributes,
+  type ApiCookieKind,
+  type ApiSite,
+  COOKIE_ATTRIBUTES,
+  clearApiCookie,
+  cookieName,
+  readApiCookie,
+  type SetApiCookieOptions,
+  setApiCookie,
+} from './cookies.ts';
 export {
   isDatabaseUnavailable,
   payloadTooLarge,
@@ -100,6 +122,14 @@ export {
   type MetricsRegistry,
   registerProcessMetrics,
 } from './metrics.ts';
+export {
+  createRateLimiter,
+  type RateLimitDecision,
+  type RateLimiter,
+  type RateLimiterOptions,
+  type RateLimitRule,
+  rateLimitByIp,
+} from './rate-limit.ts';
 export { createRequestState, type RequestState } from './request-state.ts';
 export {
   type RunningServer,

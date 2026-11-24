@@ -1,12 +1,14 @@
 import { STATUS_CODES } from 'node:http';
 import type { Socket } from 'node:net';
 import type { Readable } from 'node:stream';
+import fastifyCookie from '@fastify/cookie';
 import {
   type Logger,
   notFound,
   PROBLEM_CONTENT_TYPE,
   type Problem,
   REQUEST_ID_HEADER,
+  rateLimited,
   resolveRequestId,
   toProblem,
   validationFailed,
@@ -18,6 +20,7 @@ import fastify, {
   type FastifyRequest,
   LogController,
 } from 'fastify';
+import { registerBodyParsers } from './bodies.ts';
 import {
   type ClientAddress,
   createTrustedProxies,
@@ -47,6 +50,7 @@ import {
   type MetricsRegistry,
   registerProcessMetrics,
 } from './metrics.ts';
+import { createRateLimiter, type RateLimiterOptions, type RateLimitRule } from './rate-limit.ts';
 import { createEventStreamTracker, type EventStreams, SSE_HEADERS } from './sse.ts';
 import { createContractValidator, type SchemaValidator } from './validation.ts';
 
@@ -80,7 +84,29 @@ export type OperationHandler = (request: FastifyRequest, reply: FastifyReply) =>
 export interface OperationOptions {
   /** Limite do corpo desta operação, em bytes, quando difere do padrão do serviço. */
   bodyLimit?: number;
+  /**
+   * `Cache-Control: no-store` em toda resposta da operação, inclusive nas de erro: a exibição de
+   * senha, a sessão, o retorno OAuth.
+   */
+  noStore?: boolean;
 }
+
+/** O que a base informa ao recusar uma operação por permissão. */
+export interface PermissionDeniedContext {
+  operation: ContractOperation;
+  /** Ações de `x-permission` da operação (vazio se o contrato não declara). */
+  permissions: readonly string[];
+}
+
+/**
+ * Chamada quando uma operação termina em `403 permission_denied`, lançado pelo tratador de
+ * segurança ou pela rota, antes de a resposta sair. A `admin-api` grava ali a auditoria com
+ * `outcome = denied` (spec 028). Falha dela vai para o log; a resposta continua 403.
+ */
+export type PermissionDeniedHandler = (
+  request: FastifyRequest,
+  context: PermissionDeniedContext,
+) => void | Promise<void>;
 
 export interface ApiAppOptions {
   /** Contrato do serviço (`loadContract`). */
@@ -109,6 +135,20 @@ export interface ApiAppOptions {
    * abertos no `preClose`. Sem isto, `app.eventStreams.open(...)` lança.
    */
   eventStreams?: boolean;
+  /**
+   * `SESSION_SECRET`: assina o cookie de retorno OAuth (HMAC-SHA256, spec 007). Sem ele, os
+   * cookies continuam sendo lidos e gravados, mas `setApiCookie(..., 'oauth', ...)` lança.
+   */
+  cookieSecret?: string;
+  /**
+   * Limites de taxa em memória (spec 003, RNF-03; spec 004, RNF-04). Passou do limite:
+   * `429 rate_limited` com `Retry-After` e `retryAfterSeconds`, antes da validação e da rota.
+   */
+  rateLimits?: readonly RateLimitRule[];
+  /** Relógio e limpeza do limite de taxa; para os testes. */
+  rateLimiter?: RateLimiterOptions;
+  /** Gancho da negação por permissão (veja `PermissionDeniedHandler`). */
+  onPermissionDenied?: PermissionDeniedHandler;
 }
 
 /**
@@ -216,6 +256,10 @@ export function createApiApp(options: ApiAppOptions): FastifyInstance {
 
   // O logger do core segue a interface do pino que o Fastify usa.
   const loggerInstance: FastifyBaseLogger = logger;
+  if (options.cookieSecret !== undefined && options.cookieSecret.length < 32) {
+    // Spec 031: mínimo de 32 caracteres.
+    throw new TypeError('cookieSecret precisa de pelo menos 32 caracteres.');
+  }
   const app = fastify({
     loggerInstance,
     // A linha de log de cada requisição é escrita aqui, com os campos da spec 033.
@@ -232,6 +276,15 @@ export function createApiApp(options: ApiAppOptions): FastifyInstance {
     // Requisição que o Node recusa antes de existir `request` (HTTP malformado, corpo cortado).
     clientErrorHandler: (error, socket) => rejectMalformedRequest(logger, error, socket),
   });
+
+  // Cookies lidos no `onRequest` (antes dos tratadores de segurança) e gravados no `onSend`.
+  app.register(fastifyCookie, {
+    ...(options.cookieSecret === undefined ? {} : { secret: options.cookieSecret }),
+    hook: 'onRequest',
+  });
+  registerBodyParsers(app);
+  const limiter = createRateLimiter(options.rateLimits ?? [], options.rateLimiter);
+  app.addHook('onClose', async () => limiter.stop());
 
   const metrics = options.metrics ?? createMetricsRegistry();
   if (!options.metrics) {
@@ -375,6 +428,12 @@ export function createApiApp(options: ApiAppOptions): FastifyInstance {
       }
     }
     request.problemCode = problem.code;
+    // Um redirecionamento que deu erro não leva o destino junto.
+    reply.removeHeader('location');
+    if (problem.status === 413) {
+      // O resto do corpo não foi lido: a conexão não pode ser reaproveitada.
+      reply.header('Connection', 'close');
+    }
     if (typeof problem.retryAfterSeconds === 'number') {
       reply.header('Retry-After', String(problem.retryAfterSeconds));
     }
@@ -385,13 +444,27 @@ export function createApiApp(options: ApiAppOptions): FastifyInstance {
       .send(JSON.stringify(problem));
   };
 
-  app.setErrorHandler((error, request, reply) => {
+  app.setErrorHandler(async (error, request, reply) => {
     const { problem, kind } = resolveError(error, pathOf(request.url));
     if (kind === 'unexpected') {
       request.log.error(
         { err: error, error_code: problem.code, operation: request.operation?.operationId },
         'Erro ao atender a requisição',
       );
+    }
+    const operation = request.operation;
+    if (problem.code === 'permission_denied' && operation && options.onPermissionDenied) {
+      try {
+        await options.onPermissionDenied(request, {
+          operation,
+          permissions: operation.permissions,
+        });
+      } catch (hookError) {
+        request.log.error(
+          { err: hookError, operation: operation.operationId },
+          'Falha ao registrar a negação por permissão',
+        );
+      }
     }
     return sendProblem(request, reply, problem);
   });
@@ -420,14 +493,32 @@ export function createApiApp(options: ApiAppOptions): FastifyInstance {
         ? {}
         : { bodyLimit: operationOptions.bodyLimit }),
       // Sessão e CSRF vêm antes da validação: a falta deles é 401/403, não 400 (spec 003).
-      onRequest: async (request) => {
+      // Depois deles, o limite de taxa (que pode contar por sessão) e o `Content-Type`, ainda
+      // antes de ler o corpo.
+      onRequest: async (request, reply) => {
         request.operation = operation;
+        if (operationOptions.noStore) {
+          reply.header('Cache-Control', 'no-store');
+        }
         await authorize(request, operation, security);
+        const decision = limiter.check(request, operation);
+        if (!decision.allowed) {
+          throw rateLimited(
+            decision.retryAfterSeconds,
+            'Muitas requisições. Tente de novo mais tarde.',
+          );
+        }
+        if (!checks.acceptsContentType(request.headers['content-type'], undefined)) {
+          throw unsupportedMediaType(
+            `Tipo de conteúdo não aceito. Use ${acceptedTypes(operation)}.`,
+          );
+        }
       },
       preValidation: async (request) => {
         if (!checks.acceptsContentType(request.headers['content-type'], request.body)) {
-          const accepted = Object.keys(operation.requestBody?.content ?? {}).join(' ou ');
-          throw unsupportedMediaType(`Tipo de conteúdo não aceito. Use ${accepted}.`);
+          throw unsupportedMediaType(
+            `Tipo de conteúdo não aceito. Use ${acceptedTypes(operation)}.`,
+          );
         }
         const errors = checks.validateRequest({
           params: request.params,
@@ -449,6 +540,28 @@ export function createApiApp(options: ApiAppOptions): FastifyInstance {
         );
         if (!check.ok) {
           throw new ResponseContractError(check.reason, check.detail);
+        }
+        return payload;
+      },
+      // Resposta sem corpo (`204`, o `302` de `reply.redirect`): o Fastify não chama o
+      // `preSerialization`, então o status é conferido aqui.
+      onSend: async (request, reply, payload) => {
+        if (payload !== undefined && payload !== null && payload !== '') {
+          return payload;
+        }
+        if (request.problemCode !== null) {
+          return payload;
+        }
+        const check = checks.validateResponse(reply.statusCode, undefined, undefined);
+        if (!check.ok) {
+          throw new ResponseContractError(check.reason, check.detail);
+        }
+        const status = reply.statusCode;
+        if (status >= 300 && status < 400 && status !== 304 && !reply.hasHeader('location')) {
+          throw new ResponseContractError(
+            'schema_mismatch',
+            `${operation.key}: resposta ${status} sem o cabeçalho Location.`,
+          );
         }
         return payload;
       },
@@ -518,6 +631,11 @@ export function createApiApp(options: ApiAppOptions): FastifyInstance {
   });
 
   return app;
+}
+
+/** `application/json ou multipart/form-data`: os tipos que a operação aceita. */
+function acceptedTypes(operation: ContractOperation): string {
+  return Object.keys(operation.requestBody?.content ?? {}).join(' ou ');
 }
 
 /**

@@ -2,6 +2,7 @@ import type { FieldError } from '@nuva-edu/core';
 import type { ErrorObject, ValidateFunction } from 'ajv';
 import { Ajv2020 } from 'ajv/dist/2020.js';
 import addFormatsModule from 'ajv-formats';
+import { FORM_MEDIA_TYPE, MULTIPART_MEDIA_TYPE, UploadedFile } from './bodies.ts';
 import {
   type Contract,
   ContractError,
@@ -136,7 +137,7 @@ export function createContractValidator(contract: Contract): ContractValidator {
     for(operation) {
       let validator = cache.get(operation.operationId);
       if (!validator) {
-        validator = buildOperationValidator(operation, {
+        validator = buildOperationValidator(operation, contract.document, {
           exact: (schema, where) => compile(exact, schema, `${operation.key} ${where}`),
           coercing: (schema, where) => compile(coercing, schema, `${operation.key} ${where}`),
         });
@@ -154,6 +155,7 @@ interface Compilers {
 
 function buildOperationValidator(
   operation: ContractOperation,
+  document: Record<string, unknown>,
   compilers: Compilers,
 ): OperationValidator {
   const group = (location: 'path' | 'query' | 'header'): ValidateFunction | null => {
@@ -177,13 +179,18 @@ function buildOperationValidator(
   const headers = group('header');
 
   const bodies = new Map<string, ValidateFunction | null>();
+  // Propriedades do corpo multipart que são arquivo (`format: binary`); as outras são texto.
+  let multipartFiles = new Set<string>();
   for (const [mediaType, schema] of Object.entries(operation.requestBody?.content ?? {})) {
     bodies.set(
       mediaType,
-      schema !== null && isJsonMediaType(mediaType)
+      schema !== null && hasReadableBody(mediaType)
         ? compilers.exact(schema, `corpo (${mediaType})`)
         : null,
     );
+    if (mediaType === MULTIPART_MEDIA_TYPE && schema !== null) {
+      multipartFiles = fileProperties(document, schema);
+    }
   }
 
   const responses = operation.responses.map((response) => ({
@@ -232,7 +239,13 @@ function buildOperationValidator(
             });
           } else {
             const validate = bodies.get(mediaType) ?? null;
-            if (validate && !validate(parts.body)) {
+            let data = parts.body;
+            if (mediaType === MULTIPART_MEDIA_TYPE) {
+              const view = multipartView(parts.body, multipartFiles);
+              errors.push(...view.errors);
+              data = view.data;
+            }
+            if (validate && !validate(data)) {
               errors.push(...toFieldErrors(validate.errors, 'body'));
             }
           }
@@ -297,6 +310,102 @@ function buildOperationValidator(
 
 function isJsonMediaType(mediaType: string): boolean {
   return mediaType === 'application/json' || mediaType.endsWith('+json');
+}
+
+/** Corpos que a base lê e entrega como objeto, validados pelo esquema do contrato. */
+function hasReadableBody(mediaType: string): boolean {
+  return (
+    isJsonMediaType(mediaType) ||
+    mediaType === FORM_MEDIA_TYPE ||
+    mediaType === MULTIPART_MEDIA_TYPE
+  );
+}
+
+/**
+ * O corpo multipart como o esquema o enxerga: cada arquivo vira texto vazio (o esquema o
+ * descreve como `type: string, format: binary`). Arquivo em propriedade de texto, ou texto em
+ * propriedade de arquivo, é recusado aqui, porque o esquema não distingue os dois.
+ */
+function multipartView(
+  body: unknown,
+  files: ReadonlySet<string>,
+): { data: unknown; errors: FieldError[] } {
+  if (typeof body !== 'object' || body === null) {
+    return { data: body, errors: [] };
+  }
+  const errors: FieldError[] = [];
+  const data: Record<string, unknown> = {};
+  for (const [name, value] of Object.entries(body)) {
+    const isFile = value instanceof UploadedFile;
+    if (isFile && !files.has(name)) {
+      errors.push({ path: `body.${name}`, message: 'Deve ser texto, não arquivo.' });
+    } else if (!isFile && files.has(name)) {
+      errors.push({ path: `body.${name}`, message: 'Deve ser um arquivo.' });
+    }
+    Object.defineProperty(data, name, {
+      value: isFile ? '' : value,
+      enumerable: true,
+      writable: true,
+      configurable: true,
+    });
+  }
+  return { data, errors };
+}
+
+/**
+ * Nomes das propriedades de arquivo de um esquema de corpo multipart: as que têm
+ * `format: binary` (ou `contentMediaType`/`contentEncoding`, do OpenAPI 3.1). Segue `$ref`
+ * internos e os ramos de `allOf`.
+ */
+function fileProperties(document: Record<string, unknown>, schema: JsonSchema): Set<string> {
+  const names = new Set<string>();
+  const visit = (value: unknown, depth: number) => {
+    const node = resolveRef(document, value);
+    if (!isObject(node) || depth > 10) {
+      return;
+    }
+    if (isObject(node.properties)) {
+      for (const [name, property] of Object.entries(node.properties)) {
+        const resolved = resolveRef(document, property);
+        if (
+          isObject(resolved) &&
+          (resolved.format === 'binary' ||
+            resolved.contentMediaType !== undefined ||
+            resolved.contentEncoding !== undefined)
+        ) {
+          names.add(name);
+        }
+      }
+    }
+    if (Array.isArray(node.allOf)) {
+      for (const member of node.allOf) {
+        visit(member, depth + 1);
+      }
+    }
+  };
+  visit(schema, 0);
+  return names;
+}
+
+function resolveRef(document: Record<string, unknown>, value: unknown): unknown {
+  let current = value;
+  for (let hops = 0; isObject(current) && typeof current.$ref === 'string' && hops < 20; hops++) {
+    const ref = current.$ref;
+    if (!ref.startsWith('#/')) {
+      return undefined;
+    }
+    let target: unknown = document;
+    for (const segment of ref.slice(2).split('/')) {
+      const key = segment.replace(/~1/g, '/').replace(/~0/g, '~');
+      target = isObject(target) ? target[key] : undefined;
+    }
+    current = target;
+  }
+  return current;
+}
+
+function isObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
 function hasContentType(contentType: string | undefined): boolean {

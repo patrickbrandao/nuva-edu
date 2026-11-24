@@ -23,6 +23,9 @@ export const CSRF_SCHEME = 'csrfToken';
 /** Extensão que marca uma operação cuja rota ainda não existe. */
 export const PENDING_EXTENSION = 'x-nuva-pending';
 
+/** Extensão com a ação de `packages/core` que a operação exige (spec 008). */
+export const PERMISSION_EXTENSION = 'x-permission';
+
 export type JsonSchema = Record<string, unknown> | boolean;
 
 /** Uma alternativa do `security`: todos os esquemas dela são exigidos juntos. */
@@ -60,6 +63,11 @@ export interface ContractOperation {
    * A conferência de contrato não exige a rota de uma operação pendente.
    */
   pending: boolean;
+  /**
+   * Ações de `x-permission` (spec 008): uma, ou mais de uma quando a ação depende do alvo
+   * (`users.edit` para aluno, `staff.manage` para equipe). Vazio quando a operação não declara.
+   */
+  permissions: readonly string[];
   parameters: readonly ContractParameter[];
   /** Esquema do corpo por tipo de mídia; `null` quando a operação não tem corpo. */
   requestBody: {
@@ -165,6 +173,7 @@ export function parseContract(document: unknown, source = 'openapi'): Contract {
         security,
         isWrite: !READ_METHODS.includes(method),
         pending: readPending(raw[PENDING_EXTENSION], where),
+        permissions: readPermissions(raw[PERMISSION_EXTENSION], where),
         parameters,
         requestBody: readRequestBody(raw.requestBody, resolve),
         responses: readResponses(raw.responses, resolve, where),
@@ -236,6 +245,19 @@ function readPending(value: unknown, where: string): boolean {
     throw new ContractError(`${where}: "${PENDING_EXTENSION}" deve ser true ou false.`);
   }
   return value;
+}
+
+function readPermissions(value: unknown, where: string): string[] {
+  if (value === undefined) {
+    return [];
+  }
+  const list = Array.isArray(value) ? value : [value];
+  if (list.length === 0 || !list.every((entry) => typeof entry === 'string' && entry !== '')) {
+    throw new ContractError(
+      `${where}: "${PERMISSION_EXTENSION}" deve ser um texto ou uma lista de textos não vazia.`,
+    );
+  }
+  return list as string[];
 }
 
 function readSecurity(value: unknown, where: string): SecurityRequirement[] | undefined {

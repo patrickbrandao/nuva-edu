@@ -18,6 +18,9 @@ Roda direto no Node 26, sem build: os imports levam `.ts` e a sintaxe é só a q
 | `src/sse.ts` | Cabeçalhos e formato de evento SSE, e o conjunto dos fluxos abertos |
 | `src/request-state.ts` | `createRequestState`: dado tipado da API por requisição |
 | `src/server.ts` | `startServer`: escuta e encerra limpo em SIGTERM |
+| `src/cookies.ts` | Cookies de sessão e de retorno OAuth com os atributos da spec 007 |
+| `src/bodies.ts` | Leitura de `application/x-www-form-urlencoded` e `multipart/form-data` (`UploadedFile`) |
+| `src/rate-limit.ts` | Limite de taxa em memória por regra (sessão, IP, grupo de rotas) |
 
 ## Uso
 
@@ -78,6 +81,45 @@ createApiApp({
 - Registrar uma operação cujo esquema não tem tratador lança na hora: rota protegida nunca fica aberta por esquecimento.
 - Numa alternativa (`- sessionCookie: []` + `csrfToken: []`) os tratadores rodam na ordem do contrato; com mais de uma alternativa, basta uma passar.
 - O tratador guarda o que descobriu (usuário, sessão) com um dos mecanismos abaixo.
+
+## Base da Fase 1: cookies, corpos, 302, limite de taxa, negação por permissão
+
+A base não tem regra de conta: dá o transporte que as rotas de `packages/core` (sessão, OAuth, imagens) usam.
+
+**Cookies** (`@fastify/cookie`, spec 007 "Cookies"). Os cookies chegam lidos em `request.cookies` antes dos tratadores de segurança. Os dois tipos têm atributos fixos (`COOKIE_ATTRIBUTES`), sem `Domain`:
+
+```ts
+createApiApp({ /* ... */ cookieSecret: config.sessionSecret }); // assina só o de retorno OAuth
+setApiCookie(reply, 'admin', 'session', id, { maxAgeSeconds: 30 * 86_400 }); // Lax, Path=/
+setApiCookie(reply, 'admin', 'oauth', json, { maxAgeSeconds: 600 }); // None, Path=/api/v1/auth, HMAC-SHA256
+readApiCookie(request, 'admin', 'oauth'); // null sem cookie ou com assinatura inválida
+clearApiCookie(reply, 'admin', 'session'); // mesmo Path da gravação
+```
+
+`cookieSecret` com menos de 32 caracteres impede a montagem; sem ele, gravar ou ler o cookie de retorno lança.
+
+**Corpos além do JSON**, validados pelo esquema do contrato como os de JSON, e `415 unsupported_media_type` (antes de ler o corpo) para o tipo que a operação não declara:
+
+- `application/x-www-form-urlencoded` (`@fastify/formbody`): retorno da Apple. Valores sempre texto; campo repetido vira lista.
+- `multipart/form-data` (`@fastify/busboy`): envio de imagem. A rota recebe `{ campo: string, arquivo: UploadedFile }` (`filename`, `mimeType`, `data`, `size`). Campos de texto antes do arquivo, um arquivo só, nenhum campo repetido; propriedade com `format: binary` precisa ser arquivo e as outras, texto; fora disso, `400 validation_failed`. O limite é o `bodyLimit` da operação (`app.operation('uploadImage', h, { bodyLimit: 5 * 1024 * 1024 })`): `Content-Length` acima dele é `413 payload_too_large` sem ler o corpo; sem `Content-Length`, o `413` sai assim que a contagem passa, sem ler o resto. Todo `413` fecha a conexão.
+
+**Respostas sem corpo**: `reply.redirect(destino, 302)` e `204` têm o status conferido contra o contrato; `3xx` sem `Location` ou status não declarado vira `500` (o `Location` não vai junto). `{ noStore: true }` nas opções da operação põe `Cache-Control: no-store` em toda resposta dela, inclusive nas de erro.
+
+**Limite de taxa** em memória, por processo, em janela fixa (spec 003 RNF-03, spec 004 RNF-04). Roda depois dos tratadores de segurança (a chave pode ser a sessão) e antes do `Content-Type`, da validação e da rota. Passou: `429 rate_limited` com `Retry-After` e `retryAfterSeconds`.
+
+```ts
+createApiApp({
+  // ...
+  rateLimits: [
+    { name: 'session', limit: 300, windowSeconds: 60, key: (request) => request.session?.id ?? null },
+    { name: 'auth-ip', limit: 20, windowSeconds: 60, key: rateLimitByIp, operations: AUTH_OPERATIONS },
+  ],
+});
+```
+
+Chave `null` quer dizer que a regra não vale para a requisição. Sem `operations`, a regra vale em todas as operações de `/api/v1` (as sondas ficam fora).
+
+**Negação por permissão**: `x-permission` do contrato chega em `operation.permissions` (texto ou lista no contrato). Toda operação que termina em `403 permission_denied`, lançado pelo tratador de segurança ou pela rota, chama `onPermissionDenied(request, { operation, permissions })` antes da resposta; é ali que a `admin-api` grava a auditoria `outcome = denied` (spec 028). Falha do gancho vai para o log e a resposta continua `403`.
 
 ## Dados da API na requisição (com tipo, sem importar `fastify`)
 
