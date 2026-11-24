@@ -14,6 +14,11 @@ export {
   type SecurityHandlers,
 } from './app.ts';
 export {
+  CHECK_CONTRACT_EXIT,
+  type CheckContractCommandOptions,
+  runCheckContract,
+} from './check-contract-command.ts';
+export {
   type ClientAddress,
   type ClientIpSource,
   createTrustedProxies,

@@ -8,6 +8,7 @@ API do site de administração (`@nuva-edu/admin-api`), descrita em `openapi.yam
 | `src/main.ts` | Entrada do processo: configuração, banco, subida e encerramento |
 | `src/app.ts` | `buildAdminApp`: a API montada sobre `@nuva-edu/api-kit` |
 | `src/contract.ts` | Caminho do contrato e exceções de CSRF |
+| `src/check-contract.ts` | Comando `check-contract`: rotas x contrato, sem banco e sem porta |
 | `src/routes/` | Uma função `register...Routes` por grupo de rotas |
 | `test/` | Integração (requisições injetadas, banco de teste) |
 | `test/contract/` | Teste de contrato: rotas x `openapi.yaml` e regra do `csrfToken` |
@@ -37,6 +38,16 @@ Escuta na porta 3000 (spec 031); `PORT` troca a porta fora do contêiner. Precis
 3. Teste em `test/`. O teste de contrato e a própria subida do serviço falham se contrato e rotas divergirem.
 
 Escrita sem `csrfToken` no contrato só passa no teste de contrato se o `operationId` estiver em `CSRF_EXCEPTIONS` (`src/contract.ts`).
+
+## Conferir o contrato
+
+```bash
+pnpm --filter @nuva-edu/admin-api check-contract                # avisa das operações com x-nuva-pending
+pnpm --filter @nuva-edu/admin-api check-contract --no-pending   # falha se houver alguma (verify:full, release)
+docker run --rm <imagem> node src/check-contract.ts --no-pending
+```
+
+Sai com `0` quando confere, `1` com divergência (lista no `stderr`) e `2` em opção desconhecida. Não precisa de banco nem de variáveis da instalação.
 
 ## Testes
 

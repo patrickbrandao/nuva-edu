@@ -8,8 +8,13 @@ import {
 } from '@nuva-edu/core';
 import type { FastifyInstance } from 'fastify';
 import { afterEach, describe, expect, it } from 'vitest';
-import { type ApiAppOptions, ContractMismatchError, type OperationHandler } from '../src/index.ts';
-import { buildApp, type CapturedLogs } from './helpers.ts';
+import {
+  type ApiAppOptions,
+  ContractMismatchError,
+  type OperationHandler,
+  parseContract,
+} from '../src/index.ts';
+import { buildApp, type CapturedLogs, fixtureContract } from './helpers.ts';
 
 const ITEM = { id: 1, name: 'Curso', createdAt: '2026-11-24T13:45:00Z' };
 const PROBLEM = /^application\/problem\+json(;|$)/;
@@ -368,6 +373,99 @@ describe('validação da requisição', () => {
       status: 413,
       code: 'payload_too_large',
       detail: 'O corpo da requisição passa do tamanho permitido.',
+    });
+  });
+
+  it('413 e 415 chegam ao cliente mesmo sem estarem declarados na operação, e a rota não roda', async () => {
+    let called = false;
+    const { app, logs } = fullApp(
+      {
+        createItem: () => {
+          called = true;
+          return ITEM;
+        },
+      },
+      { bodyLimit: 200 },
+    );
+    // O contrato de teste é como os reais antes da tarefa 029: sem 413 nem 415 em `createItem`.
+    expect(Object.keys(app.contract.operation('createItem').responses)).not.toContain('413');
+    expect(Object.keys(app.contract.operation('createItem').responses)).not.toContain('415');
+
+    const tooLarge = await app.inject({
+      method: 'POST',
+      url: '/api/v1/items',
+      headers: { 'content-type': 'application/json' },
+      payload: JSON.stringify({ name: 'a'.repeat(300) }),
+    });
+    const wrongType = await app.inject({
+      method: 'POST',
+      url: '/api/v1/items',
+      headers: { 'content-type': 'text/plain' },
+      payload: 'nome',
+    });
+    expect([tooLarge.statusCode, wrongType.statusCode]).toEqual([413, 415]);
+    expect(called).toBe(false);
+    expect(logs.lines.some((line) => line.level === 'error')).toBe(false);
+    // O log da requisição leva o código, para o painel separar do `validation_failed`.
+    expect(
+      logs.lines.filter((line) => line.msg === 'Requisição atendida').map((l) => l.error_code),
+    ).toEqual(['payload_too_large', 'unsupported_media_type']);
+  });
+
+  it('Content-Length divergente e corpo vazio com application/json são 400 validation_failed', async () => {
+    const { app } = fullApp();
+    await app.listen({ port: 0, host: '127.0.0.1' });
+    const { port } = app.server.address() as { port: number };
+    const empty = await fetch(`http://127.0.0.1:${port}/api/v1/items`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+    });
+    expect(empty.status).toBe(400);
+    expect(await empty.json()).toMatchObject({
+      code: 'validation_failed',
+      errors: [{ path: 'body' }],
+    });
+
+    // Corpo menor do que o Content-Length anunciado, com a escrita encerrada pelo cliente.
+    const { connect } = await import('node:net');
+    const send = (text: string) =>
+      new Promise<string>((resolve, reject) => {
+        const socket = connect(port, '127.0.0.1', () => socket.end(text));
+        let data = '';
+        socket.setEncoding('utf8');
+        socket.on('data', (chunk) => {
+          data += chunk;
+        });
+        socket.on('close', () => resolve(data));
+        socket.on('error', reject);
+      });
+    const raw = await send(
+      'POST /api/v1/items HTTP/1.1\r\nHost: x\r\nContent-Type: application/json\r\n' +
+        'Content-Length: 40\r\nConnection: close\r\n\r\n{"name":"a"}',
+    );
+    expect(raw).toMatch(/^HTTP\/1\.1 400 /);
+    expect(raw).toContain('"code":"validation_failed"');
+    expect(raw).toContain('"path":"body"');
+    expect(raw).toMatch(/\r\nContent-Type: application\/problem\+json\r\n/);
+    expect(raw).toMatch(/\r\nX-Request-Id: [\w-]+\r\n/);
+
+    // HTTP que o Node nem consegue ler: mesma resposta, sem campo apontado.
+    const garbage = await send('ISTO NAO E HTTP\r\n\r\n');
+    expect(garbage).toMatch(/^HTTP\/1\.1 400 /);
+    expect(garbage).toContain('"code":"validation_failed"');
+    expect(garbage).toContain('"errors":[]');
+
+    // O mesmo erro visto pelo Fastify (requisição injetada, sem o analisador HTTP do Node).
+    const injected = await app.inject({
+      method: 'POST',
+      url: '/api/v1/items',
+      headers: { 'content-type': 'application/json', 'content-length': '40' },
+      payload: '{"name":"a"}',
+    });
+    expect(injected.statusCode).toBe(400);
+    expect(injected.json()).toMatchObject({
+      code: 'validation_failed',
+      errors: [{ path: 'body', message: 'O Content-Length não confere com o corpo enviado.' }],
     });
   });
 
@@ -788,5 +886,100 @@ describe('contrato na subida', () => {
     const report = app.checkContract();
     expect(report.writesWithoutCsrf).toEqual(['deleteItem', 'login']);
     expect(report.routesMissingInContract).toEqual([]);
+  });
+});
+
+describe('operação pendente (x-nuva-pending) no serviço', () => {
+  const PENDING_INFO = 'Operações do contrato com x-nuva-pending ainda sem rota';
+  const PENDING_WARNING =
+    'Operações com x-nuva-pending já têm rota: a marca precisa sair do contrato';
+
+  /** O contrato de teste com `getItem` e `deleteItem` marcadas como pendentes. */
+  function pendingContract() {
+    const document = structuredClone(fixtureContract().document) as {
+      paths: Record<string, Record<string, Record<string, unknown>>>;
+    };
+    for (const method of ['get', 'delete']) {
+      const operation = document.paths['/api/v1/items/{id}']?.[method];
+      if (operation) {
+        operation['x-nuva-pending'] = true;
+      }
+    }
+    return parseContract(document, 'pendente.yaml');
+  }
+
+  /** App sem as rotas das operações pendentes. */
+  function appWithoutPendingRoutes() {
+    const { app, logs } = buildApp({
+      contract: pendingContract(),
+      security: { sessionCookie: () => {}, csrfToken: () => {}, apiKey: () => {} },
+    });
+    apps.push(app);
+    app.operation('listItems', () => ({ items: [ITEM], nextCursor: null }));
+    app.operation('createItem', (_request, reply) => reply.status(201).send(ITEM));
+    app.operation('login', (_request, reply) => reply.status(204).send());
+    return { app, logs };
+  }
+
+  it('sem rota: o serviço sobe, só informa no log, e o teste de contrato passa', async () => {
+    const { app, logs } = appWithoutPendingRoutes();
+    await expect(app.ready()).resolves.toBeDefined();
+    expect(logs.lines.find((line) => line.msg === PENDING_INFO)).toMatchObject({
+      level: 'info',
+      operations: ['DELETE /api/v1/items/{id}', 'GET /api/v1/items/{id}'],
+    });
+    expect(logs.lines.some((line) => line.level === 'warn')).toBe(false);
+
+    const report = app.checkContract({ csrfExceptions: ['deleteItem', 'login'] });
+    expect(report.ok).toBe(true);
+    expect(report.operationsMissingInApp).toEqual([]);
+  });
+
+  it('com rota: o serviço sobe, com aviso no log da subida e a cada checkContract', async () => {
+    const { app, logs } = fullApp({}, { contract: pendingContract() });
+    await expect(app.ready()).resolves.toBeDefined();
+    const warnings = () => logs.lines.filter((line) => line.msg === PENDING_WARNING);
+    expect(warnings()).toHaveLength(1);
+    expect(warnings()[0]).toMatchObject({
+      level: 'warn',
+      operations: ['DELETE /api/v1/items/{id}', 'GET /api/v1/items/{id}'],
+    });
+    expect(logs.lines.some((line) => line.msg === PENDING_INFO)).toBe(false);
+
+    const report = app.checkContract({ csrfExceptions: ['deleteItem', 'login'] });
+    expect(report.ok).toBe(true);
+    expect(report.pendingWithRoute).toHaveLength(2);
+    expect(warnings()).toHaveLength(2);
+
+    // A rota de uma operação pendente atende como qualquer outra.
+    const response = await app.inject({ method: 'GET', url: '/api/v1/items/1' });
+    expect(response.statusCode).toBe(200);
+  });
+
+  it('requisição para operação pendente sem rota responde 404 not_found', async () => {
+    const { app } = appWithoutPendingRoutes();
+    for (const method of ['GET', 'DELETE'] as const) {
+      const response = await app.inject({ method, url: '/api/v1/items/1' });
+      expect(response.statusCode).toBe(404);
+      expect(response.headers['content-type']).toMatch(PROBLEM);
+      expect(response.json()).toMatchObject({
+        status: 404,
+        code: 'not_found',
+        instance: '/api/v1/items/1',
+      });
+    }
+  });
+
+  it('checkContract com allowPending: false recusa as pendentes (check-contract --no-pending)', () => {
+    const { app } = appWithoutPendingRoutes();
+    const report = app.checkContract({
+      csrfExceptions: ['deleteItem', 'login'],
+      allowPending: false,
+    });
+    expect(report.ok).toBe(false);
+    expect(report.pendingNotAllowed).toEqual([
+      'DELETE /api/v1/items/{id}',
+      'GET /api/v1/items/{id}',
+    ]);
   });
 });

@@ -50,7 +50,8 @@ await startServer(app, { port: 3000 });
 - **Contrato manda.** `app.operation(id, handler)` é a única forma de criar rota de negócio. Na subida (`ready`/`listen`), rota registrada fora do contrato ou operação do contrato sem rota lança `ContractMismatchError` e o serviço não sobe (spec 003). Só `GET /metrics` fica fora; outra exceção entra em `internalRoutes`. Operação com `x-nuva-pending: true` é a exceção: veja "Operação pendente".
 - **Requisição validada** antes da rota: caminho, consulta e cabeçalhos são convertidos para o tipo do contrato e recebem os valores padrão (`request.query.limit` chega como número); o corpo é validado sem conversão. Falha: `400 validation_failed` com `errors[]` (`body.email`, `query.limit`). As mensagens nunca repetem o valor recebido. `Content-Type` que a operação não declara (ou que o serviço não sabe ler): `415 unsupported_media_type`. Corpo acima do limite: `413 payload_too_large`.
 - **Resposta validada** depois da rota: status, tipo de mídia e corpo JSON. Fora do contrato vira `500 internal_error`, com o motivo no log (caminho e regra, sem valores). Corpo que não é JSON (texto, fluxo, SSE) não tem o conteúdo validado.
-- **Erros** sempre em `application/problem+json`: `DomainError` do core sai com o próprio `code`; erro de requisição do Fastify vira `validation_failed` (400; JSON malformado, corpo vazio), `payload_too_large` (413) ou `unsupported_media_type` (415); rota inexistente, `not_found`; falha de conexão com o PostgreSQL, `database_unavailable` (503); o resto, `internal_error` sem `detail`. `rate_limited` com `retryAfterSeconds` ganha o cabeçalho `Retry-After`. Erro com status que a operação não declara chega ao cliente e gera um aviso no log.
+- **Erros** sempre em `application/problem+json`: `DomainError` do core sai com o próprio `code`; erro de requisição do Fastify vira `validation_failed` (400; JSON malformado, corpo vazio), `payload_too_large` (413) ou `unsupported_media_type` (415); rota inexistente, `not_found`; falha de conexão com o PostgreSQL, `database_unavailable` (503); o resto, `internal_error` sem `detail`. `rate_limited` com `retryAfterSeconds` ganha o cabeçalho `Retry-After`. Erro com status que a operação não declara chega ao cliente e gera um aviso no log (é o caso de `413` e `415` enquanto o contrato não os declara).
+- **HTTP malformado**, que o Node recusa antes de existir requisição (linha ou cabeçalho ilegível, corpo menor que o `Content-Length`): `400 validation_failed` em problem+json, com `X-Request-Id`; o corpo cortado leva `errors: [{ path: "body" }]`. Não entra em `http_requests_total` nem no log de requisição (só uma linha `debug`). Prazo esgotado (`408`) e cabeçalhos grandes demais (`431`) saem como no Fastify, sem problem+json: a spec não define código para eles.
 - **Id de requisição**: usa o `X-Request-Id` do proxy quando tem forma segura, senão cria; volta na resposta e está em toda linha de `request.log` como `request_id`.
 - **Log por requisição** (spec 033): `method`, `route` (o padrão da rota, nunca a URL com consulta), `status`, `duration_ms`, `client_ip`, `client_ip_source`, `peer_ip` e `error_code`. Sondas saem em `debug`. Cada requisição gera uma linha só: `Requisição atendida` quando a resposta termina, ou `Requisição encerrada pelo cliente` (com `aborted: true`) quando o cliente fecha a conexão antes.
 - **Requisição abortada**: o cliente que fecha antes do fim (o caso normal de um fluxo SSE) é registrado no log e em `http_requests_total`/`http_request_duration_seconds` com o status convencional **499** (`CLIENT_CLOSED_REQUEST_STATUS`, o mesmo código que o nginx usa). O 499 nunca vai ao cliente e não entra no contrato.
@@ -135,6 +136,33 @@ Uma operação marcada com `x-nuva-pending: true` no `openapi.yaml` pode chegar 
 - `formatContractReport(report)` continua listando só as divergências; com `{ warnings: true }` (ou `formatContractWarnings(report)`) lista também os avisos, cada linha começando por `aviso:`.
 - `checkContract(..., { allowPending: false })` (também em `app.checkContract`) trata toda operação pendente, com ou sem rota, como divergência (`report.pendingNotAllowed`): é a base do `check-contract --no-pending` da spec 003.
 - As outras regras (CSRF em toda escrita, esquemas válidos) valem para a operação pendente.
+
+## Comando `check-contract`
+
+`runCheckContract` é o comando `check-contract` da spec 003 ("Subida estrita"), igual nas duas APIs: monta o app, repete a conferência da subida e do teste de contrato (rotas x contrato nos dois sentidos, `csrfToken` das escritas) e devolve o código de saída. Não escuta em porta e não precisa de banco. Cada API tem um `src/check-contract.ts` e o script `check-contract` no `package.json`:
+
+```ts
+import { runCheckContract } from '@nuva-edu/api-kit';
+
+process.exitCode = await runCheckContract({
+  service: 'admin-api',
+  csrfExceptions: CSRF_EXCEPTIONS,
+  // Logger em `silent`: a saída do comando é só o relatório.
+  build: () => buildAdminApp({ config, db, logger, readiness: {} }),
+});
+```
+
+```bash
+pnpm --filter @nuva-edu/admin-api check-contract                # operação pendente só gera aviso
+pnpm --filter @nuva-edu/admin-api check-contract --no-pending   # verify:full e release
+node src/check-contract.ts --no-pending                         # na imagem (sem pnpm)
+```
+
+| Saída | Quando |
+| --- | --- |
+| `0` | Contrato e rotas conferem. Sem `--no-pending`, as pendentes saem como `aviso:` no `stderr` |
+| `1` | Divergência (uma por linha no `stderr`), app que não monta ou, com `--no-pending`, qualquer operação com `x-nuva-pending`, com ou sem rota |
+| `2` | Opção desconhecida |
 
 ## Métricas e saúde sem Fastify
 

@@ -1,3 +1,5 @@
+import { STATUS_CODES } from 'node:http';
+import type { Socket } from 'node:net';
 import type { Readable } from 'node:stream';
 import {
   type Logger,
@@ -227,6 +229,8 @@ export function createApiApp(options: ApiAppOptions): FastifyInstance {
     // Só existe a rota que o contrato descreve: nada de HEAD automático.
     exposeHeadRoutes: false,
     return503OnClosing: true,
+    // Requisição que o Node recusa antes de existir `request` (HTTP malformado, corpo cortado).
+    clientErrorHandler: (error, socket) => rejectMalformedRequest(logger, error, socket),
   });
 
   const metrics = options.metrics ?? createMetricsRegistry();
@@ -541,6 +545,59 @@ async function authorize(
   if (operation.security.length > 0) {
     throw firstError;
   }
+}
+
+/**
+ * Erro do analisador HTTP do Node (`clientError`): a requisição nem chega ao Fastify, então a
+ * resposta é escrita direto no soquete. Erro de análise vira `400 validation_failed` em
+ * problem+json; corpo menor do que o `Content-Length` anunciado leva `errors: [{ path: 'body' }]`
+ * (spec 003, "Códigos de erro"). Prazo esgotado (408) e cabeçalhos grandes demais (431) não têm
+ * código na spec e saem como no Fastify.
+ */
+function rejectMalformedRequest(
+  logger: Logger,
+  error: Error & { code?: string },
+  socket: Socket,
+): void {
+  // Conexão derrubada: não há a quem responder.
+  if (error.code === 'ECONNRESET' || socket.destroyed) {
+    return;
+  }
+  const requestId = resolveRequestId(undefined);
+  let status = 400;
+  let contentType = PROBLEM_CONTENT_TYPE;
+  let body: string;
+  if (error.code === 'ERR_HTTP_REQUEST_TIMEOUT') {
+    status = 408;
+    contentType = 'application/json';
+    body = `{"error":"${STATUS_CODES[status]}","message":"Client Timeout","statusCode":408}`;
+  } else if (error.code === 'HPE_HEADER_OVERFLOW') {
+    status = 431;
+    contentType = 'application/json';
+    body = `{"error":"${STATUS_CODES[status]}","message":"Exceeded maximum allowed HTTP header size","statusCode":431}`;
+  } else {
+    const truncatedBody = error.code === 'HPE_INVALID_EOF_STATE';
+    const detail = truncatedBody
+      ? 'O Content-Length não confere com o corpo enviado.'
+      : 'Requisição HTTP malformada.';
+    body = JSON.stringify(
+      toProblem(validationFailed(truncatedBody ? [{ path: 'body', message: detail }] : [], detail)),
+    );
+  }
+  logger.debug(
+    { request_id: requestId, status, parser_code: error.code },
+    'Requisição recusada antes do roteamento',
+  );
+  if (socket.writable) {
+    socket.write(
+      `HTTP/1.1 ${status} ${STATUS_CODES[status]}\r\n` +
+        `Content-Length: ${Buffer.byteLength(body)}\r\n` +
+        `Content-Type: ${contentType}\r\n` +
+        `X-Request-Id: ${requestId}\r\n` +
+        `Connection: close\r\n\r\n${body}`,
+    );
+  }
+  socket.destroy(error);
 }
 
 /** Caminho sem a consulta: é o que vai em `instance`, e a consulta pode carregar um token. */
