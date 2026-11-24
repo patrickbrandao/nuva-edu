@@ -1,0 +1,30 @@
+{
+  "name": "@nuva-edu/core",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Núcleo do nuva-edu: configuração, acesso a dados (Kysely), logger, erros de domínio e regras de negócio.",
+  "license": "AGPL-3.0-only",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "test": "vitest run",
+    "test:coverage": "vitest run --coverage",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "db:types": "node scripts/db-types.ts",
+    "db:types:check": "node scripts/db-types.ts --verify"
+  },
+  "dependencies": {
+    "kysely": "0.29.9",
+    "pg": "8.23.1"
+  },
+  "devDependencies": {
+    "@nuva-edu/database": "workspace:*",
+    "@types/node": "26.6.6",
+    "@types/pg": "8.23.1",
+    "@vitest/coverage-v8": "5.1.1",
+    "kysely-codegen": "0.20.0",
+    "vitest": "5.1.1"
+  }
+}

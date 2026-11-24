@@ -14,6 +14,7 @@ Detalhe das decisões em `specs/decisions/`.
 - `pnpm db:migrate` (`up`, `down`, `status`, `template`), migration 0001 (`settings`) e banco modelo dos testes.
 - `packages/ui` (`@nuva-edu/ui`): tokens, Inter, primitivos, painel admin, preços e tema Sistema/Claro/Escuro do minui; catálogo e testes de renderização.
 - `packages/api-client` (`@nuva-edu/api-client`): clientes tipados da admin-api e da classroom-api gerados dos contratos, erro problem+json (`ApiError`), fluxo SSE tipado e verificação de gerado desatualizado.
+- `packages/core` (`@nuva-edu/core`): configuração validada por variável de ambiente, conexão Kysely com tipos gerados do banco, logger JSON com máscara de campos proibidos e erro de domínio em problem+json.
 
 ### Decisões
 - Instalável, uma escola por instalação; AGPL-3.0.
