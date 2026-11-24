@@ -6,6 +6,7 @@ Detalhe das decisões em `specs/decisions/`.
 ## [Não lançado]
 
 ### Adicionado
+- `@nuva-edu/core`: matriz de permissões da spec 008 (`can`, `assertCan`, `permissionScope`, `permissionsFor` para `Session.permissions`, alcance ◐ do instrutor por `courseOwnerId`), regras de gestão (`staff.manage` sobre equipe, `self_action_not_allowed`) e teste de cada célula e de todo `x-permission` dos contratos (task 142).
 - `@nuva-edu/core`: base dos módulos da Fase 1 (`index.ts` de `accounts`, `accounts/management`, `audit`, `images`, `jobs`, `notifications`, `oauth`, `permissions` e `privacy`, com `export *`), `sharp` 0.35.5 e `jose` 6.2.18; configuração com `SESSION_SECRET` de 32+ caracteres, `ADMIN_PASSWORD` de 8 a 128, `APPLE_PRIVATE_KEY` com `\n` convertido e simulador OAuth (`NUVA_OAUTH_MOCK_URL`, `NUVA_OAUTH_MOCK_INTERNAL_URL`, recusado em produção, credenciais fixas) (task 141).
 - Migration 0007: `email_outbox` (spec 024; `subject` nulo até o envio, índices da tela de operação e do expurgo), `terms_versions` (número único por documento entre as publicadas, versão publicada recusa `UPDATE` e `DELETE`) e `terms_acceptances` (um aceite por usuário e versão) (task 140).
 - Admin: entrar por senha e login social, sessão ao carregar com destino guardado, "Sair", menu e telas pelo `permissions` da sessão e aviso de termos sem versão publicada (task 162).
