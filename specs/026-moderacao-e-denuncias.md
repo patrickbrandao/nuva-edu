@@ -93,6 +93,8 @@ Denúncias contra membros da equipe são visíveis apenas ao `admin`.
 | `user_suspensions` | `user_id`, `kind` (`posting`/`full`), `reason`, `starts_at`, `ends_at`, `lifted_at`, `created_by` | `admin-api`; `worker` no fim do prazo |
 | `hidden_at`, `hidden_by` | colunas nos conteúdos moderáveis | `admin-api`; `worker` na ocultação automática |
 
+Decisões de esquema da migration 0005 para `user_suspensions` (aceitas na tarefa 198): `created_by` é obrigatório (toda suspensão é aplicada por alguém da equipe, pelo painel ou por MCP com o emissor da chave; o worker só encerra, preenchendo `lifted_at`); `user_id` e `created_by` têm chave estrangeira para `users` sem cascata, porque o histórico é registro de terceiros e a linha de `users` nunca é apagada ([030](030-lgpd.md)); `ends_at` nulo é prazo indeterminado.
+
 Retenção: denúncias resolvidas por 2 anos; ações de moderação e suspensões por 2 anos, junto com a auditoria ([033](033-observabilidade-retencao-backup.md)). Na exclusão de conta do denunciante, a denúncia permanece sem o denunciante.
 
 ## Critérios de aceite

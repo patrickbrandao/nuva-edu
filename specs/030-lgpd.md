@@ -93,10 +93,18 @@ Contas de equipe (`instructor`, `manager`, `admin`) não se excluem sozinhas: o 
 | Chamados de suporte | Mantidos com autor "usuário removido"; anexos de imagem apagados |
 | Pontos, medalhas, seguidores | Apagados |
 | Notificações e preferências | Apagadas |
+| Fila de e-mails (`email_outbox`) do usuário | Apagada (o `to` guarda o e-mail) |
 | Aceites de termos | Mantidos sem IP nem agente do navegador |
 | Auditoria | Mantida; rótulo do usuário trocado e IP apagado ([028](028-auditoria.md)) |
 
 O e-mail liberado pode ser usado em novo cadastro, que será uma conta nova, sem histórico.
+
+Como a linha de `users` é anonimizada (decidido na tarefa 198, sobre a migration 0005):
+
+- `email` e `name` são `NOT NULL` no banco ([007](007-contas-e-autenticacao.md), "Dados"): são substituídos, não anulados. `email` vira `removido-<id>@invalid` (o domínio `.invalid` é reservado e nunca entrega; o `id` mantém o valor único, embora o índice único só valha para contas não excluídas), e `name` vira `usuário removido`. O rótulo exibido continua vindo de `deleted_at` na leitura; o valor gravado só garante que nada do nome original sobra.
+- `full_name`, `password`, `email_verified_at`, `tax_id_type` e `tax_id` passam a nulo (o CPF/CNPJ que a lei fiscal exige fica no pedido, não na conta).
+- A linha nunca é apagada, então a cascata das tabelas da conta não dispara: `profiles`, `oauth_identities`, `sessions`, `email_tokens`, `user_devices`, `login_attempts` (pelo e-mail) e `email_outbox` são apagadas explicitamente pela `account.anonymize`, na mesma transação.
+- As referências de terceiros ao usuário (`user_suspensions.user_id` e `created_by`, `users.suspended_by`, `audit_log.actor_user_id`, `terms_acceptances.user_id`) permanecem e passam a mostrar "usuário removido".
 
 ## Interfaces e contratos
 
@@ -120,6 +128,13 @@ Em `apps/admin-api/openapi.yaml`:
 | `terms_acceptances` | `classroom-api` | `user_id`, `terms_version_id`, `accepted_at`, `ip`, `user_agent` |
 | `data_exports` | `worker` | `user_id`, `status`, `file` (bytea), `token_hash`, `expires_at` |
 | `users.deletion_requested_at`, `users.deleted_at` | `classroom-api` pede; `worker` executa | |
+
+Decisões de esquema da migration 0007 (aceitas na tarefa 198):
+
+- Versão publicada (`version` não nulo) é imutável no banco: um gatilho recusa `UPDATE` e também `DELETE` dela (apagá-la alteraria o que foi aceito). Rascunho pode ser publicado ou apagado; a API não oferece hoje a exclusão de rascunho.
+- Rascunho não tem `version`, `effective_at` nem `published_at`; publicada tem os três. `version` é único por documento entre as publicadas.
+- `terms_acceptances` não confere no banco que a versão aceita é publicada: a regra "vigente" é da `classroom-api` (`terms_version_outdated`), que nunca grava aceite de rascunho.
+- As chaves estrangeiras para `users` não têm cascata: a linha de `users` não é apagada e os aceites ficam na exclusão de conta, sem `ip` nem `user_agent`.
 
 ## Critérios de aceite
 

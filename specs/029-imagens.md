@@ -95,6 +95,14 @@ Esta decisão é provisória. O admin vê, na tela de operação ([033](033-obse
 - Dono: a API que recebeu o envio escreve; o worker apaga órfãs.
 - `image_variants.data` usa armazenamento `EXTERNAL` (WebP já é comprimido; evita recompressão pelo banco).
 - Consultas de listagem nunca selecionam `data`.
+
+Decisões de esquema da migration 0004 (aceitas na tarefa 198):
+
+- `image_variants.sha256` é o SHA-256 de `data` em hexadecimal minúsculo (64 caracteres), conferido por `CHECK`. É o `ETag` da entrega, entre aspas (`ETag: "<sha256>"`).
+- `image_variants.width` é o nome da variante na URL e faz parte da chave (`image_id`, `width`); o banco aceita só os seis valores (`64`, `256`, `480`, `512`, `1280`, `1600`). `height` é a altura gravada, de 1 a 1600. `bytes` é o tamanho de `data` (de 1 a 400 KB), conferido contra ela.
+- O banco não amarra a largura à finalidade: gerar só as variantes da finalidade (tabela de "Finalidades e variantes") e devolver 404 para outra largura é do código.
+- Com isso, a variante tem exatamente a largura do nome. Nas finalidades com corte (`avatar`, `profile_cover`, `product_cover`, `event_cover`) a imagem é cortada na proporção e redimensionada para essa largura, ampliando quando o original é menor; a altura sai da proporção (no máximo 400 px em 4:1 e 720 px em 16:9), dentro do teto de RNF-03.
+- Em aberto: nas finalidades de proporção original (`case_image`, `content_image`, `school_logo`), uma imagem mais alta que larga não cabe em "largura = nome" sem passar de 1600 px de altura. A regra (por exemplo, o nome passar a ser o teto do maior lado, com uma coluna para a largura real) é fixada pelo `arquiteto` antes da fase que introduz a primeira delas; na Fase 1 só existe `avatar`.
 - Retenção: enquanto houver referência; órfãs, 24 horas. Na exclusão de conta ([030](030-lgpd.md)), avatar, capa e imagens de cases do usuário são apagados.
 
 ## Critérios de aceite

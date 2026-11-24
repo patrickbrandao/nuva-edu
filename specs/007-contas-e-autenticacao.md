@@ -63,7 +63,7 @@ Qualquer pessoa pode se cadastrar no classroom. A mesma conta serve a alunos e �
 
 - E-mail "verificado": Google `email_verified = true`; Apple `email_verified = true` (no `id_token`, como booleano ou texto `"true"`); Facebook só quando a API devolve e-mail (tratado como verificado).
 - Nome: o do provedor (Apple só o envia na primeira autorização, no campo `user` do retorno); sem nome, a parte local do e-mail.
-- Vínculo manual: em Configurações > Acesso, o usuário logado adiciona (`intent=link`) ou remove provedores. Não é permitido remover o último método de acesso (precisa restar senha ou um provedor). Identidade que já está vinculada a outra conta: o vínculo é recusado com `identity_in_use`.
+- Vínculo manual: em Configurações > Acesso, o usuário logado adiciona (`intent=link`) ou remove provedores. Não é permitido remover o último método de acesso (precisa restar senha ou um provedor). Identidade que já está vinculada a outra conta: o vínculo é recusado com `identity_in_use`. A conta tem no máximo uma identidade por provedor (a remoção é por provedor, `DELETE /account/identities/{provider}`): vincular outra identidade de um provedor que a conta já tem é recusado com `provider_already_linked` (para trocar, remove-se a atual e vincula-se a nova); a mesma identidade já vinculada à própria conta conta como vínculo feito.
 - Provedor fora do ar ou com erro: o retorno leva ao site com o código do erro; os demais métodos seguem funcionando.
 - No site admin só existe `intent=login`: a identidade precisa já estar vinculada ou casar por e-mail verificado com uma conta da equipe. Não há cadastro pelo admin; quem não é da equipe volta com `staff_only`.
 
@@ -81,7 +81,7 @@ Qualquer pessoa pode se cadastrar no classroom. A mesma conta serve a alunos e �
 | Cadastro pendente | `/cadastro/social` (só no classroom) |
 | Erro | `/entrar?erro=<code>` no login; `/conta/acesso?erro=<code>` no vínculo |
 
-Códigos do retorno: `oauth_state_invalid` (sem cookie, `state` diferente ou vencido), `oauth_denied` (o usuário recusou no provedor), `oauth_provider_error` (troca do código ou validação falhou, provedor fora do ar), `account_suspended`, `staff_only` (admin), `identity_in_use` (vínculo).
+Códigos do retorno: `oauth_state_invalid` (sem cookie, `state` diferente ou vencido), `oauth_denied` (o usuário recusou no provedor), `oauth_provider_error` (troca do código ou validação falhou, provedor fora do ar), `account_suspended`, `staff_only` (admin), `identity_in_use` e `provider_already_linked` (vínculo).
 
 #### Cadastro pendente
 
@@ -190,6 +190,7 @@ As escritas sem sessão (`/auth/register`, `/auth/login`, `/auth/email/verify`, 
 | Senha do admin errada ao exibir senha | `422` `password_confirmation_invalid` |
 | E-mail já cadastrado (equipe criada pelo admin, edição, cadastro social com e-mail digitado) | `409` `email_taken` |
 | Identidade do provedor já vinculada a outra conta | `409` `identity_in_use` (no retorno OAuth, código na URL) |
+| Vínculo de um provedor que a conta já tem (outra identidade do mesmo provedor) | `409` `provider_already_linked` (no retorno OAuth, código na URL) |
 | Remover último método de acesso | `422` `last_login_method` |
 | Conta ou IP bloqueado | `429` `too_many_attempts` com `Retry-After` |
 | Retorno OAuth com `state` inválido | `302` para o site com `oauth_state_invalid` ([Fluxo do provedor](#fluxo-do-provedor)) |
@@ -283,7 +284,7 @@ Nenhum esquema tem campo de senha, exceto a resposta da exibição.
 | --- | --- | --- |
 | `users` | `id`, `email` (único entre os não excluídos, minúsculas), `email_verified_at`, `name` (nome de exibição), `full_name` (nome completo, usado em pedidos e certificados), `password` (texto, nulo), `role`, `suspended_at`, `suspended_kind` (`posting` \| `full`, nulo), `suspended_reason`, `suspended_by`, `tax_id_type` (`cpf` \| `cnpj`, nulo), `tax_id`, `last_login_at`, `deletion_requested_at`, `deleted_at`, `version`, `created_at`, `updated_at` | `classroom-api` (cadastro e dados próprios); `admin-api` (papel, suspensão, senha definida pelo admin, equipe criada) |
 | `profiles` | `user_id` (chave), `avatar_image_id` (nesta fase; o resto em [019](019-perfil-e-diretorio.md)) | `classroom-api` |
-| `oauth_identities` | `user_id`, `provider`, `provider_user_id` (único por provedor), `email`, `email_verified`, `created_at` | `classroom-api`; `admin-api` só no vínculo por e-mail do login |
+| `oauth_identities` | `user_id`, `provider`, `provider_user_id` (único por provedor), `email`, uma por provedor em cada conta (`user_id`, `provider` único), `email_verified`, `created_at` | `classroom-api`; `admin-api` só no vínculo por e-mail do login |
 | `sessions` | `id`, `id_hash` (único), `user_id`, `site`, `ip`, `user_agent`, `csrf_token`, `created_at`, `last_used_at`, `expires_at` | API do respectivo site; `admin-api` encerra sessões dos dois sites (suspensão, papel, senha) |
 | `email_tokens` | `token_hash` (único), `user_id`, `purpose` (`verify` \| `reset`), `expires_at`, `used_at`, `created_at` | `worker` (criação); `classroom-api` (uso) |
 | `login_attempts` | `email`, `ip`, `success`, `site`, `created_at` | API do respectivo site |
@@ -291,12 +292,22 @@ Nenhum esquema tem campo de senha, exceto a resposta da exibição.
 
 Restrições no banco: `CHECK (password IS NULL OR length(password) BETWEEN 8 AND 128)`; `role` nos quatro valores; `suspended_kind` amarrado a `suspended_at`; índice único de `email` parcial (`WHERE deleted_at IS NULL`).
 
+Decisões de esquema da migration 0005 (aceitas na tarefa 198):
+
+- A linha de `users` nunca é apagada: a exclusão anonimiza ([030](030-lgpd.md)). As tabelas que só existem por causa da conta (`profiles`, `oauth_identities`, `sessions`, `email_tokens`, `user_devices`) têm `ON DELETE CASCADE`; as que registram ação de terceiros (`user_suspensions`, `users.suspended_by`, `images.owner_user_id`) não deixam apagar o usuário. A cascata não substitui a anonimização, que apaga essas linhas explicitamente.
+- `email` e `name` são `NOT NULL` (com `email` normalizado e `name` não vazio). A anonimização os substitui, não os anula ([030](030-lgpd.md), "O que acontece com cada dado").
+- `version` começa em 1 e é incrementada pelo código (`UPDATE ... SET version = version + 1 WHERE id = $1 AND version = $n`; nenhuma linha atualizada: `409`); não há gatilho.
+- `tax_id` não tem formato no banco (o CNPJ alfanumérico convive com o numérico); a validação é do código, e o banco só o amarra a `tax_id_type`.
+- `sessions.id_hash` e `email_tokens.token_hash` são o SHA-256 em hexadecimal minúsculo (64 caracteres), conferido por `CHECK`.
+- `oauth_identities`: `(provider, provider_user_id)` único (`identity_in_use`) e `(user_id, provider)` único (`provider_already_linked`).
+
 Retenção: sessões 30 dias sem uso; `email_tokens` 24 h; `login_attempts` 30 dias; `user_devices` 1 ano sem uso ([033](033-observabilidade-retencao-backup.md)).
 
 ## Critérios de aceite
 
 - [ ] Conta criada pelo Google, sem senha, é recusada no login por senha com senha vazia, com espaços e com qualquer texto.
 - [ ] Mesma conta entra por senha e por Google depois de vincular; remover o último método é recusado.
+- [ ] Vincular uma segunda conta Google à mesma conta é recusado com `provider_already_linked`, também pelo banco.
 - [ ] Login social com e-mail verificado igual ao de conta existente entra na mesma conta; se a conta local não tinha e-mail confirmado, a senha anterior deixa de funcionar.
 - [ ] Cadastro com e-mail já existente responde igual ao cadastro novo e envia `account.exists` ao dono, sem alterar a conta.
 - [ ] Usuário com e-mail não confirmado não consegue comprar nem publicar (verificado nas fases que trazem essas rotas).

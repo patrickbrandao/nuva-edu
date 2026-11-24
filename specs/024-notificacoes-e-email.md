@@ -106,6 +106,13 @@ O grupo `account` não tem canal "plataforma", então não passa pela tarefa `no
 
 Retenção: `notifications` conforme RNF-04; `email_outbox` enviados por 30 dias e com falha por 90 dias. O corpo renderizado do e-mail não é guardado; `data` não contém senha nem token em claro.
 
+Decisões de esquema da migration 0007 (aceitas na tarefa 198):
+
+- A coluna `to` segue o nome desta spec; é palavra reservada e vai sempre entre aspas no SQL (`"to"`). Guarda o e-mail do usuário no momento do enfileiramento, e a fila do usuário é apagada na exclusão de conta ([030](030-lgpd.md)).
+- `sent_at` existe se, e só se, `status = 'sent'`; o "reenviar" da tela de operação devolve `failed` a `queued`. `subject` é nulo até o envio e não é amarrado ao estado: o envio pulado (`skipped: already_verified`) fica `sent` sem montar o e-mail.
+- O expurgo dos com falha (90 dias) conta de `created_at`: a tabela não guarda a data da falha. O dos enviados (30 dias) conta de `sent_at`.
+- `type` segue o formato dos códigos do catálogo (minúsculas, ao menos um ponto) e `data` é um objeto JSON.
+
 ## Critérios de aceite
 
 - [ ] Resposta em tópico seguido cria notificação e incrementa o sino do destinatário sem recarregar.

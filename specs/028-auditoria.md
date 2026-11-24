@@ -101,6 +101,16 @@ Tabela `audit_log`, de propriedade da `admin-api` (a `classroom-api` e o `worker
 
 Índices: `(created_at)`, `(actor_user_id, created_at)`, `(target_type, target_id, created_at)`, `(action, created_at)`, `(mcp_key_id, created_at)`.
 
+Decisões de esquema da migration 0006 (aceitas na tarefa 198):
+
+- `target_id` é `text`: o alvo pode ser um UUID ou uma chave (como em `settings.update`).
+- `actor_user_id` tem chave estrangeira para `users` (a linha de `users` nunca é apagada, [030](030-lgpd.md)). `mcp_key_id` fica sem chave estrangeira até a Fase 5, quando a migration de `mcp_keys` a acrescenta.
+- O índice de ação é `(action text_pattern_ops, created_at)`: o banco usa colação `en_US`, e o filtro por prefixo (`user.*` vira `action LIKE 'user.%'`) só usa índice assim; a igualdade também o usa.
+- `action` precisa ter ao menos um ponto, em minúsculas: `CHECK (action ~ '^[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*)+$')`. Toda ação do catálogo acima já segue esse formato; ação nova também.
+- O limite de 8 KB de `details` e a marca `truncated` são da `recordAudit`; o banco não repete o limite, para não desfazer uma ação por diferença de medida. O banco só exige que `details` seja um objeto.
+- O gatilho de `DELETE`, além da marca `nuva.audit_purge` da transação, exige que a linha tenha mais de 365 dias, e `audit_log_purge` desliga a marca ao terminar: nem um `SET LOCAL` avulso apaga registro recente.
+- `audit_log_purge` com `retention_days` nulo ou abaixo de 365 falha com `SQLSTATE` `22023` (`invalid_parameter_value`), distinto do `P0001` dos gatilhos.
+
 ## Critérios de aceite
 
 - [ ] Cada rota de escrita da `admin-api` tem teste que confere o registro gerado.
