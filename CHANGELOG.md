@@ -11,6 +11,7 @@ Detalhe das decisões em `specs/decisions/`.
 - Compose base: Postgres 18, Traefik opcional, Mailpit.
 - Contratos OpenAPI 3.1 iniciais das duas APIs: componentes comuns, saúde, `/api/v1/meta` e SSE.
 - Monorepo pnpm 12, TypeScript 7, Biome, lefthook (lint no pre-commit, commit validado).
+- `pnpm db:migrate` (`up`, `down`, `status`, `template`), migration 0001 (`settings`) e banco modelo dos testes.
 
 ### Decisões
 - Instalável, uma escola por instalação; AGPL-3.0.
