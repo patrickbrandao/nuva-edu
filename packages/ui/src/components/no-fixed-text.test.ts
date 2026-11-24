@@ -15,12 +15,13 @@ const withoutComments = (code: string) =>
   code.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:])\/\/.*$/gm, '$1');
 
 describe('sem texto fixo', () => {
-  it('confere os cinco componentes', () => {
+  it('confere os seis componentes', () => {
     const files = Object.keys(sources).sort();
     expect(files).toEqual([
       './feedback/Alert.tsx',
       './feedback/Dialog.tsx',
       './feedback/Toast.tsx',
+      './form/AdminTextArea.tsx',
       './form/ImagePicker.tsx',
       './form/PasswordInput.tsx',
     ]);

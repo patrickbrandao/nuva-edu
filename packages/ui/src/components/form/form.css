@@ -1,5 +1,5 @@
 /*
- * Campo de senha e seletor de imagem. Tokens --adm-* (dentro de .minui-adm). Sem `style` no
+ * Campo de senha, texto de várias linhas e seletor de imagem. Tokens --adm-* (dentro de .minui-adm). Sem `style` no
  * HTML (CSP style-src 'self').
  */
 
@@ -58,6 +58,54 @@
 
 .minui-password__count[data-valid="true"] {
   color: var(--adm-green);
+}
+
+/* =================== Texto de várias linhas =================== */
+.minui-adm-input.minui-textarea__box {
+  height: auto;
+  padding: 8px 10px;
+}
+
+.minui-textarea__box textarea {
+  flex: 1;
+  width: 100%;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  outline: 0;
+  resize: vertical;
+  background: none;
+  color: var(--adm-ink);
+  font: inherit;
+  font-size: 13.5px;
+  line-height: 1.5;
+  letter-spacing: inherit;
+}
+
+.minui-textarea__box textarea::placeholder {
+  color: var(--adm-ink-3);
+}
+
+.minui-textarea__box textarea:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.minui-textarea__notes {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.minui-textarea__count {
+  flex: none;
+  color: var(--adm-ink-3);
+  font-size: 12.5px;
+  font-variant-numeric: tabular-nums;
+}
+
+.minui-textarea__count[data-valid="false"] {
+  color: var(--adm-red);
 }
 
 /* =================== Seletor de imagem =================== */

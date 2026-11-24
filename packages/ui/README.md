@@ -34,6 +34,10 @@ Em TypeScript, com tipos de propriedade e sem texto fixo (tudo por propriedade; 
   `status` para o resto (`role={null}` tira o papel).
 - `PasswordInput`: `autoComplete` obrigatório (`current-password` ou `new-password`), limites
   8 a 128 (spec 007), botão de mostrar/ocultar com nome acessível, contador opcional por função.
+- `AdminTextArea`: texto de várias linhas com o visual do `AdminField` (`label`, `hint`, `error`
+  com `aria-invalid` e `aria-describedby`), `rows` (padrão 4), `maxLength` opcional, redimensionável
+  só na vertical e contador opcional por função (`counter`, recebe `length`, `max`, `remaining` e
+  `valid`; fica vermelho fora do limite). Usos: motivo da suspensão (500) e termos (100.000).
 - `ImagePicker`: JPEG, PNG ou WebP até 5 MB (`IMAGE_MAX_BYTES`, `checkImageFile`), recusa no
   navegador com a mensagem recebida, prévia `blob:` com corte quadrado central em CSS. A CSP
   do site precisa de `blob:` em `img-src`.

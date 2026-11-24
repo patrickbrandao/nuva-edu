@@ -471,7 +471,8 @@ export function Catalog() {
         <h2>Avisos, diálogos e formulário</h2>
         <p className="cat__note">
           Alert (em linha e em faixa), Dialog, ConfirmDialog (com o nome do item e digitação),
-          ToastProvider com useToast, PasswordInput e ImagePicker (prévia quadrada, até 5 MB).
+          ToastProvider com useToast, PasswordInput, AdminTextArea e ImagePicker (prévia quadrada,
+          até 5 MB).
         </p>
         <Pair>
           <FeedbackPieces />

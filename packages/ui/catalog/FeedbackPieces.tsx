@@ -4,6 +4,7 @@ import {
   AdminCard,
   AdminField,
   AdminScope,
+  AdminTextArea,
   Alert,
   ConfirmDialog,
   Dialog,
@@ -54,6 +55,8 @@ export function FeedbackPieces() {
   const [name, setName] = useState('SQL do zero');
   const [password, setPassword] = useState('');
   const [current, setCurrent] = useState('');
+  const [reason, setReason] = useState('');
+  const [terms, setTerms] = useState('');
   const [banner, setBanner] = useState(true);
 
   const remove = () => {
@@ -129,6 +132,23 @@ export function FeedbackPieces() {
                 password.length > 0 && password.length < 8 ? 'Use ao menos 8 caracteres.' : null
               }
               counter={({ length, max }) => `${length}/${max}`}
+            />
+            <AdminTextArea
+              label="Motivo"
+              value={reason}
+              onChange={setReason}
+              rows={3}
+              maxLength={500}
+              hint="Até 500 caracteres. A pessoa vê o motivo ao tentar entrar."
+              counter={({ length, max }) => `${length}/${max}`}
+            />
+            <AdminTextArea
+              label="Texto (Markdown)"
+              value={terms}
+              onChange={setTerms}
+              rows={6}
+              maxLength={100000}
+              error={terms.trim() === '' ? 'Campo obrigatório.' : null}
             />
             <ImagePicker
               label="Foto de perfil"

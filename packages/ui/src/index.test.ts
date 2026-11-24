@@ -28,6 +28,7 @@ describe('ponto de entrada do pacote', () => {
       'ToastProvider',
       'useToast',
       'PasswordInput',
+      'AdminTextArea',
       'ImagePicker',
       'Alert',
     ];

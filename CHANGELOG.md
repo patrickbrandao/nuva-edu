@@ -6,6 +6,7 @@ Detalhe das decisões em `specs/decisions/`.
 ## [Não lançado]
 
 ### Adicionado
+- `@nuva-edu/ui`: `AdminTextArea`, campo de várias linhas com o visual do `AdminField`, limite de caracteres, contador opcional e erro com `aria-invalid`/`aria-describedby` (task 191).
 - Classroom: login e cadastro social (só os provedores de `authProviders`), `/cadastro/social`, `/conta/acesso` (senha, provedores vinculados, sessões dos dois sites) e `/conta/perfil` (foto de perfil), com as respostas da API simuladas nos testes (task 161).
 - `@nuva-edu/core`: termos da spec 030 (`createTermsDraft`, `publishTermsVersion` com número sequencial sob trava e auditoria `terms.publish`, `listTermsVersions`, `currentTermsVersions`, `getLegalDocument`), aceite (`assertTermsAccepted`, `acceptTerms` só da vigente, sem duplicar) e `pendingTermsFor` (task 147).
 - `@nuva-edu/worker`: tarefa `email.send` (spec 024) com Nodemailer 10.6.1: os oito tipos da Fase 1 em pt-BR (texto e HTML, nome, cor e logotipo da escola), token do link criado na transação do envio, TLS obrigatório fora do `mailpit`, `SMTP_PASSWORD` exigida com `SMTP_USER`, recusa 5xx marca `failed` sem nova tentativa, linha já enviada não sai de novo (task 150).
