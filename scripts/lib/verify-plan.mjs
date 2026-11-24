@@ -26,9 +26,10 @@ export const USAGE = `Uso:
   pnpm verify:quick [--files <caminhos...>] [-- <argumentos do executor de testes>]
   pnpm verify:full [--e2e]
 
-quick  confere só o que mudou: alterações não commitadas mais os commits ainda não enviados
-       (origin/main..HEAD). Com --files, só os caminhos dados (relativos à raiz). Roda todos os
-       passos e sai com código diferente de zero se algum falhar.
+quick  confere só o que mudou: alterações não commitadas mais os commits do branch que ainda
+       não estão na main local (num worktree de tarefa, é a tarefa inteira). Com --files, só os
+       caminhos dados (relativos à raiz). Roda todos os passos e sai com código diferente de
+       zero se algum falhar.
        Contrato alterado roda o teste de contrato da API e confere o cliente gerado; migration
        alterada roda os testes de banco e confere os tipos gerados do banco.
 full   lint, tipos, tipos gerados do banco, todos os testes com banco isolado (Testcontainers),
@@ -41,6 +42,15 @@ Saída: 0 tudo certo; 1 algum passo falhou; 2 ambiente indisponível.`;
  * Lê a linha de comando (sem `node` e sem o caminho do script).
  * Devolve `{ error }` quando ela não faz sentido.
  */
+/**
+ * Referência de onde o `quick` mede o que mudou: a `main` local (cada tarefa vive num branch
+ * `task/NNN` criado dela). `origin/main` só entra quando não existe o branch `main` local, como
+ * num checkout de CI. `hasRef` responde se uma referência existe.
+ */
+export function quickBaseRef(hasRef) {
+  return hasRef('refs/heads/main') ? 'main' : 'origin/main';
+}
+
 export function parseCliArgs(argv) {
   const [mode, ...rest] = argv;
   if (mode === '--help' || mode === '-h' || rest.includes('--help') || rest.includes('-h')) {

@@ -2,6 +2,9 @@
 /tasks/
 /tmp/
 
+# Um worktree por tarefa (pnpm task:start)
+/.worktrees/
+
 # Segredos e configuração local
 .env.local
 .env.*.local

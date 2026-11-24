@@ -32,6 +32,7 @@
 **/vitest.setup.ts
 
 # Fora das imagens.
+.worktrees
 tasks
 tmp
 specs

@@ -21,6 +21,11 @@
     "compose": "node scripts/dev.mjs compose",
     "dev:up": "node scripts/dev.mjs up",
     "dev:down": "node scripts/dev.mjs down",
+    "task:start": "node scripts/task.mjs start",
+    "task:finish": "node scripts/task.mjs finish",
+    "task:abort": "node scripts/task.mjs abort",
+    "task:path": "node scripts/task.mjs path",
+    "task:list": "node scripts/task.mjs list",
     "deploy:test": "node scripts/pending.mjs deploy:test 016"
   },
   "devDependencies": {

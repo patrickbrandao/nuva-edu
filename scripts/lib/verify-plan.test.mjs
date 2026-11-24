@@ -16,6 +16,7 @@ import {
   parseCliArgs,
   parseWorkspacePatterns,
   planQuick,
+  quickBaseRef,
   ROOT_PACKAGE,
   resolveExtraArgs,
   testCandidates,
@@ -67,6 +68,23 @@ function disk(...files) {
 function changedOf(...paths) {
   return paths.map((path) => ({ path, deleted: false }));
 }
+
+describe('base do quick', () => {
+  test('a main local é a base; origin/main só quando ela não existe', () => {
+    assert.equal(
+      quickBaseRef((ref) => ref === 'refs/heads/main'),
+      'main',
+    );
+    assert.equal(
+      quickBaseRef(() => true),
+      'main',
+    );
+    assert.equal(
+      quickBaseRef(() => false),
+      'origin/main',
+    );
+  });
+});
 
 describe('linha de comando', () => {
   test('quick sem argumentos', () => {

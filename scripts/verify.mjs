@@ -24,6 +24,7 @@ import {
   parseWorkspacePatterns,
   planQuick,
   plural,
+  quickBaseRef,
   resolveExtraArgs,
   shortName,
   USAGE,
@@ -76,10 +77,15 @@ function splitNul(text) {
   return text ? text.split('\0').filter(Boolean) : [];
 }
 
+/** Base do `quick`: a `main` local; `origin/main` só se ela não existir. */
+function baseRef() {
+  return quickBaseRef((ref) => git(['show-ref', '--verify', '--quiet', ref]) !== null);
+}
+
 /**
- * O que mudou. Sem `--files`: tudo que difere do ponto em que o trabalho local se separou de
- * `origin/main` (commits não enviados, alterações em stage e fora dele) mais os arquivos novos
- * ainda não rastreados. Num branch de contribuição, a mesma conta dá "tudo desde o merge-base".
+ * O que mudou. Sem `--files`: tudo que difere do ponto em que o branch atual se separou da
+ * `main` local (`git merge-base HEAD main`: commits da tarefa, alterações em stage e fora dele)
+ * mais os arquivos novos ainda não rastreados. Num worktree de tarefa, é a tarefa inteira.
  * Só lê o Git; não mexe em índice, stash nem árvore de trabalho.
  */
 function changedFiles(onlyFiles) {
@@ -105,7 +111,7 @@ function changedFiles(onlyFiles) {
     }
     return [...seen.values()];
   }
-  const base = git(['merge-base', 'HEAD', 'origin/main'])?.trim() || 'HEAD';
+  const base = git(['merge-base', 'HEAD', baseRef()])?.trim() || 'HEAD';
   const diff = splitNul(git(['diff', '--name-status', '--no-renames', '-z', base]));
   const changed = new Map();
   for (let i = 0; i + 1 < diff.length; i += 2) {
@@ -318,7 +324,7 @@ async function quick(options) {
   console.log(
     options.files
       ? `verify:quick — ${plural(affected, 'arquivo')} de --files`
-      : `verify:quick — ${plural(affected, 'arquivo alterado', 'arquivos alterados')} desde origin/main`,
+      : `verify:quick — ${plural(affected, 'arquivo alterado', 'arquivos alterados')} desde ${baseRef()}`,
   );
 
   const extra = resolveExtraArgs({
