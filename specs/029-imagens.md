@@ -71,6 +71,23 @@ O processamento acontece na API (não na fila), porque o usuário espera o resul
 - Imagem de conteúdo ocultado pela moderação ([026](026-moderacao-e-denuncias.md)) passa a devolver 404.
 - As duas APIs servem a rota de entrega; só a API do site em uso aceita o envio daquela finalidade.
 
+### Limite de taxa da entrega
+
+Uma página do classroom (vitrine, diretório, fórum) mostra dezenas de avatares e capas, e cada um é uma requisição de entrega na primeira visita. Contada nos limites gerais, ela esgotaria os 60 por minuto do visitante e boa parte dos 120 da sessão ([004](004-classroom-api.md), RNF-04), e uma rede com NAT (escola, empresa) dividiria os 60 entre todos. Por isso (decidido na tarefa 277):
+
+- `getImageVariant` não entra nos limites por sessão e por visitante de nenhuma das duas APIs, nem conta neles.
+- Tem conta própria: 600 requisições por minuto por IP, com ou sem sessão, nas duas APIs (cada uma conta as suas). `304` conta como qualquer outra resposta. Acima disso, `429` `rate_limited` com `Retry-After`, já declarado na operação.
+- O teto cobre uma página cheia com folga; o navegador não repete a entrega de uma variante em cache (RNF-06), então o volume de quem navega cai depois da primeira visita. O teto existe para conter quem varre a rota (cada entrega lê até 400 KB do banco).
+- Na `admin-api`, que não tem limite de visitante ([003](003-admin-api.md), RNF-03), vale o mesmo: a entrega sai do limite de 300 por sessão e ganha a conta de 600 por IP.
+
+### Apagar imagem
+
+`DELETE /api/v1/images/{image_id}` existe para o cliente desfazer um envio que não vai usar (o aluno escolheu outra foto antes de salvar o perfil). Responde `204`, ou `404` quando a imagem não existe, é de outro usuário **ou já está em uso** (decidido na tarefa 277):
+
+- A operação só tem efeito sobre o envio ainda solto; para quem chama, imagem em uso não é "apagável" e se comporta como inexistente. A interface não tem o que fazer de diferente num `409`: a imagem em uso sai da referência pelo próprio recurso (trocar o avatar) e some no expurgo.
+- O mesmo `404` para "de outro usuário" e "em uso" não revela, por diferença de resposta, se o identificador de outra pessoa está em uso.
+- O núcleo (`deleteUnreferencedImage`) distingue o caso com `image_in_use` (`409`), útil a outros chamadores e aos testes; a rota de cada API o converte em `404`. O contrato declara só `404`, sem `409`.
+
 ### Expurgo
 
 A tarefa diária `image.cleanup` do worker ([005](005-worker-e-fila.md)) apaga as imagens sem referência há mais de 24 horas. A referência é mantida por chaves estrangeiras das tabelas donas (`profiles`, `courses`, `bundles`, `ebooks`, `events`, `case_images`, `settings`) e por uma tabela de uso para `content_image`.
