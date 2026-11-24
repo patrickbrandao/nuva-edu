@@ -67,6 +67,7 @@ Regras:
 6. **Índices**: nome `<tabela>_<assunto>_idx`; o único leva `_unique` no fim, como as restrições, porque também aparece nos erros (`jobs_unique_key_active_unique`). Índice parcial traz no comentário a consulta que atende, e o código repete o predicado tal como está (`ON CONFLICT (...) WHERE ...` só encontra o índice assim).
 7. **Estado em `text` com `CHECK`** (`<tabela>_status_valid`), não `ENUM`: acrescentar um estado é trocar a restrição. Colunas que só valem em certos estados ganham um `CHECK` que as amarra ao estado (`jobs_lock_matches_status`).
 8. **`NOTIFY`**: canal `nuva_<assunto>`, emitido por gatilho `AFTER ... FOR EACH ROW` com a condição no `WHEN`, função `<tabela>_notify()` e sem conteúdo (avisos iguais da mesma transação viram um só; quem ouve consulta a tabela). O `down` remove a função.
+9. **Sequência avulsa** (que não é de coluna): nome `<assunto>_id_seq`, `AS bigint`, consumida com `nextval`. Serve para numerar em ordem o que não tem tabela, como os eventos do SSE (`user_event_id_seq`). Não volta atrás em `ROLLBACK`: o código que a usa aceita saltos.
 
 ### Mudança destrutiva: duas etapas
 

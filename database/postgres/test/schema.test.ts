@@ -21,6 +21,11 @@ async function publicObjects(db: Scratch): Promise<string[]> {
       WHERE n.nspname = 'public' AND d.objid IS NULL
     UNION ALL
     SELECT 'extensão ' || extname FROM pg_extension WHERE extname <> 'plpgsql'
+    UNION ALL
+    SELECT 'sequência ' || sequencename FROM pg_sequences WHERE schemaname = 'public'
+    UNION ALL
+    SELECT 'índice ' || indexname FROM pg_indexes
+      WHERE schemaname = 'public' AND tablename <> 'schema_migrations'
     ORDER BY 1`);
   return rows.map((row) => row.item);
 }
@@ -38,7 +43,13 @@ describe('migrations reais', () => {
 
   test('do zero, depois down de todas e up de novo, sem sobras', async () => {
     const full = await publicObjects(db);
-    for (const item of ['tabela settings', 'tabela jobs', 'função jobs_notify']) {
+    for (const item of [
+      'tabela settings',
+      'tabela jobs',
+      'função jobs_notify',
+      'índice jobs_unique_key_idx',
+      'sequência user_event_id_seq',
+    ]) {
       assert.ok(full.includes(item), item);
     }
 
@@ -171,7 +182,7 @@ describe('migrations reais', () => {
     await db.client.query('DELETE FROM jobs');
   });
 
-  test('0002: jobs tem os índices de consumo, deduplicação, batimento e retenção', async () => {
+  test('0002 e 0003: jobs tem os índices de consumo, deduplicação, batimento, retenção e chave', async () => {
     const { rows } = await db.client.query<{ indexname: string; indexdef: string }>(
       `SELECT indexname, indexdef FROM pg_indexes
         WHERE schemaname = 'public' AND tablename = 'jobs' ORDER BY indexname`,
@@ -183,6 +194,7 @@ describe('migrations reais', () => {
       'jobs_ready_idx',
       'jobs_running_heartbeat_idx',
       'jobs_unique_key_active_unique',
+      'jobs_unique_key_idx',
     ]);
     assert.match(
       defs.jobs_ready_idx ?? '',
@@ -191,6 +203,10 @@ describe('migrations reais', () => {
     assert.match(defs.jobs_unique_key_active_unique ?? '', /^CREATE UNIQUE INDEX .*\(unique_key\)/);
     assert.match(defs.jobs_running_heartbeat_idx ?? '', /\(heartbeat_at\) WHERE/);
     assert.match(defs.jobs_finished_idx ?? '', /\(status, finished_at\) WHERE/);
+    assert.match(
+      defs.jobs_unique_key_idx ?? '',
+      /^CREATE INDEX .*\(unique_key\) WHERE \(unique_key IS NOT NULL\)$/,
+    );
   });
 
   test('0002: jobs recusa estado, tipo, payload e tentativas inválidos', async () => {
@@ -524,5 +540,114 @@ describe('migrations reais', () => {
     await db.client.query(`UPDATE jobs SET priority = 10 WHERE type = 'email.send'`);
     assert.equal(await drain(), 0, 'mudança de prioridade');
     await db.client.query('DELETE FROM jobs');
+  });
+
+  // A consulta de enqueueRecurring (packages/core/src/modules/jobs/queue.ts), com os mesmos
+  // parâmetros e conversões.
+  const enqueueRecurring = `
+    INSERT INTO jobs (type, payload, priority, max_attempts, unique_key, run_at)
+    SELECT
+      $1,
+      $2::jsonb,
+      $3::smallint,
+      $4::smallint,
+      $5,
+      COALESCE($6::timestamptz, now())
+    WHERE NOT EXISTS (SELECT 1 FROM jobs WHERE unique_key = $5)
+    ON CONFLICT (unique_key) WHERE status IN ('queued', 'running') DO NOTHING
+    RETURNING *`;
+  const recurringParams = (key: string) => ['retention.purge', '{}', 0, 5, key, null];
+
+  test('0003: a recorrente não é reenfileirada depois de concluída', async () => {
+    const key = 'retention.purge:2026-11-24';
+    const first = await db.client.query<{ id: string }>(enqueueRecurring, recurringParams(key));
+    assert.equal(first.rowCount, 1);
+    assert.equal((await db.client.query(enqueueRecurring, recurringParams(key))).rowCount, 0);
+    await db.client.query(
+      `UPDATE jobs SET status = 'done', finished_at = now(), locked_by = 'w1' WHERE id = $1`,
+      [first.rows[0]?.id],
+    );
+    assert.equal(
+      (await db.client.query(enqueueRecurring, recurringParams(key))).rowCount,
+      0,
+      'janela já concluída',
+    );
+    const next = recurringParams('retention.purge:2026-11-25');
+    assert.equal((await db.client.query(enqueueRecurring, next)).rowCount, 1, 'janela seguinte');
+    await db.client.query('DELETE FROM jobs');
+  });
+
+  test('0003: a consulta de existência da recorrente usa jobs_unique_key_idx', async () => {
+    // Histórico de recorrentes concluídas, mais tarefas sem chave (fora do índice parcial).
+    await db.client.query(
+      `INSERT INTO jobs (type, status, finished_at, unique_key)
+       SELECT 'retention.purge', 'done', now(), 'retention.purge:janela-' || n
+         FROM generate_series(1, 3000) n`,
+    );
+    await db.client.query(
+      `INSERT INTO jobs (type, status, finished_at)
+       SELECT 'email.send', 'done', now() FROM generate_series(1, 3000)`,
+    );
+    await db.client.query('ANALYZE jobs');
+    const explain = async (): Promise<string> => {
+      const { rows } = await db.client.query<{ 'QUERY PLAN': string }>(
+        `EXPLAIN ${enqueueRecurring}`,
+        recurringParams('retention.purge:janela-1500'),
+      );
+      return rows.map((row) => row['QUERY PLAN']).join('\n');
+    };
+
+    const plan = await explain();
+    assert.match(plan, /Index (Only )?Scan using jobs_unique_key_idx on jobs/, plan);
+    assert.doesNotMatch(plan, /Seq Scan/, plan);
+
+    // Contraprova: sem o índice (como antes da 0003), a mesma consulta varre a tabela.
+    await db.client.query('BEGIN');
+    await db.client.query('DROP INDEX jobs_unique_key_idx');
+    const before = await explain();
+    await db.client.query('ROLLBACK');
+    assert.match(before, /Seq Scan on jobs/, before);
+
+    const { rows: size } = await db.client.query(
+      `SELECT pg_relation_size('jobs_unique_key_idx') < pg_relation_size('jobs_pkey') AS smaller`,
+    );
+    assert.deepEqual(size, [{ smaller: true }], 'parcial: só as tarefas com chave');
+    await db.client.query('DELETE FROM jobs');
+  });
+
+  test('0003: user_event_id_seq é bigint, começa em 1 e só cresce, mesmo com ROLLBACK', async () => {
+    const { rows: meta } = await db.client.query(
+      `SELECT data_type::text AS type, start_value::text AS start, increment_by::text AS step,
+              max_value::text AS max, cycle
+         FROM pg_sequences WHERE schemaname = 'public' AND sequencename = 'user_event_id_seq'`,
+    );
+    assert.deepEqual(meta, [
+      { type: 'bigint', start: '1', step: '1', max: '9223372036854775807', cycle: false },
+    ]);
+
+    const other = await db.connect();
+    const next = async (client: pg.Client): Promise<bigint> => {
+      const { rows } = await client.query<{ id: string }>(
+        `SELECT nextval('user_event_id_seq')::text AS id`,
+      );
+      return BigInt(rows[0]?.id ?? '0');
+    };
+    const a = await next(db.client);
+    const b = await next(other);
+    await db.client.query('BEGIN');
+    const c = await next(db.client);
+    await db.client.query('ROLLBACK');
+    const d = await next(other);
+    assert.ok(a >= 1n && a < b && b < c && c < d, `${a} < ${b} < ${c} < ${d}`);
+
+    // Duas conexões ao mesmo tempo nunca recebem o mesmo número.
+    const take = async (client: pg.Client): Promise<bigint[]> => {
+      const taken: bigint[] = [];
+      for (let i = 0; i < 100; i += 1) taken.push(await next(client));
+      return taken;
+    };
+    const ids = (await Promise.all([take(db.client), take(other)])).flat();
+    assert.equal(new Set(ids).size, ids.length);
+    assert.ok(ids.every((id) => id > d));
   });
 });
