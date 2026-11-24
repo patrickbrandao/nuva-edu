@@ -1,3 +1,4 @@
+import { generateKeyPairSync } from 'node:crypto';
 import { writeSync } from 'node:fs';
 import { isIP } from 'node:net';
 import { LOG_LEVELS, type LogLevel } from '../logging/logger.ts';
@@ -67,12 +68,21 @@ export interface Config {
     orderBoletoDays: number;
     subscriptionGraceDays: number;
   };
-  /** Provedor não configurado vale `null` e fica desligado. */
+  /**
+   * Provedor não configurado vale `null` e fica desligado. Com o simulador ligado (`oauthMock`),
+   * os três valem as credenciais fixas de teste (`OAUTH_MOCK_CLIENTS`).
+   */
   authProviders: {
     google: OAuthCredentials | null;
     facebook: OAuthCredentials | null;
     apple: AppleCredentials | null;
   };
+  /**
+   * Provedor OAuth simulado (ADR 0024), ligado por `NUVA_OAUTH_MOCK_URL`; `null` desligado.
+   * `url` é o endereço visto pelo navegador; `internalUrl`, o usado pela API na troca do código.
+   * Ambos sem a barra final.
+   */
+  oauthMock: { url: string; internalUrl: string } | null;
   trustedProxies: readonly string[];
   retention: {
     sessionDays: number;
@@ -117,6 +127,26 @@ export const DEFAULT_TRUSTED_PROXIES = [
   'fc00::/7',
 ] as const;
 
+/** Limites da spec 031 e da spec 007, contados em caracteres. */
+export const SESSION_SECRET_MIN_LENGTH = 32;
+export const ADMIN_PASSWORD_MIN_LENGTH = 8;
+export const ADMIN_PASSWORD_MAX_LENGTH = 128;
+
+/**
+ * Credenciais fixas de teste do simulador (`scripts/oauth-mock/`, `TEST_CLIENTS`), usadas com
+ * `NUVA_OAUTH_MOCK_URL` definida. Não são segredo: só valem contra o simulador. A Apple não tem
+ * chave fixa: o simulador não confere a assinatura do `client_secret`, e cada carga da
+ * configuração gera uma chave P-256 nova.
+ */
+export const OAUTH_MOCK_CLIENTS = {
+  google: {
+    clientId: 'nuva-edu-mock.apps.googleusercontent.com',
+    clientSecret: 'nuva-edu-mock-google-secret',
+  },
+  facebook: { clientId: '1000000000000001', clientSecret: 'nuva-edu-mock-facebook-secret' },
+  apple: { clientId: 'br.com.tmsoft.nuva-edu.mock', teamId: 'NUVAEDUTM1', keyId: 'NUVAEDUKY1' },
+} as const;
+
 /** Etiqueta BCP 47 aceita em `NUVA_LOCALE` (spec 031), sem diferenciar maiúsculas. */
 const LOCALE_PATTERN = /^[a-z]{2,3}(-[a-z0-9]{2,8})*$/i;
 
@@ -154,8 +184,11 @@ export function loadConfig(options: LoadConfigOptions = {}): Config {
     reader.fail('ADMIN_EMAIL', 'deve ser um endereço de e-mail');
   }
 
+  const env = reader.oneOf('NUVA_ENV', 'development', ['development', 'test', 'production']);
+  const oauthMock = readOAuthMock(reader, env);
+
   const config: Config = {
-    env: reader.oneOf('NUVA_ENV', 'development', ['development', 'test', 'production']),
+    env,
     logLevel: reader.oneOf('NUVA_LOG_LEVEL', 'info', LOG_LEVELS),
     databaseUrl: readDatabaseUrl(reader),
     domain,
@@ -167,8 +200,8 @@ export function loadConfig(options: LoadConfigOptions = {}): Config {
     classroomUrl: origin(classroomHost),
     currency: reader.matching('NUVA_CURRENCY', 'BRL', /^[A-Z]{3}$/, 'deve ser um código ISO 4217'),
     locale: readLocale(reader),
-    sessionSecret: secret('SESSION_SECRET'),
-    admin: { email: adminEmail, password: secret('ADMIN_PASSWORD') },
+    sessionSecret: readSessionSecret(reader, secret('SESSION_SECRET')),
+    admin: { email: adminEmail, password: readAdminPassword(reader, secret('ADMIN_PASSWORD')) },
     smtp: {
       host: reader.string('SMTP_HOST', 'mailpit'),
       port: reader.int('SMTP_PORT', 1025, { min: 1, max: 65535 }),
@@ -187,11 +220,8 @@ export function loadConfig(options: LoadConfigOptions = {}): Config {
       orderBoletoDays: reader.int('NUVA_ORDER_BOLETO_DAYS', 3, { min: 1 }),
       subscriptionGraceDays: reader.int('NUVA_SUBSCRIPTION_GRACE_DAYS', 3),
     },
-    authProviders: {
-      google: readOAuth(reader, 'GOOGLE_CLIENT_ID', 'GOOGLE_CLIENT_SECRET'),
-      facebook: readOAuth(reader, 'FACEBOOK_APP_ID', 'FACEBOOK_APP_SECRET'),
-      apple: readApple(reader),
-    },
+    authProviders: oauthMock === null ? readAuthProviders(reader) : mockAuthProviders(),
+    oauthMock,
     trustedProxies: readTrustedProxies(reader),
     retention: {
       sessionDays: reader.int('NUVA_RETENTION_SESSION_DAYS', 30, { min: 1 }),
@@ -353,6 +383,96 @@ function readGroup<const N extends string>(
   >;
 }
 
+/** A mensagem nunca repete o valor: é segredo. */
+function readSessionSecret(reader: EnvReader, value: string | null): string | null {
+  if (value !== null && [...value].length < SESSION_SECRET_MIN_LENGTH) {
+    reader.fail(
+      'SESSION_SECRET',
+      `deve ter no mínimo ${SESSION_SECRET_MIN_LENGTH} caracteres (gere com openssl rand -base64 48)`,
+    );
+  }
+  return value;
+}
+
+/** Fora de 8 a 128 caracteres impede a subida (spec 007, "Admin inicial"). */
+function readAdminPassword(reader: EnvReader, value: string | null): string | null {
+  if (value !== null) {
+    const length = [...value].length;
+    if (length < ADMIN_PASSWORD_MIN_LENGTH || length > ADMIN_PASSWORD_MAX_LENGTH) {
+      reader.fail(
+        'ADMIN_PASSWORD',
+        `deve ter de ${ADMIN_PASSWORD_MIN_LENGTH} a ${ADMIN_PASSWORD_MAX_LENGTH} caracteres`,
+      );
+    }
+  }
+  return value;
+}
+
+/**
+ * `NUVA_OAUTH_MOCK_URL` liga o simulador; `NUVA_OAUTH_MOCK_INTERNAL_URL` vale o mesmo endereço
+ * quando ausente. Em produção a variável impede a subida: ligada, permitiria entrar em qualquer
+ * conta (ADR 0024).
+ */
+function readOAuthMock(reader: EnvReader, env: Config['env']): Config['oauthMock'] {
+  const url = reader.optional('NUVA_OAUTH_MOCK_URL');
+  const internal = reader.optional('NUVA_OAUTH_MOCK_INTERNAL_URL');
+  if (url === null) {
+    if (internal !== null) {
+      reader.fail('NUVA_OAUTH_MOCK_INTERNAL_URL', 'só vale com NUVA_OAUTH_MOCK_URL definida');
+    }
+    return null;
+  }
+  if (env === 'production') {
+    reader.fail(
+      'NUVA_OAUTH_MOCK_URL',
+      'o provedor OAuth simulado é recusado com NUVA_ENV=production; remova a variável',
+    );
+    return null;
+  }
+  const publicUrl = readHttpUrl(reader, 'NUVA_OAUTH_MOCK_URL', url);
+  const internalUrl =
+    internal === null ? publicUrl : readHttpUrl(reader, 'NUVA_OAUTH_MOCK_INTERNAL_URL', internal);
+  return { url: publicUrl, internalUrl };
+}
+
+/** URL `http`/`https` sem consulta nem fragmento, devolvida sem a barra final. */
+function readHttpUrl(reader: EnvReader, name: string, raw: string): string {
+  const parsed = URL.parse(raw);
+  if (
+    parsed === null ||
+    !['http:', 'https:'].includes(parsed.protocol) ||
+    parsed.search !== '' ||
+    parsed.hash !== '' ||
+    parsed.username !== '' ||
+    parsed.password !== ''
+  ) {
+    reader.fail(name, `deve ser uma URL http:// ou https://, sem consulta; recebido "${raw}"`);
+    return raw;
+  }
+  return `${parsed.origin}${parsed.pathname}`.replace(/\/+$/, '');
+}
+
+function readAuthProviders(reader: EnvReader): Config['authProviders'] {
+  return {
+    google: readOAuth(reader, 'GOOGLE_CLIENT_ID', 'GOOGLE_CLIENT_SECRET'),
+    facebook: readOAuth(reader, 'FACEBOOK_APP_ID', 'FACEBOOK_APP_SECRET'),
+    apple: readApple(reader),
+  };
+}
+
+/** Com o simulador, as credenciais reais nem são lidas: ficam ignoradas (spec 007). */
+function mockAuthProviders(): Config['authProviders'] {
+  const { privateKey } = generateKeyPairSync('ec', { namedCurve: 'P-256' });
+  return {
+    google: { ...OAUTH_MOCK_CLIENTS.google },
+    facebook: { ...OAUTH_MOCK_CLIENTS.facebook },
+    apple: {
+      ...OAUTH_MOCK_CLIENTS.apple,
+      privateKey: privateKey.export({ type: 'pkcs8', format: 'pem' }).toString(),
+    },
+  };
+}
+
 function readOAuth(reader: EnvReader, id: string, secret: string): OAuthCredentials | null {
   const group = readGroup(reader, [id, secret]);
   return group && { clientId: group[id] ?? '', clientSecret: group[secret] ?? '' };
@@ -370,7 +490,8 @@ function readApple(reader: EnvReader): AppleCredentials | null {
       clientId: group.APPLE_CLIENT_ID,
       teamId: group.APPLE_TEAM_ID,
       keyId: group.APPLE_KEY_ID,
-      privateKey: group.APPLE_PRIVATE_KEY,
+      // O .env guarda o PEM numa linha só, com \n no lugar das quebras (spec 031).
+      privateKey: group.APPLE_PRIVATE_KEY.replaceAll('\\n', '\n'),
     }
   );
 }

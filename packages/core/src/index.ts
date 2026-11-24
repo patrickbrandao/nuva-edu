@@ -1,4 +1,6 @@
 export {
+  ADMIN_PASSWORD_MAX_LENGTH,
+  ADMIN_PASSWORD_MIN_LENGTH,
   type AppleCredentials,
   type Config,
   DEFAULT_TRUSTED_PROXIES,
@@ -6,7 +8,9 @@ export {
   type LoadConfigOrExitOptions,
   loadConfig,
   loadConfigOrExit,
+  OAUTH_MOCK_CLIENTS,
   type OAuthCredentials,
+  SESSION_SECRET_MIN_LENGTH,
   type SecretVariable,
 } from './config/config.ts';
 export { ConfigError, type ConfigIssue } from './config/env-reader.ts';
@@ -66,64 +70,14 @@ export {
   redactString,
   SENSITIVE_KEY_PARTS,
 } from './logging/redact.ts';
-export {
-  imagePath,
-  isImageId,
-  SCHOOL_LOGO_DEFAULT_VARIANT,
-  SCHOOL_LOGO_VARIANTS,
-  type SchoolLogoVariant,
-  schoolLogoUrl,
-} from './modules/images/image-url.ts';
-export {
-  JOBS_CHANNEL,
-  type JobListener,
-  type JobListenerOptions,
-  listenForJobs,
-} from './modules/jobs/listener.ts';
-export {
-  type ClaimOptions,
-  claimJobs,
-  completeJob,
-  type EnqueueOptions,
-  type EnqueueRecurringOptions,
-  enqueue,
-  enqueueRecurring,
-  type FailOptions,
-  failJob,
-  formatJobError,
-  getJobCounts,
-  getJobCountsByType,
-  getOldestPendingJobAgeSeconds,
-  HEARTBEAT_INTERVAL_MS,
-  heartbeatJobs,
-  type JobCounts,
-  type JobLock,
-  type JobTypeCounts,
-  RETRY_BASE_SECONDS,
-  RETRY_JITTER,
-  RETRY_MAX_SECONDS,
-  recurringKey,
-  releaseJob,
-  requeueStaleJobs,
-  retryJob,
-  STALE_AFTER_MS,
-  SWEEP_INTERVAL_MS,
-} from './modules/jobs/queue.ts';
-export {
-  isJobType,
-  isKnownJob,
-  JOB_DEFINITIONS,
-  JOB_STATUSES,
-  type Job,
-  type JobContext,
-  type JobDefinition,
-  type JobHandlers,
-  type JobOf,
-  type JobPayloads,
-  type JobStatus,
-  type JobType,
-  type KnownJob,
-} from './modules/jobs/registry.ts';
+export * from './modules/accounts/index.ts';
+export * from './modules/audit/index.ts';
+export * from './modules/images/index.ts';
+export * from './modules/jobs/index.ts';
+export * from './modules/notifications/index.ts';
+export * from './modules/oauth/index.ts';
+export * from './modules/permissions/index.ts';
+export * from './modules/privacy/index.ts';
 export {
   createSettingsReader,
   DEFAULT_SOURCE_CODE_URL,

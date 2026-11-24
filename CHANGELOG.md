@@ -6,6 +6,7 @@ Detalhe das decisões em `specs/decisions/`.
 ## [Não lançado]
 
 ### Adicionado
+- `@nuva-edu/core`: base dos módulos da Fase 1 (`index.ts` de `accounts`, `accounts/management`, `audit`, `images`, `jobs`, `notifications`, `oauth`, `permissions` e `privacy`, com `export *`), `sharp` 0.35.5 e `jose` 6.2.18; configuração com `SESSION_SECRET` de 32+ caracteres, `ADMIN_PASSWORD` de 8 a 128, `APPLE_PRIVATE_KEY` com `\n` convertido e simulador OAuth (`NUVA_OAUTH_MOCK_URL`, `NUVA_OAUTH_MOCK_INTERNAL_URL`, recusado em produção, credenciais fixas) (task 141).
 - Migration 0007: `email_outbox` (spec 024; `subject` nulo até o envio, índices da tela de operação e do expurgo), `terms_versions` (número único por documento entre as publicadas, versão publicada recusa `UPDATE` e `DELETE`) e `terms_acceptances` (um aceite por usuário e versão) (task 140).
 - Migration 0006: `audit_log` (spec 028) com os cinco índices e imutabilidade por gatilhos (`UPDATE` só anula `ip` e `user_agent`; `DELETE` só por `audit_log_purge`, que exige 365 dias ou mais e apaga em lotes de 5.000; `TRUNCATE` recusado) (task 139).
 - Migration 0005: `users` (senha de 8 a 128 ou nula, e-mail único entre ativos, busca trigram), `profiles`, `oauth_identities`, `sessions`, `email_tokens`, `login_attempts`, `user_devices` e `user_suspensions` (specs 007 e 026), e chave estrangeira de `images.owner_user_id` (task 138).

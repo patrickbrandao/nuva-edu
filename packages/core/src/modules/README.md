@@ -1,11 +1,14 @@
 # Módulos do núcleo
 
-Uma pasta por área de negócio; `jobs`, `settings` e `stream` estão implementados, `images` tem só o caminho de entrega, as demais ainda vazias. Cada módulo ganha seu código (entidades, regras, consultas Kysely) junto com a tarefa que o implementa, e exporta o que as APIs e o worker usam por `src/index.ts`.
+Uma pasta por área de negócio; `jobs`, `settings` e `stream` estão implementados, `images` tem só o caminho de entrega, as demais ainda vazias. Cada módulo ganha seu código (entidades, regras, consultas Kysely) junto com a tarefa que o implementa.
+
+Os módulos da Fase 1 (`accounts`, `audit`, `images`, `jobs`, `notifications`, `oauth`, `permissions`, `privacy`) exportam pelo próprio `index.ts`, ligado ao `src/index.ts` por `export *`: a tarefa de um módulo altera só a pasta dele. Em `accounts`, a gestão pela equipe fica em `management/`, com `index.ts` próprio reexportado pelo do módulo. Os demais seguem com exportação nomeada no `src/index.ts` até ganharem o seu `index.ts`.
 
 | Pasta | Conteúdo | Spec |
 | --- | --- | --- |
 | `settings` | Configuração da escola | 003, 031 |
-| `accounts` | Cadastro, login, sessão, admin inicial | 007 |
+| `accounts` | Cadastro, login, sessão, admin inicial; gestão de usuários pela equipe em `management/` | 007 |
+| `oauth` | Login social: provedores Google, Facebook e Apple, `id_token`, vínculo | 007 |
 | `permissions` | Papéis e matriz de permissões | 008 |
 | `catalog` | Cursos, módulos, aulas, ebooks, pacotes | 009 |
 | `entitlements` | Direitos de acesso e cascata | 010 |

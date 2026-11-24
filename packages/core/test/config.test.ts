@@ -1,3 +1,4 @@
+import { createPrivateKey } from 'node:crypto';
 import { BlockList, isIP } from 'node:net';
 import { describe, expect, it } from 'vitest';
 import {
@@ -5,9 +6,12 @@ import {
   DEFAULT_TRUSTED_PROXIES,
   loadConfig,
   loadConfigOrExit,
+  OAUTH_MOCK_CLIENTS,
 } from '../src/index.ts';
 
 const base = { DATABASE_URL: 'postgres://nuva_edu:pw-do-banco@db:5432/nuva_edu' };
+/** 32 caracteres: o mínimo da spec 031. */
+const sessionSecret = 'segredo-de-sessao-com-32-letras!';
 
 function issuesOf(
   env: Record<string, string | undefined>,
@@ -57,6 +61,7 @@ describe('loadConfig', () => {
         subscriptionGraceDays: 3,
       },
       authProviders: { google: null, facebook: null, apple: null },
+      oauthMock: null,
       workerConcurrency: 10,
       mcp: { ratePerMinute: 120, maxKeys: 20 },
       images: { maxUploadMb: 5, caseMaxImages: 8, uploadsPerHour: 30 },
@@ -186,7 +191,7 @@ describe('loadConfig', () => {
     const config = loadConfig({
       env: {
         ...base,
-        SESSION_SECRET: 's1',
+        SESSION_SECRET: sessionSecret,
         ADMIN_EMAIL: 'admin@escola.example',
         ADMIN_PASSWORD: 'senha-legivel',
         SMTP_USER: 'mailer',
@@ -197,7 +202,7 @@ describe('loadConfig', () => {
       },
       required: ['SESSION_SECRET', 'ADMIN_EMAIL', 'ADMIN_PASSWORD'],
     });
-    expect(config.sessionSecret).toBe('s1');
+    expect(config.sessionSecret).toBe(sessionSecret);
     expect(config.admin).toEqual({ email: 'admin@escola.example', password: 'senha-legivel' });
     expect(config.smtp).toMatchObject({ user: 'mailer', password: 's2' });
     expect(config.payment.mercadoPago).toEqual({
@@ -357,6 +362,140 @@ describe('loadConfig', () => {
       'APPLE_PRIVATE_KEY',
     ]);
     expect(error.message).toContain('FACEBOOK_APP_SECRET: obrigatória quando FACEBOOK_APP_ID');
+  });
+
+  it('converte o \\n literal de APPLE_PRIVATE_KEY em quebra de linha', () => {
+    const config = loadConfig({
+      env: {
+        ...base,
+        APPLE_CLIENT_ID: 'aid',
+        APPLE_TEAM_ID: 'team',
+        APPLE_KEY_ID: 'kid',
+        APPLE_PRIVATE_KEY: '-----BEGIN PRIVATE KEY-----\\nMIGT\\nAbCd\\n-----END PRIVATE KEY-----',
+      },
+    });
+    expect(config.authProviders.apple?.privateKey).toBe(
+      '-----BEGIN PRIVATE KEY-----\nMIGT\nAbCd\n-----END PRIVATE KEY-----',
+    );
+  });
+
+  it('exige SESSION_SECRET com no mínimo 32 caracteres, sem repetir o valor', () => {
+    const curto = 'segredo-de-sessao-com-31-letras';
+    expect(curto).toHaveLength(31);
+    const error = issuesOf({ ...base, SESSION_SECRET: curto });
+    expect(error.issues).toEqual([
+      { variable: 'SESSION_SECRET', message: expect.stringContaining('no mínimo 32 caracteres') },
+    ]);
+    expect(error.message).not.toContain(curto);
+    expect(loadConfig({ env: { ...base, SESSION_SECRET: sessionSecret } }).sessionSecret).toBe(
+      sessionSecret,
+    );
+  });
+
+  it('exige ADMIN_PASSWORD de 8 a 128 caracteres, sem repetir o valor', () => {
+    for (const password of ['senha12', 'x'.repeat(129)]) {
+      const error = issuesOf({ ...base, ADMIN_PASSWORD: password });
+      expect(error.issues).toEqual([
+        { variable: 'ADMIN_PASSWORD', message: 'deve ter de 8 a 128 caracteres' },
+      ]);
+      expect(error.message).not.toContain(password);
+    }
+    for (const password of ['senha123', 'x'.repeat(128), 'ação-çãé']) {
+      expect(loadConfig({ env: { ...base, ADMIN_PASSWORD: password } }).admin.password).toBe(
+        password,
+      );
+    }
+  });
+
+  it('o simulador OAuth liga os três provedores com as credenciais fixas e ignora as reais', () => {
+    const config = loadConfig({
+      env: {
+        ...base,
+        NUVA_OAUTH_MOCK_URL: 'http://oauth-mock.localhost:8080/',
+        GOOGLE_CLIENT_ID: 'real-id',
+        GOOGLE_CLIENT_SECRET: 'real-secret',
+        // Pela metade seria erro; com o simulador, nem é lida.
+        FACEBOOK_APP_ID: 'real-fb',
+      },
+    });
+    expect(config.oauthMock).toEqual({
+      url: 'http://oauth-mock.localhost:8080',
+      internalUrl: 'http://oauth-mock.localhost:8080',
+    });
+    expect(config.authProviders.google).toEqual(OAUTH_MOCK_CLIENTS.google);
+    expect(config.authProviders.facebook).toEqual(OAUTH_MOCK_CLIENTS.facebook);
+    expect(config.authProviders.apple).toMatchObject(OAUTH_MOCK_CLIENTS.apple);
+    const key = createPrivateKey(config.authProviders.apple?.privateKey ?? '');
+    expect(key.asymmetricKeyDetails?.namedCurve).toBe('prime256v1');
+  });
+
+  it('as credenciais fixas são as mesmas do simulador (scripts/oauth-mock)', async () => {
+    // Caminho em variável: o simulador é JavaScript sem declaração de tipos.
+    const simulator = new URL('../../../scripts/oauth-mock/server.mjs', import.meta.url).href;
+    const { TEST_CLIENTS } = (await import(simulator)) as {
+      TEST_CLIENTS: Record<'google' | 'facebook' | 'apple', Record<string, string>>;
+    };
+    expect(OAUTH_MOCK_CLIENTS).toEqual({
+      google: TEST_CLIENTS.google,
+      facebook: {
+        clientId: TEST_CLIENTS.facebook.appId,
+        clientSecret: TEST_CLIENTS.facebook.appSecret,
+      },
+      apple: TEST_CLIENTS.apple,
+    });
+  });
+
+  it('usa NUVA_OAUTH_MOCK_INTERNAL_URL na troca do código quando definida', () => {
+    const config = loadConfig({
+      env: {
+        ...base,
+        NUVA_ENV: 'test',
+        NUVA_OAUTH_MOCK_URL: 'https://oauth-mock.escola.test',
+        NUVA_OAUTH_MOCK_INTERNAL_URL: 'http://oauth-mock:8080',
+      },
+    });
+    expect(config.oauthMock).toEqual({
+      url: 'https://oauth-mock.escola.test',
+      internalUrl: 'http://oauth-mock:8080',
+    });
+  });
+
+  it('recusa o simulador OAuth com NUVA_ENV=production, citando a variável', () => {
+    const error = issuesOf({
+      ...base,
+      NUVA_ENV: 'production',
+      NUVA_OAUTH_MOCK_URL: 'https://oauth-mock.escola.example',
+    });
+    expect(error.issues).toEqual([
+      { variable: 'NUVA_OAUTH_MOCK_URL', message: expect.stringContaining('NUVA_ENV=production') },
+    ]);
+    expect(
+      loadConfig({ env: { ...base, NUVA_ENV: 'production' } }).authProviders.google,
+    ).toBeNull();
+  });
+
+  it('recusa URL inválida do simulador e endereço interno sem o público', () => {
+    const error = issuesOf({
+      ...base,
+      NUVA_OAUTH_MOCK_URL: 'oauth-mock.localhost',
+      NUVA_OAUTH_MOCK_INTERNAL_URL: 'ftp://oauth-mock',
+    });
+    expect(error.issues.map((issue) => issue.variable)).toEqual([
+      'NUVA_OAUTH_MOCK_URL',
+      'NUVA_OAUTH_MOCK_INTERNAL_URL',
+    ]);
+    for (const url of ['http://oauth-mock?x=1', 'http://u:p@oauth-mock', 'http://oauth-mock/#a']) {
+      expect(issuesOf({ ...base, NUVA_OAUTH_MOCK_URL: url }).issues).toHaveLength(1);
+    }
+
+    expect(
+      issuesOf({ ...base, NUVA_OAUTH_MOCK_INTERNAL_URL: 'http://oauth-mock:8080' }).issues,
+    ).toEqual([
+      {
+        variable: 'NUVA_OAUTH_MOCK_INTERNAL_URL',
+        message: 'só vale com NUVA_OAUTH_MOCK_URL definida',
+      },
+    ]);
   });
 });
 
