@@ -17,6 +17,7 @@ Detalhe das decisões em `specs/decisions/`.
 - admin-api expõe `db_pool_connections{state}` (`active`, `idle`, `waiting`); o teste do IP real do api-kit usa a lista padrão de proxies do núcleo (CGNAT, link-local e `::1`).
 - Specs alinhadas ao código da tarefa 050 (tarefa 066): sinal de interrupção do worker e `jobs_total{outcome="released"}`, estados de `db_pool_connections`, medidores da fila sem série com o banco fora, descarte de evento SSE por `contract_mismatch`, respostas `408` e `431` no formato do servidor HTTP, variante 512 na rota de imagens e `logoUrl` em 256.
 - Specs 000 a 033, plano em 8 fases, ADRs 0001 a 0018.
+- `packages/ui`: a cor de destaque da escola (`--minui-accent`) pinta botão primário, caixas marcadas, links, foco e item atual do menu, com contraste AA calculado em CSS; a gaveta das cascas prende o foco (task 094).
 - Definições de papel para Claude Code e OpenCode.
 - Compose base: Postgres 18, Traefik opcional, Mailpit.
 - Contratos OpenAPI 3.1 iniciais das duas APIs: componentes comuns, saúde, `/api/v1/meta` e SSE.

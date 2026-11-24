@@ -31,10 +31,14 @@
   --adm-ink-3: light-dark(#6f6f78, #94949b);
   --adm-ink-4: light-dark(#a1a1aa, #5f5f66);
 
-  /* ação principal (botão cheio) */
-  --adm-primary: light-dark(#1c1c1e, #f4f4f5);
-  --adm-primary-hover: light-dark(#34343a, #ffffff);
-  --adm-primary-ink: light-dark(#ffffff, #18181b);
+  /*
+   * ação principal (botão cheio): a cor de destaque da escola quando --minui-accent está
+   * definida (derivados em styles/tokens.css); sem ela, o neutro de sempre
+   */
+  --adm-primary: var(--minui-accent-fill, light-dark(#1c1c1e, #f4f4f5));
+  --adm-primary-hover: var(--minui-accent-hover, light-dark(#34343a, #ffffff));
+  --adm-primary-ink: var(--minui-accent-on, light-dark(#ffffff, #18181b));
+  --adm-primary-edge: var(--minui-accent-edge, transparent);
 
   /* estados e acentos */
   --adm-red: light-dark(#dc2626, #f2553e);
@@ -47,7 +51,7 @@
   --adm-pink: light-dark(#e0286f, #f472b6);
   --adm-rose: light-dark(#ee8f95, #fda4af);
   --adm-violet: light-dark(#7c3aed, #a78bfa);
-  --adm-focus: var(--minui-focus-ring);
+  --adm-focus: var(--minui-accent-text, var(--minui-focus-ring));
 
   /* forma */
   --adm-r-window: 16px;
@@ -284,7 +288,7 @@
 }
 
 .minui-adm-nav__item[aria-current="page"] {
-  background: var(--adm-active);
+  background: var(--minui-accent-tint, var(--adm-active));
   color: var(--adm-ink);
   font-weight: 520;
 }
@@ -292,6 +296,10 @@
 .minui-adm-nav__item > svg {
   width: 16px;
   height: 16px;
+}
+
+.minui-adm-nav__item[aria-current="page"] > svg {
+  color: var(--minui-accent-text, currentColor);
 }
 
 .minui-adm-nav__text {
@@ -536,13 +544,13 @@
 }
 
 .minui-adm-btn--primary {
-  border-color: transparent;
+  border-color: var(--adm-primary-edge);
   background: var(--adm-primary);
   color: var(--adm-primary-ink);
 }
 
 .minui-adm-btn--primary:hover {
-  border-color: transparent;
+  border-color: var(--adm-primary-edge);
   background: var(--adm-primary-hover);
 }
 
@@ -791,7 +799,7 @@
 }
 
 .minui-adm-check input:checked + .minui-adm-check__box {
-  border-color: var(--adm-primary);
+  border-color: var(--minui-accent-edge, var(--adm-primary));
   background: var(--adm-primary);
   color: var(--adm-primary-ink);
 }

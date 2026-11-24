@@ -179,6 +179,16 @@ export { TAG_HUES, tagHue } from './components/snippets/GlowTag.jsx';
 export const SnippetCard = rawSnippetCard.SnippetCard as Loose<typeof rawSnippetCard.SnippetCard>;
 export const SnippetGrid = rawSnippetCard.SnippetGrid as Loose<typeof rawSnippetCard.SnippetGrid>;
 
+// cor de destaque da escola: as contas de contraste dos tokens --minui-accent-* (TypeScript)
+export type { AccentTheme } from './accent/accent';
+export {
+  accentHover,
+  accentOn,
+  accentText,
+  contrastRatio,
+  isHexColor,
+  relativeLuminance,
+} from './accent/accent';
 export { ICON_PATHS } from './components/core/iconPaths.js';
 // fluxo: título de página, link de texto, estados de carregando e erro (TypeScript)
 export type {

@@ -252,3 +252,143 @@
   --minui-snip-button-hover: light-dark(#e9e9ec, #26262a);
   --minui-snip-path: light-dark(#71717a, #8a8a90);
 }
+
+/*
+ * Cor de destaque da escola (spec 006, RF-06).
+ *
+ * --minui-accent é a cor que a escola escolhe (#RRGGBB). Os sites a gravam em <html> pelo
+ * CSSOM; aqui ela NÃO tem declaração: sem ela, nenhum dos tokens abaixo existe e cada
+ * componente usa o seu valor de sempre (o var() cai no segundo argumento), que é o padrão
+ * neutro dos dois temas: botão cheio light-dark(#1c1c1e, #f4f4f5), foco --minui-focus-ring.
+ *
+ * Com a cor definida, os componentes NÃO usam --minui-accent direto, e sim os derivados:
+ *   --minui-accent-fill   fundo cheio (botão primário, caixa marcada): a própria cor;
+ *   --minui-accent-on     texto sobre o fundo cheio: branco se a luminância relativa (WCAG)
+ *                         da cor for menor que 0,179, preto caso contrário. Nesse ponto de
+ *                         corte os dois dão 4,58:1, então o contraste nunca fica abaixo de AA;
+ *   --minui-accent-hover  o fundo cheio sob o ponteiro: 14% de branco ou de preto, para o
+ *                         lado que mantém o texto acima de 4,5:1;
+ *   --minui-accent-edge   contorno do fundo cheio (aparece quando a cor é quase a da página);
+ *   --minui-accent-text   a cor como texto, ícone ou anel de foco sobre as superfícies do
+ *                         tema: no claro é escurecida até a luminância 0,115 (no máximo); no
+ *                         escuro é clareada até 0,32 (no mínimo), primeiro subindo os canais
+ *                         na mesma proporção e, se um deles chegar ao teto, com branco. Dá
+ *                         4,5:1 ou mais sobre qualquer superfície --adm-*;
+ *   --minui-accent-tint   fundo suave (item atual do menu); o texto sobre ele segue --adm-ink.
+ *
+ * As contas são feitas em srgb-linear, onde 0,2126 r + 0,7152 g + 0,0722 b é a luminância
+ * relativa da WCAG. As mesmas contas estão em src/accent/accent.ts, que é o que os testes
+ * conferem: mudou um número aqui, mude lá.
+ *
+ * Os derivados valem em :root e são refeitos em .minui-adm, então --minui-accent pode ser
+ * definida em <html> ou em qualquer elemento que contenha um AdminScope ou uma casca.
+ * Navegador sem cor relativa (anterior a Chrome 119, Firefox 128, Safari 16.4) ignora o
+ * bloco inteiro e fica com o padrão neutro.
+ */
+@supports (color: color(from red srgb-linear calc(r * 0.5) min(g, 1) b)) {
+  :root,
+  .minui-adm {
+    --minui-accent-fill: var(--minui-accent);
+
+    /* cinza cujo canal é a luminância da cor: nas contas seguintes, r é a luminância */
+    --minui-accent-lum: color(
+      from var(--minui-accent) srgb-linear calc(0.2126 * r + 0.7152 * g + 0.0722 * b)
+        calc(0.2126 * r + 0.7152 * g + 0.0722 * b) calc(0.2126 * r + 0.7152 * g + 0.0722 * b)
+    );
+    --minui-accent-on: color(
+      from var(--minui-accent-lum) srgb-linear clamp(0, (0.179 - r) * 1e9, 1)
+        clamp(0, (0.179 - r) * 1e9, 1) clamp(0, (0.179 - r) * 1e9, 1)
+    );
+
+    /* clareia abaixo de 0,05 e entre 0,179 e 0,7; escurece no resto */
+    --minui-accent-hover: color-mix(
+      in srgb,
+      var(--minui-accent) 86%,
+      color(
+        from var(--minui-accent-lum) srgb-linear
+          max(
+            clamp(0, (0.05 - r) * 1e9, 1),
+            min(clamp(0, (r - 0.179) * 1e9, 1), clamp(0, (0.7 - r) * 1e9, 1))
+          )
+          max(
+            clamp(0, (0.05 - r) * 1e9, 1),
+            min(clamp(0, (r - 0.179) * 1e9, 1), clamp(0, (0.7 - r) * 1e9, 1))
+          )
+          max(
+            clamp(0, (0.05 - r) * 1e9, 1),
+            min(clamp(0, (r - 0.179) * 1e9, 1), clamp(0, (0.7 - r) * 1e9, 1))
+          )
+      )
+    );
+    --minui-accent-edge: color-mix(in srgb, var(--minui-accent-on) 22%, var(--minui-accent));
+
+    /* no escuro: primeiro a cor sobe sem perder a saturação, até a luminância 0,32 ou o teto de um canal */
+    --minui-accent-up: color(
+      from var(--minui-accent) srgb-linear
+        calc(
+          r *
+          min(
+            max(1, 0.32 / max(0.2126 * r + 0.7152 * g + 0.0722 * b, 0.0001)),
+            1 /
+            max(r, g, b, 0.0001)
+          )
+        )
+        calc(
+          g *
+          min(
+            max(1, 0.32 / max(0.2126 * r + 0.7152 * g + 0.0722 * b, 0.0001)),
+            1 /
+            max(r, g, b, 0.0001)
+          )
+        )
+        calc(
+          b *
+          min(
+            max(1, 0.32 / max(0.2126 * r + 0.7152 * g + 0.0722 * b, 0.0001)),
+            1 /
+            max(r, g, b, 0.0001)
+          )
+        )
+    );
+    /* claro: escurece até 0,115; escuro: o que faltar para 0,32 vem de branco */
+    --minui-accent-text: light-dark(
+      color(
+        from var(--minui-accent) srgb-linear
+          calc(r * min(1, 0.115 / max(0.2126 * r + 0.7152 * g + 0.0722 * b, 0.0001)))
+          calc(g * min(1, 0.115 / max(0.2126 * r + 0.7152 * g + 0.0722 * b, 0.0001)))
+          calc(b * min(1, 0.115 / max(0.2126 * r + 0.7152 * g + 0.0722 * b, 0.0001)))
+      ),
+      color(
+        from var(--minui-accent-up) srgb-linear
+          calc(
+            r +
+            (1 - r) *
+            max(
+              0,
+              (0.32 - (0.2126 * r + 0.7152 * g + 0.0722 * b)) /
+              max(1 - (0.2126 * r + 0.7152 * g + 0.0722 * b), 0.0001)
+            )
+          )
+          calc(
+            g +
+            (1 - g) *
+            max(
+              0,
+              (0.32 - (0.2126 * r + 0.7152 * g + 0.0722 * b)) /
+              max(1 - (0.2126 * r + 0.7152 * g + 0.0722 * b), 0.0001)
+            )
+          )
+          calc(
+            b +
+            (1 - b) *
+            max(
+              0,
+              (0.32 - (0.2126 * r + 0.7152 * g + 0.0722 * b)) /
+              max(1 - (0.2126 * r + 0.7152 * g + 0.0722 * b), 0.0001)
+            )
+          )
+      )
+    );
+    --minui-accent-tint: color-mix(in srgb, var(--minui-accent-text) 12%, transparent);
+  }
+}

@@ -393,6 +393,50 @@ describe('janela do painel: página inteira e gaveta', () => {
     expect(side().getAttribute('data-drawer')).toBe('closed');
     expect(onNavigate.mock.calls[0]?.[0]).toBe('alunos');
   });
+
+  it('com a gaveta aberta, Tab e Shift+Tab dão a volta dentro dela', () => {
+    fakeViewport(360);
+    render(
+      <>
+        <a href="#conteudo">Ir para o conteúdo</a>
+        <AdminShell
+          fullPage
+          drawerBelow={1024}
+          drawerLabels={{ open: 'Abrir menu', close: 'Fechar menu', title: 'Menu do painel' }}
+          sidebar={<AdminSidebar brand={{ name: 'Escola' }} sections={sections} />}
+        >
+          <AdminTopbar title="Painel" />
+          <AdminContent>Conteúdo</AdminContent>
+        </AdminShell>
+      </>,
+    );
+    const skip = screen.getByRole('link', { name: 'Ir para o conteúdo' });
+    fireEvent.click(screen.getByRole('button', { name: 'Abrir menu' }));
+    const dialog = screen.getByRole('dialog', { name: 'Menu do painel' });
+    const stops = within(dialog).getAllByRole('button');
+    const first = stops[0] as HTMLElement;
+    const last = stops.at(-1) as HTMLElement;
+    expect(first).not.toBe(last);
+
+    // o Tab do último controle volta ao primeiro, e o Shift+Tab do primeiro vai ao último
+    last.focus();
+    expect(fireEvent.keyDown(last, { key: 'Tab' })).toBe(false);
+    expect(document.activeElement).toBe(first);
+    expect(fireEvent.keyDown(first, { key: 'Tab', shiftKey: true })).toBe(false);
+    expect(document.activeElement).toBe(last);
+
+    // um link da página, fora da casca, não fica com o foco: o Tab o devolve à gaveta
+    skip.focus();
+    expect(fireEvent.keyDown(skip, { key: 'Tab', shiftKey: true })).toBe(false);
+    expect(document.activeElement).toBe(last);
+    skip.focus();
+    expect(fireEvent.keyDown(skip, { key: 'Tab' })).toBe(false);
+    expect(document.activeElement).toBe(first);
+
+    // fechada, o Tab é o do navegador
+    fireEvent.keyDown(dialog, { key: 'Escape' });
+    expect(fireEvent.keyDown(skip, { key: 'Tab' })).toBe(true);
+  });
 });
 
 describe('casca do painel', () => {

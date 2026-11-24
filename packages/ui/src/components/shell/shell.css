@@ -153,7 +153,7 @@
 }
 
 .minui-room__item[aria-current="page"] {
-  background: var(--adm-active);
+  background: var(--minui-accent-tint, var(--adm-active));
   color: var(--adm-ink);
   font-weight: 500;
 }
@@ -161,6 +161,10 @@
 .minui-room__item > svg {
   width: 16px;
   height: 16px;
+}
+
+.minui-room__item[aria-current="page"] > svg {
+  color: var(--minui-accent-text, currentColor);
 }
 
 .minui-room__item-text {
@@ -203,6 +207,8 @@
   width: 288px;
   max-width: 85vw;
   height: auto;
+  /* sem isto o `align-self: flex-start` da coluna encolhe a gaveta à altura do conteúdo */
+  align-self: stretch;
   box-shadow: var(--adm-shadow-pop);
   transition: transform 0.2s ease;
 }

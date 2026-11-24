@@ -36,10 +36,47 @@ interface Focusable {
   focus: () => void;
 }
 
+const FOCUSABLE = [
+  'a[href]',
+  'button:not([disabled])',
+  'input:not([disabled]):not([type="hidden"])',
+  'select:not([disabled])',
+  'textarea:not([disabled])',
+  '[tabindex]:not([tabindex="-1"])',
+].join(', ');
+
+/** Controles da gaveta que o Tab alcança, na ordem do documento. */
+function tabStops(dialog: Element): HTMLElement[] {
+  return [...dialog.querySelectorAll<HTMLElement>(FOCUSABLE)].filter(
+    (control) => !control.closest('[inert], [hidden]'),
+  );
+}
+
+/**
+ * Prende o Tab na gaveta: do último controle volta ao primeiro, do primeiro (com Shift) vai ao
+ * último, e o foco que estiver fora dela (ex.: no link "Ir para o conteúdo") entra de volta.
+ */
+function keepTabInside(event: KeyboardEvent, dialog: Element): void {
+  const stops = tabStops(dialog);
+  const first = stops[0];
+  const last = stops.at(-1);
+  if (!first || !last) {
+    event.preventDefault();
+    return;
+  }
+  const current = document.activeElement;
+  const outside = !dialog.contains(current);
+  if (outside || current === (event.shiftKey ? first : last)) {
+    event.preventDefault();
+    (event.shiftKey ? last : first).focus();
+  }
+}
+
 /**
  * Comportamento de uma gaveta aberta sobre a página: o foco entra nela ao abrir (em
  * `closeRef`) e volta ao botão que a abriu (`toggleRef`) ao fechar; enquanto aberta, a
- * página não rola por baixo e a tecla Esc chama `onClose`.
+ * página não rola por baixo, a tecla Esc chama `onClose` e o Tab dá a volta dentro dela
+ * (a gaveta é o `[role="dialog"]` que contém `closeRef`).
  */
 export function useDrawerFocus(
   open: boolean,
@@ -58,6 +95,10 @@ export function useDrawerFocus(
     if (!open) return undefined;
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') close.current();
+      if (event.key !== 'Tab' || event.defaultPrevented) return;
+      const anchor = closeRef.current;
+      const dialog = anchor instanceof Element ? anchor.closest('[role="dialog"]') : null;
+      if (dialog) keepTabInside(event, dialog);
     };
     document.addEventListener('keydown', onKeyDown);
     const previous = document.body.style.overflow;

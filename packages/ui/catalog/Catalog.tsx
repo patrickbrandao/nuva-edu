@@ -1,5 +1,5 @@
 import { BookOpen, Inbox, Plus, UserPlus } from 'lucide-react';
-import type { ReactNode } from 'react';
+import type { CSSProperties, ReactNode } from 'react';
 import { useState } from 'react';
 import {
   ActionButton,
@@ -13,6 +13,7 @@ import {
   AdminField,
   AdminList,
   AdminMenu,
+  AdminNav,
   AdminScope,
   AdminSearch,
   AdminStats,
@@ -23,9 +24,12 @@ import {
   AdminTag,
   AdminTimeline,
   Avatar,
+  accentOn,
+  accentText,
   Badge,
   CasesBoard,
   ClientOverview,
+  contrastRatio,
   DiffBlocks,
   Dot,
   ErrorState,
@@ -290,8 +294,86 @@ function FlowPieces() {
   );
 }
 
+/** Cores de exemplo da escola: clara, média e escura (as mesmas de src/accent/accent.test.ts). */
+const ACCENTS = [
+  { id: 'clara', label: 'Clara', color: '#ffd166' },
+  { id: 'media', label: 'Média', color: '#2563eb' },
+  { id: 'escura', label: 'Escura', color: '#1e3a5f' },
+];
+
+const ACCENT_NAV = [
+  {
+    id: 'menu',
+    items: [
+      { id: 'cursos', label: 'Cursos', icon: <BookOpen aria-hidden="true" /> },
+      { id: 'caixa', label: 'Caixa de entrada', icon: <Inbox aria-hidden="true" /> },
+    ],
+  },
+];
+
+const ratio = (a: string, b: string): string => `${contrastRatio(a, b).toFixed(1)}:1`;
+
+/** O que muda com `--minui-accent`: botão primário, caixas marcadas, link, foco e item atual. */
+function AccentSample({ color, theme }: { color: string | null; theme: 'light' | 'dark' }) {
+  // como nos sites, a cor entra por uma variável CSS; os derivados são refeitos no AdminScope
+  const scope = color ? ({ '--minui-accent': color } as CSSProperties) : undefined;
+  return (
+    <div className="cat__accent" data-accent={color ?? 'padrao'} style={scope}>
+      <AdminScope className="cat__stack">
+        <div className="cat__row">
+          <AdminButton variant="primary" icon={<Plus />}>
+            Matricular
+          </AdminButton>
+          <AdminCheckbox checked onChange={() => {}}>
+            Marcada
+          </AdminCheckbox>
+          <AdminSwitch checked onChange={() => {}}>
+            Ligado
+          </AdminSwitch>
+          <TextLink href="/termos">Link de texto</TextLink>
+        </div>
+        <div style={{ maxWidth: 220 }}>
+          <AdminNav sections={ACCENT_NAV} active="cursos" />
+        </div>
+        <p className="cat__note">
+          {color
+            ? `${color}: texto ${accentOn(color)} sobre a cor (${ratio(accentOn(color), color)}); como texto vira ${accentText(color, theme)}.`
+            : 'Sem --minui-accent: o padrão neutro de sempre.'}
+        </p>
+      </AdminScope>
+    </div>
+  );
+}
+
+function AccentSamples() {
+  return (
+    <div className="cat__pair">
+      {(['light', 'dark'] as const).map((theme) => (
+        <div key={theme} className="cat__pane" data-theme={theme} data-testid={`accent-${theme}`}>
+          <h3>{theme === 'light' ? 'Claro' : 'Escuro'}</h3>
+          <div className="cat__stack">
+            <AccentSample color={null} theme={theme} />
+            {ACCENTS.map((accent) => (
+              <AccentSample key={accent.id} color={accent.color} theme={theme} />
+            ))}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 /** As duas cascas em molduras estreitas (menu em gaveta), uma por tema. */
-function ShellFrames({ demo, title }: { demo: string; title: string }) {
+function ShellFrames({
+  demo,
+  title,
+  accent,
+}: {
+  demo: string;
+  title: string;
+  accent?: string | undefined;
+}) {
+  const query = accent ? `&accent=${encodeURIComponent(accent)}` : '';
   return (
     <div className="cat__pair">
       {(['light', 'dark'] as const).map((theme) => (
@@ -300,7 +382,7 @@ function ShellFrames({ demo, title }: { demo: string; title: string }) {
           <iframe
             className="cat__device"
             title={`${title}, tema ${theme === 'light' ? 'claro' : 'escuro'}`}
-            src={`?demo=${demo}&theme=${theme}`}
+            src={`?demo=${demo}&theme=${theme}${query}`}
           />
         </div>
       ))}
@@ -335,6 +417,30 @@ export function Catalog() {
         <Pair>
           <AdminPieces />
         </Pair>
+      </section>
+
+      <section>
+        <h2>Cor de destaque da escola</h2>
+        <p className="cat__note">
+          <code>--minui-accent</code> (spec 006, RF-06) com três cores de exemplo. O texto sobre a
+          cor é branco ou preto conforme a luminância; como link, ícone ou foco a cor é ajustada ao
+          tema. Regra em <code>src/styles/tokens.css</code>.
+        </p>
+        <AccentSamples />
+        <p className="cat__note" style={{ marginTop: 16 }}>
+          Nas cascas (360 px), com a cor aplicada em <code>&lt;html&gt;</code> como nos sites:{' '}
+          <a href="?demo=classroom&accent=%232563eb">aluno</a> e{' '}
+          <a href="?demo=admin&accent=%232563eb">painel</a> em página inteira; troque{' '}
+          <code>accent</code> no endereço para testar outra cor.
+        </p>
+        <div className="cat__stack">
+          <ShellFrames
+            demo="classroom"
+            title="Casca do aluno com cor de destaque"
+            accent="#2563eb"
+          />
+          <ShellFrames demo="admin" title="Casca do painel com cor de destaque" accent="#ffd166" />
+        </div>
       </section>
 
       <section>

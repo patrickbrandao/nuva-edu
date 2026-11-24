@@ -43,7 +43,7 @@
 
 /* =================== Link de texto =================== */
 .minui-text-link {
-  color: var(--adm-ink-2);
+  color: var(--minui-accent-text, var(--adm-ink-2));
   text-decoration: underline;
   text-underline-offset: 2px;
 }

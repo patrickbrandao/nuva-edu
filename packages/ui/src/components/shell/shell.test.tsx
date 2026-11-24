@@ -174,6 +174,52 @@ describe('casca do site do aluno', () => {
     expect(aside.getAttribute('data-drawer')).toBe('closed');
   });
 
+  it('com a gaveta aberta, Tab e Shift+Tab dão a volta dentro dela', () => {
+    fakeViewport(360);
+    renderShell();
+    const skip = screen.getByRole('link', { name: 'Ir para o conteúdo' });
+    expect(skip.hasAttribute('inert')).toBe(false);
+    fireEvent.click(screen.getByRole('button', { name: 'Abrir o menu' }));
+
+    const dialog = screen.getByRole('dialog', { name: 'Menu principal' });
+    const close = within(dialog).getByRole('button', { name: 'Fechar o menu' });
+    const last = within(dialog).getByRole('link', { name: 'Compras' });
+    // o link "Ir para o conteúdo" fica fora da gaveta: não recebe foco enquanto ela está aberta
+    expect(skip.hasAttribute('inert')).toBe(true);
+    expect(dialog.contains(skip)).toBe(false);
+
+    // Shift+Tab no primeiro controle vai ao último, sem deixar o navegador sair da gaveta
+    expect(document.activeElement).toBe(close);
+    expect(fireEvent.keyDown(close, { key: 'Tab', shiftKey: true })).toBe(false);
+    expect(document.activeElement).toBe(last);
+
+    // Tab no último volta ao primeiro
+    expect(fireEvent.keyDown(last, { key: 'Tab' })).toBe(false);
+    expect(document.activeElement).toBe(close);
+
+    // no meio da gaveta o Tab é o do navegador
+    const middle = within(dialog).getByRole('link', { name: 'Vitrine' });
+    middle.focus();
+    expect(fireEvent.keyDown(middle, { key: 'Tab' })).toBe(true);
+    expect(fireEvent.keyDown(middle, { key: 'Tab', shiftKey: true })).toBe(true);
+    expect(document.activeElement).toBe(middle);
+
+    // foco que escapou (ex.: clique fora) volta para dentro
+    (document.activeElement as HTMLElement).blur();
+    expect(fireEvent.keyDown(document.body, { key: 'Tab' })).toBe(false);
+    expect(document.activeElement).toBe(close);
+    (document.activeElement as HTMLElement).blur();
+    expect(fireEvent.keyDown(document.body, { key: 'Tab', shiftKey: true })).toBe(false);
+    expect(document.activeElement).toBe(last);
+
+    // fechada, o Tab volta a ser o do navegador e o link inicial volta a receber foco
+    fireEvent.keyDown(dialog, { key: 'Escape' });
+    expect(skip.hasAttribute('inert')).toBe(false);
+    const open = screen.getByRole('button', { name: 'Abrir o menu' });
+    expect(fireEvent.keyDown(open, { key: 'Tab', shiftKey: true })).toBe(true);
+    expect(document.activeElement).toBe(open);
+  });
+
   it('a gaveta aberta some quando a tela alarga, e não reabre ao estreitar', () => {
     const resize = fakeViewport(800);
     renderShell();

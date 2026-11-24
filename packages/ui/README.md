@@ -17,6 +17,36 @@ import { AdminButton, ThemeSwitch, useTheme } from '@nuva-edu/ui';
   configuração consegue importar; também exporta `THEME_BOOT_SCRIPT` e `THEME_STORAGE_KEY`).
 - Os textos padrão dos componentes são exemplos; os sites passam os das suas traduções pelas props.
 
+## Cor de destaque da escola
+
+A escola escolhe uma cor `#RRGGBB` (spec 006, RF-06) e o site a grava em `--minui-accent` no
+`<html>`, pelo CSSOM (`style.setProperty`; a CSP `style-src 'self'` não barra). É só isso: o
+resto é CSS do pacote (`src/styles/tokens.css`), sem JavaScript e sem `style` no HTML. Sem a
+variável, tudo fica no padrão neutro (botão cheio quase preto no claro e quase branco no escuro).
+
+Os componentes não usam `--minui-accent` direto, e sim os tokens derivados dela:
+
+| Token | Onde entra | Regra |
+| --- | --- | --- |
+| `--minui-accent-fill` | fundo do botão primário, da caixa marcada e da chave ligada | a própria cor |
+| `--minui-accent-on` | texto e ícone sobre o fundo cheio | branco se a luminância relativa da cor (WCAG) for menor que 0,179; senão preto. Nunca menos de 4,58:1 |
+| `--minui-accent-hover` | fundo cheio sob o ponteiro | 14% de branco ou preto, para o lado que mantém o texto acima de 4,5:1 |
+| `--minui-accent-edge` | contorno do fundo cheio | 22% da cor do texto; aparece quando a cor é quase a da página |
+| `--minui-accent-text` | link de texto, anel de foco, ícone do item atual do menu | a cor escurecida até a luminância 0,115 no tema claro e clareada até 0,32 no escuro: 4,5:1 ou mais sobre qualquer superfície `--adm-*` |
+| `--minui-accent-tint` | fundo do item atual do menu | 12% de `--minui-accent-text`; o texto do item segue `--adm-ink` |
+
+A cor nunca é usada crua como texto, e o texto sobre ela é sempre calculado: por isso qualquer
+`#RRGGBB` mantém o contraste AA. As contas usam cor relativa em `srgb-linear` (Chrome 119,
+Firefox 128, Safari 16.4 em diante); navegador mais antigo ignora o bloco e fica com o padrão
+neutro. `--minui-accent` também pode ser definida num elemento qualquer que contenha um
+`AdminScope` ou uma casca (é assim que o catálogo mostra três cores na mesma página).
+
+As mesmas contas existem em TypeScript, para teste e para o site que precisar do resultado fora
+do CSS (ex.: prévia da cor nas configurações): `accentOn(cor)`, `accentHover(cor)`,
+`accentText(cor, 'light' | 'dark')`, `contrastRatio(a, b)`, `relativeLuminance(cor)` e
+`isHexColor(valor)`. `src/accent/accent.test.ts` confere o AA numa grade de 4.096 cores e que os
+números do CSS e do TypeScript são os mesmos.
+
 ## Link do roteador
 
 O pacote não conhece roteador. O site entrega o seu componente de link uma vez, e `AdminButton`,
@@ -38,6 +68,10 @@ Cada componente também aceita `linkComponent`, que vale mais que o do provedor.
 - `AdminShell`: `fullPage` tira a moldura e ocupa a tela; `drawerBelow={1024}` transforma o menu em
   gaveta abaixo dessa largura de tela (a `AdminTopbar` ganha o botão que a abre; textos em
   `drawerLabels`). Sem essas props, a janela é a de sempre.
+- Gaveta aberta (nas duas cascas): é um `role="dialog"` modal; o foco entra no botão de fechar,
+  Tab e Shift+Tab dão a volta dentro dela, Esc fecha e o foco volta ao botão que a abriu. O resto
+  da página fica `inert`, inclusive o link "Ir para o conteúdo" da `ClassroomShell`. O site não
+  precisa de armadilha de foco própria.
 - `ClassroomShell`: casca do site do aluno (barra superior, menu em coluna ou gaveta, trilha,
   conteúdo e rodapé). Textos em `labels`, página atual em `active`, foco e anúncio da troca de
   página por `mainRef` e `announcement`.
@@ -69,6 +103,7 @@ propriedades opcionais e sem tipo de valor (`Loose`); cada um ganha tipos própr
 ## Comandos
 
 - `pnpm --filter @nuva-edu/ui dev`: catálogo em http://127.0.0.1:5310, com os componentes nos temas claro e escuro.
-  As cascas abrem em página inteira em `?demo=classroom` e `?demo=admin`.
+  As cascas abrem em página inteira em `?demo=classroom` e `?demo=admin`; com
+  `&accent=%23RRGGBB` a cor de destaque é aplicada em `<html>`, como nos sites.
 - `pnpm --filter @nuva-edu/ui test`: testes de renderização (Vitest + Testing Library).
 - `pnpm --filter @nuva-edu/ui typecheck`: checagem de tipos.

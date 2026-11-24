@@ -165,7 +165,7 @@ export function ClassroomShell({
 
   return (
     <div className={cx('minui-adm', 'minui-room', className)}>
-      <TextLink href={`#${contentId}`} className="minui-room__skip">
+      <TextLink href={`#${contentId}`} className="minui-room__skip" inert={drawerOpen}>
         {labels.skipToContent}
       </TextLink>
 

@@ -24,6 +24,7 @@ import {
   AdminTopbar,
   ClassroomShell,
   ErrorState,
+  isHexColor,
   type LinkComponent,
   LinkProvider,
   LoadingState,
@@ -297,8 +298,21 @@ function AdminDemo({ fixed }: { fixed: ThemeMode | null }) {
 }
 
 /** Página de demonstração escolhida pelo endereço; `null` quando é o catálogo. */
-export function Demo({ name, theme }: { name: string; theme: string | null }) {
+export function Demo({
+  name,
+  theme,
+  accent,
+}: {
+  name: string;
+  theme: string | null;
+  accent?: string | null;
+}) {
   const fixed: ThemeMode | null = theme === 'light' || theme === 'dark' ? theme : null;
+  // Cor de destaque: pelo CSSOM em <html>, como os sites (a CSP deles barra `style` no HTML).
+  useEffect(() => {
+    if (isHexColor(accent)) document.documentElement.style.setProperty('--minui-accent', accent);
+    else document.documentElement.style.removeProperty('--minui-accent');
+  }, [accent]);
   // Tema fixo: só marca <html>, sem gravar (as molduras dividem o armazenamento com o catálogo).
   useEffect(() => {
     if (fixed) document.documentElement.setAttribute('data-theme', fixed);

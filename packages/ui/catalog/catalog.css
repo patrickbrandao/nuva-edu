@@ -100,6 +100,17 @@ body {
   color: inherit;
 }
 
+/* uma amostra da cor de destaque */
+.cat__accent {
+  padding: 14px;
+  border: 1px dashed var(--minui-stage-line);
+  border-radius: 10px;
+}
+
+.cat__accent .cat__note {
+  margin: 0;
+}
+
 /* moldura de celular para as cascas: 360 px de largura, o mínimo da spec 006 */
 .cat__device {
   display: block;
