@@ -15,6 +15,7 @@ Detalhe das decisões em `specs/decisions/`.
 - `packages/ui` (`@nuva-edu/ui`): tokens, Inter, primitivos, painel admin, preços e tema Sistema/Claro/Escuro do minui; catálogo e testes de renderização.
 - `packages/api-client` (`@nuva-edu/api-client`): clientes tipados da admin-api e da classroom-api gerados dos contratos, erro problem+json (`ApiError`), fluxo SSE tipado e verificação de gerado desatualizado.
 - `packages/core` (`@nuva-edu/core`): configuração validada por variável de ambiente, conexão Kysely com tipos gerados do banco, logger JSON com máscara de campos proibidos e erro de domínio em problem+json.
+- `pnpm verify:quick` e `pnpm verify:full` (`scripts/verify.mjs`): lint, tipos e testes só do que mudou no rápido; suíte inteira com Postgres isolado por Testcontainers no completo; `scripts/test-db.mjs` como setup global do banco dos testes (`NUVA_TEST_DB=local`).
 
 ### Decisões
 - Instalável, uma escola por instalação; AGPL-3.0.

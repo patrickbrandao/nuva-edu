@@ -11,3 +11,7 @@ engineStrict: true
 allowBuilds:
   lefthook: true
   "@biomejs/biome": true
+  # Dependências do Testcontainers: os scripts só compilam aceleração opcional; não rodam.
+  cpu-features: false
+  protobufjs: false
+  ssh2: false
