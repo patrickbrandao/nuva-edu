@@ -3,11 +3,18 @@ import {
   databaseReadiness,
   type FastifyInstance,
   type ReadinessChecks,
+  registerMetaRoute,
 } from '@nuva-edu/api-kit';
-import { type Config, type Database, databasePoolStats, type Logger } from '@nuva-edu/core';
+import {
+  type Config,
+  createSettingsReader,
+  type Database,
+  databasePoolStats,
+  type Logger,
+  type SettingsReader,
+} from '@nuva-edu/core';
 import { loadAdminContract } from './contract.ts';
 import { readServiceVersion } from './meta.ts';
-import { registerMetaRoutes } from './routes/meta.ts';
 
 export const SERVICE = 'admin-api';
 
@@ -19,6 +26,11 @@ export interface AdminAppOptions {
   version?: string;
   /** Verificações do `/readyz`. Padrão: banco e migrations. */
   readiness?: ReadinessChecks;
+  /**
+   * Leitor das configurações da escola (`settings`). Padrão: um por app, com o cache do núcleo
+   * e o `logger` do serviço.
+   */
+  settings?: SettingsReader;
 }
 
 /**
@@ -50,6 +62,15 @@ export function buildAdminApp(options: AdminAppOptions): FastifyInstance {
     },
   });
 
-  registerMetaRoutes(app, { config, version: options.version ?? readServiceVersion() });
+  // Um leitor por processo: o `/meta` não vai ao banco a cada requisição. Com o `logger`, valor
+  // inválido gravado em `settings` gera aviso e vale o padrão (spec 003, "Meta").
+  const settings = options.settings ?? createSettingsReader(db, { logger });
+
+  // `GET /api/v1/meta`: dados públicos da instalação e da marca, sem sessão (spec 003, RF-09).
+  registerMetaRoute(app, {
+    config,
+    version: options.version ?? readServiceVersion(),
+    settings,
+  });
   return app;
 }

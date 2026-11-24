@@ -9,9 +9,9 @@ API do site de administração (`@nuva-edu/admin-api`), descrita em `openapi.yam
 | `src/app.ts` | `buildAdminApp`: a API montada sobre `@nuva-edu/api-kit` |
 | `src/contract.ts` | Caminho do contrato e exceções de CSRF |
 | `src/check-contract.ts` | Comando `check-contract`: rotas x contrato, sem banco e sem porta |
-| `src/routes/` | Uma função `register...Routes` por grupo de rotas |
+| `src/routes/` | Uma função `register...Routes` por grupo de rotas (criada com o primeiro grupo; o `/meta` vem do `api-kit`) |
 | `test/` | Integração (requisições injetadas, banco de teste) |
-| `test/contract/` | Teste de contrato: rotas x `openapi.yaml` e regra do `csrfToken` |
+| `test/contract/` | Teste de contrato: rotas x `openapi.yaml`, regra do `csrfToken` e respostas de erro declaradas |
 
 Aqui fica só transporte, validação e autorização; regra de negócio e acesso a dados ficam em `packages/core`. A base HTTP (validação pelo contrato, problem+json, id de requisição, IP real, sondas, métricas) vem de `packages/api-kit`.
 
@@ -29,7 +29,7 @@ Escuta na porta 3000 (spec 031); `PORT` troca a porta fora do contêiner. Precis
 | `GET /healthz` | Processo vivo; não toca no banco |
 | `GET /readyz` | `200` com banco no ar e migrations em dia; senão `503` |
 | `GET /metrics` | Texto do Prometheus (inclui `db_pool_connections{state}`: `active`, `idle`, `waiting`); fora do contrato, só rede interna |
-| `GET /api/v1/meta` | Dados públicos da instalação, sem sessão |
+| `GET /api/v1/meta` | Dados públicos da instalação e da marca da escola (`settings`), sem sessão; rota comum do `api-kit` (`registerMetaRoute`) |
 
 ## Nova rota
 

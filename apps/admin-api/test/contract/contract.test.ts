@@ -1,7 +1,11 @@
 import { execFile } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
-import { formatContractReport, formatContractWarnings } from '@nuva-edu/api-kit';
+import {
+  formatContractReport,
+  formatContractWarnings,
+  requiredErrorResponses,
+} from '@nuva-edu/api-kit';
 import { afterAll, describe, expect, it } from 'vitest';
 import { CSRF_EXCEPTIONS } from '../../src/contract.ts';
 import { createTestApp } from '../helpers.ts';
@@ -10,7 +14,9 @@ describe('contrato da admin-api', () => {
   const test = createTestApp();
   afterAll(() => test.close());
 
-  it('toda rota registrada existe no openapi.yaml e vice-versa, e toda escrita exige csrfToken', () => {
+  // A mesma conferência cobre a tabela "Respostas de erro declaradas" da spec 003: operação que
+  // não declara um erro exigido sai no relatório como `resposta de erro não declarada: ...`.
+  it('rotas e openapi.yaml coincidem, toda escrita exige csrfToken e toda operação declara seus erros', () => {
     const report = test.app.checkContract({ csrfExceptions: CSRF_EXCEPTIONS });
     // Operação com `x-nuva-pending` não reprova o teste, mas aparece na saída (spec 003).
     for (const warning of formatContractWarnings(report)) {
@@ -18,7 +24,20 @@ describe('contrato da admin-api', () => {
     }
     // A mensagem lista cada divergência; vazia quando não há nenhuma.
     expect(formatContractReport(report)).toBe('');
+    expect(report.missingErrorResponses).toEqual([]);
     expect(report.ok).toBe(true);
+  });
+
+  it('GET /api/v1/meta declara as respostas de erro de operação pública, sem corpo e sem parâmetro', () => {
+    const meta = test.app.contract.operation('getMeta');
+    expect(requiredErrorResponses(meta)).toEqual(['400', '429', '500', '503']);
+    expect(meta.responses.map((response) => response.status)).toEqual([
+      '200',
+      '400',
+      '429',
+      '500',
+      '503',
+    ]);
   });
 
   it('só /metrics fica fora do contrato', () => {
