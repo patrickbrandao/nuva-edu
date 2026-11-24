@@ -12,6 +12,10 @@ const SITES = [
 /** Valores que nenhuma instalação tem: se aparecem na página, vieram da resposta da API. */
 const FAKE_META = { schoolName: 'Escola Fumaça', version: '97.98.99' };
 
+/** Nomes tolerantes: a casca pode trocar "Menu principal" por "Menu" sem quebrar a fumaça. */
+const MENU = /^Menu/;
+const OPEN_MENU = /^Abrir o menu/;
+
 /** Opção do seletor de tema, seja ela botão de alternância ou opção de grupo. */
 function themeOption(page: Page, name: string): Locator {
   const group = page.getByRole('group', { name: 'Tema da página' });
@@ -92,26 +96,26 @@ for (const { site, url, title } of SITES) {
 test('classroom a 360 px: o menu vira gaveta', async ({ page }) => {
   await page.setViewportSize({ width: 360, height: 740 });
   await page.goto(CLASSROOM_URL);
-  const menu = page.getByRole('navigation', { name: 'Menu principal' });
-  const drawer = page.getByRole('dialog', { name: 'Menu principal' });
+  const menu = page.getByRole('navigation', { name: MENU });
+  const drawer = page.getByRole('dialog', { name: MENU });
 
   // Fechada: o menu não ocupa a tela; só o botão que o abre.
-  await expect(page.getByRole('button', { name: 'Abrir o menu' })).toBeVisible();
+  await expect(page.getByRole('button', { name: OPEN_MENU })).toBeVisible();
   await expect(menu).toBeHidden();
 
-  await page.getByRole('button', { name: 'Abrir o menu' }).click();
+  await page.getByRole('button', { name: OPEN_MENU }).click();
   await expect(drawer).toBeVisible();
   await expect(drawer.getByRole('link', { name: 'Vitrine', exact: true })).toBeVisible();
   await expectNoHorizontalScroll(page);
 
   await page.keyboard.press('Escape');
   await expect(drawer).toBeHidden();
-  await expect(page.getByRole('button', { name: 'Abrir o menu' })).toBeVisible();
+  await expect(page.getByRole('button', { name: OPEN_MENU })).toBeVisible();
 });
 
 test('classroom em tela larga: o menu fica à vista, sem gaveta', async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: 800 });
   await page.goto(CLASSROOM_URL);
-  await expect(page.getByRole('navigation', { name: 'Menu principal' })).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Abrir o menu' })).toBeHidden();
+  await expect(page.getByRole('navigation', { name: MENU })).toBeVisible();
+  await expect(page.getByRole('button', { name: OPEN_MENU })).toBeHidden();
 });
