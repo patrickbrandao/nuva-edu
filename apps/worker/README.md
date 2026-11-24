@@ -10,6 +10,10 @@ Roda direto no Node 26, sem build. Métricas e verificações do `/readyz` vêm 
 | `src/app.ts` | Liga banco, laço de consumo, agendador e HTTP interno |
 | `src/worker.ts` | Laço: `NOTIFY` + varredura, concorrência, batimento, tarefa presa, encerramento |
 | `src/handlers.ts` | Um manipulador por tipo do registro do núcleo, todos idempotentes |
+| `src/email/send-email.ts` | `email.send` (spec 024): lê `email_outbox`, cria o token do link, envia e marca `sent` numa transação |
+| `src/email/templates.ts`, `src/email/locales/pt-BR.ts` | Layout (texto e HTML) e textos de cada tipo de e-mail, por idioma |
+| `src/email/smtp.ts` | Transporte SMTP (Nodemailer), regra de TLS e classificação dos erros |
+| `src/secrets.ts` | Segredos exigidos na subida (`SMTP_PASSWORD` quando há `SMTP_USER`) |
 | `src/scheduler.ts` | Recorrentes: janela no fuso da escola (`school.timezone`, lido pelo `createSettingsReader` do núcleo), `enqueueRecurring` |
 | `src/http.ts` | `/healthz`, `/readyz`, `/metrics` em `node:http` |
 | `src/metrics.ts`, `src/queue-metrics.ts` | Métricas do laço e medidores da fila, do pool e do processo |
@@ -25,6 +29,10 @@ PORT=3901 pnpm --filter @nuva-edu/worker dev
 | --- | --- | --- |
 | `NUVA_WORKER_CONCURRENCY` | `10` | Tarefas simultâneas |
 | `PORT` | `3000` | Porta do HTTP interno (saúde e métricas) |
+| `SMTP_HOST`, `SMTP_PORT` | `mailpit`, `1025` | Servidor SMTP. Porta 465: TLS desde a conexão; outra: STARTTLS obrigatório; só o host `mailpit` dispensa TLS |
+| `SMTP_USER`, `SMTP_PASSWORD` | vazio | Autenticação; com `SMTP_USER`, `SMTP_PASSWORD` é obrigatória e a subida falha citando-a |
+| `SMTP_FROM` | `nuva-edu <no-reply@${NUVA_DOMAIN}>` | Remetente |
+| `NUVA_CLASSROOM_HOST`, `NUVA_ADMIN_HOST`, `NUVA_PUBLIC_SCHEME`, `NUVA_PUBLIC_PORT` | spec 031 | Endereços dos links nos e-mails |
 
 No encerramento o worker para de pegar tarefas, aborta o sinal das que estão em execução, espera até 30 s por elas e devolve o resto à fila.
 
@@ -37,6 +45,14 @@ Cada manipulador recebe `(job, { signal })`, com um `AbortSignal` próprio da ta
 `jobs_total{type,outcome}` (`done`, `retry`, `failed`, `lost`, `released`), `jobs_duration_seconds{type}`, `jobs_queue_depth{type}`, `jobs_failed{type}`, `jobs_count{status}` (`queued`, `ready`, `running`, `done`, `failed`), `jobs_oldest_pending_seconds`, `worker_jobs_running`, `worker_concurrency`, `worker_database_up`, `db_pool_connections{state}` (`active`, `idle`, `waiting`) e as do processo (`process_*`, `nodejs_heap_size_used_bytes`).
 
 Os rótulos saem em ordem alfabética (`jobs_total{outcome="done",type="..."}`). Com o banco fora, `worker_database_up` vale 0 e os medidores da fila saem só com o cabeçalho, sem série.
+
+## E-mail
+
+`email.send` envia uma linha de `email_outbox` e é idempotente: linha que não está `queued` não sai de novo. O token dos links de confirmação e de redefinição é criado na mesma transação que marca o envio; se o SMTP falha, a transação desfaz e nenhum token fica valendo. O token em claro existe só no corpo enviado: nunca em log, em `jobs` nem em `email_outbox`. O log e o `last_error` também não levam o endereço do destinatário (`smtp: EENVELOPE 550 (recusa permanente)`).
+
+Recusa 5xx do destinatário ou da mensagem marca `failed` sem nova tentativa (`PermanentJobError`); o resto segue a espera própria do tipo (1 min, 5 min, 30 min, 2 h). Na última tentativa a linha também fica `failed`. Confirmação para quem já confirmou o e-mail, ou para conta excluída, fica `sent` sem envio (`skipped: already_verified`, `skipped: user_deleted`).
+
+Texto novo de e-mail: acrescente o tipo em `src/email/locales/pt-BR.ts`; o tipo `EmailTemplates` obriga um modelo por tipo do núcleo.
 
 ## Tipo novo de tarefa
 

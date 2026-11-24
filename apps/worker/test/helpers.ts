@@ -7,6 +7,8 @@ import {
   type Logger,
 } from '@nuva-edu/core';
 import { inject } from 'vitest';
+import type { Mailer, OutgoingEmail } from '../src/email/smtp.ts';
+import type { HandlerDependencies } from '../src/handlers.ts';
 
 declare module 'vitest' {
   export interface ProvidedContext {
@@ -81,4 +83,33 @@ export function deferred(): { promise: Promise<void>; resolve: () => void } {
     resolve = done;
   });
   return { promise, resolve };
+}
+
+/** Carteiro em memória: guarda as mensagens em vez de falar SMTP. */
+export function memoryMailer(): Mailer & { sent: OutgoingEmail[] } {
+  const sent: OutgoingEmail[] = [];
+  return {
+    sent,
+    async send(message) {
+      sent.push(message);
+    },
+    close() {},
+  };
+}
+
+/** Dependências dos manipuladores reais, com os endereços públicos do ambiente local. */
+export function handlerDependencies(
+  db: Database,
+  logger: Logger,
+  overrides: Partial<HandlerDependencies> = {},
+): HandlerDependencies {
+  return {
+    db,
+    logger,
+    mailer: memoryMailer(),
+    classroomUrl: 'http://classroom.localhost:8080',
+    adminUrl: 'http://edu-admin.localhost:8080',
+    locale: 'pt-BR',
+    ...overrides,
+  };
 }

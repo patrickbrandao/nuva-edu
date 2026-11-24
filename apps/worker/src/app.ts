@@ -1,5 +1,6 @@
 import { databaseReadiness } from '@nuva-edu/api-kit/health';
 import { type Config, closeDatabase, createDatabase, type Logger } from '@nuva-edu/core';
+import { createMailer, type Mailer } from './email/smtp.ts';
 import { createHandlers } from './handlers.ts';
 import { createHttpServer } from './http.ts';
 import { createWorkerMetrics } from './metrics.ts';
@@ -14,6 +15,8 @@ export interface AppOptions {
   port: number;
   host?: string;
   shutdownTimeoutMs?: number;
+  /** Padrão: SMTP de `config.smtp`. Os testes trocam pelo servidor local. */
+  mailer?: Mailer;
 }
 
 export interface App {
@@ -35,11 +38,19 @@ export async function startApp(options: AppOptions): Promise<App> {
     logger,
   });
   const metrics = createWorkerMetrics();
+  const mailer = options.mailer ?? createMailer(config.smtp);
   const worker = createWorker({
     db,
     databaseUrl: config.databaseUrl,
     logger,
-    handlers: createHandlers({ logger }),
+    handlers: createHandlers({
+      db,
+      logger,
+      mailer,
+      classroomUrl: config.classroomUrl,
+      adminUrl: config.adminUrl,
+      locale: config.locale,
+    }),
     concurrency,
     metrics,
   });
@@ -75,6 +86,7 @@ export async function startApp(options: AppOptions): Promise<App> {
         timeoutMs: options.shutdownTimeoutMs ?? SHUTDOWN_TIMEOUT_MS,
       });
       await http.close();
+      mailer.close();
       await closeDatabase(db);
       return result;
     },

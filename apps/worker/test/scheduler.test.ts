@@ -20,6 +20,7 @@ import {
   captureLogger,
   clearJobs,
   getJob,
+  handlerDependencies,
   openDatabase,
   testDatabaseUrl,
   waitFor,
@@ -229,7 +230,7 @@ describe('agendador', () => {
       db,
       databaseUrl: testDatabaseUrl(),
       logger,
-      handlers: createHandlers({ logger }),
+      handlers: createHandlers(handlerDependencies(db, logger)),
       concurrency: 2,
       sweepIntervalMs: 50,
     });

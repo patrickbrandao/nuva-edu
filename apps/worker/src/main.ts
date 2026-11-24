@@ -1,14 +1,17 @@
 import { createLogger, loadConfigOrExit } from '@nuva-edu/core';
 import { startApp } from './app.ts';
+import { workerRequiredSecrets } from './secrets.ts';
 
 /** Porta interna dos serviços (spec 031). `PORT` troca, para rodar fora do contêiner. */
 const DEFAULT_PORT = 3000;
 /** Folga depois do encerramento ordenado antes de forçar a saída. */
 const EXIT_GRACE_MS = 5_000;
 
-// Nesta fase o worker não usa segredo algum (SMTP e Mercado Pago entram com as tarefas que os
-// usam); a conexão com o banco é sempre obrigatória.
-const config = loadConfigOrExit({ service: 'worker', required: [] });
+// A conexão com o banco é sempre obrigatória; `SMTP_PASSWORD`, só quando `SMTP_USER` existe.
+const config = loadConfigOrExit({
+  service: 'worker',
+  required: workerRequiredSecrets(process.env),
+});
 const logger = createLogger({ service: 'worker', level: config.logLevel });
 
 function readPort(): number {
