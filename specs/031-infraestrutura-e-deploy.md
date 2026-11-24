@@ -87,10 +87,13 @@ Os sites são estáticos: os nomes de host e a moeda chegam em tempo de execuç�
 | --- | --- | --- |
 | `NUVA_ADMIN_HOST` | `/api/` | `admin-api` |
 | `NUVA_ADMIN_HOST` | `/mcp` | `admin-api` |
+| `NUVA_ADMIN_HOST` | `/healthz` | `admin-api` |
 | `NUVA_ADMIN_HOST` | demais | `admin` |
 | `NUVA_CLASSROOM_HOST` | `/api/` | `classroom-api` |
+| `NUVA_CLASSROOM_HOST` | `/healthz` | `classroom-api` |
 | `NUVA_CLASSROOM_HOST` | demais | `classroom` |
 
+- `/healthz` é a única sonda roteada para fora, para monitoramento externo; `/readyz` e `/metrics` ficam só na rede interna ([033](033-observabilidade-retencao-backup.md)).
 - Os rótulos do Traefik ficam no `docker-compose.yml` de cada aplicação e usam `TRAEFIK_NETWORK`, `TRAEFIK_ENTRYPOINTS` e `TRAEFIK_CERTRESOLVER`.
 - Com `TRAEFIK_CERTRESOLVER` vazio, os rótulos de TLS não são emitidos (desenvolvimento em HTTP).
 - A rota de SSE (`/api/v1/stream`) desliga o buffer de resposta e tem tempo limite de leitura de 1 hora.
