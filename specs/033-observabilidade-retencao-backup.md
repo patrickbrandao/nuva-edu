@@ -81,7 +81,7 @@ Detalhe das métricas do worker:
 - `worker_database_up`: 1 quando a leitura da fila para a coleta funcionou. Com o banco fora, vale 0, os medidores `jobs_queue_depth`, `jobs_failed`, `jobs_count` e `jobs_oldest_pending_seconds` ficam de fora da resposta e o `/metrics` continua respondendo `200`.
 - Os medidores da fila são lidos do banco a cada coleta; com mais de um worker, todos devolvem o mesmo valor, e quem coleta usa `max`, não `sum`.
 
-`sse_connections` conta as conexões abertas no processo. Requisição de SSE encerrada pelo cliente não entra em `http_request_duration_seconds` (a duração seria a da conexão, não a de um atendimento).
+`sse_connections` conta as conexões abertas no processo. Requisição encerrada pelo cliente antes do fim da resposta (o caso normal do SSE) é registrada uma vez, no log e nas métricas HTTP, com o status convencional `499`. Em `/api/v1/stream`, a duração observada é a da conexão, não a de um atendimento: painel ou alerta de latência exclui essa rota.
 
 Não há tracing distribuído nem alertas embutidos. O guia em `docs/` traz um exemplo de coleta com Prometheus e três alertas sugeridos (fila parada, taxa de erro 5xx, backup atrasado).
 
