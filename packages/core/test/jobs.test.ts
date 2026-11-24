@@ -120,22 +120,24 @@ describe('registro de tipos', () => {
     expect(cleanup).toMatchObject({ type: 'image.cleanup', maxAttempts: 5 });
   });
 
-  it('exige o manipulador de todos os tipos, email.send incluído', () => {
-    expectTypeOf<PendingHandlerJobType>().toEqualTypeOf<'suspension.expire' | 'image.cleanup'>();
-    expectTypeOf<Exclude<keyof JobHandlers, PendingHandlerJobType>>().toEqualTypeOf<
-      'email.send' | 'example.echo' | 'retention.purge'
-    >();
+  it('exige o manipulador de todos os tipos, suspension.expire e image.cleanup incluídos', () => {
+    expectTypeOf<PendingHandlerJobType>().toEqualTypeOf<never>();
+    expectTypeOf<keyof JobHandlers>().toEqualTypeOf<keyof typeof JOB_DEFINITIONS>();
     const noop = async (): Promise<void> => {};
-    // @ts-expect-error falta o manipulador de `email.send`.
-    const missing: JobHandlers = { 'example.echo': noop, 'retention.purge': noop };
-    const complete: JobHandlers = { ...missing, 'email.send': noop };
-    expect(Object.keys(complete).sort()).toEqual(['email.send', 'example.echo', 'retention.purge']);
-    const withPending: JobHandlers = {
-      ...complete,
-      'suspension.expire': noop,
-      'image.cleanup': noop,
+    const base = {
+      'example.echo': noop,
+      'retention.purge': noop,
+      'email.send': noop,
     };
-    expect(Object.keys(withPending).sort()).toEqual(Object.keys(JOB_DEFINITIONS).sort());
+    // @ts-expect-error falta o manipulador de `image.cleanup`.
+    const withoutCleanup: JobHandlers = { ...base, 'suspension.expire': noop };
+    // @ts-expect-error falta o manipulador de `suspension.expire`.
+    const withoutExpire: JobHandlers = { ...base, 'image.cleanup': noop };
+    const complete: JobHandlers = {
+      ...withoutCleanup,
+      ...withoutExpire,
+    };
+    expect(Object.keys(complete).sort()).toEqual(Object.keys(JOB_DEFINITIONS).sort());
   });
 });
 

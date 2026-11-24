@@ -62,14 +62,11 @@ export const JOB_DEFINITIONS: { readonly [T in JobType]: JobDefinition } = {
 
 /**
  * Tipos já no registro cujo manipulador ainda não existe no worker (chega em outra tarefa).
- * `JobHandlers` exige o manipulador de todos os demais tipos do registro. Tipo novo cujo
- * manipulador venha depois entra aqui até ele chegar; tarefa sem manipulador falha como erro
- * comum e segue as tentativas do tipo.
- *
- * `suspension.expire` e `image.cleanup`: os manipuladores chegam com a tarefa 151 (worker), que
- * os retira desta união.
+ * Hoje a união é vazia: `JobHandlers` exige o manipulador de todos os tipos do registro.
+ * Tipo novo cujo manipulador venha depois entra aqui até ele chegar; tarefa sem manipulador
+ * falha como erro comum e segue as tentativas do tipo.
  */
-export type PendingHandlerJobType = 'suspension.expire' | 'image.cleanup';
+export type PendingHandlerJobType = never;
 
 export const JOB_STATUSES = ['queued', 'running', 'done', 'failed'] as const;
 export type JobStatus = (typeof JOB_STATUSES)[number];
