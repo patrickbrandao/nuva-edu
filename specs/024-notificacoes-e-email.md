@@ -80,6 +80,7 @@ O grupo `account` não tem canal "plataforma", então não passa pela tarefa `no
 - A tarefa `email.send` cria o token do link no momento de montar o e-mail (tipos `account.verify_email` e `account.password_reset`): gera o valor aleatório, grava o SHA-256 em `email_tokens` com validade de 24 h, invalida os anteriores do mesmo usuário e propósito e põe o valor em claro só no corpo enviado ([007](007-contas-e-autenticacao.md), "Tokens de e-mail").
 - Nova tentativa do mesmo e-mail gera token novo; o anterior deixa de valer.
 - Se o usuário já confirmou o e-mail quando `account.verify_email` vai sair, a linha é marcada `sent` sem envio (`last_error = 'skipped: already_verified'`).
+- Se o `to` da linha não é mais o e-mail atual do usuário (a equipe trocou o e-mail depois do enfileiramento), `account.verify_email` e `account.password_reset` são marcados `sent` sem envio e sem token (`last_error = 'skipped: email_changed'`) ([007](007-contas-e-autenticacao.md), "Tokens de e-mail").
 - Cabeçalhos `List-Unsubscribe` e `List-Unsubscribe-Post` nos e-mails não obrigatórios; o token de descadastro identifica usuário e grupo e não expira.
 - Tela de operação no admin: e-mails pendentes e com falha, com motivo e botão "reenviar".
 

@@ -7,6 +7,7 @@ Detalhe das decisões em `specs/decisions/`.
 
 ### Adicionado
 - `@nuva-edu/core`: tipos de tarefa `suspension.expire` (3 tentativas) e `image.cleanup` (5) no registro da fila, ainda em `PendingHandlerJobType` até o worker trazer os manipuladores (task 235).
+- Specs 007, 024 e 028: ação `user.sessions_revoke` na auditoria; trocar o e-mail pela equipe invalida os links `verify` e `reset` pendentes (task 236).
 - `@nuva-edu/core`: `JobHandlers` passa a exigir o manipulador de `email.send` (`PendingHandlerJobType = never`) (task 225).
 - admin-api: `POST /auth/login`, `POST /auth/logout`, `GET /session`, entrega de imagens, tratadores de sessão e CSRF (`student` recebe `403`), auditoria `denied`, limite de taxa da 003 RNF-03, admin inicial na subida e comando `create-admin` (task 154).
 - `@nuva-edu/core`: gestão de usuários pela equipe (`listUsers` com busca, filtros e cursor, `getUser`, `createUser`, `updateUser` com `version`, `setUserRole`, `suspendUser`/`reactivateUser`, `expireSuspensions` para o worker, `revealUserPassword` com confirmação que conta no bloqueio, `setUserPassword`, `listUserSessions`/`revokeAllUserSessions`), com negações e escritas na auditoria e a regra do último admin (task 149).

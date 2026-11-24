@@ -26,7 +26,7 @@ A equipe tem poderes amplos (inclusive ver senhas, no caso do admin) e agentes d
 
 | Grupo | Ações (`action`) |
 | --- | --- |
-| Contas | `user.create`, `user.update`, `user.suspend`, `user.unsuspend`, `user.set_role`, `user.delete`, `user.password_view`, `user.password_set`, `user.export` |
+| Contas | `user.create`, `user.update`, `user.suspend`, `user.unsuspend`, `user.sessions_revoke`, `user.set_role`, `user.delete`, `user.password_view`, `user.password_set`, `user.export` |
 | Sessão e login | `auth.login`, `auth.logout`, `auth.lockout`, `auth.password_reset`, `auth.provider_link`, `auth.provider_unlink` |
 | Catálogo | `course.*`, `module.*`, `lesson.*`, `ebook.*`, `bundle.*` (`create`, `update`, `delete`, `publish`, `unpublish`), `product.set_price` |
 | Vendas | `plan.*`, `coupon.*`, `order.refund`, `sales.export` |

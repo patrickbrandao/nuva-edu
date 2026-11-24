@@ -106,6 +106,8 @@ Códigos do retorno: `oauth_state_invalid` (sem cookie, `state` diferente ou ven
 - Token: 32 bytes aleatórios em base64url; o banco guarda só o SHA-256 (`email_tokens.token_hash`). O token em claro existe só no e-mail enviado.
 - Quem cria o token é a tarefa `email.send` do worker, no momento de montar o e-mail ([024](024-notificacoes-e-email.md), "Links com token"): a API só enfileira o e-mail com o propósito. Assim o token nunca passa por `jobs.payload` nem por `email_outbox`.
 - Cada token novo de um propósito invalida os anteriores não usados do mesmo usuário e propósito: vale o último link enviado.
+- Troca de e-mail pela equipe (`PATCH /users/{id}`): na mesma transação, todos os tokens não usados da conta (`verify` e `reset`) são invalidados (`used_at = now()`), com a mesma trava por usuário e propósito da emissão. Um link enviado ao endereço anterior não confirma o novo nem redefine a senha. O `account.verify_email` enfileirado pela troca gera o link novo, para o novo endereço; quem precisar redefinir a senha pede outro link.
+- E-mail com link ainda na fila para o endereço anterior (`email_outbox.to` diferente do e-mail atual da conta) não sai: o worker o marca `sent` sem envio e sem criar token (`last_error = 'skipped: email_changed'`), na mesma transação que emitiria o token ([024](024-notificacoes-e-email.md), "Links com token").
 - Link de redefinição: `<classroomUrl>/redefinir?token=<token>`. O site admin não tem redefinição própria: o "esqueci a senha" do admin leva a `<classroomUrl>/redefinir`.
 - Conta suspensa (`full` ou `posting`) continua recebendo os e-mails de conta desta spec: confirmação de e-mail, redefinição de senha, aviso de bloqueio, aviso de dispositivo novo, aviso de senha alterada e de mudança de papel. São de segurança da própria conta; a regra "suspenso não recebe nada" da [024](024-notificacoes-e-email.md) vale para as notificações. Conta excluída não recebe nenhum ([024](024-notificacoes-e-email.md), "E-mails do grupo `account` e da Fase 1").
 
@@ -173,7 +175,8 @@ As escritas sem sessão (`/auth/register`, `/auth/login`, `/auth/email/verify`, 
 ### Equipe criada pelo admin
 
 - `POST /users` (só `admin`) com nome, e-mail, papel e senha (8 a 128). A conta nasce com o e-mail não confirmado e recebe `account.verify_email`; o admin informa a senha à pessoa por fora do sistema. E-mail já cadastrado: `409` `email_taken` (para promover uma conta existente, muda-se o papel).
-- Editar dados (`PATCH /users/{id}`): nome, nome completo e e-mail. Trocar o e-mail anula `email_verified_at` e envia `account.verify_email` ao novo endereço. Aluno: `manager` e `admin`; equipe: só `admin` ([008](008-papeis-e-permissoes.md)).
+- Editar dados (`PATCH /users/{id}`): nome, nome completo e e-mail. Trocar o e-mail anula `email_verified_at` e envia `account.verify_email` ao novo endereço, e invalida os links pendentes da conta ("Tokens de e-mail"). Aluno: `manager` e `admin`; equipe: só `admin` ([008](008-papeis-e-permissoes.md)).
+- Encerrar as sessões de um usuário (`DELETE /users/{id}/sessions`, dos dois sites) grava `user.sessions_revoke`, com o número de sessões encerradas em `details` (`sessionsRevoked`).
 
 ### Casos de erro
 
@@ -287,7 +290,7 @@ Nenhum esquema tem campo de senha, exceto a resposta da exibição.
 | `profiles` | `user_id` (chave), `avatar_image_id` (nesta fase; o resto em [019](019-perfil-e-diretorio.md)) | `classroom-api` |
 | `oauth_identities` | `user_id`, `provider`, `provider_user_id` (único por provedor), `email`, uma por provedor em cada conta (`user_id`, `provider` único), `email_verified`, `created_at` | `classroom-api`; `admin-api` só no vínculo por e-mail do login |
 | `sessions` | `id`, `id_hash` (único), `user_id`, `site`, `ip`, `user_agent`, `csrf_token`, `created_at`, `last_used_at`, `expires_at` | API do respectivo site; `admin-api` encerra sessões dos dois sites (suspensão, papel, senha) |
-| `email_tokens` | `token_hash` (único), `user_id`, `purpose` (`verify` \| `reset`), `expires_at`, `used_at`, `created_at` | `worker` (criação); `classroom-api` (uso) |
+| `email_tokens` | `token_hash` (único), `user_id`, `purpose` (`verify` \| `reset`), `expires_at`, `used_at`, `created_at` | `worker` (criação); `classroom-api` (uso); `admin-api` (invalidação na troca de e-mail pela equipe) |
 | `login_attempts` | `email`, `ip`, `success`, `site`, `created_at` | API do respectivo site |
 | `user_devices` | `user_id`, `device_key` (único por usuário), `first_seen_at`, `last_seen_at` | API do respectivo site |
 
@@ -311,6 +314,7 @@ Retenção: sessões 30 dias sem uso; `email_tokens` 24 h; `login_attempts` 30 d
 - [ ] Vincular uma segunda conta Google à mesma conta é recusado com `provider_already_linked`, também pelo banco.
 - [ ] Login social com e-mail verificado igual ao de conta existente entra na mesma conta; se a conta local não tinha e-mail confirmado, a senha anterior deixa de funcionar.
 - [ ] Cadastro com e-mail já existente responde igual ao cadastro novo e envia `account.exists` ao dono, sem alterar a conta.
+- [ ] Depois de a equipe trocar o e-mail de uma conta, os links `verify` e `reset` enviados antes da troca respondem `410` `token_expired`, e um link ainda na fila para o endereço anterior não é enviado.
 - [ ] Usuário com e-mail não confirmado não consegue comprar nem publicar (verificado nas fases que trazem essas rotas).
 - [ ] 5 senhas erradas bloqueiam a conta por 15 minutos e geram e-mail de aviso; redefinir a senha libera.
 - [ ] `manager` recebe `403` em `/users/{id}/password/reveal`; `admin` vê a senha e a visualização aparece na auditoria sem o valor.
