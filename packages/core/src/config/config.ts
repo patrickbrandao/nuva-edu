@@ -2,6 +2,7 @@ import { generateKeyPairSync } from 'node:crypto';
 import { writeSync } from 'node:fs';
 import { isIP } from 'node:net';
 import { LOG_LEVELS, type LogLevel } from '../logging/logger.ts';
+import { AUDIT_RETENTION_DEFAULT_DAYS, AUDIT_RETENTION_MIN_DAYS } from '../modules/audit/purge.ts';
 import { ConfigError, type Env, EnvReader } from './env-reader.ts';
 
 /** Variáveis sem valor padrão, que cada serviço declara como obrigatórias conforme o que usa. */
@@ -236,7 +237,10 @@ export function loadConfig(options: LoadConfigOptions = {}): Config {
       emailSentDays: reader.int('NUVA_RETENTION_EMAIL_SENT_DAYS', 30, { min: 1 }),
       emailFailedDays: reader.int('NUVA_RETENTION_EMAIL_FAILED_DAYS', 90, { min: 1 }),
       webhookDays: reader.int('NUVA_RETENTION_WEBHOOK_DAYS', 90, { min: 1 }),
-      auditDays: reader.int('NUVA_RETENTION_AUDIT_DAYS', 730, { min: 1 }),
+      // Abaixo de 365 o `audit_log_purge` recusa (spec 028, RNF-01): o erro vem na subida.
+      auditDays: reader.int('NUVA_RETENTION_AUDIT_DAYS', AUDIT_RETENTION_DEFAULT_DAYS, {
+        min: AUDIT_RETENTION_MIN_DAYS,
+      }),
       moderationDays: reader.int('NUVA_RETENTION_MODERATION_DAYS', 730, { min: 1 }),
       cartDays: reader.int('NUVA_RETENTION_CART_DAYS', 30, { min: 1 }),
       fiscalYears: reader.int('NUVA_RETENTION_FISCAL_YEARS', 5, { min: 1 }),

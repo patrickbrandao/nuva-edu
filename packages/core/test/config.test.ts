@@ -119,6 +119,20 @@ describe('loadConfig', () => {
     ]);
   });
 
+  it('recusa NUVA_RETENTION_AUDIT_DAYS abaixo de 365 na subida (spec 028, RNF-01)', () => {
+    const error = issuesOf({ ...base, NUVA_RETENTION_AUDIT_DAYS: '364' });
+    expect(error.issues).toEqual([
+      {
+        variable: 'NUVA_RETENTION_AUDIT_DAYS',
+        message: 'deve ser um inteiro maior ou igual a 365; recebido "364"',
+      },
+    ]);
+    expect(
+      loadConfig({ env: { ...base, NUVA_RETENTION_AUDIT_DAYS: '365' } }).retention.auditDays,
+    ).toBe(365);
+    expect(loadConfig({ env: base }).retention.auditDays).toBe(730);
+  });
+
   it('lê process.env quando nenhum ambiente é passado', () => {
     const before = process.env.DATABASE_URL;
     process.env.DATABASE_URL = base.DATABASE_URL;
