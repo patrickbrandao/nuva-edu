@@ -13,13 +13,13 @@ O nuva-edu tem dois sites, ambos SPAs em React: `admin` (equipe) e `classroom` (
 - RF-02: Toda chamada HTTP usa o cliente gerado dos contratos em `packages/api-client`; nenhum site escreve URL de API à mão.
 - RF-03: Componentes visuais vêm de `packages/ui`; um site só cria componente local quando ele é específico de uma tela.
 - RF-04: Tema Sistema, Claro e Escuro, escolhido na barra superior e nas configurações, guardado no navegador (chave `nuva-theme`).
-- RF-05: Todos os textos de interface em arquivos de tradução (`locales/pt-BR/*.json`); nenhum texto fixo em componente. Idioma único no MVP: pt-BR.
-- RF-06: Nome, logotipo e cor de destaque da escola vêm de `settings` (endpoint público de marca), não do código.
+- RF-05: Todos os textos de interface em arquivos de tradução, um arquivo por idioma em cada site (`apps/<site>/src/locales/pt-BR.json`), com as chaves agrupadas por tela ou recurso dentro do arquivo; nenhum texto fixo em componente. Idioma único no MVP: pt-BR. O arquivo só é dividido por recurso (`locales/pt-BR/<recurso>.json`, carregado sob demanda) se passar a pesar na RNF-03.
+- RF-06: Nome, logotipo e cor de destaque da escola vêm de `settings`, não do código. Os sites os leem de `GET /api/v1/meta` (`schoolName`, `logoUrl`, `accentColor`), que é o endpoint público de marca ([003](003-admin-api.md), "Meta"). Sem logotipo, mostra-se só o nome; sem cor, vale a cor de destaque padrão de `packages/ui`.
 - RF-07: Navegação por URL: toda tela tem endereço próprio, recarregável e compartilhável; breadcrumb sempre com rótulo legível (nunca slug ou identificador).
 - RF-08: Busca global (atalho `Ctrl/⌘ + K`) nos dois sites.
 - RF-09: Estados de carregamento, vazio e erro em toda listagem e toda tela de detalhe; estado vazio sempre com uma ação sugerida.
 - RF-10: O site admin mostra apenas os itens de menu e botões que o papel do usuário pode usar ([008](008-papeis-e-permissoes.md)); a API continua sendo quem decide.
-- RF-11: O rodapé dos dois sites exibe o link "Código-fonte", apontando para o repositório público (`https://github.com/patrickbrandao/nuva-edu`, ajustável nas configurações da escola para quem distribui uma versão modificada), como a AGPL-3.0 exige para uso em rede ([0016](decisions/0016-licenca-agpl-3.md)).
+- RF-11: O rodapé dos dois sites exibe o link "Código-fonte", apontando para o endereço de `sourceCodeUrl` do `GET /api/v1/meta` (padrão: o repositório público `https://github.com/patrickbrandao/nuva-edu`; ajustável nas configurações da escola, chave `school.source_code_url`, para quem distribui uma versão modificada), como a AGPL-3.0 exige para uso em rede ([0016](decisions/0016-licenca-agpl-3.md)).
 - RNF-01: Responsivo de 360 px a 1920 px de largura, sem rolagem horizontal; menu lateral vira gaveta abaixo de 1024 px.
 - RNF-02: WCAG 2.1 nível AA nos fluxos principais (cadastro, login, vitrine, checkout, player, fórum, chamados): contraste mínimo 4,5:1, tudo operável por teclado, foco visível, rótulos em campos, `aria-live` em avisos.
 - RNF-03: JavaScript inicial de cada site abaixo de 300 KB comprimido (gzip); demais telas carregadas sob demanda.

@@ -35,7 +35,7 @@ A `classroom-api` é o backend do site do aluno (`https://<NUVA_CLASSROOM_HOST>`
 
 ### Convenções da API
 
-Iguais às da `admin-api` ([003](003-admin-api.md)): caminhos completos no contrato, JSON em `camelCase`, erros em `application/problem+json` com `code` estável (os códigos gerais e as regras para código próprio são os de "Códigos de erro" da 003), paginação por cursor (`limit` padrão 25, máximo 100; `Page` composto por `allOf`, com `items` declarado em cada listagem), `Idempotency-Key` em criação de pedido e de assinatura, `X-Request-Id` em toda resposta, IP do cliente por `TRUSTED_PROXIES`.
+Iguais às da `admin-api` ([003](003-admin-api.md)), incluindo a subida estrita, as operações pendentes (`x-nuva-pending`) e as respostas de erro declaradas: caminhos completos no contrato, JSON em `camelCase`, erros em `application/problem+json` com `code` estável (os códigos gerais e as regras para código próprio são os de "Códigos de erro" da 003), paginação por cursor (`limit` padrão 25, máximo 100; `Page` composto por `allOf`, com `items` declarado em cada listagem), `Idempotency-Key` em criação de pedido e de assinatura, `X-Request-Id` em toda resposta, IP do cliente por `TRUSTED_PROXIES`.
 
 Regra adicional: recurso que existe mas ao qual o aluno não tem direito responde `403` com `code: entitlement_required` e, no corpo, os produtos que o liberam (para a interface oferecer a compra). Produto `private` sem direito responde `404`.
 
@@ -43,7 +43,7 @@ Regra adicional: recurso que existe mas ao qual o aluno não tem direito respond
 
 | Prefixo em `/api/v1` | Login | Conteúdo | Spec |
 | --- | --- | --- | --- |
-| `/meta` | Não | Dados públicos da instalação, com os mesmos campos da `admin-api` | [003](003-admin-api.md) |
+| `/meta` | Não | Dados públicos da instalação e da marca, com os mesmos campos da `admin-api` | [003](003-admin-api.md), "Meta" |
 | `/auth/*`, `/session` | Não | Cadastro, login, OAuth, confirmação, redefinição | [007](007-contas-e-autenticacao.md) |
 | `/catalog` | Não | Vitrine: produtos e planos não privados | [009](009-catalogo-e-conteudo.md) |
 | `/courses`, `/lessons`, `/ebooks`, `/library` | Sim (programa: não) | Programa, player, links, estante | [009](009-catalogo-e-conteudo.md), [014](014-aprendizado-e-progresso.md) |
@@ -72,8 +72,24 @@ Regra adicional: recurso que existe mas ao qual o aluno não tem direito respond
 ### Fluxo SSE (`GET /api/v1/stream`)
 
 1. O navegador abre a conexão com o cookie de sessão. Resposta `text/event-stream`, sem compressão, com `Cache-Control: no-store`.
-2. A API mantém uma única conexão `LISTEN` ao PostgreSQL por processo, no canal `nuva_user_events`. Quem grava uma mensagem ou notificação executa `NOTIFY` com `{ userId, kind, id }` na mesma transação.
-3. A API repassa o evento às conexões abertas daquele `userId`.
+2. A API mantém uma única conexão `LISTEN` ao PostgreSQL por processo, no canal `nuva_user_events`.
+3. Quem grava uma mensagem ou notificação (API ou worker) chama `publishUserEvent(trx, { userId, kind, data })`, de `packages/core`, na mesma transação da escrita. A função pega o `id` na sequência `user_event_id_seq` e executa `pg_notify('nuva_user_events', carga)`; o aviso só sai no `COMMIT`.
+4. A API confere a carga recebida e repassa o evento às conexões abertas daquele `userId`.
+
+Carga do `NOTIFY` (JSON):
+
+| Campo | Tipo | Descrição |
+| --- | --- | --- |
+| `userId` | uuid | Destinatário; só as conexões dele recebem |
+| `kind` | texto | Nome do evento (tabela abaixo); vira o campo `event` do SSE |
+| `id` | inteiro | Valor de `user_event_id_seq`; vira o campo `id` do SSE |
+| `data` | objeto | O `data` do evento, exatamente como vai ao navegador; só identificadores e contadores |
+
+- Ninguém chama `pg_notify` nesse canal fora de `publishUserEvent`. A função tipa o `data` por `kind` (mesmo mapa dos esquemas `StreamEvent*` do contrato), então evento com formato errado não compila.
+- A sequência é uma só para todos os usuários: o `id` é crescente para cada usuário, mas não consecutivo. O cliente só o compara e o devolve em `Last-Event-ID`.
+- A carga serializada precisa ter menos de 8000 bytes, limite do `NOTIFY` no PostgreSQL. `publishUserEvent` recusa com erro a que passar, antes de chamar o banco, e a transação de quem chamou é desfeita: evento grande é erro de programação, não caso de uso. Como o evento leva só identificadores, o cliente busca o resto pela API.
+- Carga que a API não consegue ler (JSON inválido, formato errado, `kind` desconhecido) é descartada com aviso no log, sem repetir o conteúdo. `kind` desconhecido acontece quando o worker é mais novo que a API durante uma atualização.
+- Evento de destinatário sem conexão aberta é guardado só para o reenvio (abaixo) e depois esquecido.
 
 | Evento | Dados | Quando |
 | --- | --- | --- |
@@ -88,10 +104,22 @@ Regra adicional: recurso que existe mas ao qual o aluno não tem direito respond
 
 - O evento carrega só identificadores; o conteúdo é buscado pela rota normal, que checa permissão.
 - No fio, cada evento usa os campos `id`, `event` (nome da tabela acima) e `data` (objeto JSON numa linha). No contrato, cada evento é um esquema `StreamEvent*`, reunidos em `StreamEvent`.
-- Cada evento tem `id` crescente por usuário, exceto `ping`, que não tem `id`. Na reconexão, `Last-Event-ID` faz a API reenviar o que foi perdido nos últimos 5 minutos; além disso, a interface recarrega as listas.
+- Cada evento tem `id` crescente por usuário, exceto `ping`, que não tem `id` (e por isso não muda o `Last-Event-ID` do navegador).
+- Ao abrir, a API envia o comentário `: ok`, para os cabeçalhos saírem de imediato.
 - Limite de 3 conexões SSE por usuário; a quarta derruba a mais antiga.
+- Cliente que não lê: com mais de 256 KB pendentes de envio, a conexão é derrubada.
 - Presença: usuário é "online" enquanto tiver conexão SSE aberta; `profiles.last_seen_at` ([019](019-perfil-e-diretorio.md)) é atualizado no fechamento e a cada 60 s.
 - Sessão encerrada ou usuário com suspensão `full`: a conexão é fechada pelo servidor.
+
+### Reenvio na reconexão
+
+Comportamento aceito para a Fase 0 e registrado como provisório ([0020](decisions/0020-eventos-de-usuario-do-sse.md)):
+
+- A API guarda em memória, por processo, os eventos de cada usuário dos últimos 5 minutos, até 500 por usuário (os mais antigos saem primeiro).
+- Na reconexão com `Last-Event-ID`, a API reenvia os guardados de `id` maior, em ordem, antes dos novos.
+- O reenvio cobre a queda de rede do navegador. Não cobre o reinício da API, a queda da conexão `LISTEN` nem um segundo processo de `classroom-api`: o `NOTIFY` não é durável ([0008](decisions/0008-fila-e-sse-no-postgres.md)).
+- Por isso o SSE é só um atalho: mensagens e notificações têm estado no banco, e a interface recarrega as listas afetadas a cada reconexão, com ou sem reenvio. Nenhuma tela depende de ter recebido todos os eventos.
+- Não há tabela de eventos. Gatilho de revisão: perda de evento relatada por usuário, ou mais de um processo de `classroom-api`.
 
 ### Casos de erro
 
@@ -117,6 +145,9 @@ O estado de pagamento, as assinaturas e os direitos derivados são escritos pelo
 - [ ] Visitante sem login acessa vitrine, cases públicos e validação de certificado, e recebe `401` nas demais rotas.
 - [ ] Aula de curso `paid` sem direito responde `403` com `entitlement_required`; aula com `is_sample` é entregue a qualquer usuário logado.
 - [ ] Mensagem direta enviada chega por SSE ao destinatário em até 2 s.
+- [ ] `publishUserEvent` numa transação desfeita não entrega evento; com carga de 8000 bytes ou mais, lança erro.
+- [ ] Reconexão com `Last-Event-ID` dentro de 5 minutos recebe os eventos perdidos, em ordem e sem repetir os já vistos.
+- [ ] Carga inválida no canal é descartada sem derrubar a escuta.
 - [ ] 500 conexões SSE simultâneas mantidas em teste de carga, dentro de RNF-02.
 - [ ] Conteúdo com `<script>` em tópico, case, mensagem ou perfil é neutralizado na gravação e na leitura.
 - [ ] Webhook com assinatura inválida é recusado e registrado.
@@ -133,5 +164,6 @@ O estado de pagamento, as assinaturas e os direitos derivados são escritos pelo
 
 - [0004 — Duas APIs, um banco](decisions/0004-duas-apis-um-banco.md)
 - [0008 — Fila e SSE no PostgreSQL](decisions/0008-fila-e-sse-no-postgres.md)
+- [0020 — Eventos de usuário do SSE (provisória)](decisions/0020-eventos-de-usuario-do-sse.md)
 - [0009 — Stack TypeScript, Fastify e Kysely](decisions/0009-stack-typescript-fastify-kysely.md)
 - [0011 — Autenticação, sessão e vínculo social](decisions/0011-autenticacao-sessao-e-vinculo-social.md)

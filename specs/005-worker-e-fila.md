@@ -33,14 +33,18 @@ queued → running → done
 
 - Seleção: `status = 'queued' AND run_at <= now()`, por `priority` decrescente e `run_at` crescente, com `SKIP LOCKED`.
 - Ao iniciar, a tarefa recebe `locked_by`, `locked_at` e passa a `running`; o worker renova `heartbeat_at` a cada 30 s.
-- Novas tentativas: espera de `min(2^tentativa × 30 s, 6 h)` com variação aleatória de ±20%. Máximo de tentativas por tipo (tabela abaixo).
+- Contagem de tentativas: `attempts` sobe quando o worker pega a tarefa, não quando ela falha. Tarefa com `attempts = max_attempts` não é mais pega.
+- Novas tentativas: espera de `min(2^tentativa × 30 s, 6 h)` com variação aleatória de ±20%. Máximo de tentativas por tipo (tabelas abaixo).
 - `failed` não é reprocessada sozinha; fica até alguém reenfileirar, descartar ou a retenção expirar.
-- Encerramento do contêiner: o worker para de pegar tarefas, espera até 30 s pelas em andamento e devolve as restantes à fila.
-- Mais de um contêiner `worker` pode rodar ao mesmo tempo; `SKIP LOCKED` evita execução dupla. As recorrentes usam chave de unicidade para não duplicar.
+- Encerramento do contêiner: o worker para de pegar tarefas, espera até 30 s pelas em andamento e devolve as restantes à fila. A devolução desfaz a contagem daquela tentativa (`attempts - 1`): interrupção por encerramento não é falha da tarefa.
+- Tarefa presa (RNF-04) volta à fila de imediato, com a tentativa contada (o worker morreu executando); se já gastou todas, fica `failed` com `last_error` dizendo que ficou sem batimento.
+- Worker que perde a trava (a tarefa foi dada como presa e outro a pegou) abandona o resultado: concluir e falhar só valem para quem ainda é o `locked_by`.
+- Tarefa de tipo que o worker não conhece (versões diferentes durante uma atualização) falha como erro comum e segue as tentativas; não é descartada.
+- Mais de um contêiner `worker` pode rodar ao mesmo tempo; `SKIP LOCKED` evita execução dupla. As recorrentes usam chave de unicidade para não duplicar ([Tarefas recorrentes](#tarefas-recorrentes)).
 
 ### Idempotência
 
-- `unique_key` opcional com índice único parcial sobre tarefas `queued` e `running`: enfileirar de novo com a mesma chave não cria segunda tarefa.
+- `unique_key` opcional com índice único parcial sobre tarefas `queued` e `running`: enfileirar de novo com a mesma chave não cria segunda tarefa enquanto a primeira estiver ativa (`enqueue` devolve nulo). Depois que ela termina, a mesma chave pode ser enfileirada outra vez; quem precisa de "uma única vez" usa a regra das recorrentes.
 - Manipuladores conferem o estado atual antes de agir (ex.: pedido já `paid` não é pago de novo; e-mail com `sent_at` preenchido não é reenviado).
 - Efeitos externos carregam chave de idempotência derivada do `id` da tarefa (Mercado Pago) ou são registrados antes do envio (e-mail).
 
@@ -64,25 +68,43 @@ Este é o catálogo único de tipos de tarefa; as demais specs usam exatamente e
 | `announcement.publish` | Novidade com publicação agendada | Publica no horário marcado ([025](025-novidades.md)) | 3 |
 | `account.export` | Pedido do aluno ou do admin | Monta o arquivo de dados pessoais ([030](030-lgpd.md)) | 3 |
 | `account.anonymize` | Fim da carência da exclusão de conta | Anonimiza o usuário ([030](030-lgpd.md)) | 5 |
+| `example.echo` | Testes e diagnóstico; nenhum fluxo do produto o enfileira | Registra no log a `message` do payload, sem outro efeito | 3 |
+
+`example.echo` nasceu como exemplo da Fase 0 e fica no catálogo como tarefa de diagnóstico: serve aos testes da fila, ao e2e de fumaça e para conferir numa instalação que o worker está consumindo.
 
 ### Tarefas recorrentes
 
-| Tipo | Frequência | O que faz |
-| --- | --- | --- |
-| `payment.reconcile_orders` | A cada 5 min | Consulta no provedor os pedidos `pending` há mais de 2 min e conclui, ou expira os vencidos: 30 min para cartão e Pix (`NUVA_ORDER_PENDING_MINUTES`), 3 dias para boleto (`NUVA_ORDER_BOLETO_DAYS`) ([011](011-vendas-e-checkout.md), [013](013-pagamentos-mercado-pago.md)) |
-| `payment.reconcile_subscriptions` | A cada 6 h | Confere as assinaturas no provedor; aplica a carência de 3 dias e a suspensão ([012](012-assinaturas.md)) |
-| `payment.reconcile_refunds` | A cada 30 min | Conclui ou marca falha nos reembolsos pedidos ([013](013-pagamentos-mercado-pago.md)) |
-| `entitlement.expire` | A cada 15 min | Marca como vencidos os direitos com `expires_at` passado e desfaz a cascata |
-| `suspension.expire` | A cada 15 min | Encerra as suspensões com prazo vencido ([026](026-moderacao-e-denuncias.md)) |
-| `ticket.autoclose` | Diária 04:00 | Fecha os chamados `resolved` vencidos ([023](023-chamados-de-suporte.md)) |
-| `gamification.weekly` | Segunda-feira 00:00 | Fecha o ranking semanal e zera o acumulado da semana ([020](020-gamificacao.md)) |
-| `image.cleanup` | Diária 03:45 | Apaga imagens sem referência há mais de 24 horas ([029](029-imagens.md)) |
-| `retention.purge` | Diária 03:30 | Expurga dados vencidos conforme [033](033-observabilidade-retencao-backup.md) |
-| `ops.digest` | Diária 08:00 | Se houver tarefas `failed`, e-mails ou webhooks com falha, notifica os admins |
+| Tipo | Frequência | O que faz | Tentativas |
+| --- | --- | --- | --- |
+| `payment.reconcile_orders` | A cada 5 min | Consulta no provedor os pedidos `pending` há mais de 2 min e conclui, ou expira os vencidos: 30 min para cartão e Pix (`NUVA_ORDER_PENDING_MINUTES`), 3 dias para boleto (`NUVA_ORDER_BOLETO_DAYS`) ([011](011-vendas-e-checkout.md), [013](013-pagamentos-mercado-pago.md)) | 3 |
+| `payment.reconcile_subscriptions` | A cada 6 h | Confere as assinaturas no provedor; aplica a carência de 3 dias e a suspensão ([012](012-assinaturas.md)) | 3 |
+| `payment.reconcile_refunds` | A cada 30 min | Conclui ou marca falha nos reembolsos pedidos ([013](013-pagamentos-mercado-pago.md)) | 3 |
+| `entitlement.expire` | A cada 15 min | Marca como vencidos os direitos com `expires_at` passado e desfaz a cascata | 3 |
+| `suspension.expire` | A cada 15 min | Encerra as suspensões com prazo vencido ([026](026-moderacao-e-denuncias.md)) | 3 |
+| `ticket.autoclose` | Diária 04:00 | Fecha os chamados `resolved` vencidos ([023](023-chamados-de-suporte.md)) | 5 |
+| `gamification.weekly` | Segunda-feira 00:00 | Fecha o ranking semanal e zera o acumulado da semana ([020](020-gamificacao.md)) | 5 |
+| `image.cleanup` | Diária 03:45 | Apaga imagens sem referência há mais de 24 horas ([029](029-imagens.md)) | 5 |
+| `retention.purge` | Diária 03:30 | Expurga dados vencidos conforme [033](033-observabilidade-retencao-backup.md) | 5 |
+| `ops.digest` | Diária 08:00 | Se houver tarefas `failed`, e-mails ou webhooks com falha, notifica os admins | 5 |
 
 O processamento de imagens enviadas não passa pela fila: é feito na API que recebe o envio ([029](029-imagens.md)).
 
-O agendador roda dentro do `worker`: a cada minuto enfileira as recorrentes devidas com `unique_key = tipo + janela`. Horários no fuso de `settings.timezone` (padrão `America/Sao_Paulo`).
+O agendador roda dentro do `worker` e, a cada minuto, enfileira as recorrentes devidas:
+
+- **Chave com a janela.** Cada execução tem `unique_key = <tipo>:<janela>`. A janela identifica o período a que a execução pertence:
+
+  | Frequência | Janela | Exemplo de chave |
+  | --- | --- | --- |
+  | Diária | Data local, `AAAA-MM-DD` | `retention.purge:2026-11-24` |
+  | Semanal | Data local da segunda-feira | `gamification.weekly:2026-11-23` |
+  | A cada N minutos ou horas | Início do intervalo em UTC, `AAAA-MM-DDTHH:MM`, alinhado a múltiplos de N desde 00:00 UTC | `entitlement.expire:2026-11-24T10:15` |
+
+- **Uma única vez por janela.** `enqueueRecurring` só insere se não existir tarefa com a mesma chave em **nenhum** estado (`queued`, `running`, `done` ou `failed`). O índice único parcial sozinho não basta: ele deixaria um segundo worker reenfileirar a janela que o primeiro já concluiu. A consulta de existência usa o índice simples de `unique_key`.
+- **Janela residual.** Dois workers podem passar juntos pela consulta de existência; o índice único segura o segundo enquanto a tarefa do primeiro está ativa. Se ela terminar exatamente nesse intervalo, a janela é enfileirada duas vezes. Não há trava para isso: os manipuladores das recorrentes são idempotentes (RF-05), e a segunda execução não encontra nada a fazer.
+- **Horário já passado.** Diária e semanal ficam devidas a partir do horário marcado e até o fim do dia local: worker que sobe depois do horário ainda enfileira a janela do dia, uma vez. Dia em que nenhum worker esteve no ar não é recuperado.
+- **Falha.** Recorrente `failed` não bloqueia a janela seguinte. As de intervalo têm 3 tentativas, porque a janela seguinte refaz o trabalho; as diárias e a semanal têm 5.
+- **Fuso.** Horários de diárias e da semanal no fuso da escola: chave `school.timezone` de `settings` (padrão `America/Sao_Paulo`; [031](031-infraestrutura-e-deploy.md), "Configurações da escola"). Valor inválido gera aviso no log e vale o padrão. O fuso é relido a cada minuto, sem reiniciar o worker.
+- A retenção apaga as recorrentes concluídas depois de 7 dias; a essa altura a janela já passou e não volta a ficar devida.
 
 ### Casos de erro
 
@@ -95,8 +117,16 @@ O agendador roda dentro do `worker`: a cada minuto enfileira as recorrentes devi
 
 - Sem API HTTP de negócio. Rotas internas: `/healthz`, `/readyz`, `/metrics`.
 - Enfileiramento por função de `packages/core` (`enqueue(tx, type, payload, options)`), usada pelas duas APIs e pelo próprio worker.
-- Aviso de nova tarefa: `NOTIFY nuva_jobs`.
-- Tela de operações servida pela `admin-api` em `/api/v1/ops` ([003](003-admin-api.md)).
+- Enfileiramento de recorrente: `enqueueRecurring(tx, type, payload, { window })`, usada só pelo agendador.
+- Aviso de nova tarefa: `NOTIFY nuva_jobs`, sem conteúdo, emitido por gatilho da tabela (ver "Dados"); o worker que o recebe consulta a fila.
+- Tela de operações servida pela `admin-api` em `/api/v1/ops` ([003](003-admin-api.md)):
+
+| Ação | Efeito | Erros |
+| --- | --- | --- |
+| Reenfileirar (`POST /ops/jobs/{id}/retry`) | A tarefa `failed` volta a `queued` para agora, com `attempts = 0`; `last_error` fica como registro | `404 not_found` se não existe; `409 job_not_failed` se não está `failed`; `409 job_already_active` se já existe tarefa `queued` ou `running` com a mesma `unique_key` |
+| Descartar (`DELETE /ops/jobs/{id}`) | Apaga a tarefa `failed` | `404 not_found`; `409 job_not_failed` |
+
+As duas ações gravam auditoria ([028](028-auditoria.md)).
 
 ## Dados
 
@@ -104,17 +134,36 @@ Tabela `jobs` (dono: `worker`; as APIs só inserem):
 
 | Campo | Tipo | Descrição |
 | --- | --- | --- |
-| `id` | uuid v7 | Chave |
-| `type` | text | Tipo da tarefa |
-| `payload` | jsonb | Apenas identificadores; nunca senha, token ou CPF |
-| `status` | text | `queued`, `running`, `done`, `failed` |
-| `priority` | smallint | Padrão 0; pagamento usa 10 |
-| `run_at` | timestamptz | Quando pode executar |
-| `attempts` / `max_attempts` | smallint | Controle de tentativas |
-| `unique_key` | text | Unicidade opcional |
-| `locked_by`, `locked_at`, `heartbeat_at` | — | Controle de execução |
-| `last_error` | text | Último erro |
-| `created_at`, `finished_at` | timestamptz | Datas |
+| `id` | uuid v7 | Chave; padrão `uuidv7()` |
+| `type` | text | Tipo da tarefa, no formato `palavra.palavra` em minúsculas (`^[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*)*$`) |
+| `payload` | jsonb | Sempre um objeto (padrão `{}`); apenas identificadores, nunca senha, token ou CPF |
+| `status` | text | `queued` (padrão), `running`, `done`, `failed` |
+| `priority` | smallint | Maior primeiro. Padrão 0; pagamento usa 10 |
+| `run_at` | timestamptz | Quando pode executar; padrão `now()` |
+| `attempts` / `max_attempts` | smallint | Padrões 0 e 5; `0 <= attempts <= max_attempts` e `max_attempts >= 1`. Quem enfileira pela função do núcleo usa o máximo do tipo |
+| `unique_key` | text | Unicidade opcional; nula ou não vazia |
+| `locked_by`, `locked_at`, `heartbeat_at` | text, timestamptz, timestamptz | Controle de execução. Os três preenchidos em `running`, os três nulos em `queued`; `done` e `failed` guardam a última trava como registro de quem executou |
+| `last_error` | text | Último erro, já mascarado e cortado em 8.000 caracteres |
+| `created_at`, `finished_at` | timestamptz | `finished_at` preenchido se, e só se, o estado é `done` ou `failed` |
+
+As regras da coluna "Descrição" são restrições `CHECK` da tabela (migrations 0002 e 0003): o banco recusa estado incoerente mesmo que o código erre.
+
+Índices:
+
+| Índice | Sobre | Para |
+| --- | --- | --- |
+| `jobs_ready_idx` | `(priority DESC, run_at)` onde `status = 'queued'` | Consumo com `SKIP LOCKED` |
+| `jobs_unique_key_active_unique` (único) | `(unique_key)` onde `status IN ('queued', 'running')` | Deduplicação entre tarefas ativas |
+| `jobs_unique_key_idx` | `(unique_key)` onde `unique_key IS NOT NULL` | Existência da recorrente em qualquer estado |
+| `jobs_running_heartbeat_idx` | `(heartbeat_at)` onde `status = 'running'` | Tarefa presa |
+| `jobs_finished_idx` | `(status, finished_at)` onde `status IN ('done', 'failed')` | Retenção e lista de falhas do `/ops` |
+
+Aviso (`NOTIFY nuva_jobs`, sem conteúdo), por gatilho:
+
+- em `INSERT`, quando a tarefa nasce `queued` e já pode executar;
+- em `UPDATE` de `status` ou `run_at`, quando a tarefa passa a `queued` e já pode executar: é o que acorda o worker ao reenfileirar pelo `/ops`, ao devolver à fila no encerramento ou ao antecipar o `run_at`.
+
+Tarefa agendada para depois não gera aviso; a varredura de 5 s a pega. O aviso só é entregue no `COMMIT`, então tarefa de transação desfeita não acorda ninguém.
 
 O `worker` também é o único que escreve em: `payments`, estado de `orders` após a criação, `subscriptions`, `entitlements` com `source` `order`, `subscription` e `cascade`, `points_ledger`, `user_badges` automáticas, `certificates`, `notifications` (criação) e estado de processamento em `webhook_events`.
 
@@ -127,7 +176,10 @@ Retenção: `done` por 7 dias, `failed` por 30 dias ([033](033-observabilidade-r
 - [ ] Manipulador que falha é reexecutado com a espera prevista e termina em `failed` após o máximo de tentativas.
 - [ ] Tarefa cujo worker foi morto volta à fila em até 5 minutos.
 - [ ] Executar duas vezes `order.fulfill` para o mesmo pedido cria os direitos uma única vez.
-- [ ] Recorrentes não duplicam com dois workers no ar.
+- [ ] Recorrentes não duplicam com dois workers no ar, nem depois de a tarefa da janela ter sido concluída.
+- [ ] Worker que sobe depois do horário de uma diária enfileira a janela do dia uma única vez.
+- [ ] Tarefa devolvida à fila no encerramento mantém o número de tentativas que tinha antes de ser pega.
+- [ ] Reenfileirar uma `failed` zera as tentativas e acorda o worker; com outra tarefa ativa de mesma chave, responde `409 job_already_active`.
 - [ ] Tela de operações lista as `failed` e permite reenfileirar e descartar.
 - [ ] Definition of Done ([002](002-organizacao-do-trabalho.md)) atendida.
 

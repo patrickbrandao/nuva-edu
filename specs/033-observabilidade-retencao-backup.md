@@ -30,7 +30,7 @@ Uma instalação é operada por uma escola pequena, sem equipe de infraestrutura
 - Formato JSON, uma linha por evento, com `time`, `level`, `service`, `msg`, `request_id` e, quando houver, `user_id`, `route`, `status`, `duration_ms`, `job_id`.
 - O `request_id` nasce no Traefik (ou na API, se ausente), volta ao cliente em `X-Request-Id` e acompanha as tarefas que a requisição enfileira.
 - Nível por `NUVA_LOG_LEVEL` (`info` por padrão). Erros incluem a pilha.
-- Lista de campos sempre mascarados: `password`, `token`, `secret`, `authorization`, `cookie`, `cpf`, `cnpj`, `document`, `key`.
+- Lista de campos sempre mascarados: `password`, `token`, `secret`, `authorization`, `cookie`, `cpf`, `cnpj`, `document`, `key`. O nome é comparado sem diferenciar maiúsculas e vale como palavra dentro de nomes compostos (`apiKey`, `secret_key`, `accessToken`). Mascarar a mais é aceitável; deixar passar, não. Exceção: o trecho `key` é perdoado em nomes que nunca guardam credencial e precisam aparecer no log, listados em `packages/core` — a chave de unicidade da fila (`unique_key`, [005](005-worker-e-fila.md)), o nome de uma configuração (`setting_key`) e a chave de um texto traduzido (`translation_key`, `i18n_key`). Nome novo só entra nessa lista se o valor nunca for credencial.
 - Os logs ficam no Docker com rotação de 10 MB x 5 arquivos; não há agregador embutido.
 
 ### Saúde
@@ -44,6 +44,8 @@ API com migrations desatualizadas fica "não pronta" e registra o motivo.
 
 Nas APIs, `/healthz` responde `200` com `{ "status": "ok" }`. `/readyz` responde `200` ou `503` com `{ "status": "ready" | "not_ready", "checks": { "database": "ok" | "fail", "migrations": "ok" | "fail" } }`.
 
+No worker o formato é o mesmo, com um terceiro item em `checks`: `queue`, que é `ok` enquanto o laço de consumo está rodando e a última rodada dele conseguiu consultar a fila há menos de três varreduras (15 s). Fica `fail` quando o laço parou, durante o encerramento, ou quando o banco está fora há mais que isso.
+
 ### Métricas
 
 Sem identificadores de usuário nos rótulos.
@@ -55,13 +57,31 @@ Sem identificadores de usuário nos rótulos.
 | `sse_connections` | medidor | `classroom-api`, `admin-api` |
 | `db_pool_connections{state}` | medidor | todos |
 | `jobs_total{type,outcome}` | contador | worker |
+| `jobs_duration_seconds{type}` | histograma | worker |
 | `jobs_queue_depth{type}` | medidor | worker |
+| `jobs_failed{type}` | medidor | worker |
+| `jobs_count{status}` | medidor | worker |
 | `jobs_oldest_pending_seconds` | medidor | worker |
+| `worker_jobs_running` | medidor | worker |
+| `worker_concurrency` | medidor | worker |
+| `worker_database_up` | medidor | worker |
 | `emails_total{outcome}` | contador | worker |
 | `webhooks_total{provider,outcome}` | contador | `classroom-api` |
 | `login_attempts_total{outcome}` | contador | APIs |
 | `mcp_tool_calls_total{tool,outcome}` | contador | `admin-api` |
 | `images_bytes_total` | medidor | worker |
+
+Detalhe das métricas do worker:
+
+- `jobs_total`: uma contagem por execução. `outcome` é `done` (concluída), `retry` (falhou e voltou à fila), `failed` (esgotou as tentativas) ou `lost` (o worker perdeu a trava e abandonou o resultado). Tipo que o worker não conhece conta com `type="unknown"`, para o rótulo não crescer sem limite.
+- `jobs_duration_seconds`: tempo do manipulador, com faixas de 5 ms a 300 s.
+- `jobs_queue_depth`: tarefas `queued` por tipo. `jobs_failed`: tarefas `failed` por tipo, a mesma lista da tela "Operação".
+- `jobs_count`: total por `status` (`queued`, `ready`, `running`, `done`, `failed`); `ready` é a parte de `queued` com `run_at` vencido, o tamanho real da fila.
+- `worker_jobs_running` e `worker_concurrency`: ocupação deste processo e o seu limite (`NUVA_WORKER_CONCURRENCY`).
+- `worker_database_up`: 1 quando a leitura da fila para a coleta funcionou. Com o banco fora, vale 0, os medidores `jobs_queue_depth`, `jobs_failed`, `jobs_count` e `jobs_oldest_pending_seconds` ficam de fora da resposta e o `/metrics` continua respondendo `200`.
+- Os medidores da fila são lidos do banco a cada coleta; com mais de um worker, todos devolvem o mesmo valor, e quem coleta usa `max`, não `sum`.
+
+`sse_connections` conta as conexões abertas no processo. Requisição de SSE encerrada pelo cliente não entra em `http_request_duration_seconds` (a duração seria a da conexão, não a de um atendimento).
 
 Não há tracing distribuído nem alertas embutidos. O guia em `docs/` traz um exemplo de coleta com Prometheus e três alertas sugeridos (fila parada, taxa de erro 5xx, backup atrasado).
 

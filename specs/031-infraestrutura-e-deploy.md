@@ -60,6 +60,8 @@ O Compose lê `.env` e depois `.env.local` (`env_file` e `--env-file`, encapsula
 
 CPU e memória de cada serviço são ajustáveis por `NUVA_<SERVICO>_CPUS` e `NUVA_<SERVICO>_MEMORY`.
 
+As duas APIs e o worker escutam na porta de `PORT` (padrão 3000). No Compose a variável não é definida: a porta interna é sempre 3000, e é ela que os `healthcheck` e os rótulos do Traefik usam. `PORT` existe para rodar os três processos lado a lado fora do contêiner (desenvolvimento e testes).
+
 ### Padrões de todo contêiner
 
 - `deploy.resources.limits` com CPU e memória (tabela acima).
@@ -102,7 +104,18 @@ Os sites são estáticos: os nomes de host e a moeda chegam em tempo de execuç�
 ### IP real do cliente
 
 - As APIs leem `X-Forwarded-For` (e `X-Real-IP` como alternativa) somente quando a conexão vem de um endereço listado em `TRUSTED_PROXIES`; fora disso, vale o endereço da conexão TCP.
-- Padrão de `TRUSTED_PROXIES`: faixas privadas (`10.0.0.0/8`, `172.16.0.0/12`, `192.168.0.0/16`, `127.0.0.0/8`, `fc00::/7`). Quem instala pode restringir à rede do proxy.
+- Padrão de `TRUSTED_PROXIES`, as faixas de onde um proxy na mesma máquina ou na mesma rede interna pode chegar:
+
+  | Faixa | O que é |
+  | --- | --- |
+  | `10.0.0.0/8`, `172.16.0.0/12`, `192.168.0.0/16` | Redes privadas (as redes do Docker caem aqui) |
+  | `100.64.0.0/10` | CGNAT; usada por redes de sobreposição e balanceadores internos de provedores |
+  | `127.0.0.0/8`, `::1/128` | Laço local |
+  | `169.254.0.0/16`, `fe80::/10` | Link-local |
+  | `fc00::/7` | Endereços locais únicos do IPv6 |
+
+- A variável aceita endereços e faixas CIDR separados por vírgula e, quando definida, substitui a lista padrão inteira.
+- O padrão é amplo para funcionar atrás de qualquer proxy sem configuração. O custo: um cliente cujo endereço real está numa dessas faixas (rede interna da escola, cliente atrás do mesmo CGNAT do servidor) é tratado como proxy, e o `X-Forwarded-For` que ele enviar é aceito. Quem atende usuários nessas condições restringe `TRUSTED_PROXIES` à rede do proxy (`TRAEFIK_NETWORK`); o guia de instalação traz o exemplo.
 - Do `X-Forwarded-For`, usa-se o endereço mais à direita que não pertence a `TRUSTED_PROXIES`.
 - O IP assim obtido alimenta o limite de tentativas de login, a auditoria e os logs.
 
@@ -158,7 +171,8 @@ O script só age sobre o projeto Compose `nuva-edu`; qualquer outra ação no se
 | `NUVA_PUBLIC_SCHEME` | `http` | `http` ou `https`, para montar URLs em e-mails e retornos |
 | `NUVA_PUBLIC_PORT` | `8080` | Porta pública; vazio quando 80/443 |
 | `NUVA_CURRENCY` | `BRL` | Moeda da instalação |
-| `NUVA_LOCALE` | `pt-BR` | Idioma padrão |
+| `NUVA_LOCALE` | `pt-BR` | Idioma padrão, como etiqueta BCP 47 (`^[a-z]{2,3}(-[A-Za-z0-9]{2,8})*$`, sem diferenciar maiúsculas). A configuração guarda a forma canônica (`pt-br` vira `pt-BR`), e é ela que o `/meta` devolve |
+| `PORT` | `3000` | Porta de escuta das duas APIs e do worker; não é definida no Compose |
 | `NUVA_IMAGE_TAG` | `latest` | Etiqueta das imagens |
 | `NUVA_TEST_DB` | vazio | `local` liga o banco de testes clonado ([032](032-verificacao-e-ci.md)) |
 | `ADMIN_EMAIL` | segredo | E-mail do admin inicial |
@@ -186,7 +200,7 @@ O script só age sobre o projeto Compose `nuva-edu`; qualquer outra ação no se
 | `TRAEFIK_CERTRESOLVER` | vazio | Resolvedor de certificado; vazio = sem TLS |
 | `TRAEFIK_HTTP_PORT`, `TRAEFIK_HTTPS_PORT` | `8080`, `8443` | Portas do Traefik próprio |
 | `TRAEFIK_ACME_EMAIL` | vazio | E-mail do Let's Encrypt no Traefik próprio |
-| `TRUSTED_PROXIES` | faixas privadas | Origens confiáveis para o IP real |
+| `TRUSTED_PROXIES` | faixas privadas, CGNAT, laço local e link-local | Origens confiáveis para o IP real ([IP real do cliente](#ip-real-do-cliente)) |
 | `NUVA_RETENTION_SESSION_DAYS` | `30` | Sessão sem uso |
 | `NUVA_RETENTION_EMAIL_TOKEN_HOURS` | `24` | Links de confirmação e de redefinição |
 | `NUVA_RETENTION_LOGIN_ATTEMPT_DAYS` | `30` | Tentativas de login |
@@ -213,6 +227,26 @@ O script só age sobre o projeto Compose `nuva-edu`; qualquer outra ação no se
 
 Segredos de Mercado Pago e de SMTP usam `${VAR:?}` apenas nos serviços que os exigem; em desenvolvimento, o `.env.local` de exemplo traz valores de teste.
 
+### Configurações da escola
+
+O que a escola ajusta sem reiniciar nada fica na tabela `settings`, uma linha por chave, com o valor em JSON. Variável de ambiente é para o que depende da instalação (hosts, segredos, limites); `settings` é para o que o admin muda pela tela de configurações.
+
+| Chave | Valor (JSON) | Padrão | Uso |
+| --- | --- | --- | --- |
+| `school.name` | texto de 1 a 120 caracteres, sem espaços nas pontas | `nuva-edu` | `schoolName` do `/meta`, título dos sites, e-mails, certificados |
+| `school.timezone` | texto: fuso IANA | `America/Sao_Paulo` | Horário das tarefas recorrentes ([005](005-worker-e-fila.md)), retenção ([033](033-observabilidade-retencao-backup.md)) e padrão do usuário sem fuso próprio ([014](014-aprendizado-e-progresso.md)) |
+| `school.logo_image_id` | uuid de uma imagem ([029](029-imagens.md)) ou nulo | nulo | `logoUrl` do `/meta`, e-mails |
+| `school.accent_color` | texto `#RRGGBB` ou nulo | nulo | `accentColor` do `/meta` |
+| `school.source_code_url` | texto: URL `https` | `https://github.com/patrickbrandao/nuva-edu` | `sourceCodeUrl` do `/meta`, link "Código-fonte" ([006](006-sites-e-interface.md), RF-11) |
+
+Regras:
+
+- Formato da chave: `grupo.nome`, em minúsculas com `_` (restrição da tabela). O grupo `school` reúne a identidade da escola; cada spec que criar uma chave a acrescenta nesta tabela, que é a lista única.
+- Chave ausente vale o padrão: a instalação nova não tem linha nenhuma e funciona. Nenhuma migration insere configuração.
+- Leitura só por `packages/core` (módulo `settings`), que valida o valor e devolve o padrão, com aviso no log, quando ele é inválido. Nenhum serviço lê a tabela diretamente.
+- Escrita só pela `admin-api` ([003](003-admin-api.md)), que valida antes de gravar e registra auditoria.
+- `settings.timezone`, citado em outras specs, é a chave `school.timezone`.
+
 ### Comandos
 
 - `pnpm compose <args>` — `docker compose` com os arquivos de ambiente corretos.
@@ -234,6 +268,9 @@ Segredos de Mercado Pago e de SMTP usam `${VAR:?}` apenas nos serviços que os e
 - [ ] Sem o perfil `traefik` e com `TRAEFIK_NETWORK=network_public`, os contêineres entram na rede externa e nenhum publica porta.
 - [ ] Todos os contêineres rodam com raiz somente leitura, limites de CPU e memória e `nofile` definidos (teste lê o `docker compose config`).
 - [ ] Requisição com `X-Forwarded-For` forjado, vinda de fora de `TRUSTED_PROXIES`, é registrada com o IP da conexão.
+- [ ] Conexão vinda de `100.64.0.1` ou de `169.254.0.1` tem o `X-Forwarded-For` aceito com a lista padrão, e recusado com `TRUSTED_PROXIES` restrito a outra faixa.
+- [ ] `NUVA_LOCALE=pt-br` sobe o serviço e o `/meta` responde `locale: pt-BR`.
+- [ ] Banco sem nenhuma linha em `settings`: o `/meta` devolve os padrões e o agendador usa `America/Sao_Paulo`.
 - [ ] As cinco imagens existem no Docker Hub com manifesto para `amd64` e `arm64`.
 - [ ] `pnpm deploy:test` deixa os dois hosts de teste respondendo `/healthz` por HTTPS com certificado válido.
 - [ ] Trocar `NUVA_ADMIN_HOST` e subir de novo muda o host do admin sem refazer imagem.

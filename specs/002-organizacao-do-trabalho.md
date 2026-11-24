@@ -13,6 +13,7 @@ Vários agentes (Claude Code e OpenCode) trabalham no mesmo repositório, no mes
 - RF-02: Cada tarefa lista os arquivos que pode alterar; duas tarefas em andamento nunca compartilham arquivo.
 - RF-03: Toda mudança de comportamento começa pela spec; contrato e migration vêm antes do código que os usa.
 - RF-04: Toda mudança vem com o teste que a cobre.
+- RF-05: Mudança de contrato, a rota que a atende e o cliente gerado entram na mesma janela de trabalho ([Janela de contrato](#janela-de-contrato)).
 - RNF-01: Nenhum commit contém arquivo fora das pastas do papel de quem o fez (verificável pelo histórico).
 
 ## Comportamento
@@ -76,9 +77,23 @@ O status `em-revisao` do template não é usado, porque não há revisão antes 
 ### Paralelismo
 
 - Duas tarefas rodam em paralelo quando os campos `arquivos` não se cruzam.
-- Dentro de um recurso a ordem é fixa: spec e contrato → migration → `packages/core` → APIs → `packages/api-client` → sites → e2e.
+- Dentro de um recurso a ordem é fixa: spec → migration → `packages/core` → contrato → APIs e `packages/api-client` → sites → e2e. A spec decide o contrato antes de tudo; o arquivo `openapi.yaml` só muda quando a API pode alcançá-lo em seguida ([Janela de contrato](#janela-de-contrato)).
 - Mudança de contrato e migration são sempre sequenciais entre si.
 - As frentes paralelas de cada fase estão no [PLAN](PLAN.md).
+
+### Janela de contrato
+
+As APIs sobem em modo estrito ([003](003-admin-api.md), RF-04): operação do contrato sem rota, ou rota fora do contrato, impede a subida e quebra o teste de contrato. O cliente de `packages/api-client` também é conferido contra o contrato. Como o contrato vem antes do código, uma mudança de contrato deixa a `main` vermelha até a API e o cliente a alcançarem. A regra para manter esse intervalo curto e previsível ([0019](decisions/0019-janela-de-contrato-e-operacoes-pendentes.md)):
+
+1. Antes de alterar o `openapi.yaml`, o `arquiteto` cria as tarefas encadeadas: a da API dona da rota (`api-admin` ou `api-classroom`), a do `interface` para regenerar o cliente e, se houver, as dos sites. A tarefa do contrato e essas tarefas formam uma **janela**.
+2. O `arquiteto` só envia o contrato quando a tarefa da API está criada, sem dependência pendente além do próprio contrato, e é a próxima a ser executada pelo papel dono. A tarefa do `interface` roda em paralelo com a da API.
+3. Operação **nova** entra no contrato com a extensão `x-nuva-pending: true` no objeto da operação. A conferência do `api-kit` ignora operação pendente sem rota, então a API continua subindo e o teste de contrato continua verde. A tarefa da API registra a rota e pede ao `arquiteto`, no relato, a retirada da marca. Operação pendente que já tem rota não impede a subida (a rota pode chegar antes de a marca sair), mas gera aviso no log e no teste de contrato até a marca ser retirada.
+4. Mudança em operação **existente** (campo obrigatório novo, esquema alterado, resposta nova) não tem marca: o contrato e a rota divergem até a tarefa da API terminar. Por isso a janela inteira é executada em sequência, sem outra tarefa do mesmo papel no meio.
+5. Enquanto a janela está aberta, as falhas esperadas são só as dela: `pnpm --filter @nuva-edu/api-client check` (gerado desatualizado) e os testes da API que a mudança atinge. Quem roda `verify:quick` em outra área e esbarra nelas relata e segue; ninguém as "corrige" fora da tarefa dona.
+6. A janela fecha quando contrato, rota e cliente gerado estão na `main` e `pnpm verify:quick` das três áreas está verde. Os sites só usam a operação depois disso (a tarefa do site depende da da API e da do `interface`).
+7. Nenhuma release sai com operação pendente: `check-contract --no-pending` faz parte do `verify:full`.
+
+Mudança de contrato que não altera o cliente gerado nem a validação (hoje, só afrouxar um `pattern`) dispensa a janela, desde que `pnpm --filter @nuva-edu/api-client check` e os testes das duas APIs passem no mesmo commit.
 
 ### Verificação
 
@@ -129,6 +144,8 @@ O agente para e pergunta quando houver:
 - [ ] Existe uma definição por papel nas duas ferramentas.
 - [ ] Todo commit de entrega cita uma tarefa.
 - [ ] Nenhum commit mistura pastas de papéis diferentes, salvo `CHANGELOG.md`.
+- [ ] Toda mudança de `openapi.yaml` que altera o cliente gerado tem, criadas antes do commit, a tarefa da API e a do `interface`.
+- [ ] Nenhuma tag de release contém operação com `x-nuva-pending`.
 
 ## Fora de escopo
 
@@ -138,4 +155,5 @@ O agente para e pergunta quando houver:
 
 - [0013 — Commit direto na main, diretório compartilhado](decisions/0013-commit-direto-na-main-diretorio-compartilhado.md)
 - [0014 — Verificação em dois níveis](decisions/0014-verificacao-em-dois-niveis.md)
+- [0019 — Janela de contrato e operações pendentes](decisions/0019-janela-de-contrato-e-operacoes-pendentes.md)
 - [0001 — Decisões iniciais](decisions/0001-decisoes-iniciais.md)
