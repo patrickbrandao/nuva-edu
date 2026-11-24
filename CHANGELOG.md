@@ -47,6 +47,7 @@ Detalhe das decisões em `specs/decisions/`.
 - classroom-api: comando `check-contract [--no-pending]` (script `check-contract`), sem banco e sem porta; `buildClassroomApp` aceita `listenUserEvents: false`.
 - `@nuva-edu/admin`: leitura do `/config.json` ao abrir (`app`, `adminUrl`, `classroomUrl`), tela "sem acesso ao painel" com o link para o classroom vindo de `classroomUrl` (some se o arquivo faltar ou vier inválido) e `/config.json` respondido pelo Vite no desenvolvimento (task 063).
 - CI no GitHub Actions: fluxos `verify` (`pnpm verify:full --e2e` em push na `main` e em PR), `images` (cinco imagens amd64 e arm64, `NUVA_VERSION` nos backends, Trivy, publicação `sha-<7>` e `main` depois do `verify` verde), `release` (tag `vX.Y.Z`: `X.Y.Z`, `X.Y` e `latest`) e `security` (`pnpm audit`, CodeQL e `pnpm licenses:check` com `license-allowlist.json`); Dependabot semanal; `docs/ci.md` (task 015).
+- `scripts/task.mjs` conhece a janela de contrato: `task:start MMM --as <papel> --join NNN`, `task:finish MMM` marca `pronta`, `task:finish NNN` exige todas prontas e remove os arquivos da janela; `task:list` com a coluna `JANELA` (task 104).
 
 ### Alterado
 - Infra: `postgres`, `traefik` e `mailpit` sem capacidades (`cap_drop: ALL`, `no-new-privileges`), Postgres sem root, `nofile` 65536 no banco e no proxy, `healthcheck` no Mailpit; sites com `Content-Security-Policy` sem `unsafe-inline` (hash do script do tema gerado no build da imagem); pre-commit confere YAML; `verify:quick` sobe o banco por `pnpm compose`.

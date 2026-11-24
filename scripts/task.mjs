@@ -5,6 +5,11 @@
 // A tarefa NNN é o arquivo `tasks/NNN-*.md` do checkout principal; o trabalho acontece em
 // `.worktrees/task-NNN/`, no branch local `task/NNN`. O script nunca usa `git stash`,
 // `git reset --hard` nem `git push --force`.
+//
+// Janela de contrato (specs/002, ADR 0022): a tarefa com `janela: NNN` no cabeçalho não tem
+// worktree nem branch próprios. Entra com `task:start MMM --as <papel> --join NNN`, trabalha no
+// worktree da tarefa NNN, fica `pronta` com `task:finish MMM` e só chega à `main` no
+// `task:finish NNN`, que remove os arquivos de todas as tarefas da janela.
 
 import { spawnSync } from 'node:child_process';
 import {
@@ -43,6 +48,8 @@ export const EXIT = Object.freeze({
 
 export const USAGE = `Uso:
   pnpm task:start NNN --as <papel>   cria .worktrees/task-NNN no branch task/NNN a partir da main
+  pnpm task:start MMM --as <papel> --join NNN
+                                     entra na janela de contrato NNN, sem worktree nem branch
   pnpm task:finish [NNN]             rebase, verificação, fast-forward da main, push e limpeza
   pnpm task:abort NNN [--force]      remove worktree e branch; a tarefa volta a "aberta"
   pnpm task:path                     caminho do checkout principal (onde fica a fila tasks/)
@@ -53,11 +60,27 @@ finish  sem NNN, usa o branch task/NNN do diretório atual. --skip-verify só va
 abort   recusa com alterações não commitadas ou commits fora da main; --force os descarta e pede
         confirmação digitada num terminal.
 
+Janela de contrato (specs/002): a tarefa MMM com "janela: NNN" no cabeçalho trabalha no worktree
+da tarefa NNN (a do contrato), que precisa estar aberta e "em-andamento".
+start   sem --join, recusa tarefa que tem "janela:". Com --join NNN, só marca a tarefa como
+        "em-andamento" e imprime WORKTREE=<worktree da janela>. Dependência atendida: a própria
+        NNN, ou tarefa da mesma janela já "pronta".
+finish  MMM (tarefa da janela): exige commit terminando com "(task MMM)" em main..task/NNN e a
+        seção "## Relato" no arquivo da tarefa; só marca "pronta". Não faz rebase, não verifica,
+        não toca a main e não remove nada.
+        NNN (a janela): recusa enquanto houver tarefa da janela que não esteja "pronta"; depois
+        é o finish normal, e a limpeza remove também os arquivos das tarefas da janela.
+abort   MMM (tarefa da janela): só devolve a tarefa a "aberta"; recusa se já há commit
+        "(task MMM)" no branch da janela.
+        NNN (a janela): as regras de sempre; devolve a "aberta" também as tarefas da janela.
+
 Códigos de saída:
   0  sucesso
   1  uso errado ou erro inesperado do Git
   2  recusa por pré-condição (estado da tarefa, dependência pendente, branch ou worktree já
-     existente, checkout principal sujo ou fora da main, --force sem terminal); nada muda
+     existente, checkout principal sujo ou fora da main, --force sem terminal; na janela de
+     contrato: --join que não confere, janela fechada, falta de commit ou de relato, tarefa da
+     janela que não está "pronta"); nada muda
   3  worktree da tarefa com alterações não commitadas
   4  conflito no rebase sobre a main (o rebase fica em andamento no worktree)
   5  verificação falhou no worktree
@@ -90,7 +113,15 @@ export function normalizeId(raw) {
 
 export function parseArgs(argv) {
   const [command, ...rest] = argv;
-  const options = { command, id: null, as: null, force: false, skipVerify: false, iKnow: false };
+  const options = {
+    command,
+    id: null,
+    as: null,
+    join: null,
+    force: false,
+    skipVerify: false,
+    iKnow: false,
+  };
   if (!command || command === '--help' || command === '-h') return { help: true };
   if (!['start', 'finish', 'abort', 'path', 'list'].includes(command)) {
     return { error: `Subcomando desconhecido: ${command}` };
@@ -103,6 +134,10 @@ export function parseArgs(argv) {
       options.as = rest[i] ?? '';
     } else if (arg.startsWith('--as=') && command === 'start') {
       options.as = arg.slice('--as='.length);
+    } else if ((arg === '--join' || arg.startsWith('--join=')) && command === 'start') {
+      const raw = arg === '--join' ? rest[++i] : arg.slice('--join='.length);
+      options.join = normalizeId(raw);
+      if (!options.join) return { error: `Número de janela inválido em --join: ${raw ?? ''}` };
     } else if (arg === '--force' && command === 'abort') {
       options.force = true;
     } else if (arg === '--skip-verify' && command === 'finish') {
@@ -140,13 +175,24 @@ export function parseTask(text) {
     .split(',')
     .map((item) => normalizeId(item.trim()))
     .filter(Boolean);
-  return {
+  const task = {
     status: field('status'),
     owner: field('responsavel'),
     role: field('papel'),
     dependsOn,
     title: /^# (.+)$/m.exec(text)?.[1].trim() ?? '',
   };
+  // `window` é a janela de contrato (`janela: NNN`), normalizada como os IDs; vazia quando o campo
+  // falta. Fica fora da enumeração para que quem compara ou copia o cabeçalho campo a campo veja
+  // os mesmos cinco campos de antes da janela existir.
+  Object.defineProperty(task, 'window', { value: normalizeId(field('janela')) ?? '' });
+  return task;
+}
+
+/** O título de commit termina com `(task NNN)` desta tarefa? */
+export function citesTask(subject, id) {
+  const cited = /\(task (\d+)\)$/.exec(subject.trim())?.[1];
+  return cited !== undefined && normalizeId(cited) === id;
 }
 
 /** Troca campos do cabeçalho, sem tocar no resto do arquivo. */
@@ -281,6 +327,51 @@ function taskFile(ctx, id) {
 const branchOf = (id) => `task/${id}`;
 const worktreeOf = (ctx, id) => join(ctx.main, '.worktrees', `task-${id}`);
 
+/** A fila inteira, em ordem de ID: arquivo, texto e cabeçalho de cada tarefa. */
+function readQueue(ctx) {
+  if (!existsSync(ctx.tasksDir)) return [];
+  return readdirSync(ctx.tasksDir)
+    .filter((name) => /^\d{3,}-.*\.md$/.test(name))
+    .sort()
+    .map((name) => {
+      const file = join(ctx.tasksDir, name);
+      const text = readFileSync(file, 'utf8');
+      return { id: name.split('-')[0], name, file, text, task: parseTask(text) };
+    });
+}
+
+/** As tarefas da janela `windowId`: as que trazem `janela: <windowId>` no cabeçalho. */
+function windowMembers(ctx, windowId) {
+  return readQueue(ctx).filter((entry) => entry.task.window === windowId && entry.id !== windowId);
+}
+
+/** A janela está aberta quando a tarefa do contrato tem worktree e branch. */
+function windowOpen(ctx, windowId) {
+  return branchExists(ctx, branchOf(windowId)) && existsSync(worktreeOf(ctx, windowId));
+}
+
+/** Tarefa da janela não tem worktree nem branch próprios; é isso que a distingue no finish/abort. */
+function hasOwnWorktree(ctx, id) {
+  return branchExists(ctx, branchOf(id)) || existsSync(worktreeOf(ctx, id));
+}
+
+/** Títulos dos commits de `main..task/<windowId>` que terminam com `(task <id>)`. */
+function commitsCiting(ctx, windowId, id) {
+  const log = git(ctx.main, ['log', '--format=%s', `main..${branchOf(windowId)}`]);
+  if (!log.ok) fail(EXIT.ERROR, `git log main..${branchOf(windowId)} falhou:\n${log.output}`);
+  return log.stdout.split('\n').filter((subject) => citesTask(subject, id));
+}
+
+function describeMembers(members) {
+  return formatTable(
+    members.map((entry) => [
+      `  ${entry.id}`,
+      entry.task.status || 'sem status',
+      entry.task.owner || '-',
+    ]),
+  );
+}
+
 function branchExists(ctx, name) {
   return git(ctx.main, ['show-ref', '--verify', '--quiet', `refs/heads/${name}`]).ok;
 }
@@ -337,12 +428,19 @@ function requireCleanMain(ctx) {
 // ---------------------------------------------------------------------------------------------
 // Subcomandos.
 
-function start(ctx, { id, as }) {
+function start(ctx, { id, as, join: windowId }) {
   const say = (line) => ctx.log(`task:start ${id} — ${line}`);
   const file = taskFile(ctx, id);
   if (!file) fail(EXIT.ERROR, `Tarefa ${id} não está na fila: falta tasks/${id}-*.md.`);
   const text = readFileSync(file, 'utf8');
   const task = parseTask(text);
+  if (windowId) return startJoin(ctx, { id, as, windowId, file, text, task, say });
+  if (task.window) {
+    fail(
+      EXIT.REFUSED,
+      `Tarefa ${id} faz parte da janela ${task.window}: não abre worktree próprio. Use: pnpm task:start ${id} --as ${as} --join ${task.window}`,
+    );
+  }
   if (task.status !== 'aberta') {
     fail(
       EXIT.REFUSED,
@@ -392,6 +490,143 @@ function start(ctx, { id, as }) {
   writeFileSync(file, setTaskFields(text, { status: 'em-andamento', responsavel: as }));
   say(`tarefa marcada como em-andamento (responsável: ${as})`);
   ctx.log(`WORKTREE=${dir}`);
+  return EXIT.OK;
+}
+
+/**
+ * `task:start MMM --as <papel> --join NNN`: a tarefa entra na janela NNN. Não cria branch nem
+ * worktree e não instala nada; só marca a tarefa e diz onde fica o worktree da janela.
+ */
+function startJoin(ctx, { id, as, windowId, file, text, task, say }) {
+  if (id === windowId) {
+    fail(
+      EXIT.REFUSED,
+      `A tarefa ${id} é a própria janela: abra-a com pnpm task:start ${id} --as ${as}, sem --join.`,
+    );
+  }
+  if (task.status !== 'aberta') {
+    fail(
+      EXIT.REFUSED,
+      `Tarefa ${id} está "${task.status || 'sem status'}"${task.owner ? ` (responsável: ${task.owner})` : ''}; só começa tarefa "aberta".`,
+    );
+  }
+  if (task.window !== windowId) {
+    fail(
+      EXIT.REFUSED,
+      `Tarefa ${id} não é da janela ${windowId}: o cabeçalho traz ${task.window ? `"janela: ${task.window}"` : 'o campo "janela" ausente ou vazio'}.`,
+    );
+  }
+  const dir = worktreeOf(ctx, windowId);
+  if (!windowOpen(ctx, windowId)) {
+    fail(
+      EXIT.REFUSED,
+      `A janela ${windowId} não foi aberta: falta o worktree (${dir}) ou o branch (${branchOf(windowId)}). Quem abre é a tarefa do contrato: pnpm task:start ${windowId} --as <papel>.`,
+    );
+  }
+  const windowFile = taskFile(ctx, windowId);
+  const windowTask = windowFile ? parseTask(readFileSync(windowFile, 'utf8')) : null;
+  if (windowTask?.status !== 'em-andamento') {
+    fail(
+      EXIT.REFUSED,
+      `A janela ${windowId} não está em andamento: ${windowTask ? `a tarefa ${windowId} está "${windowTask.status || 'sem status'}"` : `falta tasks/${windowId}-*.md na fila`}.`,
+    );
+  }
+  // Dentro da janela, a dependência está atendida quando é a própria janela ou uma tarefa dela
+  // já "pronta". Qualquer outra tarefa ainda na fila segura o início, como no start normal.
+  const pending = [];
+  for (const dep of task.dependsOn) {
+    if (dep === windowId) continue;
+    const depFile = taskFile(ctx, dep);
+    if (!depFile) continue;
+    const depTask = parseTask(readFileSync(depFile, 'utf8'));
+    if (depTask.window === windowId && depTask.status === 'pronta') continue;
+    pending.push(`${dep} (${depTask.status || 'sem status'})`);
+  }
+  if (pending.length > 0) {
+    fail(
+      EXIT.REFUSED,
+      `Tarefa ${id} depende de tarefa ainda não atendida: ${pending.join(', ')}. Na janela ${windowId}, a dependência precisa ser a própria ${windowId} ou uma tarefa da janela já "pronta".`,
+    );
+  }
+  if (task.role && task.role !== as) {
+    say(`aviso: a tarefa é do papel "${task.role}" e está sendo assumida por "${as}".`);
+  }
+  writeFileSync(file, setTaskFields(text, { status: 'em-andamento', responsavel: as }));
+  say(`tarefa marcada como em-andamento (responsável: ${as}), na janela ${windowId}`);
+  say(
+    'o worktree é compartilhado: git add e git commit só com caminhos explícitos, citando esta tarefa',
+  );
+  ctx.log(`WORKTREE=${dir}`);
+  return EXIT.OK;
+}
+
+/**
+ * `task:finish MMM` em tarefa da janela: confere que há commit citando a tarefa no branch da
+ * janela e a marca como "pronta". Não confere worktree limpo, não faz rebase, não verifica, não
+ * toca a `main`, não faz push e não remove nada.
+ */
+function finishMember(ctx, { id, file, text, task }) {
+  const say = (line) => ctx.log(`task:finish ${id} — ${line}`);
+  const windowId = task.window;
+  if (task.status !== 'em-andamento') {
+    fail(
+      EXIT.REFUSED,
+      `Tarefa ${id} (janela ${windowId}) está "${task.status || 'sem status'}"; só fica "pronta" a tarefa "em-andamento".`,
+    );
+  }
+  if (!windowOpen(ctx, windowId)) {
+    fail(
+      EXIT.REFUSED,
+      `A janela ${windowId} não tem worktree (${worktreeOf(ctx, windowId)}) e branch (${branchOf(windowId)}): não foi aberta, ou já foi fechada.`,
+    );
+  }
+  const cited = commitsCiting(ctx, windowId, id);
+  if (cited.length === 0) {
+    fail(
+      EXIT.REFUSED,
+      `Nenhum commit em main..${branchOf(windowId)} tem o título terminando com "(task ${id})": falta commitar no worktree da janela citando a tarefa.`,
+    );
+  }
+  if (!/^## Relato[ \t]*$/m.test(text)) {
+    fail(
+      EXIT.REFUSED,
+      `Falta a seção "## Relato" em ${file}: acrescente os commits, o que foi verificado e a linha sugerida para o CHANGELOG.md (specs/002, "Janela de contrato") e rode de novo.`,
+    );
+  }
+  writeFileSync(file, setTaskFields(text, { status: 'pronta' }));
+  say(
+    `tarefa marcada como pronta (${cited.length} commit(s) em ${branchOf(windowId)} citam a tarefa)`,
+  );
+  say('nada foi enviado: a tarefa chega à main no fechamento da janela');
+  const members = windowMembers(ctx, windowId);
+  ctx.log(`Tarefas da janela ${windowId}:`);
+  ctx.log(describeMembers(members));
+  const waiting = members.filter((entry) => entry.task.status !== 'pronta');
+  ctx.log(
+    waiting.length === 0
+      ? `Janela ${windowId} pronta para fechar: acrescente o CHANGELOG.md (task ${windowId}) e rode pnpm task:finish ${windowId}`
+      : `Janela ${windowId} ainda aberta: falta(m) ${waiting.map((entry) => entry.id).join(', ')}.`,
+  );
+  return EXIT.OK;
+}
+
+/** `task:abort MMM` em tarefa da janela: só a tarefa volta a "aberta"; o worktree não é tocado. */
+function abortMember(ctx, { id, file, text, task }) {
+  const say = (line) => ctx.log(`task:abort ${id} — ${line}`);
+  const windowId = task.window;
+  const cited = branchExists(ctx, branchOf(windowId)) ? commitsCiting(ctx, windowId, id) : [];
+  if (cited.length > 0) {
+    fail(
+      EXIT.REFUSED,
+      `Já há ${cited.length} commit(s) "(task ${id})" em main..${branchOf(windowId)}. Desfazer é pela janela (pnpm task:abort ${windowId} --force, com o humano) ou por um novo commit que reverta. Nada foi alterado.`,
+    );
+  }
+  if (task.status === 'em-andamento' || task.status === 'pronta') {
+    writeFileSync(file, setTaskFields(text, { status: 'aberta', responsavel: '' }));
+    say(`tarefa devolvida a "aberta"; o worktree da janela ${windowId} não foi tocado`);
+  } else {
+    say(`a tarefa está "${task.status || 'sem status'}": nada a desfazer`);
+  }
   return EXIT.OK;
 }
 
@@ -450,6 +685,21 @@ function finish(ctx, options) {
   const say = (line) => ctx.log(`task:finish ${id} — ${line}`);
   const branch = branchOf(id);
   const dir = worktreeOf(ctx, id);
+  const own = taskFile(ctx, id);
+  if (own && !hasOwnWorktree(ctx, id)) {
+    const text = readFileSync(own, 'utf8');
+    const task = parseTask(text);
+    if (task.window) return finishMember(ctx, { id, file: own, text, task });
+  }
+  // Tarefa que é janela: antes de qualquer passo, todas as tarefas dela têm de estar "prontas".
+  const members = windowMembers(ctx, id);
+  const waiting = members.filter((entry) => entry.task.status !== 'pronta');
+  if (waiting.length > 0) {
+    fail(
+      EXIT.REFUSED,
+      `A janela ${id} tem tarefa que não está "pronta" (ID, status, responsável):\n${describeMembers(waiting)}\nCada uma termina com pnpm task:finish <ID>. Nada foi alterado.`,
+    );
+  }
   if (!branchExists(ctx, branch) || !existsSync(dir)) {
     fail(
       EXIT.REFUSED,
@@ -511,7 +761,13 @@ function finish(ctx, options) {
   if (!removed.ok) {
     fail(
       EXIT.ERROR,
-      `A main já tem a tarefa, mas o worktree não saiu:\n${indent(removed.output)}\nFalta, no checkout principal: git worktree remove ${dir} && git branch -d ${branch}${file ? ` && rm ${file}` : ''}${push.ok ? '' : ' && git push origin main'}`,
+      `A main já tem a tarefa, mas o worktree não saiu:\n${indent(removed.output)}\nFalta, no checkout principal: git worktree remove ${dir} && git branch -d ${branch}${[
+        file,
+        ...members.map((entry) => entry.file),
+      ]
+        .filter(Boolean)
+        .map((path) => ` && rm ${path}`)
+        .join('')}${push.ok ? '' : ' && git push origin main'}`,
     );
   }
   const deleted = git(ctx.main, ['branch', '-d', branch]);
@@ -520,6 +776,13 @@ function finish(ctx, options) {
   if (file) {
     rmSync(file);
     say('arquivo da tarefa removido da fila');
+  }
+  const gone = members.filter((entry) => existsSync(entry.file));
+  for (const entry of gone) rmSync(entry.file);
+  if (gone.length > 0) {
+    say(
+      `arquivos das tarefas da janela removidos da fila: ${gone.map((entry) => entry.id).join(', ')}`,
+    );
   }
 
   if (!push.ok) {
@@ -545,6 +808,11 @@ function abort(ctx, { id, force }) {
   const hasBranch = branchExists(ctx, branch);
   const file = taskFile(ctx, id);
   if (!hasDir && !hasBranch && !file) fail(EXIT.ERROR, `Tarefa ${id} não existe.`);
+  if (file && !hasDir && !hasBranch) {
+    const text = readFileSync(file, 'utf8');
+    const task = parseTask(text);
+    if (task.window) return abortMember(ctx, { id, file, text, task });
+  }
 
   const dirty = hasDir ? statusOf(dir) : '';
   if (dirty && !force) {
@@ -603,34 +871,52 @@ function abort(ctx, { id, force }) {
       say('tarefa devolvida a "aberta"');
     }
   }
+  // Abortar a janela devolve à fila também o trabalho de quem estava nela.
+  const reopened = windowMembers(ctx, id).filter((entry) =>
+    ['em-andamento', 'pronta'].includes(entry.task.status),
+  );
+  for (const entry of reopened) {
+    writeFileSync(entry.file, setTaskFields(entry.text, { status: 'aberta', responsavel: '' }));
+  }
+  if (reopened.length > 0) {
+    say(`tarefas da janela devolvidas a "aberta": ${reopened.map((entry) => entry.id).join(', ')}`);
+  }
   return EXIT.OK;
 }
 
 function list(ctx) {
-  const names = existsSync(ctx.tasksDir)
-    ? readdirSync(ctx.tasksDir)
-        .filter((name) => /^\d{3,}-.*\.md$/.test(name))
-        .sort()
-    : [];
-  if (names.length === 0) {
+  const queue = readQueue(ctx);
+  if (queue.length === 0) {
     ctx.log('A fila tasks/ está vazia.');
     return EXIT.OK;
   }
-  const ids = new Set(names.map((name) => name.split('-')[0]));
-  const rows = [['TAREFA', 'STATUS', 'PAPEL', 'RESPONSÁVEL', 'DEPENDE DE', 'WORKTREE', 'TÍTULO']];
-  for (const name of names) {
-    const id = name.split('-')[0];
-    const task = parseTask(readFileSync(join(ctx.tasksDir, name), 'utf8'));
-    const pending = task.dependsOn.filter((dep) => ids.has(dep));
-    rows.push([
+  const byId = new Map(queue.map((entry) => [entry.id, entry.task]));
+  // A coluna JANELA só aparece quando alguma tarefa da fila é de janela: sem janela, a lista é a
+  // de sempre.
+  const withWindow = queue.some((entry) => entry.task.window);
+  const header = ['TAREFA', 'STATUS', 'PAPEL', 'RESPONSÁVEL', 'DEPENDE DE', 'WORKTREE', 'TÍTULO'];
+  if (withWindow) header.splice(4, 0, 'JANELA');
+  const rows = [header];
+  for (const { id, name, task } of queue) {
+    // Dependência "pronta" ainda não está na main: continua pendente, com a marca.
+    const pending = task.dependsOn
+      .filter((dep) => byId.has(dep))
+      .map((dep) => (byId.get(dep).status === 'pronta' ? `${dep} (pronta)` : dep));
+    let worktree = existsSync(worktreeOf(ctx, id)) ? 'sim' : '-';
+    if (worktree === '-' && task.window && existsSync(worktreeOf(ctx, task.window))) {
+      worktree = `task-${task.window}`;
+    }
+    const row = [
       id,
       task.status || '?',
       task.role || '-',
       task.owner || '-',
       pending.join(', ') || '-',
-      existsSync(worktreeOf(ctx, id)) ? 'sim' : '-',
+      worktree,
       task.title || name,
-    ]);
+    ];
+    if (withWindow) row.splice(4, 0, task.window || '-');
+    rows.push(row);
   }
   ctx.log(formatTable(rows));
   return EXIT.OK;

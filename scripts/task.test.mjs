@@ -19,7 +19,15 @@ import {
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { after, describe, test } from 'node:test';
-import { EXIT, formatTable, parseArgs, parseTask, runTask, setTaskFields } from './task.mjs';
+import {
+  citesTask,
+  EXIT,
+  formatTable,
+  parseArgs,
+  parseTask,
+  runTask,
+  setTaskFields,
+} from './task.mjs';
 
 // O Git dos testes ignora a configuração da máquina (ganchos, assinatura, identidade).
 Object.assign(process.env, {
@@ -44,8 +52,8 @@ function git(cwd, ...args) {
 
 const CHANGELOG = '# Changelog\n\n## [Não lançado]\n\n### Adicionado\n- Linha antiga.\n';
 
-function taskText({ id, status = 'aberta', owner = '', dependsOn = [] }) {
-  return `---\nid: ${id}\nstatus: ${status}\nresponsavel:${owner ? ` ${owner}` : ''}\nfase: 0\npapel: infra\ndepende-de: [${dependsOn.join(', ')}]\n---\n\n# Tarefa ${id} de teste\n\nCorpo.\n`;
+function taskText({ id, status = 'aberta', owner = '', dependsOn = [], janela = '' }) {
+  return `---\nid: ${id}\nstatus: ${status}\nresponsavel:${owner ? ` ${owner}` : ''}\nfase: 0\npapel: infra\ndepende-de: [${dependsOn.join(', ')}]\n${janela ? `janela: ${janela}\n` : ''}---\n\n# Tarefa ${id} de teste\n\nCorpo.\n`;
 }
 
 /** Repositório com `main`, um commit, remoto `origin` (bare) e a fila `tasks/` fora do Git. */
@@ -606,5 +614,507 @@ describe('task:path e task:list', () => {
     );
     assert.match(lines[1], /^001\s+em-andamento\s+infra\s+infra\s+-\s+sim\s+Tarefa 001 de teste$/);
     assert.match(lines[2], /^002\s+aberta\s+infra\s+-\s+001\s+-\s+Tarefa 002 de teste$/);
+  });
+});
+
+// ---------------------------------------------------------------------------------------------
+// Janela de contrato (specs/002, ADR 0022): a tarefa 010 é a janela; 011 e 012 são tarefas dela.
+
+const WINDOW_TASKS = [
+  { id: '010' },
+  { id: '011', janela: '010', dependsOn: ['010'] },
+  { id: '012', janela: '010', dependsOn: ['010', '011'] },
+];
+
+/** Repositório com a janela 010 aberta (worktree e branch) e as tarefas dela na fila. */
+function windowEnv(tasks = WINDOW_TASKS) {
+  const env = makeRepo({ tasks });
+  assert.equal(run(env.repo, ['start', '010', '--as', 'arquiteto']).code, EXIT.OK);
+  return env;
+}
+
+function setTask(env, id, fields) {
+  const file = join(env.repo, 'tasks', `${id}-tarefa-de-teste.md`);
+  writeFileSync(file, setTaskFields(readFileSync(file, 'utf8'), fields));
+}
+
+function addRelato(env, id) {
+  appendFileSync(
+    join(env.repo, 'tasks', `${id}-tarefa-de-teste.md`),
+    '\n## Relato\n\n- Commits, verificação e linha sugerida para o changelog.\n',
+  );
+}
+
+/** Commit de uma tarefa no worktree da janela, com caminho explícito (diretório compartilhado). */
+function commitMember(env, id) {
+  const dir = env.worktree('010');
+  const file = `tarefa-${id}.txt`;
+  writeFileSync(join(dir, file), `trabalho da ${id}\n`);
+  git(dir, 'add', file);
+  git(dir, 'commit', '--quiet', '-m', `feat: trabalho (task ${id})`, '--', file);
+}
+
+/** Entra na janela, commita, relata e termina: a tarefa fica "pronta". */
+function memberReady(env, id) {
+  assert.equal(run(env.repo, ['start', id, '--as', 'infra', '--join', '010']).code, EXIT.OK);
+  commitMember(env, id);
+  addRelato(env, id);
+  const result = run(env.repo, ['finish', id]);
+  assert.equal(result.code, EXIT.OK, result.out);
+  return result;
+}
+
+describe('janela de contrato: partes puras', () => {
+  test('argumentos: --join só no start e com número válido', () => {
+    assert.equal(parseArgs(['start', '11', '--as', 'infra', '--join', '10']).join, '010');
+    assert.equal(parseArgs(['start', '11', '--as', 'infra', '--join=010']).join, '010');
+    assert.equal(parseArgs(['start', '11', '--as', 'infra']).join, null);
+    assert.match(parseArgs(['start', '11', '--as', 'infra', '--join']).error, /janela inválido/);
+    assert.match(parseArgs(['start', '11', '--as', 'infra', '--join', 'x']).error, /inválido/);
+    assert.match(parseArgs(['finish', '11', '--join', '10']).error, /desconhecida/);
+    assert.match(parseArgs(['abort', '11', '--join', '10']).error, /desconhecida/);
+  });
+
+  test('cabeçalho: campo janela normalizado, vazio quando ausente; status pronta', () => {
+    assert.equal(parseTask(taskText({ id: '011', janela: '10' })).window, '010');
+    assert.equal(parseTask(taskText({ id: '011' })).window, '');
+    assert.equal(parseTask(taskText({ id: '011', janela: 'abc' })).window, '');
+    assert.equal(parseTask(taskText({ id: '011', status: 'pronta' })).status, 'pronta');
+    const text = taskText({ id: '011', janela: '010' });
+    const changed = setTaskFields(text, { status: 'pronta' });
+    assert.equal(parseTask(changed).window, '010');
+    assert.equal(changed.split('---')[2], text.split('---')[2]);
+  });
+
+  test('commit cita a tarefa só no fim do título, com ou sem zeros', () => {
+    assert.equal(citesTask('feat: x (task 011)', '011'), true);
+    assert.equal(citesTask('feat: x (task 11)', '011'), true);
+    assert.equal(citesTask('feat: x (task 0110)', '011'), false);
+    assert.equal(citesTask('feat: (task 011) no meio', '011'), false);
+    assert.equal(citesTask('feat: x (tarefa 011)', '011'), false);
+  });
+});
+
+describe('janela de contrato: task:start --join', () => {
+  test('entra na janela: só marca a tarefa; sem worktree, sem branch e sem install', () => {
+    const env = windowEnv();
+    const mainBefore = git(env.repo, 'rev-parse', 'main');
+    const result = run(env.repo, ['start', '011', '--as', 'interface', '--join', '10']);
+    assert.equal(result.code, EXIT.OK, result.out);
+    assert.equal(result.out.split('\n').at(-1), `WORKTREE=${env.worktree('010')}`);
+    assert.match(result.out, /aviso: a tarefa é do papel "infra" .* "interface"/);
+    assert.equal(result.calls.install.length, 0);
+    assert.equal(existsSync(env.worktree('011')), false);
+    assert.equal(git(env.repo, 'branch', '--list', 'task/011'), '');
+    assert.deepEqual(
+      { status: taskOf(env, '011').status, owner: taskOf(env, '011').owner },
+      { status: 'em-andamento', owner: 'interface' },
+    );
+    assert.equal(git(env.repo, 'rev-parse', 'main'), mainBefore);
+    assert.equal(git(env.repo, 'status', '--porcelain'), '');
+    assert.equal(git(env.worktree('010'), 'status', '--porcelain'), '');
+    assert.doesNotMatch(git(env.repo, 'worktree', 'list'), /task-011/);
+  });
+
+  test('recusa tarefa que não está aberta', () => {
+    const env = windowEnv();
+    setTask(env, '011', { status: 'bloqueada' });
+    const result = run(env.repo, ['start', '011', '--as', 'infra', '--join', '010']);
+    assert.equal(result.code, EXIT.REFUSED);
+    assert.match(result.out, /está "bloqueada"/);
+    assert.equal(taskOf(env, '011').status, 'bloqueada');
+
+    assert.equal(run(env.repo, ['start', '011', '--as', 'infra', '--join', '010']).code, 2);
+    setTask(env, '011', { status: 'aberta' });
+    assert.equal(run(env.repo, ['start', '011', '--as', 'infra', '--join', '010']).code, EXIT.OK);
+    // Já em andamento: não entra de novo.
+    assert.equal(run(env.repo, ['start', '011', '--as', 'infra', '--join', '010']).code, 2);
+  });
+
+  test('recusa quando o cabeçalho não traz a janela pedida, e diz o que encontrou', () => {
+    const env = windowEnv([
+      { id: '010' },
+      { id: '011' },
+      { id: '012', janela: '020' },
+      { id: '020' },
+    ]);
+    const none = run(env.repo, ['start', '011', '--as', 'infra', '--join', '010']);
+    assert.equal(none.code, EXIT.REFUSED);
+    assert.match(none.out, /não é da janela 010: .*ausente ou vazio/);
+    const other = run(env.repo, ['start', '012', '--as', 'infra', '--join', '010']);
+    assert.equal(other.code, EXIT.REFUSED);
+    assert.match(other.out, /não é da janela 010: .*"janela: 020"/);
+    assert.equal(taskOf(env, '011').status, 'aberta');
+    assert.equal(taskOf(env, '012').status, 'aberta');
+  });
+
+  test('recusa quando a janela não foi aberta, ou não está em andamento', () => {
+    const closed = makeRepo({ tasks: WINDOW_TASKS });
+    const result = run(closed.repo, ['start', '011', '--as', 'infra', '--join', '010']);
+    assert.equal(result.code, EXIT.REFUSED);
+    assert.match(result.out, /janela 010 não foi aberta/);
+    assert.equal(taskOf(closed, '011').status, 'aberta');
+
+    // Só o branch, sem worktree, também não é janela aberta.
+    git(closed.repo, 'branch', 'task/010');
+    assert.equal(run(closed.repo, ['start', '011', '--as', 'infra', '--join', '010']).code, 2);
+
+    const blocked = windowEnv();
+    setTask(blocked, '010', { status: 'bloqueada' });
+    const second = run(blocked.repo, ['start', '011', '--as', 'infra', '--join', '010']);
+    assert.equal(second.code, EXIT.REFUSED);
+    assert.match(second.out, /janela 010 não está em andamento: a tarefa 010 está "bloqueada"/);
+
+    const orphan = windowEnv();
+    rmSync(join(orphan.repo, 'tasks', '010-tarefa-de-teste.md'));
+    const third = run(orphan.repo, ['start', '011', '--as', 'infra', '--join', '010']);
+    assert.equal(third.code, EXIT.REFUSED);
+    assert.match(third.out, /falta tasks\/010-\*\.md/);
+  });
+
+  test('recusa a própria janela como tarefa da janela', () => {
+    const env = makeRepo({ tasks: [{ id: '010', janela: '010' }] });
+    const result = run(env.repo, ['start', '010', '--as', 'infra', '--join', '010']);
+    assert.equal(result.code, EXIT.REFUSED);
+    assert.match(result.out, /é a própria janela/);
+    assert.equal(taskOf(env, '010').status, 'aberta');
+  });
+
+  test('dependência: a janela e tarefa pronta da janela atendem; o resto da fila não', () => {
+    const env = windowEnv([
+      ...WINDOW_TASKS,
+      { id: '013', janela: '010', dependsOn: ['010', '030', '099'] },
+      { id: '030' },
+    ]);
+    // 012 depende da 011, que ainda está aberta e depois em andamento.
+    const open = run(env.repo, ['start', '012', '--as', 'infra', '--join', '010']);
+    assert.equal(open.code, EXIT.REFUSED);
+    assert.match(open.out, /ainda não atendida: 011 \(aberta\)/);
+    assert.equal(run(env.repo, ['start', '011', '--as', 'infra', '--join', '010']).code, EXIT.OK);
+    const running = run(env.repo, ['start', '012', '--as', 'infra', '--join', '010']);
+    assert.equal(running.code, EXIT.REFUSED);
+    assert.match(running.out, /011 \(em-andamento\)/);
+    assert.equal(taskOf(env, '012').status, 'aberta');
+
+    // Com a 011 pronta, a 012 entra (a dependência da própria janela nunca segura).
+    commitMember(env, '011');
+    addRelato(env, '011');
+    assert.equal(run(env.repo, ['finish', '011']).code, EXIT.OK);
+    assert.equal(run(env.repo, ['start', '012', '--as', 'infra', '--join', '010']).code, EXIT.OK);
+
+    // Tarefa de fora da janela ainda na fila segura; dependência já removida da fila (099) não.
+    const outside = run(env.repo, ['start', '013', '--as', 'infra', '--join', '010']);
+    assert.equal(outside.code, EXIT.REFUSED);
+    assert.match(outside.out, /ainda não atendida: 030 \(aberta\)\./);
+    // Tarefa pronta de OUTRA janela também não atende.
+    setTask(env, '030', { status: 'pronta', janela: '020' });
+    assert.equal(run(env.repo, ['start', '013', '--as', 'infra', '--join', '010']).code, 2);
+    rmSync(join(env.repo, 'tasks', '030-tarefa-de-teste.md'));
+    assert.equal(run(env.repo, ['start', '013', '--as', 'infra', '--join', '010']).code, EXIT.OK);
+  });
+
+  test('sem --join, tarefa com janela é recusada e não abre worktree próprio', () => {
+    const env = windowEnv();
+    const result = run(env.repo, ['start', '011', '--as', 'infra']);
+    assert.equal(result.code, EXIT.REFUSED);
+    assert.match(result.out, /faz parte da janela 010.*--join 010/);
+    assert.equal(result.calls.install.length, 0);
+    assert.equal(existsSync(env.worktree('011')), false);
+    assert.equal(git(env.repo, 'branch', '--list', 'task/011'), '');
+    assert.equal(taskOf(env, '011').status, 'aberta');
+  });
+
+  test('tarefa de fora que depende de tarefa pronta continua esperando', () => {
+    const env = windowEnv([...WINDOW_TASKS, { id: '040', dependsOn: ['011'] }]);
+    memberReady(env, '011');
+    const result = run(env.repo, ['start', '040', '--as', 'infra']);
+    assert.equal(result.code, EXIT.REFUSED);
+    assert.match(result.out, /depende de tarefa ainda na fila: 011\./);
+  });
+});
+
+describe('janela de contrato: task:finish da tarefa da janela', () => {
+  test('marca pronta sem rebase, verificação, push nem limpeza; avisa quando a janela fecha', () => {
+    const env = windowEnv();
+    const dir = env.worktree('010');
+    assert.equal(run(env.repo, ['start', '011', '--as', 'infra', '--join', '010']).code, EXIT.OK);
+    commitMember(env, '011');
+    addRelato(env, '011');
+    // Alteração pendente de outro agente no worktree compartilhado não impede.
+    writeFileSync(join(dir, 'de-outro-agente.txt'), 'pendente\n');
+    // A main andou: o finish da tarefa da janela não faz rebase.
+    commitIn(env.repo, 'app.txt', 'de fora\n', 'feat: de fora (task 002)');
+    const mainBefore = git(env.repo, 'rev-parse', 'main');
+    const remoteBefore = git(env.remote, 'rev-parse', 'main');
+    const tip = git(dir, 'rev-parse', 'HEAD');
+
+    const result = run(env.repo, ['finish', '011']);
+    assert.equal(result.code, EXIT.OK, result.out);
+    assert.equal(result.calls.verify.length, 0);
+    assert.equal(result.calls.install.length, 0);
+    assert.deepEqual(
+      { status: taskOf(env, '011').status, owner: taskOf(env, '011').owner },
+      { status: 'pronta', owner: 'infra' },
+    );
+    assert.equal(git(env.repo, 'rev-parse', 'main'), mainBefore);
+    assert.equal(git(env.remote, 'rev-parse', 'main'), remoteBefore);
+    assert.equal(git(dir, 'rev-parse', 'HEAD'), tip);
+    assert.ok(existsSync(join(dir, 'de-outro-agente.txt')));
+    assert.match(result.out, /^\s+011\s+pronta\s+infra$/m);
+    assert.match(result.out, /^\s+012\s+aberta\s+-$/m);
+    assert.equal(result.out.split('\n').at(-1), 'Janela 010 ainda aberta: falta(m) 012.');
+
+    // Pronta não termina de novo.
+    assert.equal(run(env.repo, ['finish', '011']).code, EXIT.REFUSED);
+
+    const last = memberReady(env, '012');
+    assert.equal(
+      last.out.split('\n').at(-1),
+      'Janela 010 pronta para fechar: acrescente o CHANGELOG.md (task 010) e rode pnpm task:finish 010',
+    );
+  });
+
+  test('recusa sem commit citando a tarefa, e sem a seção de relato', () => {
+    const env = windowEnv();
+    assert.equal(run(env.repo, ['start', '011', '--as', 'infra', '--join', '010']).code, EXIT.OK);
+    addRelato(env, '011');
+    // Commit da janela ou de outra tarefa não conta.
+    commitIn(env.worktree('010'), 'app.txt', 'contrato\n', 'feat: contrato (task 010)');
+    commitMember(env, '012');
+    const noCommit = run(env.repo, ['finish', '011']);
+    assert.equal(noCommit.code, EXIT.REFUSED);
+    assert.match(
+      noCommit.out,
+      /Nenhum commit em main\.\.task\/010 .*"\(task 011\)".*falta commitar/,
+    );
+    assert.equal(taskOf(env, '011').status, 'em-andamento');
+
+    assert.equal(run(env.repo, ['start', '012', '--as', 'infra', '--join', '010']).code, 2);
+    setTask(env, '012', { status: 'em-andamento', responsavel: 'infra' });
+    const noReport = run(env.repo, ['finish', '012']);
+    assert.equal(noReport.code, EXIT.REFUSED);
+    assert.match(noReport.out, /Falta a seção "## Relato"/);
+    assert.equal(taskOf(env, '012').status, 'em-andamento');
+  });
+
+  test('recusa tarefa que não está em andamento e janela que não está aberta', () => {
+    const env = windowEnv();
+    commitMember(env, '011');
+    addRelato(env, '011');
+    const open = run(env.repo, ['finish', '011']);
+    assert.equal(open.code, EXIT.REFUSED);
+    assert.match(open.out, /está "aberta"; só fica "pronta" a tarefa "em-andamento"/);
+
+    const closed = makeRepo({
+      tasks: [{ id: '010' }, { id: '011', janela: '010', status: 'em-andamento', owner: 'infra' }],
+    });
+    const result = run(closed.repo, ['finish', '011']);
+    assert.equal(result.code, EXIT.REFUSED);
+    assert.match(result.out, /janela 010 não tem worktree/);
+    assert.equal(taskOf(closed, '011').status, 'em-andamento');
+  });
+});
+
+describe('janela de contrato: task:finish da janela', () => {
+  test('recusa antes de qualquer passo enquanto houver tarefa que não esteja pronta', () => {
+    const env = windowEnv();
+    const dir = env.worktree('010');
+    commitIn(dir, 'app.txt', 'contrato\n', 'feat: contrato (task 010)');
+    memberReady(env, '011');
+    assert.equal(run(env.repo, ['start', '012', '--as', 'banco', '--join', '010']).code, EXIT.OK);
+    const tip = git(dir, 'rev-parse', 'HEAD');
+    const mainBefore = git(env.repo, 'rev-parse', 'main');
+
+    const result = run(env.repo, ['finish', '010']);
+    assert.equal(result.code, EXIT.REFUSED);
+    assert.match(result.out, /janela 010 tem tarefa que não está "pronta"/);
+    assert.match(result.out, /^\s+012\s+em-andamento\s+banco$/m);
+    assert.doesNotMatch(result.out, /^\s+011\s/m);
+    assert.equal(result.calls.verify.length, 0);
+    assert.equal(git(dir, 'rev-parse', 'HEAD'), tip);
+    assert.equal(git(env.repo, 'rev-parse', 'main'), mainBefore);
+    assert.equal(taskOf(env, '010').status, 'em-andamento');
+    assert.equal(taskOf(env, '011').status, 'pronta');
+    // De dentro do worktree da janela, sem número, é a mesma recusa.
+    assert.equal(run(dir, ['finish']).code, EXIT.REFUSED);
+  });
+
+  test('com todas prontas: finish normal e remove os arquivos de todas as tarefas da janela', () => {
+    const env = windowEnv([...WINDOW_TASKS, { id: '050' }, { id: '051', janela: '020' }]);
+    const dir = env.worktree('010');
+    commitIn(dir, 'app.txt', 'contrato\n', 'feat: contrato (task 010)');
+    memberReady(env, '011');
+    memberReady(env, '012');
+    commitIn(dir, 'CHANGELOG.md', '- Janela 010.\n', 'docs: changelog da janela (task 010)');
+    commitIn(env.repo, 'outro.txt', 'x\n', 'feat: de fora (task 002)');
+    const mainBefore = git(env.repo, 'rev-parse', 'main');
+
+    const result = run(env.repo, ['finish', '010']);
+    assert.equal(result.code, EXIT.OK, result.out);
+    assert.deepEqual(result.calls.verify, [dir]);
+    assert.match(result.out, /arquivos das tarefas da janela removidos da fila: 011, 012/);
+    assert.equal(git(env.repo, 'rev-list', '--count', `${mainBefore}..main`), '4');
+    assert.equal(git(env.repo, 'rev-list', '--merges', '--count', 'main'), '0');
+    assert.equal(git(env.remote, 'rev-parse', 'main'), git(env.repo, 'rev-parse', 'main'));
+    assert.equal(existsSync(dir), false);
+    assert.equal(git(env.repo, 'branch', '--list', 'task/010'), '');
+    assert.equal(taskOf(env, '010'), null);
+    assert.equal(taskOf(env, '011'), null);
+    assert.equal(taskOf(env, '012'), null);
+    // Tarefa sem janela e tarefa de outra janela ficam na fila.
+    assert.equal(taskOf(env, '050').status, 'aberta');
+    assert.equal(taskOf(env, '051').status, 'aberta');
+    assert.equal(git(env.repo, 'status', '--porcelain'), '');
+  });
+
+  test('worktree da janela sujo segura o fechamento, mesmo com todas prontas', () => {
+    const env = windowEnv();
+    memberReady(env, '011');
+    memberReady(env, '012');
+    writeFileSync(join(env.worktree('010'), 'solto.txt'), 'pendente\n');
+    const result = run(env.repo, ['finish', '010']);
+    assert.equal(result.code, EXIT.DIRTY);
+    assert.equal(taskOf(env, '011').status, 'pronta');
+  });
+
+  test('verificação falhando no fechamento: nada chega à main e as tarefas continuam prontas', () => {
+    const env = windowEnv();
+    memberReady(env, '011');
+    memberReady(env, '012');
+    const mainBefore = git(env.repo, 'rev-parse', 'main');
+    const result = run(env.repo, ['finish', '010'], { verify: () => 1 });
+    assert.equal(result.code, EXIT.VERIFY);
+    assert.equal(git(env.repo, 'rev-parse', 'main'), mainBefore);
+    assert.equal(taskOf(env, '010').status, 'em-andamento');
+    assert.equal(taskOf(env, '011').status, 'pronta');
+    assert.equal(taskOf(env, '012').status, 'pronta');
+  });
+
+  test('push negado: código próprio, e os arquivos de todas as tarefas da janela saem', () => {
+    const env = windowEnv();
+    const dir = env.worktree('010');
+    memberReady(env, '011');
+    memberReady(env, '012');
+    const tip = git(dir, 'rev-parse', 'HEAD');
+    git(env.repo, 'remote', 'set-url', 'origin', join(env.repo, '..', 'nao-existe.git'));
+
+    const result = run(env.repo, ['finish', '010']);
+    assert.equal(result.code, EXIT.PUSH);
+    assert.match(result.out, /PUSH PENDENTE/);
+    assert.match(result.out, /arquivos das tarefas da janela removidos da fila: 011, 012/);
+    assert.equal(git(env.repo, 'rev-parse', 'main'), tip);
+    assert.equal(existsSync(dir), false);
+    assert.equal(taskOf(env, '010'), null);
+    assert.equal(taskOf(env, '011'), null);
+    assert.equal(taskOf(env, '012'), null);
+  });
+});
+
+describe('janela de contrato: task:abort', () => {
+  test('tarefa da janela sem commit: volta a aberta e o worktree da janela não é tocado', () => {
+    const env = windowEnv();
+    const dir = env.worktree('010');
+    assert.equal(run(env.repo, ['start', '011', '--as', 'infra', '--join', '010']).code, EXIT.OK);
+    commitIn(dir, 'app.txt', 'contrato\n', 'feat: contrato (task 010)');
+    writeFileSync(join(dir, 'solto.txt'), 'pendente de alguém\n');
+    const tip = git(dir, 'rev-parse', 'HEAD');
+
+    const result = run(env.repo, ['abort', '011']);
+    assert.equal(result.code, EXIT.OK, result.out);
+    assert.deepEqual(
+      { status: taskOf(env, '011').status, owner: taskOf(env, '011').owner },
+      { status: 'aberta', owner: '' },
+    );
+    assert.ok(existsSync(join(dir, 'solto.txt')));
+    assert.equal(git(dir, 'rev-parse', 'HEAD'), tip);
+    assert.equal(git(env.repo, 'rev-parse', 'task/010'), tip);
+    assert.equal(taskOf(env, '010').status, 'em-andamento');
+    // Pode entrar de novo.
+    assert.equal(run(env.repo, ['start', '011', '--as', 'infra', '--join', '010']).code, EXIT.OK);
+  });
+
+  test('tarefa da janela com commit no branch: recusa e aponta o abort da janela', () => {
+    const env = windowEnv();
+    assert.equal(run(env.repo, ['start', '011', '--as', 'infra', '--join', '010']).code, EXIT.OK);
+    commitMember(env, '011');
+    const result = run(env.repo, ['abort', '011']);
+    assert.equal(result.code, EXIT.REFUSED);
+    assert.match(result.out, /1 commit\(s\) "\(task 011\)".*task:abort 010 --force/);
+    assert.equal(taskOf(env, '011').status, 'em-andamento');
+    // --force na tarefa da janela não muda a recusa (nem pede confirmação).
+    assert.equal(run(env.repo, ['abort', '011', '--force']).code, EXIT.REFUSED);
+    assert.ok(existsSync(join(env.worktree('010'), 'tarefa-011.txt')));
+  });
+
+  test('janela com commits: recusa sem --force e não mexe nas tarefas dela', () => {
+    const env = windowEnv();
+    memberReady(env, '011');
+    const result = run(env.repo, ['abort', '010']);
+    assert.equal(result.code, EXIT.DIRTY);
+    assert.ok(existsSync(env.worktree('010')));
+    assert.equal(taskOf(env, '010').status, 'em-andamento');
+    assert.equal(taskOf(env, '011').status, 'pronta');
+  });
+
+  test('janela abortada com --force: as tarefas em andamento e prontas voltam a aberta', () => {
+    const env = windowEnv([
+      ...WINDOW_TASKS,
+      { id: '013', janela: '010', status: 'bloqueada', owner: 'banco' },
+      { id: '050', status: 'em-andamento', owner: 'banco' },
+    ]);
+    memberReady(env, '011');
+    assert.equal(run(env.repo, ['start', '012', '--as', 'infra', '--join', '010']).code, EXIT.OK);
+    const result = run(env.repo, ['abort', '010', '--force'], {
+      isTTY: true,
+      ask: () => 'abortar 010',
+    });
+    assert.equal(result.code, EXIT.OK, result.out);
+    assert.match(result.out, /tarefas da janela devolvidas a "aberta": 011, 012/);
+    assert.equal(existsSync(env.worktree('010')), false);
+    assert.equal(git(env.repo, 'branch', '--list', 'task/010'), '');
+    for (const id of ['010', '011', '012']) {
+      assert.deepEqual(
+        { status: taskOf(env, id).status, owner: taskOf(env, id).owner },
+        { status: 'aberta', owner: '' },
+      );
+    }
+    // Bloqueada da janela e tarefa de fora ficam como estavam.
+    assert.equal(taskOf(env, '013').status, 'bloqueada');
+    assert.equal(taskOf(env, '050').status, 'em-andamento');
+  });
+
+  test('janela limpa e sem commits: aborta sem --force e devolve as tarefas dela', () => {
+    const env = windowEnv();
+    assert.equal(run(env.repo, ['start', '011', '--as', 'infra', '--join', '010']).code, EXIT.OK);
+    const result = run(env.repo, ['abort', '010']);
+    assert.equal(result.code, EXIT.OK, result.out);
+    assert.equal(taskOf(env, '010').status, 'aberta');
+    assert.equal(taskOf(env, '011').status, 'aberta');
+    assert.equal(taskOf(env, '012').status, 'aberta');
+  });
+});
+
+describe('janela de contrato: task:list', () => {
+  test('coluna JANELA, worktree da janela e dependência pronta marcada', () => {
+    const env = windowEnv([...WINDOW_TASKS, { id: '040', dependsOn: ['011', '000'] }]);
+    memberReady(env, '011');
+    const lines = run(env.repo, ['list']).out.split('\n');
+    assert.match(
+      lines[0],
+      /^TAREFA\s+STATUS\s+PAPEL\s+RESPONSÁVEL\s+JANELA\s+DEPENDE DE\s+WORKTREE\s+TÍTULO$/,
+    );
+    assert.match(lines[1], /^010\s+em-andamento\s+infra\s+arquiteto\s+-\s+-\s+sim\s+Tarefa 010/);
+    assert.match(lines[2], /^011\s+pronta\s+infra\s+infra\s+010\s+010\s+task-010\s+Tarefa 011/);
+    assert.match(
+      lines[3],
+      /^012\s+aberta\s+infra\s+-\s+010\s+010, 011 \(pronta\)\s+task-010\s+Tarefa 012/,
+    );
+    assert.match(lines[4], /^040\s+aberta\s+infra\s+-\s+-\s+011 \(pronta\)\s+-\s+Tarefa 040/);
+  });
+
+  test('janela ainda não aberta: a tarefa dela não mostra worktree', () => {
+    const env = makeRepo({ tasks: WINDOW_TASKS });
+    const lines = run(env.repo, ['list']).out.split('\n');
+    assert.match(lines[2], /^011\s+aberta\s+infra\s+-\s+010\s+010\s+-\s+Tarefa 011/);
   });
 });
