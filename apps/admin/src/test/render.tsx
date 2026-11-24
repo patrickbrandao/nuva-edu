@@ -79,7 +79,7 @@ export function renderApp(
       <RouterProvider router={router} />
     </AppProviders>,
   );
-  return { ...view, router, fetchMock, configFetchMock };
+  return { ...view, router, fetchMock, configFetchMock, queryClient };
 }
 
 /** Avisos da página, sem a região de toasts (sempre montada, vazia). */

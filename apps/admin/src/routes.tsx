@@ -4,6 +4,10 @@ import { HomePage } from './pages/HomePage';
 import { LoginPage } from './pages/LoginPage';
 import { NotFoundPage } from './pages/NotFoundPage';
 import { UnderConstructionPage } from './pages/UnderConstructionPage';
+import { StudentsPage } from './pages/users/StudentsPage';
+import { TeamPage } from './pages/users/TeamPage';
+import { STUDENTS_PATH } from './pages/users/UserBits';
+import { UserDetailPage } from './pages/users/UserDetailPage';
 import { RequirePermission } from './session/RequirePermission';
 import { SessionGate } from './session/SessionGate';
 import { HOME_PATH, LOGIN_PATH, MENU_ITEMS, type MenuItemId } from './shell/menu';
@@ -22,7 +26,13 @@ function guarded(id: MenuItemId, element: ReactNode): ReactNode {
 }
 
 /** Telas já construídas, por item do menu. Item sem tela leva à página "em construção". */
-const PAGES: Partial<Record<MenuItemId, RouteObject[]>> = {};
+const PAGES: Partial<Record<MenuItemId, RouteObject[]>> = {
+  students: [
+    { path: STUDENTS_PATH, element: <StudentsPage /> },
+    { path: `${STUDENTS_PATH}/:id`, element: <UserDetailPage /> },
+  ],
+  team: [{ path: '/equipe', element: <TeamPage /> }],
+};
 
 /** Rotas do site: `/entrar` fora da guarda; o resto exige sessão (spec 006, "Sessão"). */
 export const routes: RouteObject[] = [

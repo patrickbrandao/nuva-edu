@@ -21,6 +21,7 @@ import { useProblemText } from '../api/problems';
 import { forgetSession, useSession } from '../session/session';
 import { BrandMark } from './BrandMark';
 import { validAccentColor } from './brand';
+import { useCrumbState } from './crumbs';
 import { Footer } from './Footer';
 import { HOME_PATH, LOGIN_PATH, menuFor, menuItemForPath } from './menu';
 import { TermsNotice } from './TermsNotice';
@@ -50,11 +51,12 @@ export function Shell() {
   const home = t('menu.items.dashboard');
   const pageTitle = current ? t(`menu.items.${current.id}`) : t('notFound.title');
   const brandName = meta?.schoolName ?? t('app.name');
+  const [subPage, provideCrumb] = useCrumbState();
   const accentColor = validAccentColor(meta?.accentColor);
 
   useEffect(() => {
-    document.title = `${pageTitle} · ${brandName}`;
-  }, [pageTitle, brandName]);
+    document.title = `${subPage ?? pageTitle} · ${brandName}`;
+  }, [subPage, pageTitle, brandName]);
 
   const logout = useMutation({
     mutationFn: async () => {
@@ -86,7 +88,13 @@ export function Shell() {
   const crumbs =
     pathname === HOME_PATH
       ? [{ label: home }]
-      : [{ label: home, href: HOME_PATH }, { label: pageTitle }];
+      : subPage && current
+        ? [
+            { label: home, href: HOME_PATH },
+            { label: pageTitle, href: current.path },
+            { label: subPage },
+          ]
+        : [{ label: home, href: HOME_PATH }, { label: pageTitle }];
 
   return (
     <AdminShell
@@ -142,9 +150,7 @@ export function Shell() {
         <AdminBreadcrumb items={crumbs} label={t('shell.breadcrumb')} />
       </AdminTopbar>
       <TermsNotice />
-      <AdminContent>
-        <Outlet />
-      </AdminContent>
+      <AdminContent>{provideCrumb(<Outlet />)}</AdminContent>
       <Footer />
     </AdminShell>
   );

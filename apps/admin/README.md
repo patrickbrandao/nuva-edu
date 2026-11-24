@@ -25,7 +25,8 @@ biblioteca, `createBrowserRouter`) e TanStack Query (spec 006).
 | `src/runtime/` | Leitura do `/config.json` (`loadRuntimeConfig`, `useRuntimeConfig`): só `app`, `adminUrl` e `classroomUrl`. |
 | `vite/` | Plugin do Vite que responde `/config.json` no `dev` e no `preview`. |
 | `src/shell/` | Casca (`AdminShell` de `@nuva-edu/ui`), menu lateral (`menu.ts`), rodapé. |
-| `src/pages/` | Telas. Item do menu ainda sem tela usa `UnderConstructionPage`. |
+| `src/pages/` | Telas. Item do menu ainda sem tela usa `UnderConstructionPage`. `pages/users/`: alunos, ficha e equipe, com os diálogos em `dialogs/`. |
+| `src/forms/` | Campo local de várias linhas (`TextArea`), até `packages/ui` ter o seu (tarefa 191). |
 | `src/routes.tsx` | Rotas; uma por item de `menu.ts`. |
 | `src/test/render.tsx` | `renderApp(caminho, respostas, { config, routes })` para os testes; `findMenu`, `findAlert`, `queryAlerts`. |
 | `src/test/api.ts` | API simulada por rota (`apiRoutes`), sessão por papel (`sessionFor`, `PERMISSIONS` da spec 008), `problem(status, code)`. |
@@ -51,6 +52,12 @@ biblioteca, `createBrowserRouter`) e TanStack Query (spec 006).
 - Menu e botões pelo papel (spec 006, RF-10): cada item de `menu.ts` tem a ação da spec 008 que o
   libera (`permission`); botões usam `useCan()`. Isso só esconde: a API decide, e o `403` dela vira
   "sem permissão" (`QueryErrorState`, `ForbiddenState`).
+- Escritas com senha (mostrar senha, definir senha, criar equipe) usam `useAction` (`src/api/action.ts`):
+  estado só no componente, fora do cache de consultas e de mutações. A senha exibida vive só no
+  diálogo aberto e some ao fechar ou sair da tela (ADR 0002; spec 007, "Exibição da senha").
+- Ações destrutivas (suspender, mudar papel, definir senha, encerrar sessões) passam por
+  `ConfirmDialog` com o nome do usuário.
+- A trilha mostra o nome do item aberto abaixo de um item do menu por `usePageCrumb` (`shell/crumbs.tsx`).
 - Login social: o site navega (`browser.assign`) para `adminOAuthStartUrl`, nunca por `fetch`.
 - Textos de erro por `code` da API; o que a tela não trata cai em `useProblemText` (rede, limite de
   taxa, servidor), com o código da requisição.

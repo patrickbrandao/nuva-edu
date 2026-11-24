@@ -15,7 +15,9 @@
     "cancel": "Cancelar",
     "close": "Fechar",
     "save": "Salvar",
-    "saving": "Salvando…"
+    "saving": "Salvando…",
+    "loadMore": "Carregar mais",
+    "loadingMore": "Carregando…"
   },
   "theme": {
     "group": "Tema da página",
@@ -176,5 +178,225 @@
     "text": "Falta publicar a primeira versão de: {{documents}}. Enquanto isso, o cadastro no site do aluno não pede aceite.",
     "and": " e ",
     "action": "Publicar os termos"
+  },
+  "forms": {
+    "required": "Preencha este campo.",
+    "invalid": "Valor fora do formato aceito.",
+    "passwordHint": "De {{min}} a {{max}} caracteres.",
+    "passwordCounter": "{{length}}/{{max}}"
+  },
+  "users": {
+    "subtitle": "Alunos e equipe cadastrados na escola.",
+    "loading": "Carregando os usuários…",
+    "errorTitle": "Não foi possível carregar os usuários",
+    "loadMoreError": "Não foi possível carregar mais usuários. Tente de novo.",
+    "empty": "Nenhum usuário ainda",
+    "emptyText": "Os alunos aparecem aqui quando se cadastram no site do aluno.",
+    "emptyFiltered": "Nenhum usuário encontrado",
+    "emptyFilteredText": "Nenhum usuário corresponde à busca e aos filtros.",
+    "neverLoggedIn": "Nunca entrou",
+    "filters": {
+      "search": "Buscar por nome ou e-mail",
+      "searchPlaceholder": "Nome ou e-mail",
+      "searchButton": "Buscar",
+      "allRoles": "Todos os papéis",
+      "allStatuses": "Todas as situações",
+      "roleLabel": "Papel: {{value}}",
+      "statusLabel": "Situação: {{value}}",
+      "sortLabel": "Ordem: {{value}}",
+      "clear": "Limpar a busca e os filtros"
+    },
+    "sort": {
+      "-createdAt": "Cadastro mais recente",
+      "name": "Nome",
+      "-lastLoginAt": "Último acesso"
+    },
+    "status": {
+      "active": "Ativo",
+      "suspended": "Suspenso",
+      "unverified": "E-mail não confirmado"
+    },
+    "columns": {
+      "name": "Nome",
+      "email": "E-mail",
+      "role": "Papel",
+      "status": "Situação",
+      "createdAt": "Cadastro",
+      "lastLoginAt": "Último acesso"
+    },
+    "fields": {
+      "name": "Nome de exibição",
+      "fullName": "Nome completo",
+      "fullNameHint": "Usado em pedidos e certificados. Deixe em branco para apagar.",
+      "email": "E-mail",
+      "role": "Papel",
+      "status": "Situação"
+    },
+    "detail": {
+      "loading": "Carregando a ficha…",
+      "errorTitle": "Não foi possível carregar a ficha",
+      "notFound": "Usuário não encontrado",
+      "notFoundText": "A conta não existe ou foi excluída.",
+      "backToList": "Voltar aos alunos",
+      "edit": "Editar dados",
+      "data": "Dados",
+      "none": "Não informado",
+      "suspension": "Suspensão vigente",
+      "since": "Desde",
+      "until": "Até",
+      "suspendedBy": "Suspenso por",
+      "system": "Sistema",
+      "password": "Senha",
+      "hasPassword": "A conta tem senha definida.",
+      "noPassword": "A conta não tem senha; entra só por provedor.",
+      "providers": "Provedores vinculados",
+      "noProviders": "Nenhum provedor de login social vinculado.",
+      "providerNoEmail": "O provedor não informou o e-mail",
+      "linkedAt": "Vinculado em {{date}}"
+    },
+    "edit": {
+      "title": "Editar {{name}}",
+      "emailHint": "Trocar o e-mail anula a confirmação e envia um novo pedido de confirmação ao endereço novo.",
+      "reload": "Recarregar a ficha",
+      "done": "Dados salvos."
+    },
+    "role": {
+      "open": "Mudar papel",
+      "title": "Mudar o papel de {{name}}",
+      "description": "A mudança encerra as sessões da pessoa no painel e ela é avisada por e-mail.",
+      "roleLabel": "Papel: {{value}}",
+      "continue": "Continuar",
+      "confirmTitle": "Mudar o papel?",
+      "confirmText": "passa de {{from}} para {{to}}. As sessões no painel serão encerradas.",
+      "confirm": "Mudar papel",
+      "done": "Papel alterado para {{role}}."
+    },
+    "suspend": {
+      "open": "Suspender",
+      "title": "Suspender {{name}}",
+      "description": "O usuário é avisado por e-mail, sem o motivo. Compras, acessos e progresso continuam.",
+      "kind": "Tipo",
+      "kindLabel": "Tipo: {{value}}",
+      "kinds": {
+        "posting": "Só publicar",
+        "full": "Total"
+      },
+      "kindHints": {
+        "posting": "Impede publicar no fórum, em cases e em mensagens; a pessoa entra e estuda normalmente.",
+        "full": "Encerra todas as sessões e recusa o login."
+      },
+      "duration": "Prazo",
+      "durationLabel": "Prazo: {{value}}",
+      "durations": {
+        "1": "1 dia",
+        "7": "7 dias",
+        "30": "30 dias",
+        "none": "Por tempo indeterminado"
+      },
+      "reason": "Motivo",
+      "reasonHint": "Interno, visível só à equipe. Até 500 caracteres.",
+      "continue": "Continuar",
+      "confirmTitle": "Suspender o usuário?",
+      "confirmText": {
+        "posting": "não poderá publicar por {{duration}}.",
+        "full": "perde todas as sessões e não entra por {{duration}}."
+      },
+      "confirm": "Suspender",
+      "busy": "Suspendendo…",
+      "done": "{{name}} foi suspenso."
+    },
+    "reactivate": {
+      "open": "Reativar",
+      "confirmTitle": "Reativar o usuário?",
+      "confirmText": "volta a ter acesso. Sessões encerradas não voltam: a pessoa entra de novo.",
+      "confirm": "Reativar",
+      "busy": "Reativando…",
+      "done": "{{name}} foi reativado."
+    },
+    "sessions": {
+      "title": "Sessões abertas",
+      "loading": "Carregando as sessões…",
+      "errorTitle": "Não foi possível carregar as sessões",
+      "empty": "Nenhuma sessão aberta",
+      "emptyText": "A pessoa não está conectada em nenhum dos dois sites.",
+      "unknownBrowser": "Navegador desconhecido",
+      "unknownOs": "sistema desconhecido",
+      "ip": "IP {{ip}}",
+      "lastUsed": "Usada em {{date}}",
+      "sites": {
+        "admin": "Painel",
+        "classroom": "Site do aluno"
+      },
+      "revoke": "Encerrar todas as sessões",
+      "confirmTitle": "Encerrar todas as sessões?",
+      "confirmText": "sai dos dois sites e precisa entrar de novo.",
+      "confirm": "Encerrar sessões",
+      "busy": "Encerrando…",
+      "done": "Sessões encerradas."
+    },
+    "reveal": {
+      "open": "Mostrar senha",
+      "title": "Senha de {{name}}",
+      "auditTitle": "Esta visualização fica registrada na auditoria",
+      "auditText": "O registro guarda quem viu, de quem, quando e de qual IP. O valor da senha não é gravado. Feche o diálogo assim que terminar.",
+      "adminPassword": "Sua senha de administrador",
+      "adminPasswordHint": "Confirme a sua senha para ver a do usuário.",
+      "submit": "Ver a senha",
+      "busy": "Conferindo…",
+      "value": "Senha do usuário",
+      "noPassword": "Este usuário não tem senha definida.",
+      "hide": "Ocultar e fechar"
+    },
+    "setPassword": {
+      "open": "Definir senha",
+      "title": "Definir a senha de {{name}}",
+      "description": "Todas as sessões do usuário serão encerradas e ele será avisado por e-mail. Informe a senha nova à pessoa por fora do sistema.",
+      "newPassword": "Senha nova",
+      "continue": "Continuar",
+      "confirmTitle": "Definir a senha?",
+      "confirmText": "sai de todas as sessões e passa a entrar com a senha nova.",
+      "confirm": "Definir senha",
+      "done": "Senha definida."
+    },
+    "errors": {
+      "last_admin": "Não é possível: esta é a última conta de administrador ativa.",
+      "self_action_not_allowed": "Você não pode fazer isso com a sua própria conta.",
+      "already_suspended": "O usuário já está suspenso. Para mudar o tipo ou o prazo, reative e suspenda de novo.",
+      "not_suspended": "O usuário não está suspenso.",
+      "version_conflict": "A ficha foi alterada por outra pessoa enquanto você editava. Recarregue para ver os dados atuais.",
+      "email_taken": "Este e-mail já está cadastrado em outra conta.",
+      "password_invalid": "A senha precisa ter de 8 a 128 caracteres.",
+      "password_confirmation_invalid": "Senha incorreta. A tentativa conta para o bloqueio da sua conta.",
+      "too_many_attempts": "Muitas tentativas erradas. A sua conta está bloqueada por alguns minutos.",
+      "too_many_attemptsIn_one": "Muitas tentativas erradas. Tente de novo em {{count}} minuto.",
+      "too_many_attemptsIn_other": "Muitas tentativas erradas. Tente de novo em {{count}} minutos.",
+      "not_found": "Usuário não encontrado. A conta pode ter sido excluída.",
+      "validation_failed": "Confira os campos e tente de novo."
+    }
+  },
+  "team": {
+    "subtitle": "Instrutores, gerentes e administradores.",
+    "loading": "Carregando a equipe…",
+    "errorTitle": "Não foi possível carregar a equipe",
+    "empty": "Nenhum membro da equipe",
+    "emptyText": "Crie a conta de quem vai trabalhar no painel.",
+    "you": "Você",
+    "columns": {
+      "actions": "Ações"
+    },
+    "actions": {
+      "role": "Mudar papel de {{name}}",
+      "suspend": "Suspender {{name}}",
+      "reactivate": "Reativar {{name}}"
+    },
+    "create": {
+      "open": "Novo membro",
+      "title": "Novo membro da equipe",
+      "description": "A conta nasce com o e-mail não confirmado e recebe o pedido de confirmação. Informe a senha à pessoa por fora do sistema.",
+      "password": "Senha inicial",
+      "submit": "Criar conta",
+      "busy": "Criando…",
+      "done": "Conta de {{name}} criada."
+    }
   }
 }

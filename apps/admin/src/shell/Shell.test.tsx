@@ -37,18 +37,18 @@ describe('casca do admin', () => {
     const { router } = renderApp('/');
     await findMenu();
 
-    await user.click(screen.getByRole('link', { name: 'Alunos' }));
+    await user.click(screen.getByRole('link', { name: 'Cursos' }));
 
-    expect(router.state.location.pathname).toBe('/alunos');
-    expect(screen.getByRole('heading', { level: 1, name: 'Alunos' })).toBeTruthy();
+    expect(router.state.location.pathname).toBe('/cursos');
+    expect(screen.getByRole('heading', { level: 1, name: 'Cursos' })).toBeTruthy();
     expect(screen.getByText('Em construção')).toBeTruthy();
     expect(
-      screen.getByText('A tela “Alunos” ainda não está disponível nesta versão.'),
+      screen.getByText('A tela “Cursos” ainda não está disponível nesta versão.'),
     ).toBeTruthy();
-    expect(screen.getByRole('link', { name: 'Alunos' }).getAttribute('aria-current')).toBe('page');
+    expect(screen.getByRole('link', { name: 'Cursos' }).getAttribute('aria-current')).toBe('page');
 
     const crumbs = screen.getByRole('navigation', { name: 'Trilha de navegação' });
-    expect(within(crumbs).getByText('Alunos').getAttribute('aria-current')).toBe('page');
+    expect(within(crumbs).getByText('Cursos').getAttribute('aria-current')).toBe('page');
     await user.click(within(crumbs).getByRole('link', { name: 'Painel' }));
     expect(router.state.location.pathname).toBe('/');
   });
@@ -139,7 +139,7 @@ describe('casca do admin', () => {
 
   it('o botão "Voltar ao painel" navega pelo roteador, sem recarregar a página', async () => {
     const user = userEvent.setup();
-    const { router } = renderApp('/alunos');
+    const { router } = renderApp('/cursos');
     await findMenu();
     let reloads = 0;
     const onClick = (event: MouseEvent) => {
