@@ -1,0 +1,68 @@
+# oauth-mock (perfil opcional `oauth-mock`): provedor OAuth simulado de Google, Facebook e Apple
+# (ADR 0024; specs 007 e 031). Só para desenvolvimento e e2e: qualquer um escolhe a identidade.
+# Não tem imagem própria: roda o server.mjs desta pasta, montado só para leitura, no node:26-slim.
+# O navegador o alcança pelo proxy em oauth-mock.<domínio>; as APIs, em http://oauth-mock:8080.
+# A inclusão no compose da raiz é da tarefa 157.
+
+services:
+  oauth-mock:
+    image: ${OAUTH_MOCK_IMAGE:-node:26-slim}
+    profiles: ["oauth-mock"]
+    restart: unless-stopped
+    user: node
+    working_dir: /app
+    command: ["node", "--max-old-space-size=32", "/app/server.mjs"]
+    volumes:
+      - type: bind
+        source: ./server.mjs
+        target: /app/server.mjs
+        read_only: true
+    environment:
+      # Emissor (`iss`) dos id_token e base dos endereços publicados: o endereço visto pelo
+      # navegador, o mesmo de NUVA_OAUTH_MOCK_URL.
+      OAUTH_MOCK_PUBLIC_URL: ${NUVA_OAUTH_MOCK_URL:-http://oauth-mock.${NUVA_DOMAIN:-localhost}:${TRAEFIK_HTTP_PORT:-8080}}
+    networks:
+      - internal
+      - public
+    read_only: true
+    tmpfs:
+      - /run
+      - /tmp
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    ulimits:
+      nofile:
+        soft: 4096
+        hard: 4096
+    deploy:
+      resources:
+        limits:
+          cpus: "${NUVA_OAUTH_MOCK_CPUS:-1}"
+          memory: ${NUVA_OAUTH_MOCK_MEMORY:-64m}
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - "fetch('http://127.0.0.1:8080/healthz').then((r) => process.exit(r.ok ? 0 : 1), () => process.exit(1))"
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+      start_interval: 2s
+    logging:
+      driver: json-file
+      options:
+        max-size: ${NUVA_LOG_MAX_SIZE:-10m}
+        max-file: "${NUVA_LOG_MAX_FILE:-5}"
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=${TRAEFIK_NETWORK:-nuva-edu-proxy}"
+      - "traefik.http.services.nuva-edu-oauth-mock.loadbalancer.server.port=8080"
+      - "traefik.http.routers.nuva-edu-oauth-mock.rule=Host(`oauth-mock.${NUVA_DOMAIN:-localhost}`)"
+      - "traefik.http.routers.nuva-edu-oauth-mock.entrypoints=${TRAEFIK_ENTRYPOINTS:-web}"
+      - "traefik.http.routers.nuva-edu-oauth-mock.service=nuva-edu-oauth-mock"
+      # TLS só com TRAEFIK_CERTRESOLVER preenchido; vazio, sai um rótulo neutro no lugar.
+      - "${TRAEFIK_CERTRESOLVER:+traefik.http.routers.nuva-edu-oauth-mock.tls.certresolver=}${TRAEFIK_CERTRESOLVER:-nuva-edu.oauth-mock.tls=off}"
