@@ -4,7 +4,10 @@ import { useApi } from './client';
 
 export type Meta = AdminSchemas['Meta'];
 
-/** Dados públicos da instalação (`GET /api/v1/meta`): nome da escola, versão, moeda e idioma. */
+/**
+ * Dados públicos da instalação (`GET /api/v1/meta`): marca da escola (nome, logotipo e cor de
+ * destaque), endereço do código-fonte, versão, moeda e idioma.
+ */
 export function useMeta() {
   const api = useApi();
   return useQuery({

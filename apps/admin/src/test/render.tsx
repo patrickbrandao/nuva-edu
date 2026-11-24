@@ -15,6 +15,9 @@ export const META: AdminSchemas['Meta'] = {
   currency: 'BRL',
   locale: 'pt-BR',
   authProviders: ['google'],
+  logoUrl: null,
+  accentColor: null,
+  sourceCodeUrl: 'https://github.com/patrickbrandao/nuva-edu',
 };
 
 export function jsonResponse(body: unknown, status = 200, headers: Record<string, string> = {}) {

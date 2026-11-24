@@ -7,11 +7,12 @@ import {
   ThemeSwitch,
   useTheme,
 } from '@nuva-edu/ui';
-import { GraduationCap } from 'lucide-react';
 import { useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Outlet, useLocation } from 'react-router';
 import { useMeta } from '../api/meta';
+import { BrandMark } from './BrandMark';
+import { validAccentColor } from './brand';
 import { Footer } from './Footer';
 import { HOME_PATH, MENU, menuItemForPath } from './menu';
 import { useThemeLabels } from './useThemeLabels';
@@ -31,6 +32,7 @@ export function Shell() {
   const home = t('menu.items.dashboard');
   const pageTitle = current ? t(`menu.items.${current.id}`) : t('notFound.title');
   const brandName = meta?.schoolName ?? t('app.name');
+  const accentColor = validAccentColor(meta?.accentColor);
 
   useEffect(() => {
     document.title = `${pageTitle} · ${brandName}`;
@@ -63,7 +65,12 @@ export function Shell() {
       }}
       sidebar={
         <AdminSidebar
-          brand={{ name: brandName, mark: <GraduationCap size={20} aria-hidden="true" /> }}
+          brand={{
+            name: brandName,
+            mark: <BrandMark logoUrl={meta?.logoUrl} name={brandName} />,
+            // Cor da marca do menu (ícone padrão); o restante da interface segue `--minui-accent`.
+            ...(accentColor ? { color: accentColor } : {}),
+          }}
           sections={sections}
           active={current?.id}
           navLabel={t('shell.menu')}

@@ -19,6 +19,7 @@
     "collapseMenu": "Recolher o menu",
     "expandMenu": "Expandir o menu",
     "menu": "Menu",
+    "logoAlt": "Logotipo de {{name}}",
     "openMenu": "Abrir o menu",
     "closeMenu": "Fechar o menu",
     "breadcrumb": "Trilha de navegação"

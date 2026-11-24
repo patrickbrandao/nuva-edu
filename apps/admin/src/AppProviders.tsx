@@ -9,6 +9,7 @@ import { createQueryClient } from './api/query';
 import i18n from './i18n/i18n';
 import type { RuntimeConfigLoader } from './runtime/runtimeConfig';
 import { RuntimeConfigProvider } from './runtime/useRuntimeConfig';
+import { BrandAccent } from './shell/BrandAccent';
 
 /** Link interno dos componentes de @nuva-edu/ui: navega pelo roteador, sem recarregar a página. */
 const RouterLink: LinkComponent = ({ href, ...rest }) => <Link to={href} {...rest} />;
@@ -23,8 +24,8 @@ interface AppProvidersProps {
 }
 
 /**
- * Tudo de que as telas dependem: traduções, cliente da API, cache, configuração de execução e
- * link do roteador.
+ * Tudo de que as telas dependem: traduções, cliente da API, cache, configuração de execução,
+ * cor de destaque da escola e link do roteador.
  */
 export function AppProviders({
   api,
@@ -38,6 +39,7 @@ export function AppProviders({
       <ApiProvider {...(api ? { client: api } : {})}>
         <QueryClientProvider client={queryClient ?? ownQueryClient}>
           <RuntimeConfigProvider loader={runtimeConfigLoader}>
+            <BrandAccent />
             <LinkProvider component={RouterLink}>{children}</LinkProvider>
           </RuntimeConfigProvider>
         </QueryClientProvider>
