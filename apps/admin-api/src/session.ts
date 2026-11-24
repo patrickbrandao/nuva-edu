@@ -175,8 +175,7 @@ export function registerSessionCookieHooks(app: FastifyInstance, ttlDays: number
 
 /**
  * Operações de autenticação (`/api/v1/auth/*`) com o limite de 20 por minuto por IP
- * (003 RNF-03). A de OAuth entra quando a rota existir (tarefa 156): a regra só conta operação
- * registrada.
+ * (003 RNF-03), inclusive as três do login social.
  */
 export const AUTH_OPERATIONS: readonly string[] = [
   'login',

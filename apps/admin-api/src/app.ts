@@ -8,10 +8,12 @@ import {
 } from '@nuva-edu/api-kit';
 import {
   type Config,
+  createOAuth,
   createSettingsReader,
   type Database,
   databasePoolStats,
   type Logger,
+  type OAuth,
   type SettingsReader,
 } from '@nuva-edu/core';
 import { loadAdminContract } from './contract.ts';
@@ -19,6 +21,7 @@ import { readServiceVersion } from './meta.ts';
 import { registerAuditRoutes } from './routes/audit.ts';
 import { registerAuthRoutes } from './routes/auth.ts';
 import { registerImageRoutes } from './routes/images.ts';
+import { registerOAuthRoutes } from './routes/oauth.ts';
 import { registerTermsRoutes } from './routes/terms.ts';
 import { registerUserRoutes } from './routes/users.ts';
 import {
@@ -43,6 +46,11 @@ export interface AdminAppOptions {
    * e o `logger` do serviço.
    */
   settings?: SettingsReader;
+  /**
+   * Login social da equipe (spec 007). Padrão: um por app, montado da configuração; os testes
+   * passam um com o `fetch` do provedor falso.
+   */
+  oauth?: OAuth;
   /** Relógio do limite de taxa; para os testes. */
   rateLimiter?: RateLimiterOptions;
 }
@@ -61,8 +69,6 @@ export function buildAdminApp(options: AdminAppOptions): FastifyInstance {
     readiness: options.readiness ?? databaseReadiness({ db, connectionString: config.databaseUrl }),
     // Sessão do site admin, papel de equipe e CSRF (spec 007; spec 003 RF-03).
     security: sessionSecurity({ db, ttlDays }),
-    // Assina só o cookie de retorno OAuth (tarefa 156); a sessão não é assinada.
-    ...(config.sessionSecret === null ? {} : { cookieSecret: config.sessionSecret }),
     rateLimits: adminRateLimits(),
     ...(options.rateLimiter === undefined ? {} : { rateLimiter: options.rateLimiter }),
     // Negação por permissão: `outcome = denied` na auditoria (spec 028).
@@ -94,6 +100,9 @@ export function buildAdminApp(options: AdminAppOptions): FastifyInstance {
     settings,
   });
   registerAuthRoutes(app, { db, ttlDays });
+  // O cookie de retorno é assinado pelo núcleo (HMAC com `SESSION_SECRET`), não pelo
+  // `@fastify/cookie`: o app não recebe `cookieSecret`.
+  registerOAuthRoutes(app, { db, ttlDays, oauth: options.oauth ?? createOAuth(config) });
   registerImageRoutes(app, { db });
   registerUserRoutes(app, { db });
   registerAuditRoutes(app, { db });

@@ -12,6 +12,7 @@ Detalhe das decisões em `specs/decisions/`.
 - Specs 007, 024 e 028: ação `user.sessions_revoke` na auditoria; trocar o e-mail pela equipe invalida os links `verify` e `reset` pendentes (task 236).
 - Contrato do classroom: código `provider_already_linked` no retorno OAuth, com o cliente regenerado (task 201, 275).
 - admin-api: rotas `/users*` (lista, ficha, criação de equipe, edição, papel, suspensão, exibição da senha com `no-store`, definição da senha, sessões), `/audit` e `/audit/{id}`, `/terms*`; negação dependente do alvo gravada só pelo núcleo (task 155).
+- admin-api: login social da equipe (`/auth/{provider}/start` e `/callback`, `GET` e `POST` da Apple), só `intent=login`, `staff_only` para quem não é da equipe (task 156).
 - `@nuva-edu/core`: `JobHandlers` passa a exigir o manipulador de `email.send` (`PendingHandlerJobType = never`) (task 225).
 - admin-api: `POST /auth/login`, `POST /auth/logout`, `GET /session`, entrega de imagens, tratadores de sessão e CSRF (`student` recebe `403`), auditoria `denied`, limite de taxa da 003 RNF-03, admin inicial na subida e comando `create-admin` (task 154).
 - `@nuva-edu/core`: gestão de usuários pela equipe (`listUsers` com busca, filtros e cursor, `getUser`, `createUser`, `updateUser` com `version`, `setUserRole`, `suspendUser`/`reactivateUser`, `expireSuspensions` para o worker, `revealUserPassword` com confirmação que conta no bloqueio, `setUserPassword`, `listUserSessions`/`revokeAllUserSessions`), com negações e escritas na auditoria e a regra do último admin (task 149).
