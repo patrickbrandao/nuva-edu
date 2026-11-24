@@ -161,7 +161,7 @@ Esta tabela é a lista completa e única de prazos; as demais specs usam estes n
 | 5 | XSS em conteúdo de aluno (fórum, cases, mensagens, perfil) | Markdown convertido com lista de permissão de marcações e saneado no servidor e no navegador; sem HTML bruto; links com `rel="noopener nofollow"`; Content-Security-Policy sem `unsafe-inline` para scripts; cookie `HttpOnly`, `Secure`, `SameSite=Lax`; imagens regravadas ([029](029-imagens.md)) | Conjunto de cargas de XSS conhecidas publicadas em cada campo e conferidas como inertes no e2e |
 | 6 | Acesso a aula ou ebook sem direito | Links de vídeo, arquivo e ebook só saem da API depois da checagem de direito ([010](010-direitos-de-acesso.md)); o programa do curso não traz os links; reembolso e fim de plano revogam em cascata | Usuário sem direito recebe 403 e nenhuma resposta contém o link; revogação testada após reembolso |
 
-Proteções gerais que valem para todas: cabeçalhos de segurança (HSTS quando em HTTPS, `X-Content-Type-Options`, `Referrer-Policy`), proteção contra CSRF nas rotas com cookie (verificação de `Origin` e `SameSite`), limite de requisições por IP nas rotas públicas (120 por minuto) e de tamanho de corpo (1 MB, exceto envio de imagem).
+Proteções gerais que valem para todas: cabeçalhos de segurança (HSTS quando em HTTPS, `X-Content-Type-Options`, `Referrer-Policy`), proteção contra CSRF nas rotas com cookie (verificação de `Origin` e `SameSite`), limites de taxa por sessão e por IP, cujos valores são os de cada serviço ([003](003-admin-api.md), RNF-03; [004](004-classroom-api.md), RNF-04; entrega de imagens em [029](029-imagens.md), "Limite de taxa da entrega"), com `429` `rate_limited` e `Retry-After`, e limite de tamanho de corpo (1 MB, exceto envio de imagem).
 
 ### Teste de carga
 

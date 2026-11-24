@@ -20,7 +20,7 @@ A `classroom-api` é o backend do site do aluno (`https://<NUVA_CLASSROOM_HOST>`
 - RNF-01: p95 abaixo de 300 ms com 500 usuários simultâneos em 2 vCPU / 4 GB.
 - RNF-02: Sustentar 500 conexões SSE abertas num único processo, com consumo adicional inferior a 200 MB de RAM.
 - RNF-03: Evento SSE entregue em até 2 s após a gravação da mensagem ou notificação.
-- RNF-04: Limites de taxa: 120 requisições por minuto por sessão; 60 por minuto por IP para visitantes; 10 por minuto por IP em login, cadastro e redefinição; 20 mensagens diretas por minuto e 10 publicações de fórum por minuto por usuário. A entrega de imagens (`getImageVariant`) fica fora dos limites por sessão e por visitante e tem conta própria, de 600 por minuto por IP ([029](029-imagens.md), "Limite de taxa da entrega").
+- RNF-04: Limites de taxa: 120 requisições por minuto por sessão; 60 por minuto por IP para visitantes; 10 por minuto por IP em login, cadastro e redefinição (`login`, `register`, `requestPasswordReset`, `resetPassword` e, do login social, `startOAuth` e `completeSocialSignup`; o retorno do provedor vem depois do início e não conta); 20 mensagens diretas por minuto e 10 publicações de fórum por minuto por usuário. A entrega de imagens (`getImageVariant`) fica fora dos limites por sessão e por visitante e tem conta própria, de 600 por minuto por IP ([029](029-imagens.md), "Limite de taxa da entrega").
 - RNF-05: Corpo de requisição limitado a 256 KB, exceto envio de imagem, limitado a 5 MB ([029](029-imagens.md)); a imagem é processada na própria API que recebe o envio, não no worker.
 
 ## Comportamento

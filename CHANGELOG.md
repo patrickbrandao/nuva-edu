@@ -7,6 +7,7 @@ Detalhe das decisões em `specs/decisions/`.
 
 ### Adicionado
 - classroom-api: `getImageVariant` sai dos limites `session` e `visitor` e ganha `image-ip`, 600/min por IP com ou sem sessão, contando os `304` (task 335).
+- specs: limites de taxa alinhados entre 003, 004, 029 e 033; a 033 passa a remeter aos limites de cada serviço (task 337).
 - specs 029 e 004: entrega de imagens com limite próprio de 600/min por IP, fora dos limites de sessão e visitante; `deleteImage` com imagem em uso continua `404` (task 277).
 - worker: `retention.purge` apaga, em lotes, as tarefas da fila `done` (7 dias) e `failed` (30 dias) por `finished_at`; `queued` e `running` nunca (task 279).
 - `@nuva-edu/api-kit`: `setApiCookie` e `readApiCookie` só tratam o cookie de sessão e recusam o de retorno OAuth, que é assinado pelo núcleo; comentários corrigidos (task 280).

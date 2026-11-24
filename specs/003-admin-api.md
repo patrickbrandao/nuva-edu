@@ -20,7 +20,7 @@ A `admin-api` é o backend do site de administração (`https://<NUVA_ADMIN_HOST
 - RF-09: Expor `GET /api/v1/meta`, sem sessão, com os dados públicos da instalação e da marca da escola ([Meta](#meta)).
 - RNF-01: p95 de resposta abaixo de 300 ms para leituras paginadas com 50 usuários de equipe simultâneos, em 2 vCPU / 4 GB.
 - RNF-02: Corpo de requisição limitado a 1 MB, exceto envio de imagem, limitado a 5 MB ([029](029-imagens.md)); a imagem é processada na própria API que recebe o envio, não no worker.
-- RNF-03: Limite de taxa de 300 requisições por minuto por sessão e 20 por minuto por IP nas rotas de autenticação.
+- RNF-03: Limites de taxa: 300 requisições por minuto por sessão; 20 por minuto por IP nas operações de autenticação (`/api/v1/auth/*`: login, logout e as três do login social). Não há limite de visitante: requisição sem sessão só conta no limite da autenticação ou no da entrega de imagens. A entrega de imagens (`getImageVariant`) fica fora do limite por sessão e tem conta própria, de 600 por minuto por IP, com ou sem sessão ([029](029-imagens.md), "Limite de taxa da entrega"). Acima de qualquer limite, `429` `rate_limited` com `Retry-After`.
 - RNF-04: Nenhuma resposta, log ou erro contém o campo de senha, exceto a rota dedicada de exibição de senha ([007](007-contas-e-autenticacao.md)).
 
 ## Comportamento
@@ -215,6 +215,7 @@ Lê as demais tabelas. Retenção: [033](033-observabilidade-retencao-backup.md)
 - [ ] Toda operação declara as respostas de erro da tabela de [Respostas de erro declaradas](#respostas-de-erro-declaradas) (teste de contrato).
 - [ ] Operação com `x-nuva-pending` não impede a subida, com ou sem rota; `check-contract --no-pending` falha enquanto houver alguma.
 - [ ] `GET /api/v1/meta` devolve o nome, a cor e o endereço do código-fonte gravados em `settings`, e os padrões quando não há nada gravado.
+- [ ] Limites de taxa de RNF-03 respondem `429` com `Retry-After`; a entrega de imagens não conta no limite por sessão.
 - [ ] Requisição que altera dados sem `X-CSRF-Token` válido recebe `403` com `code: csrf_token_invalid`.
 - [ ] Toda operação de escrita do contrato declara `csrfToken` no `security`.
 - [ ] Nenhuma resposta de `/users` contém a senha; só a rota de exibição a devolve, e apenas para `admin`.
