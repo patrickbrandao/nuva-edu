@@ -45,6 +45,8 @@ stream.close();
 - `pnpm --filter @nuva-edu/api-client generate`: regenera a partir dos contratos.
 - `pnpm --filter @nuva-edu/api-client check`: regenera em memória e falha se o commitado estiver
   diferente. Roda dentro de `test`.
+- `test:files` (`vitest run`): usado pelo `pnpm verify:quick` para rodar só os testes ligados à
+  mudança; `test` encadeia o `check` e por isso não aceita a lista de arquivos.
 
 O `typescript` 5 nas dependências de desenvolvimento existe só para o `openapi-typescript`, que usa
 a API de compilador que o TypeScript 7 não tem. A checagem de tipos do pacote usa o TypeScript 7 da

@@ -15,7 +15,8 @@
     "generate": "node scripts/generate.mjs",
     "check": "node scripts/check.mjs",
     "typecheck": "pnpm --workspace-root exec tsc --noEmit -p packages/api-client/tsconfig.json",
-    "test": "node scripts/check.mjs && vitest run"
+    "test": "node scripts/check.mjs && vitest run",
+    "test:files": "vitest run"
   },
   "dependencies": {
     "openapi-fetch": "0.17.0"
