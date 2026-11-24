@@ -52,6 +52,9 @@ describe('migrations reais', () => {
       'tabela images',
       'tabela image_variants',
       'índice images_created_at_idx',
+      'tabela users',
+      'tabela user_suspensions',
+      'índice users_email_active_unique',
     ]) {
       assert.ok(full.includes(item), item);
     }
@@ -656,7 +659,17 @@ describe('migrations reais', () => {
 
   const owner = '0192f0c1-0000-7000-8000-000000000001';
 
+  /** A 0005 ligou images.owner_user_id a users: o dono precisa existir. */
+  async function ensureOwner(): Promise<void> {
+    await db.client.query(
+      `INSERT INTO users (id, email, name) VALUES ($1, 'dono-das-imagens@example.com', 'Dono')
+       ON CONFLICT DO NOTHING`,
+      [owner],
+    );
+  }
+
   async function insertImage(purpose = 'avatar', width = 800, height = 600): Promise<string> {
+    await ensureOwner();
     const { rows } = await db.client.query<{ id: string }>(
       `INSERT INTO images (owner_user_id, purpose, original_width, original_height)
        VALUES ($1, $2, $3, $4) RETURNING id`,
@@ -873,6 +886,7 @@ describe('migrations reais', () => {
     assert.match(defs.image_variants_pkey ?? '', /\(image_id, width\)$/);
 
     // A varredura do expurgo usa o índice, mesmo com a tabela cheia de imagens recentes.
+    await ensureOwner();
     await db.client.query(
       `INSERT INTO images (owner_user_id, purpose, original_width, original_height, created_at)
        SELECT $1, 'avatar', 10, 10, now() - make_interval(secs => g)

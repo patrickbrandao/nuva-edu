@@ -6,6 +6,7 @@ Detalhe das decisões em `specs/decisions/`.
 ## [Não lançado]
 
 ### Adicionado
+- Migration 0005: `users` (senha de 8 a 128 ou nula, e-mail único entre ativos, busca trigram), `profiles`, `oauth_identities`, `sessions`, `email_tokens`, `login_attempts`, `user_devices` e `user_suspensions` (specs 007 e 026), e chave estrangeira de `images.owner_user_id` (task 138).
 - Migration 0004: tabelas `images` e `image_variants` (spec 029), com as sete finalidades, larguras e limites de 400 KB e 1600 px em `CHECK`, `data` em armazenamento `EXTERNAL` e índice do expurgo por `created_at` (task 137).
 - Provedor OAuth simulado (`scripts/oauth-mock/`, perfil `oauth-mock`): Google, Facebook e Apple com PKCE S256, `id_token` RS256 e JWKS, `form_post` da Apple com `user` e e-mail oculto, `/me` do Graph, recusa e falhas simuladas; credenciais fixas de teste (task 158).
 - `scripts/volume-migrate.sh`: cópia do `postgres-data` para o volume com prefixo do projeto no `pnpm dev:up` e, no servidor, só com `pnpm deploy:test --migrate-volume`; Traefik em `nuva-edu-traefik-acme`.
