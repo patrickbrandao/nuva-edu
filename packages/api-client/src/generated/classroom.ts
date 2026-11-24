@@ -375,8 +375,9 @@ export interface paths {
          *     | Erro no vínculo | `/conta/acesso?erro=<code>` |
          *
          *     Códigos na URL: `oauth_state_invalid`, `oauth_denied`, `oauth_provider_error`,
-         *     `account_suspended`, `identity_in_use` (vínculo). O cookie de retorno é apagado, exceto
-         *     no cadastro pendente. A Apple volta por `POST` (`oauthCallbackForm`).
+         *     `account_suspended`, `identity_in_use` e `provider_already_linked` (vínculo). O cookie de
+         *     retorno é apagado, exceto no cadastro pendente. A Apple volta por `POST`
+         *     (`oauthCallbackForm`).
          */
         get: operations["oauthCallback"];
         put?: never;
