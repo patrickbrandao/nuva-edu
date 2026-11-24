@@ -7,8 +7,9 @@
 //   NUVA_TEST_DB=local      o Postgres de desenvolvimento (`.env` e `.env.local` da raiz);
 //   nenhum dos dois         um contêiner descartável, por Testcontainers.
 //
-// Nos três casos o banco dos testes é uma cópia nova do banco modelo (`<base>_tpl`), com nome
-// único, apagada no fim. A URL dela fica em `DATABASE_URL`.
+// Nos três casos o banco dos testes é uma cópia nova do banco modelo do conjunto de migrations
+// (`<base>_tpl_<hash>`, com os 12 primeiros caracteres do hash das migrations), com nome único,
+// apagada no fim. A URL dela fica em `DATABASE_URL`.
 //
 // Uso no Vitest (caminho relativo à pasta do pacote):
 //   test: { globalSetup: ['../../scripts/test-db.mjs'] }

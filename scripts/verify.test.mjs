@@ -3,7 +3,7 @@ import { spawnSync } from 'node:child_process';
 import { relative, resolve } from 'node:path';
 import { describe, test } from 'node:test';
 import { describePackage, describeRoot, exitCodeFor, formatSummary } from './lib/verify-plan.mjs';
-import { fullSteps, prepareLocalDatabase, runSequence } from './verify.mjs';
+import { fullSteps, preparedNote, prepareLocalDatabase, runSequence } from './verify.mjs';
 
 const script = resolve(import.meta.dirname, 'verify.mjs');
 
@@ -48,6 +48,19 @@ describe('linha de comando do verify', () => {
 });
 
 describe('Postgres local do modo rápido', () => {
+  test('nota do preparo mostra o modelo do conjunto e o que saiu', () => {
+    const name = 'nuva_edu_tpl_0123456789ab';
+    assert.equal(preparedNote({ template: { name, rebuilt: false } }), `modelo em dia: ${name}`);
+    assert.equal(
+      preparedNote({
+        template: { name, rebuilt: true },
+        removedDatabases: ['nuva_edu_test_a'],
+        removedTemplates: ['nuva_edu_tpl_aaaaaaaaaaaa', 'nuva_edu_tpl_bbbbbbbbbbbb'],
+      }),
+      `modelo refeito: ${name}; 1 banco antigo removido; 2 modelos antigos removidos`,
+    );
+  });
+
   test('no ar: não tenta subir e prepara o modelo', async () => {
     let started = 0;
     const result = await prepareLocalDatabase({

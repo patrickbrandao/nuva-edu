@@ -306,17 +306,31 @@ async function localDatabaseDeps() {
       return (await run(argv)) === 0;
     },
     prepare: async () => {
-      const removed = await db.dropStaleTestDatabases({ config });
+      const removedDatabases = await db.dropStaleTestDatabases({ config });
       const template = await db.ensureTemplate({ config, log: console.log });
-      const notes = [template.rebuilt ? 'modelo refeito' : 'modelo em dia'];
-      if (removed.length > 0) {
-        notes.push(
-          `${plural(removed.length, 'banco antigo removido', 'bancos antigos removidos')}`,
-        );
-      }
-      return notes.join('; ');
+      const removedTemplates = await db.dropStaleTemplates({ config });
+      return preparedNote({ template, removedDatabases, removedTemplates });
     },
   };
+}
+
+/**
+ * Nota do passo `postgres`: qual modelo (`<base>_tpl_<hash>`, um por conjunto de migrations), se
+ * foi refeito, e quantos bancos de teste e modelos antigos saíram.
+ */
+export function preparedNote({ template, removedDatabases = [], removedTemplates = [] }) {
+  const notes = [`${template.rebuilt ? 'modelo refeito' : 'modelo em dia'}: ${template.name}`];
+  if (removedDatabases.length > 0) {
+    notes.push(
+      plural(removedDatabases.length, 'banco antigo removido', 'bancos antigos removidos'),
+    );
+  }
+  if (removedTemplates.length > 0) {
+    notes.push(
+      plural(removedTemplates.length, 'modelo antigo removido', 'modelos antigos removidos'),
+    );
+  }
+  return notes.join('; ');
 }
 
 async function quick(options) {

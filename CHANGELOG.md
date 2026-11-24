@@ -104,6 +104,7 @@ Detalhe das decisões em `specs/decisions/`.
 - Spec 032: banco modelo dos testes passa a ser um por conjunto de migrations, `nuva_edu_tpl_<hash>` (task 196).
 - `scripts/compose.test.mjs`: o volume do banco tem de se chamar `nuva-edu-postgres-data`; o nome antigo `postgres-data` deixa de ser aceito (task 184).
 - Spec 006: mapa de telas do admin ganha a ação do menu por item e segue a 008; instrutor vê eventos, novidades, gamificação e chamados (task 192).
+- `scripts/verify.mjs`: a nota do passo `postgres` mostra o modelo do conjunto de migrations (`<base>_tpl_<hash>`) e conta os modelos antigos removidos por `dropStaleTemplates`; comentário do `scripts/test-db.mjs` com o nome novo do modelo (task 197).
 
 ### Decisões
 - Textos de processo alinhados ao `scripts/task.mjs` (`--as`, `task:list`, push negado, conflito de rebase).
