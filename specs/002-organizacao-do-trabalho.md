@@ -5,7 +5,7 @@ Depende de: 000, 001
 
 ## Contexto
 
-Vários agentes (Claude Code e OpenCode) trabalham no mesmo repositório, coordenados por uma pessoa. Cada tarefa roda em um worktree próprio, e a `main` só avança por fast-forward ([0021](decisions/0021-worktree-por-tarefa.md)). Esta spec define quem pode mexer em quê e como o trabalho flui sem conflito.
+Vários agentes (Claude Code e OpenCode) trabalham no mesmo repositório, coordenados por uma pessoa. Cada tarefa roda em um worktree próprio, e a `main` só avança por fast-forward ([0021](decisions/0021-worktree-por-tarefa.md)); a única exceção são as tarefas de uma janela de contrato, que dividem um worktree ([0022](decisions/0022-janela-de-contrato-num-so-branch.md)). Esta spec define quem pode mexer em quê e como o trabalho flui sem conflito.
 
 ## Requisitos
 
@@ -13,8 +13,8 @@ Vários agentes (Claude Code e OpenCode) trabalham no mesmo repositório, coorde
 - RF-02: Cada tarefa lista os arquivos que pode alterar; duas tarefas em andamento nunca compartilham arquivo.
 - RF-03: Toda mudança de comportamento começa pela spec; contrato e migration vêm antes do código que os usa.
 - RF-04: Toda mudança vem com o teste que a cobre.
-- RF-05: Mudança de contrato, a rota que a atende e o cliente gerado entram na mesma janela de trabalho ([Janela de contrato](#janela-de-contrato)).
-- RF-06: Cada tarefa roda em um worktree e um branch próprios, abertos por `pnpm task:start` e encerrados por `pnpm task:finish`. Nenhum agente edita arquivo versionado no checkout principal.
+- RF-05: Mudança de contrato, a rota que a atende, o cliente gerado e todo pacote que quebraria com eles formam uma janela, que chega à `main` por um único branch ([Janela de contrato](#janela-de-contrato)).
+- RF-06: Cada tarefa roda em um worktree e um branch próprios, abertos por `pnpm task:start` e encerrados por `pnpm task:finish`. Nenhum agente edita arquivo versionado no checkout principal. Exceção: as tarefas de uma janela de contrato trabalham no worktree da janela ([Janela de contrato](#janela-de-contrato)).
 - RF-07: A `main` só avança por fast-forward, a partir de um branch de tarefa que passou por rebase sobre a `main` e por `pnpm verify:quick`.
 - RNF-01: Nenhum commit contém arquivo fora das pastas do papel de quem o fez (verificável pelo histórico).
 - RNF-02: O histórico da `main` é linear: sem merge commit (verificável por `git log --merges main`, que deve ser vazio).
@@ -42,7 +42,7 @@ Regras de propriedade:
 - Só o `arquiteto` altera `specs/`, as ADRs e os `openapi.yaml`.
 - Só o `banco` cria ou altera migrations. As migrations são numeradas em sequência e criadas uma de cada vez.
 - Quem precisar de mudança em spec, contrato ou migration cria uma tarefa para o dono e segue em outra tarefa.
-- O `CHANGELOG.md` é alterado por qualquer papel, só acrescentando linhas em `## [Não lançado]`.
+- O `CHANGELOG.md` é alterado por qualquer papel, só acrescentando linhas em `## [Não lançado]`. Numa janela de contrato, só por quem a fecha.
 - Testes de unidade e de integração ficam junto do código e pertencem ao dono da pasta.
 
 ### Git
@@ -62,7 +62,7 @@ Regras de propriedade:
 
 | Comando | O que faz |
 | --- | --- |
-| `pnpm task:start NNN --as <papel>` | Roda no checkout principal. Cria o branch e o worktree, liga o `.env.local` do checkout principal por link simbólico, roda `pnpm install --frozen-lockfile` no worktree, marca a tarefa como `em-andamento`, preenche `responsavel` com o papel e imprime o caminho do worktree. Recusa se a tarefa não está `aberta`, se tem dependência ainda na fila ou se o branch ou o worktree já existem. |
+| `pnpm task:start NNN --as <papel>` | Roda no checkout principal. Cria o branch e o worktree, liga o `.env.local` do checkout principal por link simbólico, roda `pnpm install --frozen-lockfile` no worktree, marca a tarefa como `em-andamento`, preenche `responsavel` com o papel e imprime o caminho do worktree. Recusa se a tarefa não está `aberta`, se tem dependência ainda na fila ou se o branch ou o worktree já existem. Com `--join NNN`, entra na janela `NNN` sem criar worktree ([Janela de contrato](#janela-de-contrato)). |
 | `pnpm task:finish NNN` | Roda no worktree ou no checkout principal. Leva a tarefa à `main` (passos abaixo). |
 | `pnpm task:abort NNN` | Remove worktree e branch e devolve a tarefa a `aberta`. Só com o worktree limpo e sem commit fora da `main`; com alteração pendente ou commit não integrado exige `--force`, que é ação destrutiva e depende de confirmação do humano. |
 | `pnpm task:path` | Imprime o caminho do checkout principal. |
@@ -74,7 +74,7 @@ Dentro do worktree, o agente:
 
 1. Edita e commita só ali. Usa o caminho absoluto que o `task:start` imprimiu.
 2. Altera só os arquivos listados na tarefa e dentro das pastas do seu papel. O worktree isola o trabalho de cada tarefa; a propriedade das pastas não muda.
-3. Pode usar `git add -A`: o worktree é só dele.
+3. Pode usar `git add -A`: o worktree é só dele. Não vale no worktree de uma janela de contrato, que é compartilhado ([Janela de contrato](#janela-de-contrato)).
 4. Não sobe nem reconstrói o ambiente Docker a partir do worktree.
 
 `pnpm task:finish NNN` faz, nesta ordem:
@@ -110,36 +110,77 @@ A fila fica em `tasks/` do checkout principal, fora do Git, no formato do templa
 5. Ao concluir, atende a Definition of Done e roda `pnpm task:finish NNN`, que leva os commits à `main`, envia e remove o worktree, o branch e o arquivo da tarefa.
 6. Tarefa abandonada: `pnpm task:abort NNN` remove o worktree e o branch e devolve a tarefa a `aberta`. Tarefa descartada também é removida da fila; se o descarte for uma decisão, o `arquiteto` registra uma ADR.
 7. Tarefa que não pode avançar fica `bloqueada`, com o motivo escrito no corpo.
+8. Tarefa com `janela: NNN` no cabeçalho segue a [Janela de contrato](#janela-de-contrato): entra com `--join`, trabalha no worktree da janela e, concluída, fica `pronta` na fila até o fechamento.
 
-O status `em-revisao` do template não é usado, porque não há revisão antes da `main`.
+Os status são `aberta`, `em-andamento`, `bloqueada` e, só para tarefa de janela, `pronta` (commitada no branch da janela, ainda fora da `main`). O status `em-revisao` do template não é usado, porque não há revisão antes da `main`.
 
 ### Paralelismo
 
-- Cada tarefa em andamento tem o próprio worktree; várias rodam ao mesmo tempo sem enxergar o trabalho pendente umas das outras.
+- Cada tarefa em andamento tem o próprio worktree; várias rodam ao mesmo tempo sem enxergar o trabalho pendente umas das outras. As tarefas de uma janela de contrato dividem um worktree e se enxergam: ali o paralelismo depende de pastas disjuntas e de commits com caminhos explícitos.
 - Duas tarefas rodam em paralelo quando os campos `arquivos` não se cruzam. O worktree não dispensa essa regra: com arquivos cruzados, a segunda a terminar para no rebase com conflito.
-- Dentro de um recurso a ordem é fixa: spec → migration → `packages/core` → contrato → APIs e `packages/api-client` → sites → e2e. A spec decide o contrato antes de tudo; o arquivo `openapi.yaml` só muda quando a API pode alcançá-lo em seguida ([Janela de contrato](#janela-de-contrato)).
+- Dentro de um recurso a ordem é fixa: spec → migration → `packages/core` → contrato → APIs e `packages/api-client` → sites → e2e. A spec decide o contrato antes de tudo; o arquivo `openapi.yaml` só muda dentro de uma janela, junto de quem o alcança ([Janela de contrato](#janela-de-contrato)).
 - Mudança de contrato e migration são sempre sequenciais entre si. Migrations continuam uma tarefa por vez, também porque o Postgres local é compartilhado entre os worktrees.
 - O fim das tarefas é serializado: o `task:finish` só avança a `main` por fast-forward, e quem chega depois refaz rebase e verificação.
 - As frentes paralelas de cada fase estão no [PLAN](PLAN.md).
 
 ### Janela de contrato
 
-As APIs sobem em modo estrito ([003](003-admin-api.md), RF-04): operação do contrato sem rota, ou rota fora do contrato, impede a subida e quebra o teste de contrato. O cliente de `packages/api-client` também é conferido contra o contrato. Como o contrato vem antes do código, uma mudança de contrato deixa a `main` vermelha até a API e o cliente a alcançarem. A regra para manter esse intervalo curto e previsível ([0019](decisions/0019-janela-de-contrato-e-operacoes-pendentes.md)):
+As APIs sobem em modo estrito ([003](003-admin-api.md), RF-04): operação do contrato sem rota, ou rota fora do contrato, impede a subida e quebra o teste de contrato. O cliente de `packages/api-client` também é conferido contra o contrato, no passo `cliente` do `verify:quick`. Por isso um `openapi.yaml` alterado não chega à `main` sozinho: o `task:finish` da tarefa do contrato para na verificação. A regra ([0019](decisions/0019-janela-de-contrato-e-operacoes-pendentes.md), [0022](decisions/0022-janela-de-contrato-num-so-branch.md)): o contrato e tudo o que quebraria com ele formam uma **janela**, que é uma unidade de integração e chega à `main` por um único branch, num único fast-forward. A `main` não fica vermelha em nenhum momento.
 
-1. Antes de alterar o `openapi.yaml`, o `arquiteto` cria as tarefas encadeadas: a da API dona da rota (`api-admin` ou `api-classroom`), a do `interface` para regenerar o cliente e, se houver, as dos sites. A tarefa do contrato e essas tarefas formam uma **janela**.
-2. O `arquiteto` só envia o contrato quando a tarefa da API está criada, sem dependência pendente além do próprio contrato, e é a próxima a ser executada pelo papel dono. A tarefa do `interface` roda em paralelo com a da API.
-3. Operação **nova** entra no contrato com a extensão `x-nuva-pending: true` no objeto da operação. A conferência do `api-kit` ignora operação pendente sem rota, então a API continua subindo e o teste de contrato continua verde. A tarefa da API registra a rota e pede ao `arquiteto`, no relato, a retirada da marca. Operação pendente que já tem rota não impede a subida (a rota pode chegar antes de a marca sair), mas gera aviso no log e no teste de contrato até a marca ser retirada.
-4. Mudança em operação **existente** (campo obrigatório novo, esquema alterado, resposta nova) não tem marca: o contrato e a rota divergem até a tarefa da API terminar. Por isso a janela inteira é executada em sequência, sem outra tarefa do mesmo papel no meio.
-5. Enquanto a janela está aberta, as falhas esperadas são só as dela: `pnpm --filter @nuva-edu/api-client check` (gerado desatualizado) e os testes da API que a mudança atinge. Quem roda `verify:quick` em outra área e esbarra nelas relata e segue; ninguém as "corrige" fora da tarefa dona.
-6. A janela fecha quando contrato, rota e cliente gerado estão na `main` e `pnpm verify:quick` das três áreas está verde. Os sites só usam a operação depois disso (a tarefa do site depende da da API e da do `interface`).
-7. Nenhuma release sai com operação pendente: `check-contract --no-pending` faz parte do `verify:full`.
+**O que entra na janela.** A tarefa do contrato (`arquiteto`) e uma tarefa para cada pacote que ficaria vermelho com o contrato novo e o cliente regenerado:
 
-Mudança de contrato que não altera o cliente gerado nem a validação (hoje, só afrouxar um `pattern`) dispensa a janela, desde que `pnpm --filter @nuva-edu/api-client check` e os testes das duas APIs passem no mesmo commit.
+- a do `interface`, para regenerar o cliente (sempre);
+- a da API dona da rota (`api-admin` ou `api-classroom`), e a da outra API quando ela compartilha o esquema ou a rota alterada;
+- as dos sites, quando o esquema alterado aparece no código ou nos dados de teste deles (a checagem de tipos quebra com o cliente regenerado). Site que só vai *passar a usar* uma operação nova não precisa entrar: a tarefa dele roda depois, no próprio worktree.
+
+O número da tarefa do contrato é o número da janela (`NNN`). As outras tarefas trazem `janela: NNN` no cabeçalho, além do `depende-de` normal entre elas (o site depende da do `interface`). Janela é pequena: um recurso, uma mudança.
+
+**Abertura.** O `arquiteto` cria todas as tarefas da janela antes de alterar o `openapi.yaml`. Depois roda `pnpm task:start NNN --as arquiteto`, commita o contrato no worktree e **não** roda o `task:finish`: a tarefa dele fica `em-andamento` e o worktree `.worktrees/task-NNN/` fica aberto para as demais. Ele só abre a janela quando as tarefas dela podem ser executadas em seguida.
+
+**Trabalho dentro da janela.** As tarefas com `janela: NNN` não abrem worktree próprio: é a única exceção ao RF-06. Cada uma:
+
+1. Entra com `pnpm task:start MMM --as <papel> --join NNN`, no checkout principal. O comando não cria worktree nem branch: marca a tarefa como `em-andamento`, preenche `responsavel` e imprime o caminho do worktree da janela. Dependência que é tarefa da mesma janela conta como atendida quando está `pronta`.
+2. Trabalha em `.worktrees/task-NNN/`, onde outros agentes podem estar trabalhando ao mesmo tempo em outras pastas. Ali valem as regras de diretório compartilhado, no lugar das do worktree de uma tarefa só:
+   - altera só as pastas do próprio papel e os arquivos da própria tarefa;
+   - `git add <caminhos>` e `git commit ... -- <caminhos>`, sempre com caminhos explícitos; nunca `git add -A`, `git commit -a`, `git stash`, `git reset`, `git rebase` nem `git checkout` sobre arquivo alheio;
+   - ignora alteração não commitada de outro agente; não a corrige, não a commita e não a desfaz;
+   - não edita o `CHANGELOG.md` (ele entra no fechamento);
+   - mudança de dependência (`package.json` e `pnpm-lock.yaml`) é feita por uma tarefa de cada vez: roda `pnpm install` no worktree, commita o lockfile junto e avisa no relato.
+3. Commita citando a **própria** tarefa (`(task MMM)`), não a da janela. Não faz push.
+4. Verifica o que é seu: os testes do pacote (`pnpm --filter <pacote> test`), a checagem de tipos, e `pnpm verify:quick --files <seus caminhos>`. Sem `--files`, o `verify:quick` enxerga a janela inteira, e falha em pacote de outro papel que ainda não alcançou o contrato é esperada ali: a tarefa a lista no relato e não a corrige.
+5. A tarefa de API roda a **suíte inteira** do pacote. Os testes de `test/contract` conferem rota × operação, `csrfToken` e respostas declaradas, mas não acusam resposta com corpo divergente do esquema: isso só aparece nos testes que chamam a rota, onde a validação de resposta roda.
+6. Ao concluir, acrescenta ao corpo do arquivo da tarefa a seção `## Relato`, com os commits, o que verificou e a linha sugerida para o `CHANGELOG.md`, e roda `pnpm task:finish MMM`. Para tarefa de janela, o comando só confere que há commit citando a tarefa no branch e a marca como `pronta`: não faz rebase, não verifica, não toca a `main` e não remove o arquivo.
+
+Tarefa `pronta` está commitada no branch da janela e ainda não está na `main`. O arquivo fica na fila até o fechamento, e tarefa de fora da janela que dependa dela continua esperando.
+
+**Fechamento.** Fecha a janela quem conclui a última tarefa dela: depois do passo 6, se todas as outras tarefas com `janela: NNN` estão `prontas`, é esse agente, qualquer que seja o papel. Numa sessão com orquestrador, ele pode fechar no lugar do agente; a regra não depende dele. Quem fecha:
+
+1. confere que todas as tarefas da janela estão `prontas` e que o worktree não tem alteração pendente;
+2. acrescenta ao `CHANGELOG.md`, em "Não lançado", as linhas da janela (as sugeridas nos relatos, ou um resumo delas) e commita só esse arquivo, citando a tarefa da janela: `docs(<papel>): changelog da janela ... (task NNN)`;
+3. roda `pnpm task:finish NNN`, do checkout principal. É o `task:finish` normal sobre o branch inteiro (rebase, `verify:quick`, fast-forward, push), e ao final remove o worktree, o branch e os arquivos da tarefa `NNN` e de todas as tarefas com `janela: NNN`. O comando recusa enquanto houver tarefa da janela que não esteja `pronta`.
+
+Falha no fechamento (código 4 ou 5) em arquivo do papel de quem fecha: ele corrige no worktree e roda de novo. Em arquivo de outro papel: não corrige. Devolve a tarefa do dono a `aberta`, com o motivo no corpo, e a janela continua aberta até o dono resolver e a tarefa voltar a `pronta`. Push negado (código 7) segue a regra geral: relata e para.
+
+Abandonar a janela é `pnpm task:abort NNN --force`: descarta os commits de todos os papéis, devolve a `aberta` todas as tarefas da janela e exige a confirmação do humano.
+
+**Sem suporte do script.** Enquanto o `scripts/task.mjs` não aceitar `--join`, o procedimento é o mesmo, feito à mão: a tarefa da janela não roda `task:start` nem `task:finish`, edita o próprio arquivo em `tasks/` (`em-andamento` com `responsavel` ao entrar, `pronta` ao concluir), e quem fecha remove os arquivos das tarefas com `janela: NNN` depois que o `task:finish NNN` terminar sem erro.
+
+**Operação nova e `x-nuva-pending`.** As duas formas de o contrato chegar valem, cada uma no seu caso:
+
+| Caso | Forma |
+| --- | --- |
+| Mudança em operação **existente** (campo obrigatório novo, esquema alterado, resposta nova) | Sempre a janela num só branch, com todos os pacotes atingidos. Não há marca que a adie. |
+| Operação **nova**, com a tarefa da API pronta para ser executada em seguida | Janela num só branch, sem marca: contrato, cliente e rota chegam juntos. É a forma normal. |
+| Operação **nova** cujo contrato precisa chegar antes da rota (a API depende de migration ou de `packages/core` que ainda não existem, ou o contrato de um recurso inteiro é publicado para os papéis seguintes) | A operação entra com `x-nuva-pending: true`. A janela mínima é contrato + cliente regenerado (tarefa do `interface`); a tarefa da API roda depois, no worktree dela. |
+
+A conferência do `api-kit` ignora operação pendente sem rota, então a API continua subindo e o teste de contrato continua verde. Operação pendente que já tem rota não impede a subida, mas gera aviso no log e no teste de contrato até a marca sair. A tarefa da API que registra a rota pede ao `arquiteto`, no relato, a retirada da marca; se a retirada alterar o cliente gerado, ela também é uma janela (contrato + `interface`). Nenhuma release sai com operação pendente: `check-contract --no-pending` faz parte do `verify:full`.
+
+Mudança de contrato que não altera o cliente gerado nem a validação (hoje, só afrouxar um `pattern`) dispensa a janela: a tarefa do contrato segue o fluxo normal, e o `verify:quick` do `task:finish` confirma que o cliente está em dia.
 
 ### Verificação
 
 - Padrão: `pnpm verify:quick`. O `pnpm task:finish` o roda no worktree, depois do rebase, antes de avançar a `main`; o agente também pode rodá-lo à mão durante a tarefa.
-- No worktree, "o que mudou" é tudo desde `git merge-base HEAD main`, mais o que ainda não foi commitado: só a mudança da tarefa. `--files <caminhos>` continua existindo, mas deixa de ser a forma normal.
+- No worktree, "o que mudou" é tudo desde `git merge-base HEAD main`, mais o que ainda não foi commitado: só a mudança da tarefa. `--files <caminhos>` continua existindo, mas deixa de ser a forma normal, exceto no worktree de uma janela de contrato, onde cada tarefa o usa com os próprios caminhos.
 - `pnpm verify:full` só quando o usuário pedir e antes de release. O CI roda o nível completo com e2e na `main` a cada push.
 - Ao terminar, o agente diz qual nível rodou e o resultado.
 - Se o CI da `main` quebrar, a correção vira tarefa de prioridade máxima para o dono do arquivo, e ninguém inicia tarefa nova naquela área até resolver.
@@ -157,7 +198,7 @@ Uma tarefa está concluída quando tudo abaixo é verdade:
 - a documentação em `docs/` está atualizada, quando aplicável;
 - o `CHANGELOG.md` recebeu o resumo compactado da entrega;
 - todo commit da tarefa cita o ID dela;
-- `pnpm task:finish NNN` terminou sem erro: os commits estão na `main` por fast-forward e foram enviados, e o worktree, o branch e o arquivo da tarefa foram removidos. Se o push foi negado, a tarefa só está concluída depois que o humano resolver o envio, e o relato final diz isso.
+- `pnpm task:finish NNN` terminou sem erro: os commits estão na `main` por fast-forward e foram enviados, e o worktree, o branch e o arquivo da tarefa foram removidos. Se o push foi negado, a tarefa só está concluída depois que o humano resolver o envio, e o relato final diz isso. Tarefa de janela de contrato termina `pronta`, com o relato no arquivo; ela só está concluída quando o `pnpm task:finish` da janela termina sem erro, e a linha do `CHANGELOG.md` dela entra no fechamento.
 
 ### Escalonamento ao humano
 
@@ -171,6 +212,7 @@ O agente para e pergunta quando houver:
 - ação no servidor de testes além do `pnpm deploy:test`;
 - tarefa que falhou em mais de uma tentativa de correção;
 - necessidade de alterar arquivo de outro papel, ou arquivo próprio alterado por outro agente;
+- commit, no worktree de uma janela de contrato, que levou arquivo de outro papel: quem percebe para e relata, sem reescrever o histórico;
 - push negado no `pnpm task:finish`: o agente relata e para; não insiste, não tenta outro caminho e não pede a outro agente que envie;
 - `pnpm task:abort --force`, que descarta trabalho não commitado ou commits que não chegaram à `main`: exige a confirmação do humano.
 
@@ -182,6 +224,7 @@ O agente para e pergunta quando houver:
 
 ```
 pnpm task:start <NNN> --as <papel>
+pnpm task:start <MMM> --as <papel> --join <NNN>
 pnpm task:finish <NNN>
 pnpm task:abort <NNN> [--force]
 pnpm task:path
@@ -189,6 +232,7 @@ pnpm task:list
 ```
 
 - Nomes fixos: pasta `.worktrees/task-NNN/`, branch `task/NNN`.
+- Cabeçalho da tarefa: além dos campos do template, `janela: NNN` nas tarefas de uma janela de contrato (o número é o da tarefa do contrato).
 
 ## Dados
 
@@ -199,14 +243,17 @@ pnpm task:list
 
 - [ ] Existe uma definição por papel nas duas ferramentas.
 - [ ] Todo commit de entrega cita uma tarefa.
-- [ ] Nenhum commit mistura pastas de papéis diferentes, salvo `CHANGELOG.md`.
+- [ ] Nenhum commit mistura pastas de papéis diferentes, salvo `CHANGELOG.md`. Vale também dentro de uma janela de contrato.
 - [ ] `pnpm task:start NNN --as <papel>` cria `.worktrees/task-NNN/` no branch `task/NNN` e marca a tarefa como `em-andamento`; repetido, recusa.
 - [ ] `pnpm task:finish NNN` com alteração não commitada, conflito no rebase ou `verify:quick` vermelho para sem tocar a `main`.
 - [ ] Depois de um `pnpm task:finish NNN` bem-sucedido, a `main` contém os commits da tarefa sem merge commit, e o worktree, o branch e o arquivo da tarefa não existem mais.
 - [ ] Push negado no `task:finish` termina com código de saída próprio e a `main` local avançada.
 - [ ] `pnpm task:abort NNN` com alteração pendente ou com commit fora da `main` recusa sem `--force`.
 - [ ] Duas tarefas que acrescentam linhas ao `CHANGELOG.md` terminam sem conflito de rebase.
-- [ ] Toda mudança de `openapi.yaml` que altera o cliente gerado tem, criadas antes do commit, a tarefa da API e a do `interface`.
+- [ ] Toda mudança de `openapi.yaml` que altera o cliente gerado tem, criadas antes do commit, as tarefas da janela (no mínimo a do `interface`), com `janela: NNN`.
+- [ ] O contrato alterado e o cliente regenerado chegam à `main` no mesmo fast-forward; entre dois avanços da `main`, `pnpm --filter @nuva-edu/api-client check` nunca falha.
+- [ ] `pnpm task:start MMM --as <papel> --join NNN` não cria worktree nem branch e imprime o caminho do worktree da janela; `pnpm task:finish MMM` deixa a tarefa `pronta` e não toca a `main`.
+- [ ] `pnpm task:finish NNN` de uma janela recusa enquanto houver tarefa dela que não esteja `pronta`; bem-sucedido, remove os arquivos de todas as tarefas da janela.
 - [ ] Nenhuma tag de release contém operação com `x-nuva-pending`.
 
 ## Fora de escopo
@@ -221,4 +268,5 @@ pnpm task:list
 - [0013 — Commit direto na main, diretório compartilhado (substituída por 0021)](decisions/0013-commit-direto-na-main-diretorio-compartilhado.md)
 - [0014 — Verificação em dois níveis](decisions/0014-verificacao-em-dois-niveis.md)
 - [0019 — Janela de contrato e operações pendentes](decisions/0019-janela-de-contrato-e-operacoes-pendentes.md)
+- [0022 — Janela de contrato num só branch](decisions/0022-janela-de-contrato-num-so-branch.md)
 - [0001 — Decisões iniciais](decisions/0001-decisoes-iniciais.md)

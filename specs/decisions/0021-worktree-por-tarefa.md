@@ -1,6 +1,6 @@
 # 0021 — Um worktree por tarefa
 
-Status: aceita
+Status: aceita (a [0022](0022-janela-de-contrato-num-so-branch.md) abre uma exceção: as tarefas de uma janela de contrato dividem um worktree)
 Data: 2026-11-24
 
 Substitui a [0013](0013-commit-direto-na-main-diretorio-compartilhado.md) e, da [0014](0014-verificacao-em-dois-niveis.md), só a definição de "o que mudou" do `verify:quick`.

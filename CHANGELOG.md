@@ -8,6 +8,7 @@ Detalhe das decisões em `specs/decisions/`.
 ### Adicionado
 - Marca da escola no `/api/v1/meta` (logotipo, cor de destaque, código-fonte): contrato, duas APIs, cliente e sites.
 - Teste de contrato confere as respostas de erro declaradas; worker lê o fuso de `school.timezone`.
+- Processo: a janela de contrato chega à `main` por um único branch (ADR 0022, spec 002); spec 003 alinhada: a subida barra só rota × operação.
 - `task:abort` recusa sem `--force` quando o branch tem commits fora da `main`.
 - `verify:quick`: YAML (`.yml` e `.yaml`) entra no passo `lint`; o `pnpm-lock.yaml` continua fora (task 062).
 - Classroom: lê e valida o `/config.json` ao carregar (`loadRuntimeConfig`; falha não derruba o site), o `vite dev` responde o arquivo e o item "Administração" fica pronto para a equipe, à espera da sessão.

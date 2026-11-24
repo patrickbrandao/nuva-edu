@@ -171,11 +171,12 @@ Não há parâmetro de cabeçalho para o token. Como parâmetro obrigatório, o 
 
 ### Subida estrita
 
-- Na inicialização, a API compara as rotas registradas com o contrato nos dois sentidos e confere o `csrfToken` das escritas; qualquer divergência impede a subida, com a lista completa no log. O teste de contrato faz a mesma conferência no CI, e o comando `check-contract` a repete na imagem.
+- Na inicialização, a API compara as rotas registradas com o contrato nos dois sentidos: operação do contrato sem rota, ou rota fora do contrato, impede a subida, com a lista completa no log. A subida barra só isso.
+- O teste de contrato e o comando `check-contract` fazem a mesma comparação e conferem, além dela, o que depende só do texto do contrato: o `csrfToken` das escritas ([CSRF no contrato](#csrf-no-contrato)) e as [respostas de erro declaradas](#respostas-de-erro-declaradas). Divergência nesses dois pontos reprova o teste de contrato (no `verify:quick`, quando o contrato ou as rotas mudam, e no CI) e o `check-contract` (no `verify:full` e na imagem), mas não impede a subida.
 - Operação com `x-nuva-pending: true` no contrato é ignorada quando não tem rota (o contrato chegou antes do código): a subida só a cita no log, em nível `info`, e o caminho responde `404 not_found` como qualquer outro inexistente.
 - Operação pendente **com** rota registrada também não impede a subida, mas gera aviso (`warn`) no log da subida e a cada conferência do contrato: a marca precisa sair do contrato.
 - No teste de contrato, a lista de divergências continua vazia com operação pendente, com ou sem rota: o teste passa. Os avisos saem numa lista à parte, cada linha começando por `aviso:`, que o teste imprime.
-- As demais regras valem para a operação pendente: `csrfToken` nas escritas e esquemas válidos.
+- As demais regras valem para a operação pendente: `csrfToken` nas escritas e respostas de erro declaradas (teste de contrato e `check-contract`), e esquemas válidos.
 - `check-contract --no-pending` falha se o contrato tiver qualquer operação pendente, com ou sem rota, listando-as; é usado no `verify:full` e na release, e é o que impede a marca de ficar esquecida. Sem a opção, o comando só avisa. O comando confere rotas e contrato sem precisar de banco. Existe nas duas APIs (`pnpm --filter @nuva-edu/admin-api check-contract` e `pnpm --filter @nuva-edu/classroom-api check-contract`), e o `verify:full` o chama no passo `contrato` ([032](032-verificacao-e-ci.md)).
 - O fluxo de trabalho que essa regra impõe está em [002](002-organizacao-do-trabalho.md), "Janela de contrato".
 
@@ -187,7 +188,7 @@ Toda listagem e toda leitura de conteúdo, fórum, progresso e certificados feit
 
 - Banco indisponível: `503` com `code: database_unavailable`; `/readyz` passa a `503`.
 - Mercado Pago indisponível em estorno: `503` com `code: payment_provider_unavailable`; nada é alterado localmente.
-- Contrato e rota divergentes: o serviço não sobe (falha na inicialização) e o teste de contrato falha no CI ([Subida estrita](#subida-estrita)).
+- Contrato e rota divergentes (operação sem rota ou rota fora do contrato): o serviço não sobe (falha na inicialização) e o teste de contrato falha no CI ([Subida estrita](#subida-estrita)).
 - Corpo acima do limite: `413` com `code: payload_too_large`. `Content-Type` não declarado pela operação: `415` com `code: unsupported_media_type`. Em ambos, a rota não roda.
 
 ## Interfaces e contratos
@@ -233,4 +234,5 @@ Lê as demais tabelas. Retenção: [033](033-observabilidade-retencao-backup.md)
 - [0009 — Stack TypeScript, Fastify e Kysely](decisions/0009-stack-typescript-fastify-kysely.md)
 - [0012 — Chaves MCP herdam o papel](decisions/0012-mcp-chaves-herdam-papel.md)
 - [0019 — Janela de contrato e operações pendentes](decisions/0019-janela-de-contrato-e-operacoes-pendentes.md)
+- [0022 — Janela de contrato num só branch](decisions/0022-janela-de-contrato-num-so-branch.md)
 - [0002 — Senha em texto legível](decisions/0002-senha-em-texto-legivel.md)

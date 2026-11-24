@@ -1,6 +1,6 @@
 # 0019 — Janela de contrato e operações pendentes
 
-Status: aceita
+Status: aceita (complementada por [0022](0022-janela-de-contrato-num-so-branch.md), que substitui o envio do contrato sozinho à `main` e a janela em sequência)
 Data: 2026-11-24
 
 ## Contexto

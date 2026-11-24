@@ -29,7 +29,7 @@ Vários agentes trabalham ao mesmo tempo, cada tarefa em um worktree próprio, e
 O que ele considera "mudou" ([0021](decisions/0021-worktree-por-tarefa.md)):
 
 - sem argumentos: tudo desde a base `git merge-base HEAD main` (a `main` local, não a `origin/main`), mais os arquivos alterados e ainda não commitados (inclusive novos). No worktree de uma tarefa, isso é exatamente a mudança da tarefa: os commits do branch `task/NNN` e o que estiver pendente;
-- com `--files <caminhos>`: apenas os caminhos informados. Continua existindo para limitar a execução a parte da mudança, mas deixa de ser a forma normal: o worktree só contém a mudança da tarefa.
+- com `--files <caminhos>`: apenas os caminhos informados. Continua existindo para limitar a execução a parte da mudança, mas deixa de ser a forma normal: o worktree só contém a mudança da tarefa. Exceção: no worktree de uma janela de contrato, que reúne várias tarefas, cada uma usa `--files` com os próprios caminhos ([002](002-organizacao-do-trabalho.md), "Janela de contrato").
 
 Quem chama: o agente, à mão, durante a tarefa; e o `pnpm task:finish`, sempre, no worktree já rebaseado sobre a `main`.
 
@@ -51,7 +51,7 @@ Não roda build, e2e nem a suíte inteira.
 Regras que valem nos dois níveis:
 
 - **Testes de contrato rodam só no passo `contrato`.** Os arquivos de `test/contract` ficam fora do passo `testes`, mesmo quando são eles os alterados, para o resumo dizer onde foi a falha e para o completo não os rodar duas vezes.
-- **Gerado não se edita à mão.** O cliente de `packages/api-client` e os tipos do banco de `packages/core` são conferidos contra a fonte (contrato e migrations); divergência é falha do passo `cliente` ou `tipos-banco`, e a correção é regenerar. Durante uma janela de contrato, o `cliente` vermelho é esperado ([002](002-organizacao-do-trabalho.md), "Janela de contrato").
+- **Gerado não se edita à mão.** O cliente de `packages/api-client` e os tipos do banco de `packages/core` são conferidos contra a fonte (contrato e migrations); divergência é falha do passo `cliente` ou `tipos-banco`, e a correção é regenerar. Durante uma janela de contrato, o `cliente` vermelho só existe no worktree da janela, até a tarefa do `interface` commitar o cliente regenerado; na `main` ele não chega a aparecer ([002](002-organizacao-do-trabalho.md), "Janela de contrato").
 
 Testes explícitos depois de `--`, para quando a heurística não achar o certo:
 
