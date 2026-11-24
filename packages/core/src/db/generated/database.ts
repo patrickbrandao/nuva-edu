@@ -23,6 +23,25 @@ export type JsonValue = JsonArray | JsonObject | JsonPrimitive;
 
 export type Timestamp = ColumnType<Date, Date | string, Date | string>;
 
+export interface Images {
+  createdAt: Generated<Timestamp>;
+  hiddenAt: Timestamp | null;
+  id: Generated<string>;
+  originalHeight: number;
+  originalWidth: number;
+  ownerUserId: string;
+  purpose: string;
+}
+
+export interface ImageVariants {
+  bytes: number;
+  data: Buffer;
+  height: number;
+  imageId: string;
+  sha256: string;
+  width: number;
+}
+
 export interface Jobs {
   attempts: Generated<number>;
   createdAt: Generated<Timestamp>;
@@ -50,6 +69,8 @@ export interface Settings {
 }
 
 export interface DB {
+  images: Images;
+  imageVariants: ImageVariants;
   jobs: Jobs;
   settings: Settings;
 }
