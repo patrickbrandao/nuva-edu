@@ -8,19 +8,24 @@ import {
   type EmailType,
   enqueue,
   enqueueEmail,
+  invalidateEmailTokens,
+  type JobOf,
   setSetting,
 } from '@nuva-edu/core';
 import { type ParsedMail, simpleParser } from 'mailparser';
 import { SMTPServer } from 'smtp-server';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
-import { createMailer, type Mailer } from '../src/email/smtp.ts';
+import { createEmailSendHandler } from '../src/email/send-email.ts';
+import { createMailer, type Mailer, type OutgoingEmail } from '../src/email/smtp.ts';
 import { createHandlers } from '../src/handlers.ts';
 import { createWorker, type Worker } from '../src/worker.ts';
 import {
   captureLogger,
   clearJobs,
+  deferred,
   getJob,
   handlerDependencies,
+  memoryMailer,
   openDatabase,
   testDatabaseUrl,
   waitFor,
@@ -105,6 +110,51 @@ async function send<T extends EmailType>(
 async function outbox(id: string) {
   return db.selectFrom('emailOutbox').selectAll().where('id', '=', id).executeTakeFirstOrThrow();
 }
+
+/**
+ * A troca de e-mail pela equipe, como `updateUserByStaff` a faz: novo endereço e, na mesma
+ * transação, os tokens pendentes invalidados sob a trava da emissão. `hold` mantém a transação
+ * aberta (com a trava) até ser resolvido; `locked` avisa quando a trava foi tomada.
+ */
+async function changeEmail(
+  userId: string,
+  email: string,
+  gate: { locked?: () => void; hold?: Promise<void> } = {},
+): Promise<void> {
+  await db.transaction().execute(async (trx) => {
+    await trx
+      .updateTable('users')
+      .set({ email, emailVerifiedAt: null })
+      .where('id', '=', userId)
+      .execute();
+    await invalidateEmailTokens(trx, userId);
+    gate.locked?.();
+    await gate.hold;
+  });
+}
+
+/** Manipulador real de `email.send`, fora do worker, com o carteiro que o teste controla. */
+function directHandler(target: Mailer) {
+  return createEmailSendHandler({
+    db,
+    logger: captured.logger,
+    mailer: target,
+    classroomUrl: CLASSROOM_URL,
+    adminUrl: ADMIN_URL,
+    locale: 'pt-BR',
+  });
+}
+
+async function runDirect(target: Mailer, jobId: string): Promise<void> {
+  const job = (await getJob(db, jobId)) as unknown as JobOf<'email.send'>;
+  await directHandler(target)(job, { signal: new AbortController().signal });
+}
+
+async function tokensOf(userId: string) {
+  return db.selectFrom('emailTokens').selectAll().where('userId', '=', userId).execute();
+}
+
+const settle = (ms = 300) => new Promise((resolve) => setTimeout(resolve, ms));
 
 async function jobDone(jobId: string, status: 'done' | 'failed' = 'done'): Promise<void> {
   await waitFor(async () => (await getJob(db, jobId)).status === status);
@@ -329,6 +379,136 @@ describe('email.send', () => {
       status: 'sent',
       subject: null,
       lastError: 'skipped: already_verified',
+    });
+  });
+
+  describe('troca de e-mail com link na fila para o endereço anterior', () => {
+    it('não envia nem cria token: marca sent com skipped: email_changed', async () => {
+      const userId = await createUser();
+      await worker?.stop({ timeoutMs: 1_000 });
+      const verify = await send(userId, 'account.verify_email', {});
+      const reset = await send(userId, 'account.password_reset', {});
+      await changeEmail(userId, `novo-${randomUUID()}@escola.test`);
+      await startWorker();
+      await jobDone(verify.jobId);
+      await jobDone(reset.jobId);
+
+      expect(received).toHaveLength(0);
+      for (const id of [verify.outboxId, reset.outboxId]) {
+        const row = await outbox(id);
+        expect(row).toMatchObject({
+          status: 'sent',
+          subject: null,
+          attempts: 1,
+          lastError: 'skipped: email_changed',
+        });
+        expect(row.sentAt).not.toBeNull();
+      }
+      expect(await tokensOf(userId)).toHaveLength(0);
+    });
+
+    it('o link para o endereço atual sai normalmente, com token válido', async () => {
+      const userId = await createUser();
+      const email = `atual-${randomUUID()}@escola.test`;
+      await changeEmail(userId, email);
+      const { outboxId, jobId } = await send(userId, 'account.password_reset', {});
+      await jobDone(jobId);
+
+      expect(received).toHaveLength(1);
+      const to = Array.isArray(received[0]?.to) ? received[0]?.to[0] : received[0]?.to;
+      expect(to?.value[0]?.address).toBe(email);
+      expect(await outbox(outboxId)).toMatchObject({ status: 'sent', lastError: null });
+      const token = TOKEN_IN_LINK.exec(received[0]?.text ?? '')?.[1] as string;
+      const owner = await db.transaction().execute((trx) => consumeEmailToken(trx, token, 'reset'));
+      expect(owner.userId).toBe(userId);
+    });
+
+    it('e-mail sem link para o endereço anterior continua saindo', async () => {
+      const old = `antigo-${randomUUID()}@escola.test`;
+      const userId = await createUser(old);
+      await worker?.stop({ timeoutMs: 1_000 });
+      const { outboxId, jobId } = await send(userId, 'account.password_changed', { by: 'self' });
+      await changeEmail(userId, `novo-${randomUUID()}@escola.test`);
+      await startWorker();
+      await jobDone(jobId);
+
+      expect(received).toHaveLength(1);
+      const to = Array.isArray(received[0]?.to) ? received[0]?.to[0] : received[0]?.to;
+      expect(to?.value[0]?.address).toBe(old);
+      expect(await outbox(outboxId)).toMatchObject({ status: 'sent', lastError: null });
+    });
+
+    it('troca com a trava tomada antes do envio: o worker espera e dispensa o link', async () => {
+      const userId = await createUser();
+      await worker?.stop({ timeoutMs: 1_000 });
+      const { outboxId, jobId } = await send(userId, 'account.password_reset', {});
+      const locked = deferred();
+      const hold = deferred();
+      const change = changeEmail(userId, `novo-${randomUUID()}@escola.test`, {
+        locked: locked.resolve,
+        hold: hold.promise,
+      });
+      await locked.promise;
+
+      const target = memoryMailer();
+      let finished = false;
+      const run = runDirect(target, jobId).then(() => {
+        finished = true;
+      });
+      await settle();
+      expect(finished).toBe(false);
+
+      hold.resolve();
+      await change;
+      await run;
+      expect(target.sent).toHaveLength(0);
+      expect(await outbox(outboxId)).toMatchObject({
+        status: 'sent',
+        lastError: 'skipped: email_changed',
+      });
+      expect(await tokensOf(userId)).toHaveLength(0);
+    });
+
+    it('envio com a trava tomada antes da troca: o link sai, mas a troca o invalida', async () => {
+      const old = `antigo-${randomUUID()}@escola.test`;
+      const userId = await createUser(old);
+      await worker?.stop({ timeoutMs: 1_000 });
+      const { outboxId, jobId } = await send(userId, 'account.password_reset', {});
+
+      const sending = deferred();
+      const release = deferred();
+      const sent: OutgoingEmail[] = [];
+      const gated: Mailer = {
+        async send(message) {
+          sending.resolve();
+          await release.promise;
+          sent.push(message);
+        },
+        close() {},
+      };
+      const run = runDirect(gated, jobId);
+      await sending.promise;
+
+      let changed = false;
+      const change = changeEmail(userId, `novo-${randomUUID()}@escola.test`).then(() => {
+        changed = true;
+      });
+      await settle();
+      expect(changed).toBe(false);
+
+      release.resolve();
+      await run;
+      await change;
+      expect(sent).toHaveLength(1);
+      expect(sent[0]?.to).toBe(old);
+      expect(await outbox(outboxId)).toMatchObject({ status: 'sent', lastError: null });
+      const token = TOKEN_IN_LINK.exec(sent[0]?.text ?? '')?.[1] as string;
+      const tokens = await tokensOf(userId);
+      expect(tokens).toHaveLength(1);
+      expect(tokens[0]?.usedAt).not.toBeNull();
+      await expect(
+        db.transaction().execute((trx) => consumeEmailToken(trx, token, 'reset')),
+      ).rejects.toMatchObject({ code: 'token_expired' });
     });
   });
 

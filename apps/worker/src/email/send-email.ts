@@ -1,6 +1,7 @@
 import {
   type Database,
   EMAIL_TYPES,
+  type EmailTokenPurpose,
   type EmailType,
   getSettings,
   isEmailType,
@@ -78,13 +79,25 @@ export function createEmailSendHandler(deps: EmailSendDependencies): JobHandler<
         } catch {
           throw new SendFailure('Dados do e-mail fora do formato do tipo', true);
         }
+        const purpose = EMAIL_TYPES[emailType].tokenPurpose;
+        // Tipo com link: a trava da emissão vem antes da leitura da conta, para a troca de e-mail
+        // pela equipe (que invalida os tokens sob a mesma trava) não passar entre a conferência
+        // do endereço e a emissão (spec 007, "Tokens de e-mail").
+        if (purpose !== null) {
+          await lockEmailTokens(trx, row.userId, purpose);
+        }
         const user = await trx
           .selectFrom('users')
-          .select(['name', 'emailVerifiedAt', 'deletedAt'])
+          .select(['name', 'email', 'emailVerifiedAt', 'deletedAt'])
           .where('id', '=', row.userId)
           .executeTakeFirst();
         if (!user || user.deletedAt !== null) {
           await markSent(trx, outboxId, { lastError: 'skipped: user_deleted' });
+          return 'skipped';
+        }
+        // Link na fila para o endereço anterior não sai nem gera token (spec 024, "Links com token").
+        if (purpose !== null && user.email !== row.to) {
+          await markSent(trx, outboxId, { lastError: 'skipped: email_changed' });
           return 'skipped';
         }
         if (emailType === 'account.verify_email' && user.emailVerifiedAt !== null) {
@@ -93,7 +106,6 @@ export function createEmailSendHandler(deps: EmailSendDependencies): JobHandler<
         }
 
         const settings = await getSettings(trx, { logger: log });
-        const purpose = EMAIL_TYPES[emailType].tokenPurpose;
         // Vale o último link enviado: emitir aqui invalida os anteriores do mesmo propósito.
         const issued = purpose === null ? null : await issueEmailToken(trx, row.userId, purpose);
         const logoPath = schoolLogoUrl(settings['school.logo_image_id']);
@@ -172,6 +184,28 @@ export function createEmailSendHandler(deps: EmailSendDependencies): JobHandler<
       log.warn('Linha de email_outbox não existe; nada a enviar');
     }
   };
+}
+
+/**
+ * A mesma trava por usuário e propósito que `issueEmailToken` e `invalidateEmailTokens` tomam
+ * (`packages/core`, `email-tokens.ts`); a trava de transação é reentrante, então a emissão logo
+ * depois a toma de novo sem esperar. A chave precisa ser idêntica à do núcleo: o teste da
+ * corrida com a troca de e-mail acusa divergência.
+ */
+async function lockEmailTokens(
+  trx: Database,
+  userId: string,
+  purpose: EmailTokenPurpose,
+): Promise<void> {
+  await trx
+    .selectNoFrom((eb) =>
+      eb
+        .fn('pg_advisory_xact_lock', [
+          eb.fn('hashtextextended', [eb.val(`email_tokens:${userId}:${purpose}`), eb.lit(0)]),
+        ])
+        .as('locked'),
+    )
+    .execute();
 }
 
 async function markSent(
