@@ -1,7 +1,7 @@
 import createClient, { type Client, type ClientOptions, type Middleware } from 'openapi-fetch';
 import { ApiNetworkError, apiErrorFromResponse } from './problem';
 
-/** Nome do cabeçalho CSRF definido nos contratos (parâmetro `CsrfToken`). */
+/** Nome do cabeçalho CSRF definido nos contratos (esquema de segurança `csrfToken`). */
 export const CSRF_HEADER = 'X-CSRF-Token';
 
 const SAFE_METHODS = new Set(['GET', 'HEAD', 'OPTIONS', 'TRACE']);
@@ -14,7 +14,9 @@ export interface ApiClientOptions {
   baseUrl?: string;
   /**
    * Devolve o token CSRF da sessão (vem de `GET /api/v1/session`). Chamado a cada requisição
-   * que altera dados; o cabeçalho só é preenchido quando a chamada não o informou.
+   * que altera dados; o cabeçalho só é preenchido quando a chamada não o informou. Como o
+   * contrato declara o CSRF como esquema de segurança, e não como parâmetro, o tipo gerado das
+   * operações não o pede: é este preenchimento que o envia.
    */
   csrfToken?: () => string | null | undefined;
   /** Substitui o `fetch` global (testes). */

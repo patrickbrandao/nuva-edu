@@ -104,11 +104,28 @@ export interface components {
          */
         Locale: string;
         /**
-         * @description Envelope de listagem paginada por cursor. Cada listagem o compõe com `allOf`,
-         *     definindo o esquema dos itens.
+         * @description Parte comum da resposta de listagem paginada por cursor. Traz só `nextCursor`: cada
+         *     listagem a compõe com `allOf` e declara `items`, obrigatório, no próprio membro, com o
+         *     esquema dos itens:
+         *
+         *     ```yaml
+         *     UserPage:
+         *       allOf:
+         *         - $ref: "#/components/schemas/Page"
+         *         - type: object
+         *           required: [items]
+         *           properties:
+         *             items:
+         *               type: array
+         *               items:
+         *                 $ref: "#/components/schemas/User"
+         *     ```
+         *
+         *     `items` não é declarado aqui porque a interseção de um `items` genérico com o da
+         *     listagem tiparia o cliente gerado como `unknown[] & User[]`. Nem este esquema nem o
+         *     membro da listagem usam `additionalProperties: false`, que invalidaria a composição.
          */
         Page: {
-            items: unknown[];
             /** @description Cursor da próxima página; `null` na última. */
             nextCursor: components["schemas"]["Cursor"] | null;
         };
@@ -121,7 +138,10 @@ export interface components {
             path: string;
             message: string;
         };
-        /** @description Erro no formato RFC 9457. Pode trazer campos extras conforme o `code`. */
+        /**
+         * @description Erro no formato RFC 9457. Pode trazer campos extras conforme o `code`; os comuns estão
+         *     declarados aqui (`errors`, `retryAfterSeconds`).
+         */
         Problem: {
             /**
              * Format: uri-reference
@@ -141,7 +161,26 @@ export interface components {
              */
             instance?: string;
             /**
-             * @description Identificador estável do erro, para o cliente decidir o que fazer.
+             * @description Identificador estável do erro, para o cliente decidir o que fazer. A lista é aberta:
+             *     um `code` só muda ou some com mudança de versão da API, e código novo pode surgir.
+             *
+             *     Códigos gerais, iguais nas duas APIs (`specs/003-admin-api.md`):
+             *
+             *     | `code` | Status | Quando |
+             *     | --- | --- | --- |
+             *     | `validation_failed` | 400 | Requisição fora do contrato; `errors` lista os campos |
+             *     | `unauthenticated` | 401 | Sem sessão válida |
+             *     | `permission_denied` | 403 | Sessão válida, sem permissão para a operação |
+             *     | `csrf_token_invalid` | 403 | Escrita sem `X-CSRF-Token` ou com token diferente do da sessão |
+             *     | `not_found` | 404 | Recurso inexistente ou fora do alcance de quem pede |
+             *     | `version_conflict` | 409 | `version` enviada diferente da gravada |
+             *     | `rate_limited` | 429 | Limite de taxa; traz `retryAfterSeconds` |
+             *     | `internal_error` | 500 | Erro inesperado; sem `detail` |
+             *     | `database_unavailable` | 503 | Banco indisponível |
+             *     | `payment_provider_unavailable` | 503 | Provedor de pagamento indisponível |
+             *
+             *     Os demais `403`, `409`, `422` e `503` usam um código próprio da regra, definido na
+             *     spec do recurso e citado na descrição da operação (por exemplo, `entitlement_required`).
              * @example permission_denied
              * @example validation_failed
              * @example database_unavailable
@@ -149,6 +188,11 @@ export interface components {
             code: string;
             /** @description Presente em erro de validação (`400`). */
             errors?: components["schemas"]["ProblemFieldError"][];
+            /**
+             * @description Segundos até poder tentar de novo; o mesmo valor do cabeçalho `Retry-After`.
+             *     Presente em `rate_limited` (`429`).
+             */
+            retryAfterSeconds?: number;
         } & {
             [key: string]: unknown;
         };
@@ -211,7 +255,10 @@ export interface components {
                 "application/problem+json": components["schemas"]["Problem"];
             };
         };
-        /** @description Sem permissão para a operação. */
+        /**
+         * @description Sem permissão para a operação (`permission_denied`), escrita sem `X-CSRF-Token` válido
+         *     (`csrf_token_invalid`) ou outra recusa de acesso com `code` próprio.
+         */
         Forbidden: {
             headers: {
                 "X-Request-Id": components["headers"]["XRequestId"];
@@ -231,7 +278,7 @@ export interface components {
                 "application/problem+json": components["schemas"]["Problem"];
             };
         };
-        /** @description Conflito de estado (por exemplo, `version` divergente). */
+        /** @description Conflito de estado, com `code` próprio (por exemplo, `version_conflict`). */
         Conflict: {
             headers: {
                 "X-Request-Id": components["headers"]["XRequestId"];
@@ -241,7 +288,7 @@ export interface components {
                 "application/problem+json": components["schemas"]["Problem"];
             };
         };
-        /** @description Regra de negócio impede a operação. */
+        /** @description Regra de negócio impede a operação; o `code` é o da regra. */
         UnprocessableEntity: {
             headers: {
                 "X-Request-Id": components["headers"]["XRequestId"];
@@ -251,7 +298,7 @@ export interface components {
                 "application/problem+json": components["schemas"]["Problem"];
             };
         };
-        /** @description Limite de taxa atingido. */
+        /** @description Limite de taxa atingido (`rate_limited`); `retryAfterSeconds` repete o `Retry-After`. */
         TooManyRequests: {
             headers: {
                 "X-Request-Id": components["headers"]["XRequestId"];
@@ -262,7 +309,7 @@ export interface components {
                 "application/problem+json": components["schemas"]["Problem"];
             };
         };
-        /** @description Erro inesperado. */
+        /** @description Erro inesperado (`internal_error`), sem `detail`. */
         InternalError: {
             headers: {
                 "X-Request-Id": components["headers"]["XRequestId"];
@@ -288,8 +335,6 @@ export interface components {
         Limit: number;
         /** @description Valor de `nextCursor` da página anterior. Ausente na primeira página. */
         Cursor: components["schemas"]["Cursor"];
-        /** @description Token da sessão, devolvido em `GET /api/v1/session`. Exigido em toda requisição que altera dados. */
-        CsrfToken: string;
         /** @description Chave escolhida pelo cliente; a repetição devolve a primeira resposta por 24 h. */
         IdempotencyKey: string;
     };

@@ -21,7 +21,10 @@ export class ApiError extends Error {
   readonly problem: Problem;
   /** `X-Request-Id` da resposta, para o usuário informar ao suporte. */
   readonly requestId: string | undefined;
-  /** Segundos do cabeçalho `Retry-After` (presente em `429`). */
+  /**
+   * Segundos até poder tentar de novo (presente em `429`): o cabeçalho `Retry-After` e, na falta
+   * dele, o `retryAfterSeconds` do corpo.
+   */
   readonly retryAfter: number | undefined;
   readonly response: Response;
 
@@ -31,9 +34,7 @@ export class ApiError extends Error {
     this.code = problem.code;
     this.problem = problem;
     this.requestId = response.headers.get('X-Request-Id') ?? undefined;
-    const retryAfter = response.headers.get('Retry-After');
-    this.retryAfter =
-      retryAfter !== null && /^\d+$/.test(retryAfter) ? Number(retryAfter) : undefined;
+    this.retryAfter = retryAfterFrom(problem, response);
     this.response = response;
   }
 
@@ -41,6 +42,15 @@ export class ApiError extends Error {
   get fieldErrors(): ProblemFieldError[] {
     return this.problem.errors ?? [];
   }
+}
+
+function retryAfterFrom(problem: Problem, response: Response): number | undefined {
+  const header = response.headers.get('Retry-After');
+  if (header !== null && /^\d+$/.test(header)) return Number(header);
+  const seconds: unknown = problem.retryAfterSeconds;
+  return typeof seconds === 'number' && Number.isFinite(seconds) && seconds >= 0
+    ? seconds
+    : undefined;
 }
 
 /** A requisição não chegou a ter resposta (rede fora, servidor inacessível, cancelamento). */

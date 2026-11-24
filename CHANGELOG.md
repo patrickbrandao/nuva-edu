@@ -19,6 +19,7 @@ Detalhe das decisões em `specs/decisions/`.
 
 ### Alterado
 - Contratos base: `Page` só com `nextCursor` (cada listagem declara `items`), CSRF como esquema de segurança `csrfToken` em vez de parâmetro, e códigos de erro gerais fixados na spec 003 e no esquema `Problem` (com `retryAfterSeconds`).
+- `@nuva-edu/api-client`: gerado em dia com os contratos da tarefa 019; `ApiError.retryAfter` usa `retryAfterSeconds` quando falta o `Retry-After`; script `test:files` para o `verify:quick` filtrar os testes.
 
 ### Decisões
 - Instalável, uma escola por instalação; AGPL-3.0.

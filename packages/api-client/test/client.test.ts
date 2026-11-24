@@ -78,6 +78,7 @@ describe('erro problem+json', () => {
       status: 429,
       detail: 'Tente de novo em instantes.',
       code: 'rate_limited',
+      retryAfterSeconds: 45,
       limit: 60,
     };
     const { fetch } = fakeFetch(() =>
@@ -97,6 +98,33 @@ describe('erro problem+json', () => {
     expect(error.problem).toEqual(problem);
     expect(error.problem.limit).toBe(60);
     expect(error.fieldErrors).toEqual([]);
+  });
+
+  it('usa retryAfterSeconds do corpo quando falta o cabeçalho Retry-After', async () => {
+    const body = {
+      type: 'about:blank',
+      title: 'Muitas requisições',
+      status: 429,
+      code: 'rate_limited',
+    };
+    const responses = [
+      problemResponse(429, { ...body, retryAfterSeconds: 12 }),
+      problemResponse(429, { ...body, retryAfterSeconds: 12 }, { 'Retry-After': 'amanhã' }),
+      problemResponse(429, { ...body, retryAfterSeconds: '12' }),
+      problemResponse(429, { ...body, retryAfterSeconds: -1 }),
+    ];
+    const { fetch } = fakeFetch(() => responses.shift() ?? Response.error());
+    const api = createAdminClient({ baseUrl: BASE_URL, fetch });
+
+    const seen: unknown[] = [];
+    for (let index = 0; index < 4; index += 1) {
+      const error = await api.GET('/api/v1/meta').catch((thrown: unknown) => thrown);
+      if (!isApiError(error)) throw new Error('esperado ApiError');
+      expectTypeOf(error.problem.retryAfterSeconds).toEqualTypeOf<number | undefined>();
+      seen.push(error.retryAfter);
+    }
+
+    expect(seen).toEqual([12, 12, undefined, undefined]);
   });
 
   it('expõe os campos recusados na validação', async () => {
@@ -158,19 +186,11 @@ describe('erro problem+json', () => {
 });
 
 describe('cabeçalho CSRF', () => {
-  // Os contratos ainda não têm operação de escrita; este `paths` mínimo imita uma.
+  // Os contratos ainda não têm operação de escrita; este `paths` mínimo imita uma. O CSRF é
+  // esquema de segurança (`csrfToken`), não parâmetro: a operação gerada não declara o cabeçalho.
   type WritePaths = {
     '/api/v1/things': {
       get: { responses: { 200: { content: { 'application/json': { ok: boolean } } } } };
-      post: {
-        parameters: { header: { 'X-CSRF-Token': string } };
-        requestBody: { content: { 'application/json': { name: string } } };
-        responses: { 201: { content: { 'application/json': { ok: boolean } } } };
-      };
-    };
-  };
-  type OptionalHeaderPaths = {
-    '/api/v1/things': {
       post: {
         requestBody: { content: { 'application/json': { name: string } } };
         responses: { 201: { content: { 'application/json': { ok: boolean } } } };
@@ -180,7 +200,7 @@ describe('cabeçalho CSRF', () => {
 
   it('preenche X-CSRF-Token em escrita quando a chamada não informa', async () => {
     const { fetch, requests } = fakeFetch(() => Response.json({ ok: true }, { status: 201 }));
-    const api = createApiClient<OptionalHeaderPaths>({
+    const api = createApiClient<WritePaths>({
       baseUrl: BASE_URL,
       fetch,
       csrfToken: () => 'token-da-sessao',
@@ -202,7 +222,7 @@ describe('cabeçalho CSRF', () => {
     });
 
     await api.POST('/api/v1/things', {
-      params: { header: { 'X-CSRF-Token': 'explicito' } },
+      headers: { 'X-CSRF-Token': 'explicito' },
       body: { name: 'a' },
     });
     await api.GET('/api/v1/things');
@@ -213,7 +233,7 @@ describe('cabeçalho CSRF', () => {
 
   it('não envia o cabeçalho quando não há token', async () => {
     const { fetch, requests } = fakeFetch(() => Response.json({ ok: true }, { status: 201 }));
-    const api = createApiClient<OptionalHeaderPaths>({ baseUrl: BASE_URL, fetch });
+    const api = createApiClient<WritePaths>({ baseUrl: BASE_URL, fetch });
 
     await api.POST('/api/v1/things', { body: { name: 'a' } });
 
