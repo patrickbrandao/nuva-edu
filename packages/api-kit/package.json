@@ -1,0 +1,27 @@
+{
+  "name": "@nuva-edu/api-kit",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Base HTTP comum das APIs do nuva-edu: Fastify validado pelo contrato OpenAPI, problem+json, id de requisição, IP real, saúde e métricas.",
+  "license": "AGPL-3.0-only",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit -p tsconfig.json"
+  },
+  "dependencies": {
+    "@nuva-edu/core": "workspace:*",
+    "@nuva-edu/database": "workspace:*",
+    "ajv": "8.20.0",
+    "ajv-formats": "3.0.1",
+    "fastify": "5.12.8",
+    "yaml": "2.9.1"
+  },
+  "devDependencies": {
+    "@types/node": "26.6.6",
+    "vitest": "5.1.1"
+  }
+}

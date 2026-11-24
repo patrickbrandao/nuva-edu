@@ -1,0 +1,23 @@
+{
+  "name": "@nuva-edu/admin-api",
+  "version": "0.0.0",
+  "private": true,
+  "description": "API do site de administração do nuva-edu e servidor MCP.",
+  "license": "AGPL-3.0-only",
+  "type": "module",
+  "scripts": {
+    "dev": "node --env-file-if-exists=../../.env --env-file-if-exists=../../.env.local --watch src/main.ts",
+    "start": "node src/main.ts",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit -p tsconfig.json"
+  },
+  "dependencies": {
+    "@nuva-edu/api-kit": "workspace:*",
+    "@nuva-edu/core": "workspace:*",
+    "@nuva-edu/database": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "26.6.6",
+    "vitest": "5.1.1"
+  }
+}

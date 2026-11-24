@@ -20,6 +20,8 @@ Detalhe das decisões em `specs/decisions/`.
 - `pnpm verify:quick` e `pnpm verify:full` (`scripts/verify.mjs`): lint, tipos e testes só do que mudou no rápido; suíte inteira com Postgres isolado por Testcontainers no completo; `scripts/test-db.mjs` como setup global do banco dos testes (`NUVA_TEST_DB=local`).
 - `apps/admin` (`@nuva-edu/admin`): esqueleto do site admin com casca `AdminShell`, menu lateral da spec 006, tema Sistema/Claro/Escuro, traduções pt-BR (i18next), painel com os dados de `/api/v1/meta`, estrutura da tela de login e rodapé com o link "Código-fonte".
 - `apps/classroom` (`@nuva-edu/classroom`): esqueleto do site do aluno com casca responsiva (menu da spec 006, gaveta abaixo de 1024 px), tema, traduções pt-BR, vitrine vazia com os dados de `/api/v1/meta`, login só com a estrutura e link "Código-fonte" no rodapé.
+- `packages/api-kit` (`@nuva-edu/api-kit`): base HTTP das APIs sobre Fastify, com requisição e resposta validadas pelo `openapi.yaml`, conferência rotas x contrato (e `csrfToken` nas escritas), problem+json, `X-Request-Id`, IP real por `TRUSTED_PROXIES`, `/healthz`, `/readyz`, `/metrics` e encerramento limpo.
+- `apps/admin-api` (`@nuva-edu/admin-api`): esqueleto do serviço sobre o api-kit, com `GET /api/v1/meta`, testes de integração e teste de contrato.
 
 ### Alterado
 - Contratos base: `Page` só com `nextCursor` (cada listagem declara `items`), CSRF como esquema de segurança `csrfToken` em vez de parâmetro, e códigos de erro gerais fixados na spec 003 e no esquema `Problem` (com `retryAfterSeconds`).

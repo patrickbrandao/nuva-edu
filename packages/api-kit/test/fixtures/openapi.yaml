@@ -1,0 +1,288 @@
+# Contrato de teste da base HTTP: pequeno, mas com as formas que os contratos reais usam.
+openapi: 3.1.0
+info:
+  title: api-kit (teste)
+  version: 0.0.0
+security:
+  - sessionCookie: []
+paths:
+  /healthz:
+    get:
+      operationId: getHealth
+      security: []
+      responses:
+        "200":
+          description: Vivo.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Health"
+  /readyz:
+    get:
+      operationId: getReadiness
+      security: []
+      responses:
+        "200":
+          description: Pronto.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Readiness"
+        "503":
+          description: Não pronto.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Readiness"
+  /api/v1/items:
+    get:
+      operationId: listItems
+      security: []
+      parameters:
+        - $ref: "#/components/parameters/Limit"
+        - name: tag
+          in: query
+          schema:
+            type: array
+            items:
+              type: string
+        - name: X-Trace-Level
+          in: header
+          schema:
+            type: integer
+            minimum: 0
+      responses:
+        "200":
+          description: Lista.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Page"
+                  - type: object
+                    required: [items]
+                    properties:
+                      items:
+                        type: array
+                        items:
+                          $ref: "#/components/schemas/Item"
+        "400":
+          $ref: "#/components/responses/Problem"
+        "500":
+          $ref: "#/components/responses/Problem"
+        "503":
+          $ref: "#/components/responses/Problem"
+    post:
+      operationId: createItem
+      security:
+        - sessionCookie: []
+          csrfToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ItemInput"
+      responses:
+        "201":
+          description: Criado.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Item"
+        "400":
+          $ref: "#/components/responses/Problem"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "403":
+          $ref: "#/components/responses/Problem"
+        "422":
+          $ref: "#/components/responses/Problem"
+        "429":
+          $ref: "#/components/responses/Problem"
+  /api/v1/items/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: integer
+          minimum: 1
+    get:
+      operationId: getItem
+      responses:
+        "200":
+          description: Um item.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Item"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+        "500":
+          $ref: "#/components/responses/Problem"
+    delete:
+      operationId: deleteItem
+      security:
+        - sessionCookie: []
+          csrfToken: []
+        - apiKey: []
+      responses:
+        "204":
+          description: Removido.
+        "401":
+          $ref: "#/components/responses/Problem"
+        "403":
+          $ref: "#/components/responses/Problem"
+  /api/v1/auth/login:
+    post:
+      operationId: login
+      description: Exceção ao CSRF, porque ainda não há sessão.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password]
+              properties:
+                email:
+                  type: string
+                  format: email
+                password:
+                  type: string
+                  minLength: 1
+              additionalProperties: false
+      responses:
+        "204":
+          description: Sessão criada.
+        "400":
+          $ref: "#/components/responses/Problem"
+components:
+  securitySchemes:
+    sessionCookie:
+      type: apiKey
+      in: cookie
+      name: session
+    csrfToken:
+      type: apiKey
+      in: header
+      name: X-CSRF-Token
+    apiKey:
+      type: http
+      scheme: bearer
+  parameters:
+    Limit:
+      name: limit
+      in: query
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 100
+        default: 25
+  responses:
+    Problem:
+      description: Erro.
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+  schemas:
+    Health:
+      type: object
+      required: [status]
+      properties:
+        status:
+          type: string
+          const: ok
+      additionalProperties: false
+    Readiness:
+      type: object
+      required: [status, checks]
+      properties:
+        status:
+          type: string
+          enum: [ready, not_ready]
+        checks:
+          type: object
+          required: [database, migrations]
+          properties:
+            database:
+              type: string
+              enum: [ok, fail]
+            migrations:
+              type: string
+              enum: [ok, fail]
+          additionalProperties: false
+      additionalProperties: false
+    Page:
+      type: object
+      required: [nextCursor]
+      properties:
+        nextCursor:
+          oneOf:
+            - type: string
+              minLength: 1
+            - type: "null"
+    Item:
+      type: object
+      required: [id, name, createdAt]
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+      additionalProperties: false
+    ItemInput:
+      type: object
+      required: [name]
+      properties:
+        name:
+          type: string
+          minLength: 2
+          maxLength: 20
+        tags:
+          type: array
+          items:
+            type: string
+          uniqueItems: true
+      additionalProperties: false
+    Problem:
+      type: object
+      required: [type, title, status, code]
+      properties:
+        type:
+          type: string
+        title:
+          type: string
+        status:
+          type: integer
+          minimum: 400
+          maximum: 599
+        code:
+          type: string
+          pattern: "^[a-z][a-z0-9_]*$"
+        detail:
+          type: string
+        instance:
+          type: string
+        errors:
+          type: array
+          items:
+            type: object
+            required: [path, message]
+            properties:
+              path:
+                type: string
+              message:
+                type: string
+        retryAfterSeconds:
+          type: integer
+          minimum: 0
+      additionalProperties: true

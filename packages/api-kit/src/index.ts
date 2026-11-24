@@ -1,0 +1,87 @@
+// Tipos do Fastify usados pelas APIs: importados daqui, a versão do Fastify fica num lugar só.
+export type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
+export {
+  type ApiAppOptions,
+  createApiApp,
+  type OperationHandler,
+  type OperationOptions,
+  type SecurityContext,
+  type SecurityHandler,
+  type SecurityHandlers,
+} from './app.ts';
+export {
+  type ClientAddress,
+  type ClientIpSource,
+  createTrustedProxies,
+  normalizeAddress,
+  resolveClientAddress,
+  type TrustedProxies,
+} from './client-ip.ts';
+export {
+  type Contract,
+  ContractError,
+  type ContractOperation,
+  type ContractParameter,
+  type ContractResponse,
+  CSRF_SCHEME,
+  type HttpMethod,
+  loadContract,
+  parseContract,
+  READ_METHODS,
+  type SecurityRequirement,
+  toContractPath,
+  toRoutePath,
+} from './contract.ts';
+export {
+  type ContractCheckOptions,
+  ContractMismatchError,
+  type ContractReport,
+  checkContract,
+  DEFAULT_INTERNAL_ROUTES,
+  findWritesWithoutCsrf,
+  formatContractReport,
+  type RegisteredRoute,
+} from './contract-check.ts';
+export {
+  isDatabaseUnavailable,
+  type ResolvedError,
+  ResponseContractError,
+  resolveError,
+} from './errors.ts';
+export {
+  type CheckResult,
+  type DatabaseReadinessOptions,
+  databaseReadiness,
+  type ReadinessCheck,
+  type ReadinessChecks,
+  type ReadinessReport,
+  runReadinessChecks,
+} from './health.ts';
+export {
+  type Counter,
+  createMetricsRegistry,
+  DEFAULT_DURATION_BUCKETS,
+  type Gauge,
+  type GaugeOptions,
+  type Histogram,
+  type HistogramOptions,
+  type Labels,
+  METRICS_CONTENT_TYPE,
+  type MetricOptions,
+  type MetricsRegistry,
+  registerProcessMetrics,
+} from './metrics.ts';
+export {
+  type RunningServer,
+  type SignalSource,
+  type StartServerOptions,
+  startServer,
+} from './server.ts';
+export {
+  type ContractValidator,
+  createContractValidator,
+  type OperationValidator,
+  type RequestParts,
+  type ResponseCheck,
+  toFieldErrors,
+} from './validation.ts';
