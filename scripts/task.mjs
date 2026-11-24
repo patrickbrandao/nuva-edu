@@ -50,7 +50,8 @@ export const USAGE = `Uso:
 
 finish  sem NNN, usa o branch task/NNN do diretório atual. --skip-verify só vale junto de
         --i-know e é de uso do humano.
-abort   --force descarta alterações não commitadas; pede confirmação digitada num terminal.
+abort   recusa com alterações não commitadas ou commits fora da main; --force os descarta e pede
+        confirmação digitada num terminal.
 
 Códigos de saída:
   0  sucesso
@@ -552,16 +553,26 @@ function abort(ctx, { id, force }) {
       `O worktree tem alterações não commitadas: ${dir}\n${indent(dirty)}\nCommite, descarte ou peça ao humano o --force (que apaga essas alterações).`,
     );
   }
+  // Commits que ainda não chegaram à main também são trabalho: sem --force, não se apaga o branch.
+  const unmerged = hasBranch
+    ? Number(git(ctx.main, ['rev-list', '--count', `main..${branch}`]).stdout.trim() || '0')
+    : 0;
+  if (unmerged > 0 && !force) {
+    fail(
+      EXIT.DIRTY,
+      `O branch ${branch} tem ${unmerged} commit(s) que não estão na main. Termine com "pnpm task:finish ${id}" ou peça ao humano o --force (que apaga o branch).`,
+    );
+  }
   if (force) {
     if (!ctx.isTTY) {
       fail(
         EXIT.REFUSED,
-        '--force apaga trabalho não commitado e exige confirmação do humano num terminal interativo. Nada foi alterado.',
+        '--force apaga trabalho não integrado e exige confirmação do humano num terminal interativo. Nada foi alterado.',
       );
     }
     const expected = `abortar ${id}`;
     const answer = ctx.ask(
-      `Isto apaga ${dir} com tudo o que não foi commitado e o branch ${branch}.\nDigite "${expected}" para confirmar: `,
+      `Isto apaga ${dir} com tudo o que não foi commitado e o branch ${branch}${unmerged > 0 ? `, com ${unmerged} commit(s) fora da main` : ''}.\nDigite "${expected}" para confirmar: `,
     );
     if (answer !== expected) fail(EXIT.REFUSED, 'Confirmação não conferiu. Nada foi alterado.');
   }

@@ -40,8 +40,8 @@ Outros comandos:
 | --- | --- |
 | `pnpm task:list` | Fila `tasks/`: status, papel, responsável, dependências pendentes e se há worktree |
 | `pnpm -s task:path` | Caminho do checkout principal (o `-s` tira o cabeçalho do pnpm, para capturar) |
-| `pnpm task:abort 042` | Remove worktree e branch e devolve a tarefa a `aberta`; só com o worktree limpo |
-| `pnpm task:abort 042 --force` | Descarta também o que não foi commitado; pede confirmação digitada num terminal (uso do humano) |
+| `pnpm task:abort 042` | Remove worktree e branch e devolve a tarefa a `aberta`; só com o worktree limpo e sem commits fora da `main` |
+| `pnpm task:abort 042 --force` | Descarta também o que não foi commitado e os commits fora da `main`; pede confirmação digitada num terminal (uso do humano) |
 
 ## Quando o `task:finish` para
 

@@ -495,15 +495,45 @@ describe('CHANGELOG.md com merge=union', () => {
 });
 
 describe('task:abort', () => {
-  test('worktree limpo: remove worktree e branch e devolve a tarefa a aberta', () => {
+  test('worktree limpo com commit fora da main: recusa sem --force e não apaga nada', () => {
+    const env = started();
+    const dir = env.worktree('001');
+    commitIn(dir, 'app.txt', 'quatro\n', 'feat: quatro (task 001)');
+    const tip = git(dir, 'rev-parse', 'HEAD');
+    const result = run(env.repo, ['abort', '001']);
+    assert.equal(result.code, EXIT.DIRTY, result.out);
+    assert.match(result.out, /1 commit\(s\) que não estão na main/);
+    assert.ok(existsSync(dir));
+    assert.equal(git(env.repo, 'rev-parse', 'task/001'), tip);
+    assert.equal(taskOf(env, '001').status, 'em-andamento');
+  });
+
+  test('--force confirmado apaga o branch com commits e imprime como recuperar', () => {
     const env = started();
     const dir = env.worktree('001');
     commitIn(dir, 'app.txt', 'quatro\n', 'feat: quatro (task 001)');
     const tip = git(dir, 'rev-parse', '--short', 'HEAD');
+    let prompt = '';
+    const result = run(env.repo, ['abort', '001', '--force'], {
+      isTTY: true,
+      ask: (text) => {
+        prompt = text;
+        return 'abortar 001';
+      },
+    });
+    assert.equal(result.code, EXIT.OK, result.out);
+    assert.match(prompt, /1 commit\(s\) fora da main/);
+    assert.match(result.out, new RegExp(`git branch task/001 ${tip}`));
+    assert.equal(existsSync(dir), false);
+    assert.equal(git(env.repo, 'branch', '--list', 'task/001'), '');
+  });
+
+  test('worktree limpo sem commits próprios: remove worktree e branch e devolve a tarefa a aberta', () => {
+    const env = started();
+    const dir = env.worktree('001');
     const mainBefore = git(env.repo, 'rev-parse', 'main');
     const result = run(env.repo, ['abort', '001']);
     assert.equal(result.code, EXIT.OK, result.out);
-    assert.match(result.out, new RegExp(`git branch task/001 ${tip}`));
     assert.equal(existsSync(dir), false);
     assert.equal(git(env.repo, 'branch', '--list', 'task/001'), '');
     assert.equal(git(env.repo, 'rev-parse', 'main'), mainBefore);
