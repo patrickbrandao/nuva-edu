@@ -152,7 +152,6 @@ export function buildClassroomApp(options: ClassroomAppOptions): FastifyInstance
     },
     rateLimits: options.rateLimits ?? CLASSROOM_RATE_LIMITS,
     ...(options.rateLimiter ? { rateLimiter: options.rateLimiter } : {}),
-    ...(config.sessionSecret === null ? {} : { cookieSecret: config.sessionSecret }),
     // Medidor `sse_connections` e fechamento dos fluxos abertos no encerramento do serviço.
     eventStreams: true,
   });
