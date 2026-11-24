@@ -18,6 +18,13 @@ export interface JobPayloads {
    * o id da linha: o token do link é criado pelo worker ao montar o e-mail (spec 007).
    */
   'email.send': { outboxId: string };
+  /**
+   * Encerra as suspensões com prazo vencido (spec 026), a cada 15 min. Recorrente, sem
+   * parâmetros: o manipulador chama `expireSuspensions`.
+   */
+  'suspension.expire': Record<string, never>;
+  /** Apaga imagens sem referência há mais de 24 horas (spec 029). Diária, sem parâmetros. */
+  'image.cleanup': Record<string, never>;
 }
 
 export type JobType = keyof JobPayloads;
@@ -49,15 +56,20 @@ export const JOB_DEFINITIONS: { readonly [T in JobType]: JobDefinition } = {
     priority: 0,
     retryDelaysSeconds: EMAIL_SEND_RETRY_DELAYS_SECONDS,
   },
+  'suspension.expire': { maxAttempts: 3, priority: 0 },
+  'image.cleanup': { maxAttempts: 5, priority: 0 },
 };
 
 /**
  * Tipos já no registro cujo manipulador ainda não existe no worker (chega em outra tarefa).
- * Hoje a união é vazia: `JobHandlers` exige o manipulador de todos os tipos do registro.
- * Tipo novo cujo manipulador venha depois entra aqui até ele chegar; tarefa sem manipulador
- * falha como erro comum e segue as tentativas do tipo.
+ * `JobHandlers` exige o manipulador de todos os demais tipos do registro. Tipo novo cujo
+ * manipulador venha depois entra aqui até ele chegar; tarefa sem manipulador falha como erro
+ * comum e segue as tentativas do tipo.
+ *
+ * `suspension.expire` e `image.cleanup`: os manipuladores chegam com a tarefa 151 (worker), que
+ * os retira desta união.
  */
-export type PendingHandlerJobType = never;
+export type PendingHandlerJobType = 'suspension.expire' | 'image.cleanup';
 
 export const JOB_STATUSES = ['queued', 'running', 'done', 'failed'] as const;
 export type JobStatus = (typeof JOB_STATUSES)[number];
