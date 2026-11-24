@@ -14,6 +14,15 @@ export const DB_TYPES_SCRIPT = 'db:types:check';
 /** Pasta, relativa ao pacote, dos testes de contrato de uma API. */
 export const CONTRACT_DIR = 'test/contract';
 
+/**
+ * Script que confere as rotas de uma API contra o `openapi.yaml` sem subir o serviço (spec 003,
+ * "Subida estrita"). Todo pacote que o declara entra no passo "contrato" do modo completo.
+ */
+export const CONTRACT_CHECK_SCRIPT = 'check-contract';
+
+/** Opção que faz o `check-contract` falhar com operação `x-nuva-pending` no contrato. */
+export const NO_PENDING_FLAG = '--no-pending';
+
 /** Nome usado para a raiz do repositório quando ela é tratada como um pacote. */
 export const ROOT_PACKAGE = '(raiz)';
 
@@ -36,8 +45,8 @@ quick  confere só o que mudou: alterações não commitadas mais os commits do 
        Contrato alterado roda o teste de contrato da API e confere o cliente gerado; migration
        alterada roda os testes de banco e confere os tipos gerados do banco.
 full   lint, tipos, tipos gerados do banco, todos os testes com banco isolado (Testcontainers),
-       contrato, banco e build; --e2e acrescenta os testes de ponta a ponta. Para na primeira
-       falha.
+       contrato (testes e check-contract --no-pending de cada API), banco e build; --e2e
+       acrescenta os testes de ponta a ponta. Para na primeira falha.
 
 Saída: 0 tudo certo; 1 algum passo falhou; 2 ambiente indisponível.`;
 
@@ -546,6 +555,15 @@ export function buildScriptCommand(pkg, scriptName) {
     return null;
   }
   return tokenizeScript(script) ?? ['pnpm', 'run', scriptName];
+}
+
+/**
+ * Comando `check-contract --no-pending` de um pacote: release não sai com operação pendente
+ * (ADR 0019). `null` se o pacote não declara o script.
+ */
+export function buildContractCheckCommand(pkg) {
+  const argv = buildScriptCommand(pkg, CONTRACT_CHECK_SCRIPT);
+  return argv ? [...argv, NO_PENDING_FLAG] : null;
 }
 
 /** Nome curto do pacote para o resumo: `@nuva-edu/core` → `core`. */

@@ -3,6 +3,7 @@ import { describe, test } from 'node:test';
 import {
   API_CLIENT_PACKAGE,
   addExplicitTests,
+  buildContractCheckCommand,
   buildFullTestCommand,
   buildScriptCommand,
   buildTestCommand,
@@ -702,6 +703,29 @@ describe('comandos', () => {
       '-p',
       'tsconfig.json',
     ]);
+  });
+
+  test('check-contract --no-pending: só de quem declara o script', () => {
+    const api = describePackage('apps/x-api', {
+      name: 'x-api',
+      scripts: { 'check-contract': 'node src/check-contract.ts' },
+    });
+    assert.deepEqual(buildContractCheckCommand(api), [
+      'node',
+      'src/check-contract.ts',
+      '--no-pending',
+    ]);
+    const shell = describePackage('apps/y-api', {
+      name: 'y-api',
+      scripts: { 'check-contract': 'pnpm build && node dist/check-contract.js' },
+    });
+    assert.deepEqual(buildContractCheckCommand(shell), [
+      'pnpm',
+      'run',
+      'check-contract',
+      '--no-pending',
+    ]);
+    assert.equal(buildContractCheckCommand(byName('@nuva-edu/ui')), null);
   });
 });
 

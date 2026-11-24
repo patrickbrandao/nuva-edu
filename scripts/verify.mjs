@@ -8,9 +8,11 @@ import { delimiter, join, resolve } from 'node:path';
 import { performance } from 'node:perf_hooks';
 import {
   addExplicitTests,
+  buildContractCheckCommand,
   buildFullTestCommand,
   buildScriptCommand,
   buildTestCommand,
+  CONTRACT_CHECK_SCRIPT,
   CONTRACT_DIR,
   clientCheckScript,
   DATABASE_PACKAGE,
@@ -19,6 +21,7 @@ import {
   describeRoot,
   exitCodeFor,
   formatSummary,
+  NO_PENDING_FLAG,
   normalizePath,
   parseCliArgs,
   parseWorkspacePatterns,
@@ -473,6 +476,49 @@ export function fullSteps({ packages, exists: has, ensureServer, exec = run, e2e
   const withContract = workspace.filter((pkg) => has(`${pkg.dir}/${CONTRACT_DIR}`));
   // Pacotes cujos testes de contrato já rodaram junto com a suíte, no passo "testes".
   const contractInSuite = new Set();
+  // Descoberto por pacote: vale com uma API, com as duas ou com nenhuma declarando o script.
+  const withContractCheck = workspace.filter((pkg) => pkg.scripts[CONTRACT_CHECK_SCRIPT]);
+  const contractTests = async () => {
+    // O passo "testes" deixou `test/contract` de fora; o que ele não conseguiu separar
+    // (executor sem exclusão) já rodou lá e não roda de novo.
+    const targets = new Map(
+      withContract
+        .filter((pkg) => !contractInSuite.has(pkg.name))
+        .map((pkg) => [pkg.name, [CONTRACT_DIR]]),
+    );
+    const already = [...contractInSuite].map(shortName);
+    const alreadyNote = `${already.join(', ')}: já rodou no passo testes`;
+    if (targets.size === 0) {
+      return { status: 'ok', note: alreadyNote };
+    }
+    const env = await ensureServer();
+    if (!env) {
+      return noDocker;
+    }
+    const result = await runTests(packages, targets, { env, stopOnFailure: true, exec });
+    return already.length > 0 && result.status === 'ok'
+      ? { ...result, note: `${result.note}; ${alreadyNote}` }
+      : result;
+  };
+  // `check-contract --no-pending`: rotas contra o contrato, e nenhuma operação `x-nuva-pending`
+  // (spec 003, "Subida estrita"). Não usa banco.
+  const contractChecks = async () => {
+    const label = `${CONTRACT_CHECK_SCRIPT} ${NO_PENDING_FLAG}`;
+    for (const pkg of withContractCheck) {
+      const argv = buildContractCheckCommand(pkg);
+      heading(`${shortName(pkg.name)}: ${argv.join(' ')}`);
+      if ((await exec(argv, { cwd: join(root, pkg.dir) })) !== 0) {
+        return {
+          status: 'fail',
+          note: `${label} falhou em ${shortName(pkg.name)}: operação pendente (x-nuva-pending) ou rota fora do contrato`,
+        };
+      }
+    }
+    return {
+      status: 'ok',
+      note: `${label}: ${withContractCheck.map((pkg) => shortName(pkg.name)).join(', ')}`,
+    };
+  };
 
   const sequence = [
     [
@@ -555,29 +601,18 @@ export function fullSteps({ packages, exists: has, ensureServer, exec = run, e2e
     [
       'contrato',
       async () => {
-        if (withContract.length === 0) {
+        if (withContract.length === 0 && withContractCheck.length === 0) {
           return { status: 'skipped', note: 'sem testes de contrato' };
         }
-        // O passo "testes" deixou `test/contract` de fora; o que ele não conseguiu separar
-        // (executor sem exclusão) já rodou lá e não roda de novo.
-        const targets = new Map(
-          withContract
-            .filter((pkg) => !contractInSuite.has(pkg.name))
-            .map((pkg) => [pkg.name, [CONTRACT_DIR]]),
-        );
-        const already = [...contractInSuite].map(shortName);
-        const alreadyNote = `${already.join(', ')}: já rodou no passo testes`;
-        if (targets.size === 0) {
-          return { status: 'ok', note: alreadyNote };
+        const tests = withContract.length > 0 ? await contractTests() : null;
+        if (tests?.status === 'fail' || withContractCheck.length === 0) {
+          return tests;
         }
-        const env = await ensureServer();
-        if (!env) {
-          return noDocker;
+        const checks = await contractChecks();
+        if (checks.status === 'fail' || !tests) {
+          return checks;
         }
-        const result = await runTests(packages, targets, { env, stopOnFailure: true, exec });
-        return already.length > 0 && result.status === 'ok'
-          ? { ...result, note: `${result.note}; ${alreadyNote}` }
-          : result;
+        return { status: 'ok', note: `${tests.note}; ${checks.note}` };
       },
     ],
     [

@@ -9,6 +9,7 @@ Detalhe das decisões em `specs/decisions/`.
 - `task:abort` recusa sem `--force` quando o branch tem commits fora da `main`.
 - `verify:quick`: YAML (`.yml` e `.yaml`) entra no passo `lint`; o `pnpm-lock.yaml` continua fora (task 062).
 - Classroom: lê e valida o `/config.json` ao carregar (`loadRuntimeConfig`; falha não derruba o site), o `vite dev` responde o arquivo e o item "Administração" fica pronto para a equipe, à espera da sessão.
+- `verify:full`: o passo `contrato` roda `check-contract --no-pending` em todo pacote que declara o script; `.env.example` descreve `PORT` e a lista padrão de `TRUSTED_PROXIES`; `docs/instalacao.md` com o exemplo restrito à rede do Traefik (task 035).
 - Worker: sinal de aborto por tarefa (encerramento e trava perdida) e medidores `jobs_oldest_pending_seconds` e `db_pool_connections{state}`; classroom-api confere cada evento SSE com o `StreamEvent` do contrato antes de entregar, expõe `db_pool_connections{state}` e usa o SSE, o estado por requisição, as métricas e a saúde do api-kit.
 - admin-api expõe `db_pool_connections{state}` (`active`, `idle`, `waiting`); o teste do IP real do api-kit usa a lista padrão de proxies do núcleo (CGNAT, link-local e `::1`).
 - Specs alinhadas ao código da tarefa 050 (tarefa 066): sinal de interrupção do worker e `jobs_total{outcome="released"}`, estados de `db_pool_connections`, medidores da fila sem série com o banco fora, descarte de evento SSE por `contract_mismatch`, respostas `408` e `431` no formato do servidor HTTP, variante 512 na rota de imagens e `logoUrl` em 256.

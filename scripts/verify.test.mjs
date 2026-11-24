@@ -296,6 +296,118 @@ describe('passos do modo completo', () => {
     assert.match(contract.note, /admin-api: já rodou no passo testes/);
   });
 
+  // Dublês do `check-contract` (spec 003, "Subida estrita"): o passo descobre o script por pacote.
+  const checkContract = 'node src/check-contract.ts';
+  const classroomApi = describePackage('apps/classroom-api', {
+    name: '@nuva-edu/classroom-api',
+    scripts: { test: 'vitest run', typecheck, 'check-contract': checkContract },
+    dependencies: { '@nuva-edu/core': 'workspace:*' },
+  });
+  const withCheck = (...names) => [
+    ...packages.map((pkg) =>
+      names.includes(pkg.name)
+        ? { ...pkg, scripts: { ...pkg.scripts, 'check-contract': checkContract } }
+        : pkg,
+    ),
+    ...(names.includes(classroomApi.name) ? [classroomApi] : []),
+  ];
+  const checksOf = (calls) =>
+    calls.filter((call) => call.command.includes('check-contract')).map((call) => call.dir);
+
+  test('uma API com check-contract: roda --no-pending nela, depois do teste de contrato', async (t) => {
+    const { calls, steps, status } = await runFull(t, {
+      list: withCheck('@nuva-edu/admin-api'),
+      files: ['apps/admin-api/test/contract/contract.test.ts'],
+    });
+    assert.equal(status.contrato, 'ok');
+    const order = calls.map((call) => call.command);
+    const check = `${checkContract} --no-pending`;
+    assert.deepEqual(checksOf(calls), ['apps/admin-api']);
+    assert.ok(order.indexOf('vitest run test/contract') < order.indexOf(check));
+    assert.ok(order.indexOf(check) < order.indexOf('tsc -p tsconfig.build.json'));
+    assert.match(
+      steps.find((step) => step.name === 'contrato').note,
+      /admin-api; check-contract --no-pending: admin-api$/,
+    );
+  });
+
+  test('as duas APIs com check-contract: roda --no-pending em cada uma', async (t) => {
+    const { calls, steps, status } = await runFull(t, {
+      list: withCheck('@nuva-edu/admin-api', '@nuva-edu/classroom-api'),
+      files: [
+        'apps/admin-api/test/contract/contract.test.ts',
+        'apps/classroom-api/test/contract/contract.test.ts',
+      ],
+    });
+    assert.equal(status.contrato, 'ok');
+    assert.deepEqual(checksOf(calls), ['apps/admin-api', 'apps/classroom-api']);
+    for (const call of calls.filter((entry) => entry.command.includes('check-contract'))) {
+      assert.equal(call.command, `${checkContract} --no-pending`);
+      // Confere rotas e contrato sem banco: não recebe o Postgres isolado.
+      assert.equal(call.env.DATABASE_URL, undefined);
+    }
+    assert.match(
+      steps.find((step) => step.name === 'contrato').note,
+      /check-contract --no-pending: admin-api, classroom-api$/,
+    );
+  });
+
+  test('contrato com x-nuva-pending: check-contract falha, o passo falha e o build não roda', async (t) => {
+    // Dublê: a classroom-api tem operação pendente no contrato.
+    const { calls, steps, status } = await runFull(t, {
+      list: withCheck('@nuva-edu/admin-api', '@nuva-edu/classroom-api'),
+      files: ['apps/admin-api/test/contract/contract.test.ts'],
+      outcome: (command, dir) =>
+        command.includes('--no-pending') && dir === 'apps/classroom-api' ? 1 : 0,
+    });
+    assert.equal(status.contrato, 'fail');
+    assert.match(
+      steps.find((step) => step.name === 'contrato').note,
+      /check-contract --no-pending falhou em classroom-api: operação pendente/,
+    );
+    assert.deepEqual(checksOf(calls), ['apps/admin-api', 'apps/classroom-api']);
+    assert.equal(status.banco, 'not-run');
+    assert.equal(status.build, 'not-run');
+    assert.equal(exitCodeFor(steps), 1);
+  });
+
+  test('falha na primeira API: para ali, sem conferir a segunda', async (t) => {
+    const { calls, status } = await runFull(t, {
+      list: withCheck('@nuva-edu/admin-api', '@nuva-edu/classroom-api'),
+      outcome: (command, dir) =>
+        command.includes('--no-pending') && dir === 'apps/admin-api' ? 1 : 0,
+    });
+    assert.equal(status.contrato, 'fail');
+    assert.deepEqual(checksOf(calls), ['apps/admin-api']);
+  });
+
+  test('teste de contrato vermelho: o check-contract nem roda', async (t) => {
+    const { calls, status } = await runFull(t, {
+      list: withCheck('@nuva-edu/admin-api'),
+      files: ['apps/admin-api/test/contract/contract.test.ts'],
+      outcome: (command) => (command === 'vitest run test/contract' ? 1 : 0),
+    });
+    assert.equal(status.contrato, 'fail');
+    assert.deepEqual(checksOf(calls), []);
+  });
+
+  test('check-contract sem test/contract: o passo roda só a conferência, sem Postgres', async (t) => {
+    t.mock.method(console, 'log', () => {});
+    const commands = [];
+    const [contract] = await runSequence(
+      fullSteps({
+        packages: withCheck('@nuva-edu/admin-api'),
+        exists: () => false,
+        ensureServer: async () => assert.fail('o check-contract não usa o Postgres isolado'),
+        exec: async (argv) => commands.push(argv.join(' ')) && 0,
+      }).filter(([name]) => name === 'contrato'),
+      [],
+    );
+    assert.equal(contract.status, 'ok');
+    assert.equal(contract.note, 'check-contract --no-pending: admin-api');
+    assert.deepEqual(commands, [`${checkContract} --no-pending`]);
+  });
+
   test('sem test/contract em nenhum pacote, o passo contrato é pulado', async (t) => {
     const { status, calls } = await runFull(t, {});
     assert.equal(status.contrato, 'skipped');
