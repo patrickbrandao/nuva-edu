@@ -12,6 +12,8 @@ export interface ClassroomCheckContractOptions {
   contract?: Contract;
   /** Argumentos do comando. Padrão: `process.argv.slice(2)`. */
   argv?: readonly string[];
+  /** Exceções de `csrfToken`. Padrão: `CSRF_EXCEPTIONS`. Só o teste do comando troca. */
+  csrfExceptions?: readonly string[];
 }
 
 /** Roda a conferência e devolve o código de saída (`CHECK_CONTRACT_EXIT` do api-kit). */
@@ -27,7 +29,7 @@ export async function checkClassroomContract(
   try {
     return await runCheckContract({
       service: SERVICE,
-      csrfExceptions: CSRF_EXCEPTIONS,
+      csrfExceptions: options.csrfExceptions ?? CSRF_EXCEPTIONS,
       ...(options.argv ? { argv: options.argv } : {}),
       build: () =>
         buildClassroomApp({

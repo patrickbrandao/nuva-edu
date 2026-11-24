@@ -5,6 +5,7 @@ import { CHECK_CONTRACT_EXIT } from '@nuva-edu/api-kit';
 import { closeDatabase, createDatabase, createLogger, loadConfig } from '@nuva-edu/core';
 import { afterEach, describe, expect, it } from 'vitest';
 import { buildClassroomApp, userEventStream } from '../src/app.ts';
+import { loadClassroomContract } from '../src/contract.ts';
 
 const COMMAND = fileURLToPath(new URL('../src/check-contract.ts', import.meta.url));
 const PENDING_COMMAND = fileURLToPath(
@@ -52,11 +53,23 @@ describe('comando check-contract', () => {
     expect(result.code).toBe(CHECK_CONTRACT_EXIT.ok);
   });
 
-  it('sai com 0 no contrato atual com --no-pending', async () => {
+  it('com --no-pending, sai com 0 se o contrato não tem pendente e falha listando-as se tem', async () => {
+    const pending = loadClassroomContract()
+      .operations.filter((operation) => operation.pending)
+      .map((operation) => operation.key);
     const result = await run(COMMAND, ['--no-pending']);
-    expect(result.stderr).toBe('');
-    expect(result.stdout).toContain('nenhuma pendente');
-    expect(result.code).toBe(CHECK_CONTRACT_EXIT.ok);
+    if (pending.length === 0) {
+      expect(result.stderr).toBe('');
+      expect(result.stdout).toContain('nenhuma pendente');
+      expect(result.code).toBe(CHECK_CONTRACT_EXIT.ok);
+      return;
+    }
+    expect(result.stdout).toBe('');
+    expect(result.stderr).toContain('x-nuva-pending');
+    for (const key of pending) {
+      expect(result.stderr).toContain(key);
+    }
+    expect(result.code).toBe(CHECK_CONTRACT_EXIT.mismatch);
   });
 
   it('sai com 2 em opção desconhecida', async () => {
