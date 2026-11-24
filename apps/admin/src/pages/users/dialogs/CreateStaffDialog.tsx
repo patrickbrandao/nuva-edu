@@ -120,7 +120,7 @@ export function CreateStaffDialog({ onClose, onDone }: Props) {
           autoComplete="off"
           error={fieldError('email')}
         />
-        <div className="flex flex-col gap-1">
+        <div className="flex flex-col items-start gap-1">
           <span className="text-sm font-medium text-ink">{t('users.fields.role')}</span>
           <AdminMenu
             options={STAFF_ROLES.map((id) => ({ id, label: t(`roles.${id}`) }))}

@@ -75,7 +75,7 @@ export function RoleDialog({ user, onClose, onDone }: Props) {
             {message(save.error)}
           </Alert>
         ) : null}
-        <div className="flex flex-col gap-1">
+        <div className="flex flex-col items-start gap-1">
           <span className="text-sm font-medium text-ink">{t('users.fields.role')}</span>
           <AdminMenu
             options={options}

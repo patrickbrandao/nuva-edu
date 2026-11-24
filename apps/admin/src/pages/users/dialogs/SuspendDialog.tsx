@@ -96,7 +96,7 @@ export function SuspendDialog({ user, onClose, onDone }: Props) {
           </Alert>
         ) : null}
         <form id={formId} className="flex flex-col gap-4" noValidate onSubmit={onSubmit}>
-          <div className="flex flex-col gap-1">
+          <div className="flex flex-col items-start gap-1">
             <span className="text-sm font-medium text-ink">{t('users.suspend.kind')}</span>
             <AdminMenu
               options={kindOptions}
@@ -108,7 +108,7 @@ export function SuspendDialog({ user, onClose, onDone }: Props) {
             />
             <span className="text-xs text-ink-3">{t(`users.suspend.kindHints.${kind}`)}</span>
           </div>
-          <div className="flex flex-col gap-1">
+          <div className="flex flex-col items-start gap-1">
             <span className="text-sm font-medium text-ink">{t('users.suspend.duration')}</span>
             <AdminMenu
               options={durationOptions}
