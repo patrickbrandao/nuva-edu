@@ -55,6 +55,9 @@ describe('migrations reais', () => {
       'tabela users',
       'tabela user_suspensions',
       'índice users_email_active_unique',
+      'tabela audit_log',
+      'função audit_log_purge',
+      'função audit_log_guard_update',
     ]) {
       assert.ok(full.includes(item), item);
     }
