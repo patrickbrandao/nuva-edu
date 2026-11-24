@@ -4,6 +4,8 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createHandlers } from '../src/handlers.ts';
 import {
   DEVICE_RETENTION_DAYS,
+  JOB_DONE_RETENTION_DEFAULT_DAYS,
+  JOB_FAILED_RETENTION_DEFAULT_DAYS,
   purgeRetention,
   RETENTION_BATCH_SIZE,
   type RetentionSettings,
@@ -32,6 +34,8 @@ const SETTINGS: RetentionSettings = {
   emailSentDays: 30,
   emailFailedDays: 90,
   auditDays: 730,
+  jobDoneDays: 7,
+  jobFailedDays: 30,
 };
 
 const hex64 = (): string => createHash('sha256').update(randomUUID()).digest('hex');
@@ -46,7 +50,14 @@ async function createUser(): Promise<string> {
 }
 
 async function exists(
-  table: 'sessions' | 'emailTokens' | 'loginAttempts' | 'userDevices' | 'emailOutbox' | 'auditLog',
+  table:
+    | 'sessions'
+    | 'emailTokens'
+    | 'loginAttempts'
+    | 'userDevices'
+    | 'emailOutbox'
+    | 'auditLog'
+    | 'jobs',
   id: string,
 ): Promise<boolean> {
   const row = await db.selectFrom(table).select('id').where('id', '=', id).executeTakeFirst();
@@ -133,6 +144,31 @@ async function insertAudit(createdAt: Date): Promise<string> {
   const row = await db
     .insertInto('auditLog')
     .values({ origin: 'worker', action: 'test.retention', outcome: 'ok', createdAt })
+    .returning('id')
+    .executeTakeFirstOrThrow();
+  return row.id;
+}
+
+/** Tarefa da fila num estado dado; `age` é a idade de `created_at` e, se final, de `finished_at`. */
+async function insertJob(
+  status: 'queued' | 'running' | 'done' | 'failed',
+  age: number,
+): Promise<string> {
+  const at = ago(age);
+  // Batimento atual e `run_at` no futuro: os testes da fila que rodam em paralelo não recuperam
+  // nem consomem estas linhas.
+  const locked =
+    status === 'queued' ? {} : { lockedBy: 'teste', lockedAt: at, heartbeatAt: new Date() };
+  const row = await db
+    .insertInto('jobs')
+    .values({
+      type: 'test.retention_jobs',
+      status,
+      runAt: status === 'queued' ? ahead(365 * DAY) : at,
+      createdAt: at,
+      finishedAt: status === 'done' || status === 'failed' ? at : null,
+      ...locked,
+    })
     .returning('id')
     .executeTakeFirstOrThrow();
   return row.id;
@@ -245,6 +281,50 @@ describe('retention.purge', () => {
     expect(await exists('emailOutbox', queuedOld)).toBe(true);
   });
 
+  it('fila de tarefas: apaga concluídas de 7 dias e falhas de 30; pendentes e em execução ficam', async () => {
+    const doneOld = await insertJob('done', 8 * DAY);
+    const doneRecent = await insertJob('done', 6 * DAY);
+    const failedOld = await insertJob('failed', 31 * DAY);
+    const failedRecent = await insertJob('failed', 29 * DAY);
+    const queuedOld = await insertJob('queued', 400 * DAY);
+    const runningOld = await insertJob('running', 400 * DAY);
+
+    const report = await purgeRetention(db, SETTINGS);
+
+    expect(report.jobsDone).toBeGreaterThanOrEqual(1);
+    expect(report.jobsFailed).toBeGreaterThanOrEqual(1);
+    expect(await exists('jobs', doneOld)).toBe(false);
+    expect(await exists('jobs', doneRecent)).toBe(true);
+    expect(await exists('jobs', failedOld)).toBe(false);
+    expect(await exists('jobs', failedRecent)).toBe(true);
+    expect(await exists('jobs', queuedOld)).toBe(true);
+    expect(await exists('jobs', runningOld)).toBe(true);
+
+    // Repetir não apaga mais nada do que ficou.
+    await purgeRetention(db, SETTINGS);
+    expect(await exists('jobs', doneRecent)).toBe(true);
+    expect(await exists('jobs', failedRecent)).toBe(true);
+    expect(await exists('jobs', queuedOld)).toBe(true);
+    expect(await exists('jobs', runningOld)).toBe(true);
+    await db.deleteFrom('jobs').where('id', 'in', [queuedOld, runningOld]).execute();
+  });
+
+  it('fila de tarefas: segue os prazos recebidos e, sem eles, os padrões da spec 033', async () => {
+    expect(JOB_DONE_RETENTION_DEFAULT_DAYS).toBe(7);
+    expect(JOB_FAILED_RETENTION_DEFAULT_DAYS).toBe(30);
+    const done = await insertJob('done', 3 * DAY);
+    const failed = await insertJob('failed', 10 * DAY);
+
+    const { jobDoneDays: _done, jobFailedDays: _failed, ...withoutJobs } = SETTINGS;
+    await purgeRetention(db, withoutJobs);
+    expect(await exists('jobs', done)).toBe(true);
+    expect(await exists('jobs', failed)).toBe(true);
+
+    await purgeRetention(db, { ...SETTINGS, jobDoneDays: 2, jobFailedDays: 9 });
+    expect(await exists('jobs', done)).toBe(false);
+    expect(await exists('jobs', failed)).toBe(false);
+  });
+
   it('auditoria: segue NUVA_RETENTION_AUDIT_DAYS e mantém o que está no prazo', async () => {
     const veryOld = await insertAudit(ago(731 * DAY));
     const middle = await insertAudit(ago(500 * DAY));
@@ -273,6 +353,24 @@ describe('retention.purge', () => {
 
     const again = await purgeRetention(db, SETTINGS);
     expect(again).toMatchObject({ loginAttempts: 0, sessions: 0, emailTokens: 0, auditLog: 0 });
+  });
+
+  it('fila de tarefas: apaga em lotes e para entre lotes quando o worker encerra', async () => {
+    const ids = await Promise.all(Array.from({ length: 5 }, () => insertJob('done', 60 * DAY)));
+    const report = await purgeRetention(db, SETTINGS, { batchSize: 2 });
+    expect(report.jobsDone).toBeGreaterThanOrEqual(5);
+    for (const id of ids) {
+      expect(await exists('jobs', id)).toBe(false);
+    }
+
+    const pending = await insertJob('failed', 60 * DAY);
+    const controller = new AbortController();
+    const reason = new DOMException('encerrando', 'AbortError');
+    controller.abort(reason);
+    await expect(purgeRetention(db, SETTINGS, { signal: controller.signal })).rejects.toBe(reason);
+    expect(await exists('jobs', pending)).toBe(true);
+    await purgeRetention(db, SETTINGS);
+    expect(await exists('jobs', pending)).toBe(false);
   });
 
   it('para antes do lote seguinte quando o worker encerra', async () => {
