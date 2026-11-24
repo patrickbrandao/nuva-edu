@@ -32,4 +32,12 @@ describe('item "Administração"', () => {
     expect(screen.queryByRole('link', { name })).toBeNull();
     expect(screen.queryByRole('alert')).toBeNull();
   });
+
+  it('com o adminUrl fora do formato (campo descartado na leitura) o item não aparece', async () => {
+    const { adminUrl: _dropped, ...config } = RUNTIME_CONFIG;
+    renderApp('/', undefined, { role: 'admin', config });
+    await screen.findByRole('link', { name: 'Escola Aurora' });
+    expect(screen.queryByRole('link', { name })).toBeNull();
+    expect(screen.queryByRole('alert')).toBeNull();
+  });
 });

@@ -14,71 +14,141 @@ const json = (body: unknown, status = 200) =>
     headers: { 'Content-Type': 'application/json' },
   });
 
+const fetchWith = (respond: () => Response | Promise<Response>) =>
+  vi.fn(async (_input: RequestInfo | URL, _init?: RequestInit) => respond());
+
 function mockWarn() {
   return vi.spyOn(console, 'warn').mockImplementation(() => {});
 }
 
 afterEach(() => vi.restoreAllMocks());
 
+// Mesmos casos de `apps/admin/src/runtime/runtimeConfig.test.ts`: a regra é uma só nos dois sites.
 describe('loadRuntimeConfig', () => {
-  it('busca /config.json sem cache e devolve os três campos', async () => {
+  it('lê app, adminUrl e classroomUrl de /config.json, sem cache', async () => {
     const warn = mockWarn();
-    const fetchMock = vi.fn(async () => json(VALID));
+    const fetchMock = fetchWith(() => json(VALID));
 
     expect(await loadRuntimeConfig(fetchMock)).toEqual(VALID);
-    expect(fetchMock).toHaveBeenCalledWith(
-      '/config.json',
-      expect.objectContaining({ cache: 'no-store' }),
-    );
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(fetchMock.mock.calls[0]?.[0]).toBe('/config.json');
+    expect(fetchMock.mock.calls[0]?.[1]?.cache).toBe('no-store');
     expect(warn).not.toHaveBeenCalled();
   });
 
-  it('não lê moeda, idioma nem outros campos, mesmo que o arquivo os traga', async () => {
-    const extra = { ...VALID, currency: 'USD', locale: 'en', adminHost: 'edu-admin.escola.com.br' };
-    expect(await loadRuntimeConfig(async () => json(extra))).toEqual(VALID);
+  it('ignora moeda, idioma, versão e qualquer outro campo do arquivo', async () => {
+    mockWarn();
+    const fetchMock = fetchWith(() =>
+      json({ ...VALID, currency: 'USD', locale: 'en', version: '9.9.9', adminHost: 'x' }),
+    );
+    expect(await loadRuntimeConfig(fetchMock)).toEqual(VALID);
   });
 
-  it('devolve null e avisa no console quando o arquivo falta (a SPA responde o index.html)', async () => {
+  it('arquivo ausente (o index.html no lugar): devolve vazio e avisa no console', async () => {
     const warn = mockWarn();
-    const html = new Response('<!doctype html><html></html>', {
-      headers: { 'Content-Type': 'text/html' },
-    });
+    const html = '<!doctype html><html><body><div id="root"></div></body></html>';
+    const fetchMock = fetchWith(
+      () => new Response(html, { status: 200, headers: { 'Content-Type': 'text/html' } }),
+    );
 
-    expect(await loadRuntimeConfig(async () => html)).toBeNull();
+    expect(await loadRuntimeConfig(fetchMock)).toEqual({});
+    expect(warn).toHaveBeenCalledTimes(1);
+    expect(String(warn.mock.calls[0]?.[0])).toContain('/config.json');
+    expect(String(warn.mock.calls[0]?.[0])).not.toContain('doctype');
+  });
+
+  it('resposta 404: devolve vazio e avisa com o status', async () => {
+    const warn = mockWarn();
+    const fetchMock = fetchWith(() => new Response('not found', { status: 404 }));
+
+    expect(await loadRuntimeConfig(fetchMock)).toEqual({});
+    expect(String(warn.mock.calls[0]?.[0])).toContain('404');
+  });
+
+  it('falha de rede: devolve vazio e avisa, sem rejeitar', async () => {
+    const warn = mockWarn();
+    const fetchMock = fetchWith(() => Promise.reject(new TypeError('Failed to fetch')));
+
+    expect(await loadRuntimeConfig(fetchMock)).toEqual({});
     expect(warn).toHaveBeenCalledTimes(1);
   });
 
-  it('devolve null em resposta de erro e em falha de rede', async () => {
+  it('campo faltando: mantém os válidos e cita só o nome do campo no aviso', async () => {
     const warn = mockWarn();
-    expect(await loadRuntimeConfig(async () => json(VALID, 404))).toBeNull();
-    expect(
-      await loadRuntimeConfig(async () => {
-        throw new TypeError('Failed to fetch');
-      }),
-    ).toBeNull();
-    expect(warn).toHaveBeenCalledTimes(2);
+    const fetchMock = fetchWith(() => json({ app: 'classroom', adminUrl: VALID.adminUrl }));
+
+    expect(await loadRuntimeConfig(fetchMock)).toEqual({
+      app: 'classroom',
+      adminUrl: VALID.adminUrl,
+    });
+    expect(warn).toHaveBeenCalledTimes(1);
+    expect(String(warn.mock.calls[0]?.[0])).toContain('classroomUrl');
   });
 
-  it.each([
-    ['campo faltando', { app: 'classroom', classroomUrl: VALID.classroomUrl }],
-    ['app desconhecido', { ...VALID, app: 'loja' }],
-    ['endereço relativo', { ...VALID, adminUrl: '/admin' }],
-    ['endereço sem esquema', { ...VALID, adminUrl: 'edu-admin.escola.com.br' }],
-    ['esquema que não é http', { ...VALID, adminUrl: 'javascript:alert(1)' }],
-    ['endereço que não é texto', { ...VALID, classroomUrl: 42 }],
-    ['lista', [VALID]],
-    ['nulo', null],
-  ])('devolve null com formato inválido: %s', async (_name, body) => {
+  it('não põe no console o valor recebido fora do formato', async () => {
     const warn = mockWarn();
-    expect(await loadRuntimeConfig(async () => json(body))).toBeNull();
+    const fetchMock = fetchWith(() => json({ ...VALID, adminUrl: 'valor-secreto' }));
+
+    expect((await loadRuntimeConfig(fetchMock)).adminUrl).toBeUndefined();
+    expect(JSON.stringify(warn.mock.calls)).not.toContain('valor-secreto');
+  });
+
+  it('avisa quando o arquivo é de outro site', async () => {
+    const warn = mockWarn();
+    const fetchMock = fetchWith(() => json({ ...VALID, app: 'admin' }));
+
+    expect((await loadRuntimeConfig(fetchMock)).adminUrl).toBe(VALID.adminUrl);
     expect(warn).toHaveBeenCalledTimes(1);
   });
 });
 
 describe('parseRuntimeConfig', () => {
-  it('aceita http e https', () => {
-    const local = { ...VALID, adminUrl: 'http://edu-admin.localhost:8080' };
-    expect(parseRuntimeConfig(local)).toEqual(local);
+  it.each([
+    ['null', null],
+    ['lista', [VALID]],
+    ['texto', 'config'],
+  ])('corpo que não é objeto (%s): todos os campos inválidos', (_name, body) => {
+    expect(parseRuntimeConfig(body)).toEqual({
+      config: {},
+      invalid: ['app', 'adminUrl', 'classroomUrl'],
+    });
+  });
+
+  it.each([
+    ['barra no fim', 'https://edu-admin.escola.com.br/'],
+    ['caminho', 'https://edu-admin.escola.com.br/painel'],
+    ['consulta', 'https://edu-admin.escola.com.br?x=1'],
+    ['esquema que não é http', 'javascript:alert(1)'],
+    ['sem esquema', 'edu-admin.escola.com.br'],
+    ['endereço relativo', '/admin'],
+    ['número', 8080],
+    ['vazio', ''],
+  ])('recusa adminUrl com %s', (_name, adminUrl) => {
+    const { config, invalid } = parseRuntimeConfig({ ...VALID, adminUrl });
+    expect(config.adminUrl).toBeUndefined();
+    expect(invalid).toEqual(['adminUrl']);
+  });
+
+  it('recusa classroomUrl com barra no fim e mantém o adminUrl válido', () => {
+    const { config, invalid } = parseRuntimeConfig({
+      ...VALID,
+      classroomUrl: 'https://classroom.escola.com.br/',
+    });
+    expect(config).toEqual({ app: 'classroom', adminUrl: VALID.adminUrl });
+    expect(invalid).toEqual(['classroomUrl']);
+  });
+
+  it('aceita origem https sem porta e http com porta', () => {
+    const body = {
+      app: 'classroom',
+      adminUrl: 'https://edu-admin.escola.com.br',
+      classroomUrl: 'http://classroom.localhost:8080',
+    };
+    expect(parseRuntimeConfig(body)).toEqual({ config: body, invalid: [] });
+  });
+
+  it('recusa app desconhecido', () => {
+    expect(parseRuntimeConfig({ ...VALID, app: 'worker' }).invalid).toEqual(['app']);
   });
 });
 
@@ -105,6 +175,6 @@ describe('devRuntimeConfig (vite dev)', () => {
   it('deriva os nomes de NUVA_DOMAIN e aceita porta vazia', () => {
     const config = devRuntimeConfig({ NUVA_DOMAIN: 'escola.test', NUVA_PUBLIC_PORT: '' });
     expect(config.adminUrl).toBe('http://edu-admin.escola.test');
-    expect(parseRuntimeConfig(config)).toEqual(config);
+    expect(parseRuntimeConfig(config)).toEqual({ config, invalid: [] });
   });
 });

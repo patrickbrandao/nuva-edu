@@ -1,11 +1,12 @@
 import { useQuery } from '@tanstack/react-query';
 import { createContext, type ReactNode, useContext } from 'react';
-import { loadRuntimeConfig, type RuntimeConfig } from './runtime-config';
+import { loadRuntimeConfig, type RuntimeConfig, type RuntimeConfigLoader } from './runtime-config';
 
-export type RuntimeConfigLoader = () => Promise<RuntimeConfig | null>;
+export type { RuntimeConfigLoader };
 
 const defaultLoader: RuntimeConfigLoader = () => loadRuntimeConfig();
 const LoaderContext = createContext<RuntimeConfigLoader>(defaultLoader);
+const EMPTY: RuntimeConfig = {};
 
 /** Troca a origem do `/config.json`; os testes entregam aqui o valor simulado. */
 export function RuntimeConfigProvider({
@@ -22,10 +23,11 @@ export function RuntimeConfigProvider({
 
 /**
  * Configuração de execução do site, lida uma vez por carga da página, em paralelo com as
- * consultas da API. `null` enquanto carrega e quando o arquivo falta ou é inválido: quem usa
- * apenas deixa de mostrar o link para o outro site, nunca uma tela de erro.
+ * consultas da API. Enquanto carrega, ou se o arquivo faltar, devolve um objeto sem campos; campo
+ * fora do formato também fica de fora. Quem usa esconde o que depende do campo ausente, nunca
+ * mostra uma tela de erro.
  */
-export function useRuntimeConfig(): RuntimeConfig | null {
+export function useRuntimeConfig(): RuntimeConfig {
   const loader = useContext(LoaderContext);
   const { data } = useQuery({
     queryKey: ['runtime-config'],
@@ -33,12 +35,12 @@ export function useRuntimeConfig(): RuntimeConfig | null {
       try {
         return await loader();
       } catch {
-        return null;
+        return EMPTY;
       }
     },
     staleTime: Number.POSITIVE_INFINITY,
     gcTime: Number.POSITIVE_INFINITY,
     retry: false,
   });
-  return data ?? null;
+  return data ?? EMPTY;
 }

@@ -10,7 +10,7 @@ import { RUNTIME_CONFIG_PATH, type RuntimeConfig } from './runtime-config';
 type Env = Record<string, string | undefined>;
 
 /** Mesmas variáveis e padrões de `proxy/nginx/40-nuva-config.sh`. */
-export function devRuntimeConfig(env: Env): RuntimeConfig {
+export function devRuntimeConfig(env: Env): Required<RuntimeConfig> {
   const domain = env.NUVA_DOMAIN || 'localhost';
   const scheme = env.NUVA_PUBLIC_SCHEME || 'http';
   const adminHost = env.NUVA_ADMIN_HOST || `edu-admin.${domain}`;

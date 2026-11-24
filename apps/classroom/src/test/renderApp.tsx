@@ -46,14 +46,14 @@ export function unavailableResponse(): Response {
 type FetchMock = (request: Request) => Promise<Response>;
 
 /** `/config.json` no formato da spec 031. */
-export const RUNTIME_CONFIG: RuntimeConfig = {
+export const RUNTIME_CONFIG: Required<RuntimeConfig> = {
   app: 'classroom',
   adminUrl: 'https://edu-admin.escola.test',
   classroomUrl: 'https://classroom.escola.test',
 };
 
 interface RenderOptions {
-  /** Resultado da leitura do `/config.json`; `null` é arquivo ausente ou inválido. */
+  /** Resultado da leitura do `/config.json`; `null` é arquivo ausente (nenhum campo). */
   config?: RuntimeConfig | null;
   /** Papel do usuário da sessão; sem ele, é um visitante. */
   role?: UserRole | null;
@@ -79,7 +79,7 @@ export function renderApp(
     <AppProviders
       api={api}
       queryClient={queryClient}
-      loadConfig={async () => config}
+      loadConfig={async () => config ?? {}}
       sessionRole={role}
     >
       <RouterProvider router={router} />
