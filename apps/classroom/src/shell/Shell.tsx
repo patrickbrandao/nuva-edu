@@ -6,6 +6,8 @@ import { matchPath, Outlet, ScrollRestoration, useLocation, useMatches } from 'r
 import { useMeta } from '../api/meta';
 import { MENU_STORAGE_KEY } from '../config';
 import { AdminLink } from './AdminLink';
+import { BrandLogo, useBrandLogo } from './BrandLogo';
+import { useBrandAccent } from './brand';
 import { Footer } from './Footer';
 import { HOME_PATH, LOGIN_PATH, NAV_GROUPS, type TextKey } from './navigation';
 import { useDialogFocusTrap } from './useDialogFocusTrap';
@@ -52,6 +54,7 @@ export function Shell() {
   const matches = useMatches();
 
   useDialogFocusTrap();
+  useBrandAccent();
 
   const [collapsed, setCollapsed] = useState(readCollapsed);
   const mainRef = useRef<HTMLElement>(null);
@@ -61,6 +64,7 @@ export function Shell() {
   const handle = matches.map((match) => match.handle).findLast(isRouteHandle);
   const pageTitle = handle ? t(handle.titleKey) : t('notFound.title');
   const schoolName = meta?.schoolName ?? t('app.name');
+  const [logoSrc, onLogoError] = useBrandLogo(meta?.logoUrl);
 
   // Troca de página: o foco vai para o conteúdo e o nome da página é anunciado (WCAG 2.4.3).
   useEffect(() => {
@@ -86,7 +90,14 @@ export function Shell() {
 
   return (
     <ClassroomShell
-      brand={{ name: schoolName, href: HOME_PATH }}
+      brand={{
+        name: schoolName,
+        href: HOME_PATH,
+        // Sem logotipo (ou se a imagem falhar), a casca desenha as iniciais da escola.
+        ...(logoSrc
+          ? { mark: <BrandLogo src={logoSrc} school={schoolName} onError={onLogoError} /> }
+          : {}),
+      }}
       groups={groups}
       active={active}
       labels={{

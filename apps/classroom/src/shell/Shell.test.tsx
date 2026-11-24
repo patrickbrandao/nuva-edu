@@ -1,9 +1,10 @@
-import { screen, waitFor, within } from '@testing-library/react';
+import { fireEvent, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it } from 'vitest';
-import { MENU_STORAGE_KEY, SOURCE_CODE_URL } from '../config';
+import { MENU_STORAGE_KEY } from '../config';
 import ptBR from '../locales/pt-BR.json';
-import { renderApp } from '../test/renderApp';
+import { jsonResponse, META, renderApp, unavailableResponse } from '../test/renderApp';
+import { ACCENT_VARIABLE, DEFAULT_SOURCE_CODE_URL } from './brand';
 import { NAV_GROUPS } from './navigation';
 
 describe('casca do classroom', () => {
@@ -36,13 +37,77 @@ describe('casca do classroom', () => {
     expect(await screen.findByRole('link', { name: 'Escola Aurora' })).toBeTruthy();
   });
 
-  it('tem o link "Código-fonte" no rodapé (AGPL-3.0)', () => {
-    renderApp('/');
-    const footer = screen.getByRole('contentinfo');
-    const source = within(footer).getByRole('link', { name: new RegExp(ptBR.footer.source) });
-    expect(source.getAttribute('href')).toBe(SOURCE_CODE_URL);
-    expect(source.getAttribute('rel')).toBe('noreferrer');
+  const sourceLink = () =>
+    within(screen.getByRole('contentinfo')).getByRole('link', {
+      name: new RegExp(ptBR.footer.source),
+    });
+  const accent = () => document.documentElement.style.getPropertyValue(ACCENT_VARIABLE);
+  const logoAlt = `Logotipo de ${META.schoolName}`;
+
+  it('tem o link "Código-fonte" no rodapé (AGPL-3.0), no repositório padrão até o /meta responder', () => {
+    renderApp('/', () => new Promise<Response>(() => {}));
+    expect(sourceLink().getAttribute('href')).toBe(DEFAULT_SOURCE_CODE_URL);
+    expect(sourceLink().getAttribute('rel')).toBe('noreferrer');
   });
+
+  it('aponta o link "Código-fonte" para o sourceCodeUrl do /meta', async () => {
+    const sourceCodeUrl = 'https://git.escola.test/aurora/nuva-edu';
+    renderApp('/', async () => jsonResponse({ ...META, sourceCodeUrl }));
+    await waitFor(() => expect(sourceLink().getAttribute('href')).toBe(sourceCodeUrl));
+  });
+
+  it('mantém o repositório padrão se o /meta falhar ou trouxer endereço que não é http(s)', async () => {
+    const failed = renderApp('/', async () => unavailableResponse());
+    await screen.findByRole('alert');
+    expect(sourceLink().getAttribute('href')).toBe(DEFAULT_SOURCE_CODE_URL);
+    failed.unmount();
+
+    renderApp('/', async () => jsonResponse({ ...META, sourceCodeUrl: 'javascript:alert(1)' }));
+    await screen.findByRole('link', { name: META.schoolName });
+    expect(sourceLink().getAttribute('href')).toBe(DEFAULT_SOURCE_CODE_URL);
+  });
+
+  it('sem logotipo, a marca mostra só o nome da escola', async () => {
+    renderApp('/');
+    const brand = await screen.findByRole('link', { name: META.schoolName });
+    expect(brand.querySelector('img')).toBeNull();
+  });
+
+  it('com logotipo, a marca mostra a imagem com texto alternativo e o mesmo nome acessível', async () => {
+    const logoUrl = '/api/v1/images/0190a1b2-logo';
+    renderApp('/', async () => jsonResponse({ ...META, logoUrl }));
+
+    const logo = await screen.findByAltText(logoAlt);
+    expect(logo.getAttribute('src')).toBe(logoUrl);
+    // o nome acessível do link continua sendo só o nome da escola
+    const brand = screen.getByRole('link', { name: META.schoolName });
+    expect(brand.contains(logo)).toBe(true);
+
+    // imagem que não carrega: volta a mostrar só o nome
+    fireEvent.error(logo);
+    expect(screen.queryByAltText(logoAlt)).toBeNull();
+    expect(screen.getByRole('link', { name: META.schoolName })).toBeTruthy();
+  });
+
+  it('sem cor de destaque, não define a variável e vale o padrão de @nuva-edu/ui', async () => {
+    renderApp('/');
+    await screen.findByRole('link', { name: META.schoolName });
+    expect(accent()).toBe('');
+  });
+
+  it('com cor de destaque, aplica o valor na variável --minui-accent', async () => {
+    renderApp('/', async () => jsonResponse({ ...META, accentColor: '#0A7CFF' }));
+    await waitFor(() => expect(accent()).toBe('#0A7CFF'));
+  });
+
+  it.each(['#0a7', 'red', '#0A7CFF; background: url(https://x.test)', '0A7CFF'])(
+    'ignora a cor de destaque fora do formato #RRGGBB (%s)',
+    async (accentColor) => {
+      renderApp('/', async () => jsonResponse({ ...META, accentColor }));
+      await screen.findByRole('link', { name: META.schoolName });
+      expect(accent()).toBe('');
+    },
+  );
 
   it('troca o tema e guarda a escolha em nuva-theme', async () => {
     const user = userEvent.setup();

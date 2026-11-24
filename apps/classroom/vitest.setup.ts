@@ -40,6 +40,7 @@ afterEach(() => {
   localStorage.clear();
   window.innerWidth = NARROW_WIDTH;
   document.documentElement.removeAttribute('data-theme');
+  document.documentElement.removeAttribute('style');
 });
 
 // O jsdom não rola a página; o React Router chama scrollTo ao restaurar a posição.
