@@ -16,11 +16,11 @@ Usa os componentes de `@nuva-edu/ui` e o cliente de `@nuva-edu/api-client/classr
 | Pasta | Conteúdo |
 | --- | --- |
 | `src/routes.tsx` | Rotas em português; a vitrine no pacote inicial, o resto sob demanda |
-| `src/shell/` | Casca: barra superior, menu (gaveta abaixo de 1024 px), trilha, rodapé; `navigation.ts` é o menu |
+| `src/shell/` | Entrega ao `ClassroomShell` de `@nuva-edu/ui` os textos, o menu (`navigation.ts`), a página atual e o rodapé |
 | `src/pages/` | Vitrine, login (só a estrutura), "em construção", "não encontrado", erro |
 | `src/api/` | Cliente da API da própria origem, cache e `useMeta` |
 | `src/locales/pt-BR.json` | Todos os textos visíveis; as chaves são conferidas pelo compilador |
-| `src/lib/` | `usePageMeta` (título, descrição e Open Graph por página), `LinkButton` |
+| `src/lib/` | `usePageMeta` (título, descrição e Open Graph por página) |
 
 Tela nova: troque a entrada de `PENDING_PAGES` em `src/shell/navigation.ts` por uma rota própria em
 `src/routes.tsx`, com `handle.titleKey` para a trilha e `usePageMeta` na página.

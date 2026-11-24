@@ -1,3 +1,4 @@
+import { themeBootPlugin } from '@nuva-edu/ui/theme-boot';
 import tailwindcss from '@tailwindcss/vite';
 import react from '@vitejs/plugin-react';
 import { defineConfig } from 'vitest/config';
@@ -12,7 +13,8 @@ const proxy = {
 };
 
 export default defineConfig({
-  plugins: [react(), tailwindcss()],
+  // themeBootPlugin: aplica o tema salvo antes da primeira pintura (script no <head>).
+  plugins: [react(), tailwindcss(), themeBootPlugin()],
   server: { host: '127.0.0.1', port: 5312, strictPort: true, proxy },
   preview: { host: '127.0.0.1', port: 5312, strictPort: true, proxy },
   test: {

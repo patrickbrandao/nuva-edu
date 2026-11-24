@@ -1,7 +1,7 @@
 import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it } from 'vitest';
-import { SOURCE_CODE_URL } from '../config';
+import { MENU_STORAGE_KEY, SOURCE_CODE_URL } from '../config';
 import ptBR from '../locales/pt-BR.json';
 import { renderApp } from '../test/renderApp';
 import { NAV_GROUPS } from './navigation';
@@ -75,11 +75,108 @@ describe('casca do classroom', () => {
     expect(document.activeElement).toBe(
       within(drawer).getByRole('button', { name: ptBR.shell.closeMenu }),
     );
+    // o resto da página fica inerte: o foco não sai da gaveta
     expect(screen.getByRole('main').parentElement?.hasAttribute('inert')).toBe(true);
+    expect(toggle.closest('header')?.hasAttribute('inert')).toBe(true);
+    expect(document.body.style.overflow).toBe('hidden');
+
+    // o Tab dá a volta dentro da gaveta, sem chegar ao link "Ir para o conteúdo"
+    const close = within(drawer).getByRole('button', { name: ptBR.shell.closeMenu });
+    const lastLink = within(drawer).getAllByRole('link').at(-1);
+    await user.tab({ shift: true });
+    expect(document.activeElement).toBe(lastLink);
+    await user.tab();
+    expect(document.activeElement).toBe(close);
 
     await user.keyboard('{Escape}');
     expect(screen.queryByRole('dialog')).toBeNull();
     expect(document.activeElement).toBe(toggle);
+    expect(screen.getByRole('main').parentElement?.hasAttribute('inert')).toBe(false);
+    expect(document.body.style.overflow).toBe('');
+  });
+
+  it('fecha a gaveta pelo fundo e pelo botão de fechar', async () => {
+    const user = userEvent.setup();
+    renderApp('/');
+    const toggle = screen.getByRole('button', { name: ptBR.shell.openMenu });
+
+    await user.click(toggle);
+    await user.click(screen.getByTestId('menu-backdrop'));
+    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(document.activeElement).toBe(toggle);
+
+    await user.click(toggle);
+    const drawer = screen.getByRole('dialog', { name: ptBR.shell.menu });
+    await user.click(within(drawer).getByRole('button', { name: ptBR.shell.closeMenu }));
+    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(document.activeElement).toBe(toggle);
+  });
+
+  it('em tela larga recolhe o menu e lembra a escolha em nuva-classroom-menu', async () => {
+    window.innerWidth = 1440;
+    const user = userEvent.setup();
+    const first = renderApp('/');
+
+    await user.click(screen.getByRole('button', { name: ptBR.shell.collapseMenu }));
+    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(localStorage.getItem(MENU_STORAGE_KEY)).toBe('collapsed');
+    const expand = screen.getByRole('button', { name: ptBR.shell.expandMenu });
+    expect(expand.getAttribute('aria-expanded')).toBe('false');
+    // recolhido, o menu continua com os nomes dos itens
+    expect(screen.getByRole('link', { name: ptBR.menu.items.forum })).toBeTruthy();
+
+    first.unmount();
+    renderApp('/');
+    await user.click(screen.getByRole('button', { name: ptBR.shell.expandMenu }));
+    expect(localStorage.getItem(MENU_STORAGE_KEY)).toBeNull();
+    expect(screen.getByRole('button', { name: ptBR.shell.collapseMenu })).toBeTruthy();
+  });
+
+  it('navega pelo menu, pela trilha, pela marca e pelos botões sem recarregar a página', async () => {
+    window.innerWidth = 1440;
+    const user = userEvent.setup();
+    const { router } = renderApp('/');
+    const path = () => router.state.location.pathname;
+    // um <a> comum pediria a página ao servidor; o roteador cancela o clique e troca a rota
+    const clicks: boolean[] = [];
+    const onClick = (event: MouseEvent) => clicks.push(event.defaultPrevented);
+    window.addEventListener('click', onClick);
+
+    const menu = screen.getByRole('navigation', { name: ptBR.shell.menu });
+    await user.click(within(menu).getByRole('link', { name: ptBR.menu.items.plans }));
+    await waitFor(() => expect(path()).toBe('/planos'));
+    expect(within(menu).getByRole('link', { current: 'page' }).textContent).toBe(
+      ptBR.menu.items.plans,
+    );
+
+    const trail = screen.getByRole('navigation', { name: ptBR.shell.breadcrumb });
+    await user.click(within(trail).getByRole('link', { name: ptBR.home.title }));
+    await waitFor(() => expect(path()).toBe('/'));
+
+    await user.click(screen.getByRole('link', { name: ptBR.shell.signIn }));
+    await waitFor(() => expect(path()).toBe('/entrar'));
+
+    await user.click(await screen.findByRole('link', { name: 'Escola Aurora' }));
+    await waitFor(() => expect(path()).toBe('/'));
+
+    // "Notificações" existe no menu e na barra superior; aqui é o botão da barra
+    const toggle = screen.getByRole('button', { name: ptBR.shell.collapseMenu });
+    const topbar = within(toggle.closest('header') as HTMLElement);
+    await user.click(topbar.getByRole('link', { name: ptBR.shell.notifications }));
+    await waitFor(() => expect(path()).toBe('/notificacoes'));
+
+    await user.click(await screen.findByRole('link', { name: ptBR.common.backHome }));
+    await waitFor(() => expect(path()).toBe('/'));
+
+    await user.click(screen.getByRole('link', { name: ptBR.home.catalog.action }));
+    await waitFor(() => expect(path()).toBe('/cadastro'));
+
+    const footer = screen.getByRole('contentinfo');
+    await user.click(within(footer).getByRole('link', { name: ptBR.pages.terms }));
+    await waitFor(() => expect(path()).toBe('/termos'));
+
+    window.removeEventListener('click', onClick);
+    expect(clicks).toEqual(Array(8).fill(true));
   });
 
   it('leva um item ainda sem tela à página "em construção", com trilha e título', async () => {
