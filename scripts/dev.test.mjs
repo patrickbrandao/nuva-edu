@@ -4,7 +4,14 @@ import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync 
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { after, test } from 'node:test';
-import { composeArgs, envFileArgs, mergeEnv, publishPostgres, volumeMigrateArgs } from './dev.mjs';
+import {
+  composeArgs,
+  envFileArgs,
+  mergeEnv,
+  oauthMockEnv,
+  publishPostgres,
+  volumeMigrateArgs,
+} from './dev.mjs';
 
 const temps = [];
 after(() => {
@@ -27,7 +34,7 @@ test('compose repassa os argumentos depois dos arquivos de ambiente', () => {
   ]);
 });
 
-test('up liga os perfis traefik e mailpit, constrói e espera a saúde', () => {
+test('up liga os perfis traefik, mailpit e oauth-mock, constrói e espera a saúde', () => {
   assert.deepEqual(composeArgs('up', [], { hasLocal: false }), [
     '--env-file',
     '.env',
@@ -35,6 +42,8 @@ test('up liga os perfis traefik e mailpit, constrói e espera a saúde', () => {
     'traefik',
     '--profile',
     'mailpit',
+    '--profile',
+    'oauth-mock',
     'up',
     '-d',
     '--build',
@@ -44,8 +53,49 @@ test('up liga os perfis traefik e mailpit, constrói e espera a saúde', () => {
 
 test('down derruba os mesmos perfis e nunca remove volumes por conta própria', () => {
   const args = composeArgs('down');
-  assert.deepEqual(args.slice(-5), ['--profile', 'traefik', '--profile', 'mailpit', 'down']);
+  assert.deepEqual(args.slice(-7), [
+    '--profile',
+    'traefik',
+    '--profile',
+    'mailpit',
+    '--profile',
+    'oauth-mock',
+    'down',
+  ]);
   assert.ok(!args.includes('-v') && !args.includes('--volumes'));
+});
+
+test('na máquina de desenvolvimento, o simulador OAuth é ligado nas APIs', () => {
+  const urls = {
+    NUVA_OAUTH_MOCK_URL: 'http://oauth-mock.localhost:8080',
+    NUVA_OAUTH_MOCK_INTERNAL_URL: 'http://oauth-mock:8080',
+  };
+  assert.deepEqual(oauthMockEnv({}), urls);
+  assert.deepEqual(oauthMockEnv({ NUVA_DOMAIN: 'LocalHost ' }), urls);
+  // A porta pública segue a do Traefik próprio.
+  assert.equal(
+    oauthMockEnv({ TRAEFIK_HTTP_PORT: '8090' }).NUVA_OAUTH_MOCK_URL,
+    'http://oauth-mock.localhost:8090',
+  );
+});
+
+test('fora do localhost o simulador não é ligado; o que foi definido não é tocado', () => {
+  assert.deepEqual(oauthMockEnv({ NUVA_DOMAIN: 'escola.com.br' }), {});
+  assert.deepEqual(oauthMockEnv({ NUVA_DOMAIN: 'opencode.tmsoft.com.br' }, {}), {});
+  // Definida (no processo ou no .env.local), mesmo vazia, é de quem a definiu.
+  // Vazia desliga: o endereço interno sozinho impediria a subida das APIs.
+  assert.deepEqual(oauthMockEnv({}, { NUVA_OAUTH_MOCK_URL: '' }), {});
+  // Endereço público próprio: o interno continua o da rede do Compose.
+  assert.deepEqual(oauthMockEnv({}, { NUVA_OAUTH_MOCK_URL: 'http://oauth-mock.localhost:9000' }), {
+    NUVA_OAUTH_MOCK_INTERNAL_URL: 'http://oauth-mock:8080',
+  });
+  assert.deepEqual(
+    oauthMockEnv(
+      {},
+      { NUVA_OAUTH_MOCK_URL: 'http://mock.test', NUVA_OAUTH_MOCK_INTERNAL_URL: 'http://m:1' },
+    ),
+    {},
+  );
 });
 
 test('comando desconhecido devolve null', () => {
@@ -156,6 +206,7 @@ test('dev:up roda a migração de volume antes de subir', () => {
   const config = result.log.findIndex((line) => / config$/.test(line));
   const up = result.log.findIndex((line) => / up -d --build --wait/.test(line));
   assert.ok(config >= 0 && up > config, result.log.join('\n'));
+  assert.match(result.log[up], /--profile oauth-mock /);
   assert.match(result.stdout, /já existe/);
 });
 

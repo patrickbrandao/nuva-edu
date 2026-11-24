@@ -5,7 +5,7 @@ Derivado de `specs/031-infraestrutura-e-deploy.md`. Em caso de divergência, val
 ## Subir e derrubar
 
 ```bash
-cp .env.example .env.local   # preencha ao menos POSTGRES_PASSWORD
+cp .env.example .env.local   # preencha os quatro obrigatórios (abaixo)
 pnpm dev:up                  # migra o volume do banco, se preciso; constrói, sobe e espera a saúde
 pnpm dev:down                # derruba; os volumes ficam
 ```
@@ -15,6 +15,7 @@ pnpm dev:down                # derruba; os volumes ficam
 | http://edu-admin.localhost:8080 | Site admin; `/api/`, `/mcp` e `/healthz` vão para a admin-api |
 | http://classroom.localhost:8080 | Site do aluno; `/api/` e `/healthz` vão para a classroom-api |
 | http://localhost:8025 | Mailpit (e-mails enviados em desenvolvimento) |
+| http://oauth-mock.localhost:8080 | Provedor OAuth simulado (Google, Facebook e Apple), perfil `oauth-mock` |
 | `127.0.0.1:${NUVA_POSTGRES_PORT}` | PostgreSQL, para `pnpm db:migrate` e os testes (só no desenvolvimento; veja "Porta do PostgreSQL no hospedeiro") |
 
 `pnpm compose <args>` é o `docker compose` com `--env-file .env --env-file .env.local`:
@@ -23,8 +24,44 @@ pnpm dev:down                # derruba; os volumes ficam
 pnpm compose ps
 pnpm compose logs -f classroom-api
 pnpm compose up -d --wait postgres     # só o banco, como os testes precisam
-pnpm compose --profile traefik --profile mailpit up -d --build admin   # refaz um serviço
+pnpm compose --profile traefik --profile mailpit --profile oauth-mock up -d --build admin   # refaz um serviço
 ```
+
+### Segredos obrigatórios
+
+Sem qualquer um deles o Compose não sobe e a mensagem cita a variável e o `.env.local`
+(`defina SESSION_SECRET em .env.local`). Vale para `pnpm dev:up`, `pnpm compose` e o
+`docker compose` direto, porque a interpolação é do projeto inteiro.
+
+| Variável | Quem exige | Regra |
+| --- | --- | --- |
+| `POSTGRES_PASSWORD` | `postgres`, `migrate`, APIs e worker | Senha do banco |
+| `SESSION_SECRET` | `admin-api`, `classroom-api` | No mínimo 32 caracteres, senão a API não sobe. Gere com `openssl rand -base64 48` |
+| `ADMIN_EMAIL` | `admin-api` | E-mail válido do admin inicial |
+| `ADMIN_PASSWORD` | `admin-api` | Senha do admin inicial, de 8 a 128 caracteres |
+
+O admin inicial é criado na primeira subida em que o banco não tem admin; depois disso, trocar
+`ADMIN_EMAIL` ou `ADMIN_PASSWORD` não muda nada. Evite `$` nos valores (o Compose o interpreta)
+ou ponha o valor entre aspas simples.
+
+### Provedor OAuth simulado
+
+O `pnpm dev:up` sobe o serviço `oauth-mock` (`scripts/oauth-mock/`, perfil `oauth-mock`; ADR
+0024) e liga o simulador nas duas APIs no lugar de Google, Facebook e Apple. Com
+`NUVA_DOMAIN=localhost`, o `pnpm compose`, o `pnpm dev:up` e o `pnpm dev:down` passam ao Compose:
+
+| Variável | Valor | Uso |
+| --- | --- | --- |
+| `NUVA_OAUTH_MOCK_URL` | `http://oauth-mock.localhost:${TRAEFIK_HTTP_PORT}` | Endereço visto pelo navegador e emissor dos `id_token` |
+| `NUVA_OAUTH_MOCK_INTERNAL_URL` | `http://oauth-mock:8080` | Endereço que as APIs usam na rede interna |
+
+- As duas nunca ficam no `.env` versionado, que vai ao servidor: lá e na instalação da escola as
+  APIs as recebem vazias e o simulador fica desligado (com `NUVA_ENV=production` a API recusa a
+  variável).
+- Para trocar os endereços, defina-as no `.env.local`; `NUVA_OAUTH_MOCK_URL=` (vazia) desliga o
+  simulador. Mudou: rode `pnpm dev:up` de novo para recriar as APIs.
+- Na tela de autorização qualquer um escolhe a identidade; credenciais de teste e endereços em
+  `scripts/oauth-mock/README.md`.
 
 ### Porta do PostgreSQL no hospedeiro
 
@@ -54,7 +91,8 @@ lida do ambiente do processo, do `.env.local` e do `.env`, nessa ordem:
 Porta 8080 ocupada por outro projeto: defina `TRAEFIK_HTTP_PORT` e `NUVA_PUBLIC_PORT` com a mesma
 porta livre no `.env.local`.
 
-Sem `POSTGRES_PASSWORD` o Compose não sobe e a mensagem cita a variável.
+Sem um dos [segredos obrigatórios](#segredos-obrigatórios) o Compose não sobe e a mensagem cita
+a variável.
 
 ## Como os serviços se ligam
 
@@ -68,8 +106,9 @@ O `docker-compose.yml` da raiz só inclui o compose de cada sistema.
 | `worker` | `apps/worker/docker-compose.yml` | interna | Porta 3000 só para saúde e métricas |
 | `admin`, `classroom` | `apps/<app>/docker-compose.yml` | do proxy | lighttpd sem privilégios (usuário 101) na porta 8080 |
 | `traefik`, `mailpit` | `proxy/traefik/`, `mail/mailpit/` | do proxy; interna | Perfis opcionais |
+| `oauth-mock` | `scripts/oauth-mock/` | interna e do proxy | Perfil `oauth-mock`; `node:26-slim` com o `server.mjs` montado só para leitura, porta 8080 |
 
-Todo contêiner (aplicações, `postgres`, `traefik` e `mailpit`) roda com raiz somente leitura,
+Todo contêiner (aplicações, `postgres`, `traefik`, `mailpit` e `oauth-mock`) roda com raiz somente leitura,
 `/run` e `/tmp` em tmpfs, sem capacidades (`cap_drop: ALL`, sem `cap_add`), `no-new-privileges`,
 `healthcheck`, limites de CPU e memória (`NUVA_<SERVICO>_CPUS` e `NUVA_<SERVICO>_MEMORY`) e
 `ulimits.nofile` (65536 no `postgres`, no `traefik` e nas APIs; 4096 nos demais). O teste

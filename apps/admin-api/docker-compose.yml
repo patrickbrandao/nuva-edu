@@ -71,6 +71,15 @@ services:
       POSTGRES_DB: ${POSTGRES_DB:-nuva_edu}
       POSTGRES_USER: ${POSTGRES_USER:-nuva_edu}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?defina POSTGRES_PASSWORD em .env.local}
+      # Segredos da Fase 1 (spec 031, "Segredos exigidos"): admin inicial e assinatura do cookie de
+      # retorno do login social. Só a admin-api os recebe; o `migrate` não.
+      SESSION_SECRET: ${SESSION_SECRET:?defina SESSION_SECRET em .env.local}
+      ADMIN_EMAIL: ${ADMIN_EMAIL:?defina ADMIN_EMAIL em .env.local}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:?defina ADMIN_PASSWORD em .env.local}
+      # Provedor OAuth simulado (ADR 0024): o `pnpm dev:up` os preenche na máquina de
+      # desenvolvimento e no CI; vazios, o simulador fica desligado (servidor e produção).
+      NUVA_OAUTH_MOCK_URL: ${NUVA_OAUTH_MOCK_URL:-}
+      NUVA_OAUTH_MOCK_INTERNAL_URL: ${NUVA_OAUTH_MOCK_INTERNAL_URL:-}
     depends_on:
       postgres:
         condition: service_healthy

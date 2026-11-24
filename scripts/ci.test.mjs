@@ -122,9 +122,18 @@ test('verify: Node 26, pnpm do packageManager, Chromium, .env.local e verify:ful
   const env = index(/POSTGRES_PASSWORD=.*> \.env\.local/s);
   const full = index(/^pnpm verify:full --e2e$/);
   assert.ok(install >= 0 && chromium > install && env >= 0 && full > chromium && full > env);
-  // A senha é sorteada na hora e não vai para o log.
-  assert.match(run[env], /openssl rand/);
+  // Os segredos exigidos pelo Compose (spec 031, "Segredos exigidos") são sorteados na hora e
+  // não vão para o log; nenhum vem dos segredos do GitHub.
+  for (const name of ['POSTGRES_PASSWORD', 'SESSION_SECRET', 'ADMIN_PASSWORD']) {
+    assert.match(run[env], new RegExp(`'${name}=%s\\\\n' "\\$\\(openssl rand `), name);
+  }
+  assert.match(run[env], /'ADMIN_EMAIL=admin-%s@example\.com\\n' "\$\(openssl rand /);
   assert.doesNotMatch(run[env], /echo|cat \.env\.local/);
+  // O e2e sobe o provedor OAuth simulado (perfil oauth-mock do `pnpm dev:up`).
+  assert.ok(
+    run.some((text) => /oauth-mock\.localhost.*\/etc\/hosts/.test(text)),
+    'oauth-mock.localhost no /etc/hosts',
+  );
   assert.ok(verify.jobs.verify['timeout-minutes'] <= 30);
 });
 

@@ -19,13 +19,15 @@ readonly WAIT_SECONDS=120
 
 # Tudo o que vai para o servidor. Só arquivos Compose e o `.env` versionado: as imagens já trazem
 # o código, as migrations e a configuração do lighttpd (nada de `proxy/lighttpd/` é montado).
-# Os composes do Traefik e do Mailpit vão porque o `include:` da raiz os exige; os serviços deles
-# ficam em perfis que este script nunca ativa.
+# Os composes do Traefik, do Mailpit e do provedor OAuth simulado vão porque o `include:` da raiz
+# os exige; os serviços deles ficam em perfis que este script nunca ativa (o `server.mjs` do
+# simulador não vai: só seria montado com o perfil `oauth-mock`).
 readonly DEPLOY_FILES='docker-compose.yml
 .env
 database/postgres/docker-compose.yml
 proxy/traefik/docker-compose.yml
 mail/mailpit/docker-compose.yml
+scripts/oauth-mock/docker-compose.yml
 apps/admin-api/docker-compose.yml
 apps/classroom-api/docker-compose.yml
 apps/worker/docker-compose.yml

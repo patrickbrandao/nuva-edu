@@ -49,16 +49,24 @@ jobs:
         run: pnpm --filter @nuva-edu/e2e exec playwright install --with-deps chromium
 
       # O Chromium já resolve `*.localhost` para 127.0.0.1; o `fetch` do Node (sonda do e2e)
-      # depende do resolvedor do sistema. A linha no /etc/hosts tira a dúvida.
+      # depende do resolvedor do sistema. A linha no /etc/hosts tira a dúvida. `oauth-mock` é o
+      # provedor OAuth simulado, que o `pnpm dev:up` sobe com o perfil `oauth-mock`.
       - name: Hosts do ambiente local
-        run: echo "127.0.0.1 edu-admin.localhost classroom.localhost" | sudo tee -a /etc/hosts
+        run: echo "127.0.0.1 edu-admin.localhost classroom.localhost oauth-mock.localhost" | sudo tee -a /etc/hosts
 
-      # O e2e sobe o ambiente Compose com `pnpm dev:up`, que exige POSTGRES_PASSWORD no
-      # .env.local. A senha é sorteada aqui, vale só para esta execução e não é impressa.
+      # O e2e sobe o ambiente Compose com `pnpm dev:up` (perfis traefik, mailpit e oauth-mock),
+      # que exige no .env.local os segredos da spec 031 ("Segredos exigidos"): POSTGRES_PASSWORD,
+      # SESSION_SECRET (32+ caracteres), ADMIN_EMAIL e ADMIN_PASSWORD (8 a 128). Todos sorteados
+      # aqui, valem só para esta execução e não são impressos. Nenhum segredo do GitHub.
       - name: .env.local descartável
         run: |
           umask 077
-          printf 'POSTGRES_PASSWORD=%s\n' "$(openssl rand -hex 24)" > .env.local
+          {
+            printf 'POSTGRES_PASSWORD=%s\n' "$(openssl rand -hex 24)"
+            printf 'SESSION_SECRET=%s\n' "$(openssl rand -hex 32)"
+            printf 'ADMIN_EMAIL=admin-%s@example.com\n' "$(openssl rand -hex 4)"
+            printf 'ADMIN_PASSWORD=%s\n' "$(openssl rand -hex 24)"
+          } > .env.local
 
       - name: pnpm verify:full --e2e
         run: pnpm verify:full --e2e

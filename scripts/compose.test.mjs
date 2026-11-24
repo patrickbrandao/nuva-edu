@@ -13,23 +13,40 @@ const skip = hasCompose ? false : 'docker compose indisponível';
 
 const APPS = ['admin-api', 'classroom-api', 'worker', 'admin', 'classroom'];
 const MB = 1024 * 1024;
+const PROFILES = ['traefik', 'mailpit', 'oauth-mock'];
+
+/** Segredos exigidos (spec 031, "Segredos exigidos"), com valores só do teste. */
+const SECRETS = {
+  POSTGRES_PASSWORD: 'senha-so-do-teste',
+  SESSION_SECRET: 'segredo-de-sessao-so-do-teste-com-32-ou-mais',
+  ADMIN_EMAIL: 'admin@escola.test',
+  ADMIN_PASSWORD: 'senha-do-admin-so-do-teste',
+};
+const SECRET_NAMES = Object.keys(SECRETS);
 
 /** Só o `.env` versionado, mais o que o teste definir: o `.env.local` da máquina não entra. */
 function compose(env = {}, args = ['config', '--format', 'json']) {
   const clean = Object.fromEntries(
     Object.entries(process.env).filter(
-      ([name]) => !/^(POSTGRES_|NUVA_|TRAEFIK_|SMTP_|COMPOSE_)/.test(name),
+      ([name]) =>
+        !/^(POSTGRES_|NUVA_|TRAEFIK_|SMTP_|COMPOSE_|OAUTH_MOCK_|ADMIN_|SESSION_SECRET$)/.test(name),
     ),
   );
   return spawnSync(
     'docker',
-    ['compose', '--env-file', '.env', '--profile', 'traefik', '--profile', 'mailpit', ...args],
+    [
+      'compose',
+      '--env-file',
+      '.env',
+      ...PROFILES.flatMap((profile) => ['--profile', profile]),
+      ...args,
+    ],
     { cwd: root, encoding: 'utf8', env: { ...clean, ...env } },
   );
 }
 
 function config(env = {}) {
-  const result = compose({ POSTGRES_PASSWORD: 'senha-so-do-teste', ...env });
+  const result = compose({ ...SECRETS, ...env });
   assert.equal(result.status, 0, result.stderr);
   return JSON.parse(result.stdout);
 }
@@ -42,15 +59,87 @@ test('o compose da raiz só inclui os composes de cada sistema', { skip }, () =>
     assert.match(text, new RegExp(`- path: apps/${app}/docker-compose\\.yml`));
   }
   const { services } = config();
-  for (const name of [...APPS, 'migrate', 'postgres', 'traefik', 'mailpit']) {
+  assert.match(text, /- path: scripts\/oauth-mock\/docker-compose\.yml/);
+  for (const name of [...APPS, 'migrate', 'postgres', 'traefik', 'mailpit', 'oauth-mock']) {
     assert.ok(services[name], `serviço ${name} ausente`);
   }
 });
 
-test('sem POSTGRES_PASSWORD o compose falha citando a variável', { skip }, () => {
-  const result = compose();
-  assert.notEqual(result.status, 0);
-  assert.match(result.stderr, /POSTGRES_PASSWORD/);
+test('sem cada segredo exigido o compose falha citando a variável e o .env.local', { skip }, () => {
+  for (const name of SECRET_NAMES) {
+    for (const value of [undefined, '']) {
+      const env = { ...SECRETS };
+      if (value === undefined) delete env[name];
+      else env[name] = value;
+      const result = compose(env);
+      assert.notEqual(result.status, 0, `${name}=${value ?? '(ausente)'}`);
+      assert.match(result.stderr, new RegExp(`defina ${name} em \\.env\\.local`), name);
+    }
+  }
+});
+
+test('as APIs recebem os segredos que exigem; os sites não recebem nenhum', { skip }, () => {
+  // Pelo `environment`, que vale por cima do `env_file`. O worker e o migrate não os exigem, mas
+  // podem recebê-los do `.env.local` da máquina pelo `env_file`: por isso não entram na conta.
+  const { services } = config();
+  for (const name of SECRET_NAMES) {
+    assert.equal(services['admin-api'].environment[name], SECRETS[name], `admin-api: ${name}`);
+  }
+  assert.equal(services['classroom-api'].environment.SESSION_SECRET, SECRETS.SESSION_SECRET);
+  for (const site of ['admin', 'classroom']) {
+    assert.equal(services[site].env_file, undefined, `${site}: env_file`);
+    for (const name of SECRET_NAMES) {
+      assert.equal(services[site].environment?.[name], undefined, `${site}: ${name}`);
+    }
+  }
+  // O texto dos composes: `${VAR:?}` só nos serviços da spec 031, "Segredos exigidos".
+  const required = (file) =>
+    [...readFileSync(resolve(root, file), 'utf8').matchAll(/\$\{(\w+):\?/g)].map((m) => m[1]);
+  const count = (list, name) => list.filter((item) => item === name).length;
+  const admin = required('apps/admin-api/docker-compose.yml');
+  // migrate e admin-api exigem a senha do banco; só a admin-api, os da Fase 1.
+  assert.equal(count(admin, 'POSTGRES_PASSWORD'), 2);
+  for (const name of ['SESSION_SECRET', 'ADMIN_EMAIL', 'ADMIN_PASSWORD']) {
+    assert.equal(count(admin, name), 1, `admin-api: ${name}`);
+  }
+  assert.deepEqual(required('apps/classroom-api/docker-compose.yml').sort(), [
+    'POSTGRES_PASSWORD',
+    'SESSION_SECRET',
+  ]);
+  assert.deepEqual(required('apps/worker/docker-compose.yml'), ['POSTGRES_PASSWORD']);
+  for (const site of ['admin', 'classroom']) {
+    assert.deepEqual(required(`apps/${site}/docker-compose.yml`), [], site);
+  }
+});
+
+test('o provedor simulado entra pelo perfil oauth-mock e fica desligado sem as variáveis', {
+  skip,
+}, () => {
+  const { services } = config();
+  assert.deepEqual(services['oauth-mock'].profiles, ['oauth-mock']);
+  assert.equal(
+    services['oauth-mock'].labels['traefik.http.routers.nuva-edu-oauth-mock.rule'],
+    'Host(`oauth-mock.localhost`)',
+  );
+  // Sem NUVA_OAUTH_MOCK_URL (o `.env` versionado não a define), as APIs recebem vazio: desligado.
+  assert.doesNotMatch(readFileSync(resolve(root, '.env'), 'utf8'), /^\s*NUVA_OAUTH_MOCK_/m);
+  for (const api of ['admin-api', 'classroom-api']) {
+    assert.equal(services[api].environment.NUVA_OAUTH_MOCK_URL, '', api);
+    assert.equal(services[api].environment.NUVA_OAUTH_MOCK_INTERNAL_URL, '', api);
+  }
+  // Com as variáveis do `pnpm dev:up`, as duas APIs apontam para o simulador.
+  const mock = config({
+    NUVA_OAUTH_MOCK_URL: 'http://oauth-mock.localhost:8080',
+    NUVA_OAUTH_MOCK_INTERNAL_URL: 'http://oauth-mock:8080',
+  }).services;
+  for (const api of ['admin-api', 'classroom-api']) {
+    assert.equal(mock[api].environment.NUVA_OAUTH_MOCK_URL, 'http://oauth-mock.localhost:8080');
+    assert.equal(mock[api].environment.NUVA_OAUTH_MOCK_INTERNAL_URL, 'http://oauth-mock:8080');
+  }
+  assert.equal(
+    mock['oauth-mock'].environment.OAUTH_MOCK_PUBLIC_URL,
+    'http://oauth-mock.localhost:8080',
+  );
 });
 
 test('todo contêiner tem raiz somente leitura, tmpfs, limites, nofile e rotação de log', {
@@ -233,6 +322,7 @@ test('rótulos de TLS só existem com TRAEFIK_CERTRESOLVER preenchido', { skip }
     'traefik.http.routers.nuva-edu-classroom-api.tls.certresolver',
     'traefik.http.routers.nuva-edu-classroom-stream.tls.certresolver',
     'traefik.http.routers.nuva-edu-classroom.tls.certresolver',
+    'traefik.http.routers.nuva-edu-oauth-mock.tls.certresolver',
   ]);
   assert.ok(withTls.every(([, value]) => value === 'letsencrypt'));
 });
@@ -242,7 +332,7 @@ test('com Traefik externo, as aplicações entram na rede dele e não publicam p
 }, () => {
   const result = compose(
     {
-      POSTGRES_PASSWORD: 'senha-so-do-teste',
+      ...SECRETS,
       TRAEFIK_NETWORK: 'network_public',
       TRAEFIK_NETWORK_EXTERNAL: 'true',
     },
@@ -265,6 +355,7 @@ test('os sites recebem só as variáveis do config.json, sem segredo algum', { s
     NUVA_ADMIN_HOST: 'painel.escola.test',
     // Segredos presentes na interpolação não podem chegar aos sites.
     SESSION_SECRET: 'segredo-so-do-teste',
+    ADMIN_PASSWORD: 'segredo-so-do-teste',
     SMTP_PASSWORD: 'segredo-so-do-teste',
   });
   for (const site of ['admin', 'classroom']) {
@@ -351,7 +442,8 @@ const published = (services) =>
     .sort();
 
 test('sem o arquivo de desenvolvimento, o Postgres não publica porta', { skip }, () => {
-  // Com os perfis do desenvolvimento, só o proxy e a tela do Mailpit publicam.
+  // Com os perfis do desenvolvimento, só o proxy e a tela do Mailpit publicam (o simulador entra
+  // pelo proxy).
   assert.deepEqual(published(config().services), ['mailpit', 'traefik']);
   // Como no servidor de testes: sem perfil, com o Traefik que já existe lá.
   const result = spawnSync(
@@ -363,7 +455,7 @@ test('sem o arquivo de desenvolvimento, o Postgres não publica porta', { skip }
       env: {
         PATH: process.env.PATH,
         HOME: process.env.HOME,
-        POSTGRES_PASSWORD: 'senha-so-do-teste',
+        ...SECRETS,
         TRAEFIK_NETWORK: 'network_public',
         TRAEFIK_NETWORK_EXTERNAL: 'true',
       },
@@ -374,7 +466,7 @@ test('sem o arquivo de desenvolvimento, o Postgres não publica porta', { skip }
 });
 
 test('com o docker-compose.dev.yml, o Postgres publica só em 127.0.0.1', { skip }, () => {
-  const result = compose({ POSTGRES_PASSWORD: 'senha-so-do-teste', NUVA_POSTGRES_PORT: '54329' }, [
+  const result = compose({ ...SECRETS, NUVA_POSTGRES_PORT: '54329' }, [
     ...DEV_COMPOSE_FILES.flatMap((file) => ['-f', file]),
     'config',
     '--format',

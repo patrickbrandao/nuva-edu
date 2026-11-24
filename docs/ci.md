@@ -22,8 +22,11 @@ comentário. O teste `scripts/ci.test.mjs` confere isso lendo os YAML.
 
 Roda num runner Linux: Node 26, o pnpm do campo `packageManager`, o Chromium do Playwright e o
 Docker do runner (Testcontainers para o banco isolado e o ambiente Compose para o e2e). O job
-cria um `.env.local` só com `POSTGRES_PASSWORD`, sorteada na hora; o e2e sobe o ambiente com
-`pnpm dev:up`. Não usa segredo: PR de fork roda igual e não publica nada.
+cria um `.env.local` descartável com os segredos que o Compose exige (`POSTGRES_PASSWORD`,
+`SESSION_SECRET`, `ADMIN_EMAIL` e `ADMIN_PASSWORD`), sorteados na hora e nunca impressos; o e2e
+sobe o ambiente com `pnpm dev:up`, que inclui o provedor OAuth simulado (perfil `oauth-mock`,
+em `oauth-mock.localhost`). Não usa segredo do GitHub: PR de fork roda igual e não publica nada.
+Quem precisa das credenciais do admin inicial no e2e as lê desse `.env.local`.
 
 Em falha, o log traz o `pnpm compose ps` e o fim dos logs dos contêineres. Os relatórios de
 cobertura e do Playwright (`tmp/coverage`, `tmp/playwright`) ficam anexados à execução por 14

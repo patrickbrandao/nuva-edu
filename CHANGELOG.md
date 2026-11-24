@@ -8,6 +8,7 @@ Detalhe das decisões em `specs/decisions/`.
 ### Adicionado
 - worker: `retention.purge` com as regras de expurgo das contas e da auditoria (`NUVA_RETENTION_AUDIT_DAYS`) em lotes de 5.000; manipuladores e agenda de `image.cleanup` (diária 03:45) e `suspension.expire` (a cada 15 min) (task 151).
 - `classroom-api`: login social (Google, Facebook, Apple por `form_post`), vínculo por `intent=link` e cadastro pendente (`/auth/social/pending` e `/complete`), com `authProviders` do `/meta` vindo do núcleo (task 153).
+- Compose exige `SESSION_SECRET` (APIs), `ADMIN_EMAIL` e `ADMIN_PASSWORD` (admin-api); `pnpm dev:up` e CI sobem o provedor OAuth simulado (task 157).
 - `@nuva-edu/core`: tipos de tarefa `suspension.expire` (3 tentativas) e `image.cleanup` (5) no registro da fila, ainda em `PendingHandlerJobType` até o worker trazer os manipuladores (task 235).
 - Specs 007, 024 e 028: ação `user.sessions_revoke` na auditoria; trocar o e-mail pela equipe invalida os links `verify` e `reset` pendentes (task 236).
 - Contrato do classroom: código `provider_already_linked` no retorno OAuth, com o cliente regenerado (task 201, 275).

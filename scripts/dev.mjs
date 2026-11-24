@@ -3,24 +3,27 @@
 //
 //   pnpm compose <args>   docker compose --env-file .env --env-file .env.local <args>
 //   pnpm dev:up           migra o volume do banco, se preciso, e sobe o ambiente local
-//                         (perfis traefik e mailpit), esperando a saúde
+//                         (perfis traefik, mailpit e oauth-mock), esperando a saúde
 //   pnpm dev:down         derruba o ambiente local; os volumes ficam
 //
 // Os três incluem o `docker-compose.dev.yml` (porta do Postgres em 127.0.0.1) conforme
 // NUVA_POSTGRES_PUBLISH: `true` publica, `false` não; vazio publica só com NUVA_DOMAIN=localhost.
+// Na máquina de desenvolvimento (NUVA_DOMAIN=localhost) os três também ligam o provedor OAuth
+// simulado nas APIs (NUVA_OAUTH_MOCK_URL e NUVA_OAUTH_MOCK_INTERNAL_URL), que nunca ficam no
+// `.env` versionado: ele vai ao servidor.
 import { spawnSync } from 'node:child_process';
 import { existsSync, readFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { parseEnv } from 'node:util';
 
-export const DEV_PROFILES = ['traefik', 'mailpit'];
+export const DEV_PROFILES = ['traefik', 'mailpit', 'oauth-mock'];
 
 export const USAGE = `Uso: node scripts/dev.mjs <comando> [args]
 
 Comandos:
   compose <args>   docker compose com --env-file .env e .env.local (ex.: pnpm compose ps)
   up [args]        migra o volume do banco, se preciso (scripts/volume-migrate.sh), e sobe o
-                   ambiente local com os perfis ${DEV_PROFILES.join(' e ')}, esperando a saúde
+                   ambiente local com os perfis ${DEV_PROFILES.join(', ')}, esperando a saúde
   down [args]      derruba o ambiente local sem remover os volumes`;
 
 /** `--env-file` na ordem em que o Compose deve ler: `.env` e depois `.env.local`, se existir. */
@@ -55,6 +58,34 @@ export function mergeEnv(...sources) {
     }
   }
   return merged;
+}
+
+/** Endereço do simulador na rede interna do Compose (serviço `oauth-mock`, porta 8080). */
+export const OAUTH_MOCK_INTERNAL_URL = 'http://oauth-mock:8080';
+
+/**
+ * Variáveis que ligam o provedor OAuth simulado nas APIs (ADR 0024; spec 031, "Ambientes"), a
+ * acrescentar ao ambiente do `docker compose`. Só na máquina de desenvolvimento, reconhecida por
+ * NUVA_DOMAIN=localhost: com outro domínio (servidor, instalação da escola) devolve `{}`.
+ * Variável já presente em `defined` (ambiente do processo ou `.env.local`, mesmo vazia) é de quem
+ * a definiu e não é tocada: `NUVA_OAUTH_MOCK_URL=` no `.env.local` desliga o simulador (e aí o
+ * endereço interno também não é preenchido).
+ * `env` segue a precedência de `mergeEnv`.
+ */
+export function oauthMockEnv(env = {}, defined = {}) {
+  if ((env.NUVA_DOMAIN || 'localhost').trim().toLowerCase() !== 'localhost') return {};
+  const extra = {};
+  if (!('NUVA_OAUTH_MOCK_URL' in defined)) {
+    extra.NUVA_OAUTH_MOCK_URL = `http://oauth-mock.localhost:${env.TRAEFIK_HTTP_PORT || '8080'}`;
+  } else if (!defined.NUVA_OAUTH_MOCK_URL?.trim()) {
+    // Desligado: o endereço interno sozinho impediria a subida das APIs.
+    return {};
+  }
+  // As APIs, de dentro dos contêineres, só alcançam o simulador pela rede interna.
+  if (!('NUVA_OAUTH_MOCK_INTERNAL_URL' in defined)) {
+    extra.NUVA_OAUTH_MOCK_INTERNAL_URL = OAUTH_MOCK_INTERNAL_URL;
+  }
+  return extra;
 }
 
 function readEnvFile(path) {
@@ -98,15 +129,16 @@ function main(argv) {
   // O pnpm repassa o `--` de `pnpm compose -- <args>`; o docker não o entende.
   const [command, ...rest] = argv;
   const extra = rest[0] === '--' ? rest.slice(1) : rest;
+  const local = readEnvFile(join(root, '.env.local'));
+  const merged = mergeEnv(readEnvFile(join(root, '.env')), local, process.env);
   let publish;
   try {
-    publish = publishPostgres(
-      mergeEnv(readEnvFile(join(root, '.env')), readEnvFile(join(root, '.env.local')), process.env),
-    );
+    publish = publishPostgres(merged);
   } catch (error) {
     console.error(error.message);
     return 1;
   }
+  const env = { ...process.env, ...oauthMockEnv(merged, { ...local, ...process.env }) };
   const args = composeArgs(command, extra, {
     hasLocal: existsSync(join(root, '.env.local')),
     publish,
@@ -119,7 +151,7 @@ function main(argv) {
     const migrate = spawnSync(
       'bash',
       volumeMigrateArgs({ hasLocal: existsSync(join(root, '.env.local')), publish }),
-      { cwd: root, stdio: 'inherit' },
+      { cwd: root, stdio: 'inherit', env },
     );
     if (migrate.error || migrate.status !== 0) {
       console.error(
@@ -130,7 +162,7 @@ function main(argv) {
       return migrate.status || 1;
     }
   }
-  const result = spawnSync('docker', ['compose', ...args], { cwd: root, stdio: 'inherit' });
+  const result = spawnSync('docker', ['compose', ...args], { cwd: root, stdio: 'inherit', env });
   if (result.error) {
     console.error(`Não foi possível executar o docker: ${result.error.message}`);
     return 1;

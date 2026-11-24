@@ -23,6 +23,12 @@ services:
       POSTGRES_DB: ${POSTGRES_DB:-nuva_edu}
       POSTGRES_USER: ${POSTGRES_USER:-nuva_edu}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?defina POSTGRES_PASSWORD em .env.local}
+      # Assinatura do cookie de retorno do login social (spec 031, "Segredos exigidos").
+      SESSION_SECRET: ${SESSION_SECRET:?defina SESSION_SECRET em .env.local}
+      # Provedor OAuth simulado (ADR 0024): o `pnpm dev:up` os preenche na máquina de
+      # desenvolvimento e no CI; vazios, o simulador fica desligado (servidor e produção).
+      NUVA_OAUTH_MOCK_URL: ${NUVA_OAUTH_MOCK_URL:-}
+      NUVA_OAUTH_MOCK_INTERNAL_URL: ${NUVA_OAUTH_MOCK_INTERNAL_URL:-}
     depends_on:
       postgres:
         condition: service_healthy

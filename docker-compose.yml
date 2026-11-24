@@ -2,12 +2,13 @@
 # Cada sistema tem o seu docker-compose.yml na própria pasta; este arquivo só os inclui.
 #
 # Uso (os segredos ficam em .env.local, fora do Git):
-#   pnpm dev:up            ambiente local, com os perfis traefik e mailpit
+#   pnpm dev:up            ambiente local, com os perfis traefik, mailpit e oauth-mock
 #   pnpm compose <args>    docker compose --env-file .env --env-file .env.local <args>
 #
 # Perfis:
-#   traefik  proxy reverso próprio (desligue onde já existe um Traefik e aponte TRAEFIK_NETWORK para a rede dele)
-#   mailpit  captura de e-mail para desenvolvimento
+#   traefik     proxy reverso próprio (desligue onde já existe um Traefik e aponte TRAEFIK_NETWORK para a rede dele)
+#   mailpit     captura de e-mail para desenvolvimento
+#   oauth-mock  provedor OAuth simulado (Google, Facebook e Apple), só desenvolvimento e e2e
 
 name: nuva-edu
 
@@ -15,6 +16,7 @@ include:
   - path: database/postgres/docker-compose.yml
   - path: proxy/traefik/docker-compose.yml
   - path: mail/mailpit/docker-compose.yml
+  - path: scripts/oauth-mock/docker-compose.yml
   - path: apps/admin-api/docker-compose.yml
   - path: apps/classroom-api/docker-compose.yml
   - path: apps/worker/docker-compose.yml

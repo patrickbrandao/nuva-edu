@@ -23,7 +23,11 @@ const script = join(root, 'scripts', 'deploy-test.sh');
 const BACKEND = 'admin-api,classroom-api,worker';
 const SECRET = 'segredo-que-nunca-aparece';
 
+// Segredos exigidos pelo Compose desde a Fase 1 (spec 031, "Segredos exigidos").
 const TEST_ENV_LOCAL = `POSTGRES_PASSWORD=${SECRET}
+SESSION_SECRET=${SECRET}-${SECRET}
+ADMIN_EMAIL=admin@escola.test
+ADMIN_PASSWORD=${SECRET}
 NUVA_DOMAIN=opencode.tmsoft.com.br
 TRAEFIK_NETWORK=network_public
 TRAEFIK_NETWORK_EXTERNAL=true
