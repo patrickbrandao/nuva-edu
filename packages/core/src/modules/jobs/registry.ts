@@ -13,6 +13,11 @@ export interface JobPayloads {
   'example.echo': { message: string };
   /** Expurgo diário de dados vencidos (spec 033). Recorrente, sem parâmetros. */
   'retention.purge': Record<string, never>;
+  /**
+   * Envia uma linha de `email_outbox` (spec 024). Enfileirada só por `enqueueEmail`. Leva apenas
+   * o id da linha: o token do link é criado pelo worker ao montar o e-mail (spec 007).
+   */
+  'email.send': { outboxId: string };
 }
 
 export type JobType = keyof JobPayloads;
@@ -22,12 +27,36 @@ export interface JobDefinition {
   maxAttempts: number;
   /** Maior primeiro. Padrão 0; pagamento usa 10. */
   priority: number;
+  /**
+   * Espera própria das novas tentativas, em segundos, no lugar da regra geral (spec 005): o
+   * item `n - 1` vale depois da `n`-ésima tentativa; passado o fim, repete o último. Sem
+   * variação aleatória. Omitido: `min(2^tentativa × 30 s, 6 h)` com ±20%.
+   */
+  retryDelaysSeconds?: readonly number[];
 }
+
+/**
+ * Espera do `email.send` (spec 024, RNF-02): 1 min, 5 min, 30 min, 2 h e 12 h. Com 5 tentativas
+ * só as quatro primeiras são usadas; a de 12 h vale se o máximo for aumentado na chamada.
+ */
+export const EMAIL_SEND_RETRY_DELAYS_SECONDS = [60, 300, 1_800, 7_200, 43_200] as const;
 
 export const JOB_DEFINITIONS: { readonly [T in JobType]: JobDefinition } = {
   'example.echo': { maxAttempts: 3, priority: 0 },
   'retention.purge': { maxAttempts: 5, priority: 0 },
+  'email.send': {
+    maxAttempts: 5,
+    priority: 0,
+    retryDelaysSeconds: EMAIL_SEND_RETRY_DELAYS_SECONDS,
+  },
 };
+
+/**
+ * Tipos já no registro cujo manipulador ainda não existe no worker (chega em outra tarefa).
+ * `email.send`: tarefa 150. Ao entrar o manipulador, tire o tipo daqui para voltar a exigi-lo.
+ * Tarefa sem manipulador falha como erro comum e segue as tentativas do tipo.
+ */
+export type PendingHandlerJobType = 'email.send';
 
 export const JOB_STATUSES = ['queued', 'running', 'done', 'failed'] as const;
 export type JobStatus = (typeof JOB_STATUSES)[number];
@@ -71,9 +100,29 @@ export interface JobContext {
  * Manipuladores do worker: um por tipo do registro, cada um com o seu payload. O contexto é o
  * segundo argumento; manipulador que não precisa dele pode declarar só a tarefa.
  */
+export type JobHandler<T extends JobType> = (job: JobOf<T>, context: JobContext) => Promise<void>;
+
 export type JobHandlers = {
-  [T in JobType]: (job: JobOf<T>, context: JobContext) => Promise<void>;
+  [T in Exclude<JobType, PendingHandlerJobType>]: JobHandler<T>;
+} & {
+  [T in PendingHandlerJobType]?: JobHandler<T>;
 };
+
+/**
+ * Erro que não adianta repetir (ex.: SMTP recusou o destinatário com 5xx). O manipulador lança
+ * este erro e `failJob` marca a tarefa `failed` na hora, sem novas tentativas, qualquer que seja
+ * o tipo. A mensagem vai para `last_error` (mascarada): não ponha dado pessoal nela.
+ */
+export class PermanentJobError extends Error {
+  constructor(message: string, options?: { cause?: unknown }) {
+    super(message, options);
+    this.name = 'PermanentJobError';
+  }
+}
+
+export function isPermanentJobError(error: unknown): error is PermanentJobError {
+  return error instanceof PermanentJobError;
+}
 
 export function isJobType(type: string): type is JobType {
   return Object.hasOwn(JOB_DEFINITIONS, type);

@@ -7,6 +7,7 @@ import {
   createDatabase,
   createLogger,
   type Database,
+  EMAIL_SEND_RETRY_DELAYS_SECONDS,
   enqueue,
   enqueueRecurring,
   failJob,
@@ -18,10 +19,12 @@ import {
   isDomainError,
   isJobType,
   isKnownJob,
+  isPermanentJobError,
   JOB_DEFINITIONS,
   type Job,
   type JobListener,
   listenForJobs,
+  PermanentJobError,
   recurringKey,
   releaseJob,
   requeueStaleJobs,
@@ -66,10 +69,15 @@ async function waitFor(condition: () => boolean, timeoutMs = 4_000): Promise<voi
 }
 
 describe('registro de tipos', () => {
-  it('reconhece os tipos da Fase 0 e recusa os demais', () => {
-    expect(Object.keys(JOB_DEFINITIONS).sort()).toEqual(['example.echo', 'retention.purge']);
+  it('reconhece os tipos do registro e recusa os demais', () => {
+    expect(Object.keys(JOB_DEFINITIONS).sort()).toEqual([
+      'email.send',
+      'example.echo',
+      'retention.purge',
+    ]);
     expect(isJobType('retention.purge')).toBe(true);
-    expect(isJobType('email.send')).toBe(false);
+    expect(isJobType('email.send')).toBe(true);
+    expect(isJobType('notify')).toBe(false);
     expect(isJobType('toString')).toBe(false);
   });
 });
@@ -385,6 +393,67 @@ describe('fail', () => {
     const hours = ((failed?.runAt.getTime() ?? 0) - Date.now()) / 3_600_000;
     expect(hours).toBeGreaterThan(7.1);
     expect(hours).toBeLessThan(7.21);
+  });
+
+  it('email.send segue a espera própria da spec 024, sem variação, e termina failed', async () => {
+    expect(JOB_DEFINITIONS['email.send']).toMatchObject({ maxAttempts: 5 });
+    expect(EMAIL_SEND_RETRY_DELAYS_SECONDS).toEqual([60, 300, 1_800, 7_200, 43_200]);
+    const created = await enqueue(db, 'email.send', { outboxId: 'linha-1' });
+    const jobId = created?.id ?? '';
+    expect(created).toMatchObject({ maxAttempts: 5, payload: { outboxId: 'linha-1' } });
+    const makeReady = () =>
+      sql`UPDATE jobs SET run_at = now() - interval '1 second' WHERE id = ${jobId}`.execute(db);
+    const delaySeconds = (job: Job | null) => ((job?.runAt.getTime() ?? 0) - Date.now()) / 1000;
+
+    // Depois de cada tentativa: 1 min, 5 min, 30 min, 2 h; random() no extremo não muda nada.
+    for (const expected of [60, 300, 1_800, 7_200]) {
+      await claimJobs(db, { workerId: 'w1', limit: 1 });
+      const failed = await failJob(db, {
+        jobId,
+        workerId: 'w1',
+        error: new Error('SMTP fora do ar'),
+        random: () => 0.999999,
+      });
+      expect(failed?.status).toBe('queued');
+      expect(delaySeconds(failed)).toBeGreaterThan(expected - 5);
+      expect(delaySeconds(failed)).toBeLessThanOrEqual(expected);
+      await makeReady();
+    }
+    await claimJobs(db, { workerId: 'w1', limit: 1 });
+    const last = await failJob(db, { jobId, workerId: 'w1', error: new Error('SMTP fora do ar') });
+    expect(last).toMatchObject({ status: 'failed', attempts: 5 });
+  });
+
+  it('email.send com mais tentativas usa 12 h e repete o último item', async () => {
+    const created = await enqueue(db, 'email.send', { outboxId: 'linha-2' }, { maxAttempts: 9 });
+    const jobId = created?.id ?? '';
+    for (const attempts of [4, 6]) {
+      await sql`UPDATE jobs SET attempts = ${attempts}, status = 'queued', run_at = now() WHERE id = ${jobId}`.execute(
+        db,
+      );
+      await claimJobs(db, { workerId: 'w1', limit: 1 });
+      const failed = await failJob(db, { jobId, workerId: 'w1', error: new Error('x') });
+      const hours = ((failed?.runAt.getTime() ?? 0) - Date.now()) / 3_600_000;
+      expect(hours).toBeGreaterThan(11.99);
+      expect(hours).toBeLessThanOrEqual(12);
+    }
+  });
+
+  it('erro permanente marca failed sem nova tentativa, em qualquer tipo', async () => {
+    for (const type of ['email.send', 'example.echo'] as const) {
+      const created =
+        type === 'email.send'
+          ? await enqueue(db, type, { outboxId: 'linha-3' })
+          : await enqueue(db, type, { message: 'a' });
+      await claimJobs(db, { workerId: 'w1', limit: 5 });
+      const error = new PermanentJobError('550 destinatário recusado');
+      expect(isPermanentJobError(error)).toBe(true);
+      expect(isPermanentJobError(new Error('x'))).toBe(false);
+      const failed = await failJob(db, { jobId: created?.id ?? '', workerId: 'w1', error });
+      expect(failed).toMatchObject({ status: 'failed', attempts: 1, lockedBy: 'w1' });
+      expect(failed?.finishedAt).toBeInstanceOf(Date);
+      expect(failed?.lastError).toContain('PermanentJobError: 550 destinatário recusado');
+    }
   });
 
   it('ignora quem não tem mais a trava', async () => {

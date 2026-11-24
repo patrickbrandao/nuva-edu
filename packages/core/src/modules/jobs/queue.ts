@@ -3,6 +3,7 @@ import type { Database } from '../../db/database.ts';
 import { conflict } from '../../errors/domain-error.ts';
 import { redactString } from '../../logging/redact.ts';
 import {
+  isPermanentJobError,
   JOB_DEFINITIONS,
   type Job,
   type JobOf,
@@ -202,26 +203,40 @@ export interface FailOptions extends JobLock {
   random?: () => number;
 }
 
+/** `{ tipo: [esperas] }` dos tipos com espera própria, para o `failJob` escolher no SQL. */
+const CUSTOM_RETRY_DELAYS: string = JSON.stringify(
+  Object.fromEntries(
+    Object.entries(JOB_DEFINITIONS).flatMap(([type, definition]) =>
+      definition.retryDelaysSeconds ? [[type, definition.retryDelaysSeconds]] : [],
+    ),
+  ),
+);
+
 /**
  * Registra a falha. Com tentativas sobrando, a tarefa volta à fila com `run_at` adiado pela
- * espera crescente; esgotadas, fica `failed` até alguém reenfileirar pelo /ops.
+ * espera do tipo (a própria, se o registro define `retryDelaysSeconds`; senão a crescente
+ * geral); esgotadas, ou com `PermanentJobError`, fica `failed` até alguém reenfileirar pelo /ops.
  * Devolve a tarefa atualizada, ou `null` se ela não está mais travada por este worker.
  */
 export async function failJob(db: Database, options: FailOptions): Promise<Job | null> {
   const random = options.random ?? Math.random;
   const factor = 1 - RETRY_JITTER + 2 * RETRY_JITTER * random();
+  const permanent = isPermanentJobError(options.error);
+  const retry = sql<boolean>`(attempts < max_attempts AND NOT ${permanent}::boolean)`;
+  const delays = sql`(${CUSTOM_RETRY_DELAYS}::jsonb -> type)`;
   const result = await sql<Job>`
     UPDATE jobs SET
-      status = CASE WHEN attempts < max_attempts THEN 'queued' ELSE 'failed' END,
-      run_at = CASE WHEN attempts < max_attempts
-        THEN now() + make_interval(secs =>
+      status = CASE WHEN ${retry} THEN 'queued' ELSE 'failed' END,
+      run_at = CASE WHEN ${retry}
+        THEN now() + make_interval(secs => COALESCE(
+          (${delays} ->> (LEAST(attempts, jsonb_array_length(${delays})) - 1))::float8,
           LEAST(power(2, attempts) * ${sql.lit(RETRY_BASE_SECONDS)}, ${sql.lit(RETRY_MAX_SECONDS)})
-          * ${factor}::float8)
+            * ${factor}::float8))
         ELSE run_at END,
-      finished_at = CASE WHEN attempts < max_attempts THEN NULL ELSE now() END,
-      locked_by = CASE WHEN attempts < max_attempts THEN NULL ELSE locked_by END,
-      locked_at = CASE WHEN attempts < max_attempts THEN NULL ELSE locked_at END,
-      heartbeat_at = CASE WHEN attempts < max_attempts THEN NULL ELSE heartbeat_at END,
+      finished_at = CASE WHEN ${retry} THEN NULL ELSE now() END,
+      locked_by = CASE WHEN ${retry} THEN NULL ELSE locked_by END,
+      locked_at = CASE WHEN ${retry} THEN NULL ELSE locked_at END,
+      heartbeat_at = CASE WHEN ${retry} THEN NULL ELSE heartbeat_at END,
       last_error = ${formatJobError(options.error)}
     WHERE id = ${options.jobId} AND status = 'running' AND locked_by = ${options.workerId}
     RETURNING *
