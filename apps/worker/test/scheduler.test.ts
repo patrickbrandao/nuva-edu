@@ -59,6 +59,8 @@ afterEach(async () => {
 });
 
 const PURGE: Schedule = { kind: 'daily', hour: 3, minute: 30 };
+/** Só o expurgo: os testes de janela e de fuso olham uma recorrente diária só. */
+const PURGE_ONLY = RECURRING_JOBS.filter((entry) => entry.type === 'retention.purge');
 
 describe('janela das recorrentes', () => {
   it('calcula data e hora no fuso pedido', () => {
@@ -119,6 +121,19 @@ describe('janela das recorrentes', () => {
       payload: {},
     });
   });
+
+  it('a limpeza de imagens é diária às 03:45 e o fim de suspensão, a cada 15 min', () => {
+    expect(RECURRING_JOBS).toContainEqual({
+      type: 'image.cleanup',
+      schedule: { kind: 'daily', hour: 3, minute: 45 },
+      payload: {},
+    });
+    expect(RECURRING_JOBS).toContainEqual({
+      type: 'suspension.expire',
+      schedule: { kind: 'interval', everyMinutes: 15 },
+      payload: {},
+    });
+  });
 });
 
 describe('agendador', () => {
@@ -128,6 +143,7 @@ describe('agendador', () => {
     const scheduler = createScheduler({
       db,
       logger: captureLogger().logger,
+      jobs: PURGE_ONLY,
       now: at('2026-11-24T06:00:00Z'),
     });
     expect(await scheduler.runOnce()).toEqual([]);
@@ -136,8 +152,13 @@ describe('agendador', () => {
 
   it('enfileira a janela do dia uma única vez com dois workers no ar', async () => {
     const now = at('2026-11-24T06:31:00Z');
-    const first = createScheduler({ db, logger: captureLogger().logger, now });
-    const second = createScheduler({ db: other, logger: captureLogger().logger, now });
+    const first = createScheduler({ db, logger: captureLogger().logger, now, jobs: PURGE_ONLY });
+    const second = createScheduler({
+      db: other,
+      logger: captureLogger().logger,
+      now,
+      jobs: PURGE_ONLY,
+    });
 
     const created = (await Promise.all([first.runOnce(), second.runOnce()])).flat();
 
@@ -148,6 +169,38 @@ describe('agendador', () => {
     expect((await getJobCounts(db)).queued).toBe(1);
   });
 
+  it('enfileira as três recorrentes da fase, cada uma com a sua janela', async () => {
+    // 07:00 em São Paulo: as duas diárias já são devidas; a de 15 min, sempre.
+    const scheduler = createScheduler({
+      db,
+      logger: captureLogger().logger,
+      now: at('2026-11-24T10:07:00Z'),
+    });
+    const keys = (await scheduler.runOnce()).map((job) => job.uniqueKey).sort();
+    expect(keys).toEqual([
+      recurringKey('image.cleanup', '2026-11-24'),
+      recurringKey('retention.purge', '2026-11-24'),
+      recurringKey('suspension.expire', '2026-11-24T10:00'),
+    ]);
+    const jobs = await db.selectFrom('jobs').select(['type', 'maxAttempts']).execute();
+    expect(Object.fromEntries(jobs.map((job) => [job.type, job.maxAttempts]))).toEqual({
+      'image.cleanup': 5,
+      'retention.purge': 5,
+      'suspension.expire': 3,
+    });
+    // Antes das 03:45 locais só a limpeza de imagens fica de fora.
+    await clearJobs(db);
+    const early = createScheduler({
+      db,
+      logger: captureLogger().logger,
+      now: at('2026-11-24T06:40:00Z'),
+    });
+    expect((await early.runOnce()).map((job) => job.type).sort()).toEqual([
+      'retention.purge',
+      'suspension.expire',
+    ]);
+  });
+
   describe('fuso da escola (school.timezone)', () => {
     // 20:00 UTC: 17:00 do mesmo dia em São Paulo, 05:00 do dia seguinte em Tóquio.
     const now = at('2026-11-24T20:00:00Z');
@@ -155,7 +208,7 @@ describe('agendador', () => {
     it('sem a chave gravada, a janela diária segue o padrão America/Sao_Paulo', async () => {
       expect(SETTING_DEFAULTS[TIMEZONE_KEY]).toBe('America/Sao_Paulo');
       const { logger, lines } = captureLogger();
-      const created = await createScheduler({ db, logger, now }).runOnce();
+      const created = await createScheduler({ db, logger, now, jobs: PURGE_ONLY }).runOnce();
       expect(created[0]?.uniqueKey).toBe('retention.purge:2026-11-24');
       expect(lines.find((line) => line.msg === 'Tarefa recorrente enfileirada')).toMatchObject({
         window: '2026-11-24',
@@ -167,7 +220,7 @@ describe('agendador', () => {
     it('com a chave gravada, a janela diária segue o fuso da escola', async () => {
       await setSetting(db, TIMEZONE_KEY, 'Asia/Tokyo');
       const { logger, lines } = captureLogger();
-      const created = await createScheduler({ db, logger, now }).runOnce();
+      const created = await createScheduler({ db, logger, now, jobs: PURGE_ONLY }).runOnce();
       expect(created[0]?.uniqueKey).toBe('retention.purge:2026-11-25');
       expect(lines.find((line) => line.msg === 'Tarefa recorrente enfileirada')).toMatchObject({
         window: '2026-11-25',
@@ -181,6 +234,7 @@ describe('agendador', () => {
       const scheduler = createScheduler({
         db,
         logger: captureLogger().logger,
+        jobs: PURGE_ONLY,
         now: at('2026-11-24T10:00:00Z'),
       });
       expect(await scheduler.runOnce()).toEqual([]);
@@ -189,7 +243,7 @@ describe('agendador', () => {
     it('valor inválido no banco cai no padrão, com aviso que leva só a chave', async () => {
       await storeRawTimezone('Marte/Olympus');
       const { logger, lines } = captureLogger();
-      const created = await createScheduler({ db, logger, now }).runOnce();
+      const created = await createScheduler({ db, logger, now, jobs: PURGE_ONLY }).runOnce();
       expect(created[0]?.uniqueKey).toBe('retention.purge:2026-11-24');
       const warnings = lines.filter((line) => line.msg === INVALID_SETTING);
       expect(warnings).toHaveLength(1);
@@ -200,7 +254,7 @@ describe('agendador', () => {
     it('valor que não é texto também cai no padrão', async () => {
       await storeRawTimezone(42);
       const { logger, lines } = captureLogger();
-      const created = await createScheduler({ db, logger, now }).runOnce();
+      const created = await createScheduler({ db, logger, now, jobs: PURGE_ONLY }).runOnce();
       expect(created[0]?.uniqueKey).toBe('retention.purge:2026-11-24');
       expect(lines.filter((line) => line.msg === INVALID_SETTING)).toHaveLength(1);
     });
@@ -208,7 +262,13 @@ describe('agendador', () => {
     it('usa o leitor recebido: o fuso vem do cache até ele vencer', async () => {
       let clock = 0;
       const settings = createSettingsReader(db, { ttlMs: 30_000, now: () => clock });
-      const scheduler = createScheduler({ db, logger: captureLogger().logger, now, settings });
+      const scheduler = createScheduler({
+        db,
+        logger: captureLogger().logger,
+        now,
+        settings,
+        jobs: PURGE_ONLY,
+      });
       expect((await scheduler.runOnce())[0]?.uniqueKey).toBe('retention.purge:2026-11-24');
       await setSetting(db, TIMEZONE_KEY, 'Asia/Tokyo');
       // Dentro da validade do cache, a mesma janela (já enfileirada): nada novo.
@@ -223,6 +283,7 @@ describe('agendador', () => {
     const scheduler = createScheduler({
       db,
       logger,
+      jobs: PURGE_ONLY,
       now: at('2026-11-24T12:00:00Z'),
       intervalMs: 20,
     });

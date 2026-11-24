@@ -1,6 +1,16 @@
-import type { Database, JobHandlers, Logger } from '@nuva-edu/core';
+import {
+  type Database,
+  deleteOrphanImages,
+  expireSuspensions,
+  type JobHandlers,
+  type Logger,
+} from '@nuva-edu/core';
 import { createEmailSendHandler } from './email/send-email.ts';
 import type { Mailer } from './email/smtp.ts';
+import { drainBatches, purgeRetention, type RetentionSettings } from './retention.ts';
+
+/** Lote de `expireSuspensions` e de `deleteOrphanImages` (o padrão das duas no núcleo). */
+export const CORE_BATCH_SIZE = 500;
 
 export interface HandlerDependencies {
   db: Database;
@@ -10,6 +20,8 @@ export interface HandlerDependencies {
   classroomUrl: string;
   adminUrl: string;
   locale: string;
+  /** Prazos de `config.retention` usados pelo `retention.purge` (spec 033). */
+  retention: RetentionSettings;
 }
 
 /**
@@ -17,21 +29,40 @@ export interface HandlerDependencies {
  * pode executar mais de uma vez (nova tentativa, worker morto, encerramento no meio).
  */
 export function createHandlers(deps: HandlerDependencies): JobHandlers {
-  const { logger } = deps;
+  const { db, logger } = deps;
   return {
     // Exemplo da Fase 0: sem efeito além do log, então repetir não muda nada.
     'example.echo': async (job) => {
       logger.info({ job_id: job.id, message: job.payload.message }, 'Tarefa de exemplo executada');
     },
-    // Expurgo diário (spec 033). Ainda sem regras: as tabelas com retenção entram nas fases
-    // seguintes. Quando entrarem, apagar por prazo é idempotente por natureza.
-    'retention.purge': async (job) => {
+    // Expurgo diário (spec 033): apagar por prazo é idempotente por natureza.
+    'retention.purge': async (job, context) => {
+      const deleted = await purgeRetention(db, deps.retention, { signal: context.signal });
       logger.info(
-        { job_id: job.id, unique_key: job.uniqueKey },
-        'Expurgo diário executado (nenhuma regra de retenção nesta fase)',
+        { job_id: job.id, unique_key: job.uniqueKey, deleted },
+        'Expurgo diário executado',
       );
     },
     // E-mail da fila (spec 024): linha que já não está `queued` não é enviada de novo.
     'email.send': createEmailSendHandler(deps),
+    // Fim do prazo das suspensões (spec 026): o núcleo grava `user.unsuspend` com
+    // `origin = worker`; a suspensão já encerrada é pulada, então repetir não duplica.
+    'suspension.expire': async (job, context) => {
+      const expired = await drainBatches(
+        () => expireSuspensions(db, { limit: CORE_BATCH_SIZE }),
+        CORE_BATCH_SIZE,
+        context.signal,
+      );
+      logger.info({ job_id: job.id, expired }, 'Suspensões vencidas encerradas');
+    },
+    // Imagens sem referência há mais de 24 h (spec 029): a condição é refeita no `DELETE`.
+    'image.cleanup': async (job, context) => {
+      const deleted = await drainBatches(
+        () => deleteOrphanImages(db, { limit: CORE_BATCH_SIZE }),
+        CORE_BATCH_SIZE,
+        context.signal,
+      );
+      logger.info({ job_id: job.id, deleted }, 'Imagens órfãs apagadas');
+    },
   };
 }

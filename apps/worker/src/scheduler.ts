@@ -34,6 +34,8 @@ export type RecurringJob = {
  */
 export const RECURRING_JOBS: readonly RecurringJob[] = [
   { type: 'retention.purge', schedule: { kind: 'daily', hour: 3, minute: 30 }, payload: {} },
+  { type: 'image.cleanup', schedule: { kind: 'daily', hour: 3, minute: 45 }, payload: {} },
+  { type: 'suspension.expire', schedule: { kind: 'interval', everyMinutes: 15 }, payload: {} },
 ];
 
 /** Data (`AAAA-MM-DD`) e minutos desde a meia-noite de `now` no fuso dado. */

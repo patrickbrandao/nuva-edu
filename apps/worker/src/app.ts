@@ -50,6 +50,7 @@ export async function startApp(options: AppOptions): Promise<App> {
       classroomUrl: config.classroomUrl,
       adminUrl: config.adminUrl,
       locale: config.locale,
+      retention: config.retention,
     }),
     concurrency,
     metrics,

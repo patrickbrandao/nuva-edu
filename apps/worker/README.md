@@ -13,6 +13,7 @@ Roda direto no Node 26, sem build. Métricas e verificações do `/readyz` vêm 
 | `src/email/send-email.ts` | `email.send` (spec 024): lê `email_outbox`, cria o token do link, envia e marca `sent` numa transação |
 | `src/email/templates.ts`, `src/email/locales/pt-BR.ts` | Layout (texto e HTML) e textos de cada tipo de e-mail, por idioma |
 | `src/email/smtp.ts` | Transporte SMTP (Nodemailer), regra de TLS e classificação dos erros |
+| `src/retention.ts` | `retention.purge` (spec 033): sessões, links de e-mail, tentativas de login, dispositivos, `email_outbox` e auditoria (`audit_log_purge`), em lotes de 5.000 |
 | `src/secrets.ts` | Segredos exigidos na subida (`SMTP_PASSWORD` quando há `SMTP_USER`) |
 | `src/scheduler.ts` | Recorrentes: janela no fuso da escola (`school.timezone`, lido pelo `createSettingsReader` do núcleo), `enqueueRecurring` |
 | `src/http.ts` | `/healthz`, `/readyz`, `/metrics` em `node:http` |

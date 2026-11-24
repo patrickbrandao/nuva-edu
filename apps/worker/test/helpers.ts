@@ -74,6 +74,8 @@ export function handlersWith(overrides: Partial<JobHandlers> = {}): JobHandlers 
     'example.echo': async () => {},
     'retention.purge': async () => {},
     'email.send': async () => {},
+    'suspension.expire': async () => {},
+    'image.cleanup': async () => {},
     ...overrides,
   };
 }
@@ -111,6 +113,14 @@ export function handlerDependencies(
     classroomUrl: 'http://classroom.localhost:8080',
     adminUrl: 'http://edu-admin.localhost:8080',
     locale: 'pt-BR',
+    retention: {
+      sessionDays: 30,
+      emailTokenHours: 24,
+      loginAttemptDays: 30,
+      emailSentDays: 30,
+      emailFailedDays: 90,
+      auditDays: 730,
+    },
     ...overrides,
   };
 }
