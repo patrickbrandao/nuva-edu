@@ -24,7 +24,7 @@ Vários agentes (Claude Code e OpenCode) trabalham no mesmo repositório, no mes
 | `arquiteto` | Specs, ADRs, contratos, plano e criação de tarefas | `specs/`, `apps/*/openapi.yaml`, `AGENTS.md`, `CLAUDE.md`, `.claude/agents/`, `.opencode/agent/` |
 | `banco` | Esquema, migrations, sementes de teste | `database/postgres/` |
 | `nucleo` | Regras de negócio, acesso a dados, fila | `packages/core/` |
-| `api-admin` | API administrativa e MCP | `apps/admin-api/` (exceto `openapi.yaml`) |
+| `api-admin` | API administrativa, MCP e a base HTTP comum às duas APIs | `apps/admin-api/` (exceto `openapi.yaml`), `packages/api-kit/` |
 | `api-classroom` | API do aluno e worker | `apps/classroom-api/` (exceto `openapi.yaml`), `apps/worker/` |
 | `web-admin` | Site de administração | `apps/admin/` |
 | `web-classroom` | Site do aluno | `apps/classroom/` |

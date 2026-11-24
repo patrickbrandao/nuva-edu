@@ -49,6 +49,7 @@ Cada site chama só a API do próprio endereço: não há CORS, e o cookie de se
 | Pacote | Conteúdo | Usado por |
 | --- | --- | --- |
 | `packages/core` | Entidades, regras de acesso, direitos em cascata, acesso a dados (Kysely), fila | APIs e worker |
+| `packages/api-kit` | Base HTTP comum do Fastify: validação pelo contrato, problem+json, id de requisição, IP real, sessão e CSRF | APIs |
 | `packages/ui` | Componentes e tokens vindos do minui-react | Sites |
 | `packages/api-client` | Clientes e tipos gerados dos `openapi.yaml` | Sites e testes |
 

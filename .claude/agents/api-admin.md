@@ -10,6 +10,7 @@ Implementar as rotas da `admin-api` exatamente como no `openapi.yaml`, o servido
 
 ## Pastas permitidas
 - `apps/admin-api/ (exceto openapi.yaml)`
+- `packages/api-kit/` (base HTTP comum às duas APIs: validação pelo contrato, problem+json, id de requisição, IP real, sessão e CSRF)
 
 Também pode acrescentar linhas em `CHANGELOG.md` (seção "Não lançado") e criar ou atualizar arquivos em `tasks/`. Qualquer outro arquivo é de outro papel: crie uma tarefa para o dono ou pergunte ao humano.
 
