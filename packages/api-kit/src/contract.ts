@@ -20,6 +20,9 @@ export const READ_METHODS: readonly HttpMethod[] = ['get', 'head', 'options', 't
 /** Nome do esquema de segurança que representa o cabeçalho `X-CSRF-Token` nos contratos. */
 export const CSRF_SCHEME = 'csrfToken';
 
+/** Extensão que marca uma operação cuja rota ainda não existe. */
+export const PENDING_EXTENSION = 'x-nuva-pending';
+
 export type JsonSchema = Record<string, unknown> | boolean;
 
 /** Uma alternativa do `security`: todos os esquemas dela são exigidos juntos. */
@@ -52,6 +55,11 @@ export interface ContractOperation {
   security: readonly SecurityRequirement[];
   /** Verdadeiro quando o método altera dados (não é `GET`, `HEAD`, `OPTIONS` nem `TRACE`). */
   isWrite: boolean;
+  /**
+   * Verdadeiro quando a operação leva `x-nuva-pending: true`: o contrato chegou antes da rota.
+   * A conferência de contrato não exige a rota de uma operação pendente.
+   */
+  pending: boolean;
   parameters: readonly ContractParameter[];
   /** Esquema do corpo por tipo de mídia; `null` quando a operação não tem corpo. */
   requestBody: {
@@ -156,6 +164,7 @@ export function parseContract(document: unknown, source = 'openapi'): Contract {
         key,
         security,
         isWrite: !READ_METHODS.includes(method),
+        pending: readPending(raw[PENDING_EXTENSION], where),
         parameters,
         requestBody: readRequestBody(raw.requestBody, resolve),
         responses: readResponses(raw.responses, resolve, where),
@@ -217,6 +226,16 @@ function deref<T>(document: Record<string, unknown>, value: T, source: string): 
     current = target;
   }
   return current as T;
+}
+
+function readPending(value: unknown, where: string): boolean {
+  if (value === undefined) {
+    return false;
+  }
+  if (typeof value !== 'boolean') {
+    throw new ContractError(`${where}: "${PENDING_EXTENSION}" deve ser true ou false.`);
+  }
+  return value;
 }
 
 function readSecurity(value: unknown, where: string): SecurityRequirement[] | undefined {

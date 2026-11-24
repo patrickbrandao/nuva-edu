@@ -83,6 +83,19 @@ describe('validação da requisição', () => {
     ).toEqual([{ path: 'body', message: 'Tipo de conteúdo não aceito. Use application/json.' }]);
   });
 
+  it('diz se a operação aceita o Content-Type do corpo', () => {
+    const create = check('createItem');
+    expect(create.acceptsContentType('application/json', {})).toBe(true);
+    expect(create.acceptsContentType('Application/JSON; charset=utf-8', {})).toBe(true);
+    expect(create.acceptsContentType('text/plain', 'x')).toBe(false);
+    expect(create.acceptsContentType('text/plain', undefined)).toBe(false);
+    expect(create.acceptsContentType(undefined, {})).toBe(false);
+    // Sem corpo e sem cabeçalho não há tipo a recusar: a falta do corpo é `validation_failed`.
+    expect(create.acceptsContentType(undefined, undefined)).toBe(true);
+    // Operação sem corpo no contrato: o que vier é ignorado.
+    expect(check('listItems').acceptsContentType('text/plain', 'x')).toBe(true);
+  });
+
   it('nunca repete na mensagem o valor recebido', () => {
     const errors = check('login').validateRequest(
       parts({
@@ -209,5 +222,22 @@ describe('contrato com esquema inválido', () => {
         ContractError,
       );
     }
+  });
+});
+
+describe('esquema avulso', () => {
+  it('valida contra components.schemas, com tipos exatos e referências resolvidas', () => {
+    const problem = validator.schema('Problem');
+    expect(problem({ type: 'about:blank', title: 'Erro', status: 404, code: 'not_found' })).toEqual(
+      [],
+    );
+    expect(problem({ type: 'about:blank', title: 'Erro', status: '404', code: 'X' })).toEqual([
+      { path: 'Problem.status', message: 'Deve ser do tipo integer.' },
+      { path: 'Problem.code', message: 'Formato inválido.' },
+    ]);
+    // O mesmo validador é reaproveitado.
+    expect(validator.schema('Problem')).toBe(problem);
+    expect(() => validator.schema('Inexistente')).toThrow(ContractError);
+    expect(() => validator.schema('toString')).toThrow(ContractError);
   });
 });

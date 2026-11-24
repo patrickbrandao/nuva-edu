@@ -2,6 +2,10 @@
 export type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 export {
   type ApiAppOptions,
+  type ApiEventStreams,
+  type ApiInstanceExtensions,
+  type ApiRequestExtensions,
+  CLIENT_CLOSED_REQUEST_STATUS,
   createApiApp,
   type OperationHandler,
   type OperationOptions,
@@ -26,6 +30,7 @@ export {
   CSRF_SCHEME,
   type HttpMethod,
   loadContract,
+  PENDING_EXTENSION,
   parseContract,
   READ_METHODS,
   type SecurityRequirement,
@@ -38,19 +43,25 @@ export {
   type ContractReport,
   checkContract,
   DEFAULT_INTERNAL_ROUTES,
+  type FormatContractReportOptions,
   findWritesWithoutCsrf,
   formatContractReport,
+  formatContractWarnings,
   type RegisteredRoute,
 } from './contract-check.ts';
 export {
   isDatabaseUnavailable,
+  payloadTooLarge,
   type ResolvedError,
   ResponseContractError,
   resolveError,
+  unsupportedMediaType,
 } from './errors.ts';
 export {
   type CheckResult,
+  createReadinessLogger,
   type DatabaseReadinessOptions,
+  DEFAULT_CHECK_TIMEOUT_MS,
   databaseReadiness,
   type ReadinessCheck,
   type ReadinessChecks,
@@ -71,6 +82,7 @@ export {
   type MetricsRegistry,
   registerProcessMetrics,
 } from './metrics.ts';
+export { createRequestState, type RequestState } from './request-state.ts';
 export {
   type RunningServer,
   type SignalSource,
@@ -78,10 +90,21 @@ export {
   startServer,
 } from './server.ts';
 export {
+  createEventStreamTracker,
+  type EventStreams,
+  type EventStreamTracker,
+  formatSseComment,
+  formatSseEvent,
+  SSE_CONTENT_TYPE,
+  SSE_HEADERS,
+  type SseEvent,
+} from './sse.ts';
+export {
   type ContractValidator,
   createContractValidator,
   type OperationValidator,
   type RequestParts,
   type ResponseCheck,
+  type SchemaValidator,
   toFieldErrors,
 } from './validation.ts';

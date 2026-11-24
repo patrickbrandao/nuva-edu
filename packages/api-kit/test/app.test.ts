@@ -326,7 +326,7 @@ describe('validação da requisição', () => {
     expect(called).toBe(false);
   });
 
-  it('corpo ausente, JSON malformado, tipo errado e corpo grande demais são 400', async () => {
+  it('corpo ausente e JSON malformado são 400; tipo não aceito é 415; corpo grande demais é 413', async () => {
     const { app } = fullApp({}, { bodyLimit: 200 });
     const post = (headers: Record<string, string>, payload?: string) =>
       app.inject({
@@ -338,13 +338,7 @@ describe('validação da requisição', () => {
 
     const absent = await post({});
     const malformed = await post({ 'content-type': 'application/json' }, '{"name": ');
-    const wrongType = await post({ 'content-type': 'text/plain' }, 'nome');
-    const unknownType = await post({ 'content-type': 'application/xml' }, '<a/>');
-    const tooLarge = await post(
-      { 'content-type': 'application/json' },
-      JSON.stringify({ name: 'a'.repeat(300) }),
-    );
-    for (const response of [absent, malformed, wrongType, unknownType, tooLarge]) {
+    for (const response of [absent, malformed]) {
       expect(response.statusCode).toBe(400);
       expect(response.headers['content-type']).toMatch(PROBLEM);
       expect(response.json().code).toBe('validation_failed');
@@ -352,9 +346,29 @@ describe('validação da requisição', () => {
     }
     expect(absent.json().errors[0].message).toBe('O corpo da requisição é obrigatório.');
     expect(malformed.json().errors[0].message).toBe('O corpo não é um JSON válido.');
-    expect(tooLarge.json().errors[0].message).toBe(
-      'O corpo da requisição passa do tamanho permitido.',
+
+    // `text/plain` o Fastify sabe ler, mas a operação não declara; `application/xml` nem ele lê.
+    const wrongType = await post({ 'content-type': 'text/plain' }, 'nome');
+    const unknownType = await post({ 'content-type': 'application/xml' }, '<a/>');
+    for (const response of [wrongType, unknownType]) {
+      expect(response.statusCode).toBe(415);
+      expect(response.headers['content-type']).toMatch(PROBLEM);
+      expect(response.json()).toMatchObject({ status: 415, code: 'unsupported_media_type' });
+      expect(response.json().errors).toBeUndefined();
+    }
+    expect(wrongType.json().detail).toBe('Tipo de conteúdo não aceito. Use application/json.');
+
+    const tooLarge = await post(
+      { 'content-type': 'application/json' },
+      JSON.stringify({ name: 'a'.repeat(300) }),
     );
+    expect(tooLarge.statusCode).toBe(413);
+    expect(tooLarge.headers['content-type']).toMatch(PROBLEM);
+    expect(tooLarge.json()).toMatchObject({
+      status: 413,
+      code: 'payload_too_large',
+      detail: 'O corpo da requisição passa do tamanho permitido.',
+    });
   });
 
   it('bodyLimit por operação vale no lugar do padrão', async () => {
@@ -381,7 +395,7 @@ describe('validação da requisição', () => {
       url: '/api/v1/auth/login',
       payload: { email: 'ana@example.com', password: 'x'.repeat(100) },
     });
-    expect(login.statusCode).toBe(400);
+    expect(login.statusCode).toBe(413);
   });
 });
 

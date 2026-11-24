@@ -42,14 +42,28 @@ export interface OperationValidator {
    * @returns os campos recusados; vazio quando a requisição está no contrato.
    */
   validateRequest(parts: RequestParts): FieldError[];
+  /**
+   * Diz se a operação aceita um corpo com este `Content-Type`. Sem corpo e sem cabeçalho, ou em
+   * operação que não declara corpo, é sempre verdadeiro. Falso vira `415` na base HTTP.
+   */
+  acceptsContentType(contentType: string | undefined, body: unknown): boolean;
   /** Confere status, tipo de mídia e corpo de uma resposta. */
   validateResponse(status: number, contentType: string | undefined, body: unknown): ResponseCheck;
   /** Diz se o contrato declara o status (exato, faixa `4XX` ou `default`). */
   declaresStatus(status: number): boolean;
 }
 
+/** Confere um valor contra um esquema; devolve os campos recusados (vazio: confere). */
+export type SchemaValidator = (value: unknown, prefix?: string) => FieldError[];
+
 export interface ContractValidator {
   for(operation: ContractOperation): OperationValidator;
+  /**
+   * Validador de um esquema avulso de `components.schemas` (por exemplo `StreamEvent`), com os
+   * tipos exatos, sem conversão. Lança `ContractError` se o esquema não existir.
+   * O `prefix` (padrão: o nome do esquema) abre o `path` de cada campo recusado.
+   */
+  schema(name: string): SchemaValidator;
 }
 
 /**
@@ -96,7 +110,29 @@ export function createContractValidator(contract: Contract): ContractValidator {
   };
 
   const cache = new Map<string, OperationValidator>();
+  const schemas = new Map<string, SchemaValidator>();
   return {
+    schema(name) {
+      let validator = schemas.get(name);
+      if (!validator) {
+        const components = (contract.document.components ?? {}) as { schemas?: unknown };
+        const declared = (components.schemas ?? {}) as Record<string, unknown>;
+        if (!Object.hasOwn(declared, name)) {
+          throw new ContractError(`${contract.source}: não existe o esquema "${name}".`);
+        }
+        const pointer = name.replace(/~/g, '~0').replace(/\//g, '~1');
+        const validate = compile(
+          exact,
+          { $ref: `#/components/schemas/${pointer}` },
+          `esquema ${name}`,
+        );
+        validator = (value, prefix = name) =>
+          validate(value) ? [] : toFieldErrors(validate.errors, prefix);
+        schemas.set(name, validator);
+      }
+      return validator;
+    },
+
     for(operation) {
       let validator = cache.get(operation.operationId);
       if (!validator) {
@@ -203,6 +239,17 @@ function buildOperationValidator(
         }
       }
       return errors;
+    },
+
+    acceptsContentType(contentType, body) {
+      if (!operation.requestBody) {
+        return true;
+      }
+      const absent = body === undefined || body === null;
+      if (absent && !hasContentType(contentType)) {
+        return true;
+      }
+      return pickMediaType(bodies, contentType) !== undefined;
     },
 
     validateResponse(status, contentType, body) {

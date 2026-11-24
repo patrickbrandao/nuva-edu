@@ -3,9 +3,13 @@ export type Labels = Readonly<Record<string, string | number>>;
 
 export interface Counter {
   inc(labels?: Labels, value?: number): void;
+  /** Valor atual da série (0 se nunca contou): para testes e para somar na coleta. */
+  get(labels?: Labels): number;
 }
 
 export interface Gauge {
+  /** Valor guardado da série (0 se não houver); não chama o `collect`. */
+  get(labels?: Labels): number;
   set(value: number, labels?: Labels): void;
   inc(labels?: Labels, value?: number): void;
   dec(labels?: Labels, value?: number): void;
@@ -85,6 +89,7 @@ export function createMetricsRegistry(): MetricsRegistry {
           const key = serializeLabels(labels);
           series.set(key, (series.get(key) ?? 0) + value);
         },
+        get: (labels = {}) => series.get(serializeLabels(labels)) ?? 0,
       };
     },
 
@@ -111,6 +116,7 @@ export function createMetricsRegistry(): MetricsRegistry {
         set(value, labels = {}) {
           series.set(serializeLabels(labels), value);
         },
+        get: (labels = {}) => series.get(serializeLabels(labels)) ?? 0,
         inc: (labels = {}, value = 1) => add(labels, value),
         dec: (labels = {}, value = 1) => add(labels, -value),
       };

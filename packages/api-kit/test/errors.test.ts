@@ -50,7 +50,7 @@ describe('resolveError', () => {
     ).toMatchObject({ status: 500, code: 'internal_error' });
   });
 
-  it('erros de requisição do Fastify viram validation_failed', () => {
+  it('erros de requisição do Fastify viram validation_failed, salvo 413 e 415', () => {
     const invalidJson = withCode('Unexpected token', {
       code: 'FST_ERR_CTP_INVALID_JSON_BODY',
       statusCode: 400,
@@ -65,10 +65,21 @@ describe('resolveError', () => {
       },
     });
     const tooLarge = withCode('too large', { code: 'FST_ERR_CTP_BODY_TOO_LARGE', statusCode: 413 });
-    expect(resolveError(tooLarge, '/x').problem).toMatchObject({
-      status: 400,
-      code: 'validation_failed',
-      errors: [{ path: 'body', message: 'O corpo da requisição passa do tamanho permitido.' }],
+    expect(resolveError(tooLarge, '/x')).toMatchObject({
+      kind: 'expected',
+      problem: {
+        status: 413,
+        code: 'payload_too_large',
+        detail: 'O corpo da requisição passa do tamanho permitido.',
+      },
+    });
+    const mediaType = withCode('unsupported', {
+      code: 'FST_ERR_CTP_INVALID_MEDIA_TYPE',
+      statusCode: 415,
+    });
+    expect(resolveError(mediaType, '/x')).toMatchObject({
+      kind: 'expected',
+      problem: { status: 415, code: 'unsupported_media_type' },
     });
     const badUrl = withCode('bad url', { code: 'FST_ERR_BAD_URL', statusCode: 400 });
     expect(resolveError(badUrl, '/x').problem).toMatchObject({

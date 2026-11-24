@@ -1,3 +1,4 @@
+import type { Readable } from 'node:stream';
 import {
   type Logger,
   notFound,
@@ -30,7 +31,7 @@ import {
   DEFAULT_INTERNAL_ROUTES,
   type RegisteredRoute,
 } from './contract-check.ts';
-import { ResponseContractError, resolveError } from './errors.ts';
+import { ResponseContractError, resolveError, unsupportedMediaType } from './errors.ts';
 import {
   createReadinessLogger,
   DEFAULT_CHECK_TIMEOUT_MS,
@@ -44,7 +45,8 @@ import {
   type MetricsRegistry,
   registerProcessMetrics,
 } from './metrics.ts';
-import { createContractValidator } from './validation.ts';
+import { createEventStreamTracker, type EventStreams, SSE_HEADERS } from './sse.ts';
+import { createContractValidator, type SchemaValidator } from './validation.ts';
 
 /** Onde uma exigência de segurança está sendo conferida. */
 export interface SecurityContext {
@@ -100,10 +102,50 @@ export interface ApiAppOptions {
   readinessTimeoutMs?: number;
   /** Registro de métricas já existente; por padrão a base cria um. */
   metrics?: MetricsRegistry;
+  /**
+   * `true` no serviço que tem fluxo SSE: registra o medidor `sse_connections` e fecha os fluxos
+   * abertos no `preClose`. Sem isto, `app.eventStreams.open(...)` lança.
+   */
+  eventStreams?: boolean;
+}
+
+/**
+ * Status registrado no log e em `http_requests_total` quando o cliente fecha a conexão antes
+ * de a resposta terminar (o fim normal de um fluxo SSE). É o código que o nginx usa para o
+ * mesmo caso; nunca vai ao cliente.
+ */
+export const CLIENT_CLOSED_REQUEST_STATUS = 499;
+
+/**
+ * Campos que a API acrescenta ao `request`, com tipo e sem depender de `fastify`:
+ *
+ * ```ts
+ * declare module '@nuva-edu/api-kit' {
+ *   interface ApiRequestExtensions { session: SessionUser | null }
+ * }
+ * app.decorateRequest('session', null);
+ * ```
+ *
+ * Para um dado que não precisa estar no `request`, `createRequestState` é mais simples.
+ */
+// biome-ignore lint/suspicious/noEmptyInterface: ponto de extensão preenchido por quem usa o pacote.
+export interface ApiRequestExtensions {}
+
+/** Campos que a API acrescenta à instância (`app.decorate`), como `ApiRequestExtensions`. */
+// biome-ignore lint/suspicious/noEmptyInterface: ponto de extensão preenchido por quem usa o pacote.
+export interface ApiInstanceExtensions {}
+
+/** Fluxos SSE do serviço, mais a abertura de um fluxo numa resposta. */
+export interface ApiEventStreams extends EventStreams {
+  /**
+   * Prepara a resposta SSE (cabeçalhos `SSE_HEADERS`), passa a contar o fluxo em
+   * `sse_connections` e o devolve para a rota retornar: `return app.eventStreams.open(reply, s)`.
+   */
+  open<T extends Readable>(reply: FastifyReply, stream: T): T;
 }
 
 declare module 'fastify' {
-  interface FastifyInstance {
+  interface FastifyInstance extends ApiInstanceExtensions {
     /** Contrato que este serviço implementa. */
     contract: Contract;
     /** Registro de métricas exposto em `/metrics`; as APIs criam as suas aqui. */
@@ -117,9 +159,18 @@ declare module 'fastify' {
     /** Rotas registradas até agora. */
     registeredRoutes(): RegisteredRoute[];
     /** Compara as rotas registradas com o contrato; é o que o teste de contrato chama. */
-    checkContract(options?: Pick<ContractCheckOptions, 'csrfExceptions'>): ContractReport;
+    checkContract(
+      options?: Pick<ContractCheckOptions, 'csrfExceptions' | 'allowPending'>,
+    ): ContractReport;
+    /**
+     * Validador de um esquema avulso de `components.schemas` do contrato (como `StreamEvent`):
+     * `app.contractSchema('StreamEvent')(valor)` devolve os campos recusados.
+     */
+    contractSchema(name: string): SchemaValidator;
+    /** Fluxos SSE abertos; exige `eventStreams: true` em `createApiApp`. */
+    eventStreams: ApiEventStreams;
   }
-  interface FastifyRequest {
+  interface FastifyRequest extends ApiRequestExtensions {
     /** IP real do cliente e IP da conexão, já resolvidos conforme `TRUSTED_PROXIES`. */
     client: ClientAddress;
     /** Operação do contrato atendida; `null` em `/metrics` e em rota inexistente. */
@@ -202,41 +253,99 @@ export function createApiApp(options: ApiAppOptions): FastifyInstance {
   app.decorate('contract', contract);
   app.decorate('metrics', metrics);
   app.decorate('registeredRoutes', () => [...routes]);
-  app.decorate('checkContract', (check = {}) =>
-    checkContract(contract, routes, { ...check, internalRoutes }),
-  );
+  // Pendente que já tem rota: não impede nada, mas a marca precisa sair do contrato (spec 003).
+  const warnPendingWithRoute = (report: ContractReport): void => {
+    if (report.pendingWithRoute.length > 0) {
+      logger.warn(
+        { operations: report.pendingWithRoute },
+        'Operações com x-nuva-pending já têm rota: a marca precisa sair do contrato',
+      );
+    }
+  };
+  app.decorate('checkContract', (check = {}) => {
+    const report = checkContract(contract, routes, { ...check, internalRoutes });
+    warnPendingWithRoute(report);
+    return report;
+  });
+  app.decorate('contractSchema', (name) => validator.schema(name));
+
+  const streams = createEventStreamTracker();
+  if (options.eventStreams) {
+    metrics.gauge({
+      name: 'sse_connections',
+      help: 'Conexões SSE abertas neste processo.',
+      collect: () => streams.count(),
+    });
+    // Antes de o servidor parar de aceitar conexões: fluxo aberto seguraria o encerramento
+    // até o prazo do SIGTERM.
+    app.addHook('preClose', async () => {
+      streams.closeAll();
+    });
+  }
+  app.decorate('eventStreams', {
+    count: streams.count,
+    closeAll: streams.closeAll,
+    open(reply, stream) {
+      if (!options.eventStreams) {
+        throw new TypeError('Fluxo SSE exige "eventStreams: true" em createApiApp.');
+      }
+      streams.track(stream);
+      reply.headers(SSE_HEADERS);
+      return stream;
+    },
+  });
   app.decorateRequest('operation', null);
   app.decorateRequest('problemCode', null);
   // Preenchido no primeiro gancho de toda requisição.
   app.decorateRequest('client', null as unknown as ClientAddress);
 
+  // Cada requisição é registrada (log e métricas) uma vez só: no fim da resposta ou, se o
+  // cliente fechar antes, no aborto. O que chegar depois é ignorado.
+  const replies = new WeakMap<FastifyRequest, FastifyReply>();
+  const settled = new WeakSet<FastifyRequest>();
+  const settle = (request: FastifyRequest, status: number, elapsedMs: number, aborted: boolean) => {
+    if (settled.has(request)) {
+      return;
+    }
+    settled.add(request);
+    const route = request.is404 ? 'unmatched' : (request.routeOptions.url ?? 'unmatched');
+    if (route !== METRICS_PATH) {
+      requestsTotal.inc({ route, method: request.method, status });
+      requestDuration.observe(elapsedMs / 1000, { route, method: request.method });
+    }
+    const line = {
+      method: request.method,
+      route,
+      status,
+      duration_ms: Math.round(elapsedMs),
+      client_ip: request.client?.ip,
+      client_ip_source: request.client?.source,
+      peer_ip: request.client?.peerIp,
+      ...(aborted ? { aborted: true } : {}),
+      ...(request.problemCode === null ? {} : { error_code: request.problemCode }),
+    };
+    const message = aborted ? 'Requisição encerrada pelo cliente' : 'Requisição atendida';
+    if (PROBE_PATHS.has(route)) {
+      request.log.debug(line, message);
+    } else {
+      request.log.info(line, message);
+    }
+  };
+
   app.addHook('onRequest', async (request, reply) => {
+    replies.set(request, reply);
     request.client = resolveClientAddress(request.socket.remoteAddress, request.headers, trusted);
     reply.header('X-Request-Id', request.id);
   });
 
   app.addHook('onResponse', async (request, reply) => {
-    const route = request.is404 ? 'unmatched' : (request.routeOptions.url ?? 'unmatched');
-    const seconds = reply.elapsedTime / 1000;
-    if (route !== METRICS_PATH) {
-      requestsTotal.inc({ route, method: request.method, status: reply.statusCode });
-      requestDuration.observe(seconds, { route, method: request.method });
-    }
-    const line = {
-      method: request.method,
-      route,
-      status: reply.statusCode,
-      duration_ms: Math.round(reply.elapsedTime),
-      client_ip: request.client?.ip,
-      client_ip_source: request.client?.source,
-      peer_ip: request.client?.peerIp,
-      ...(request.problemCode === null ? {} : { error_code: request.problemCode }),
-    };
-    if (PROBE_PATHS.has(route)) {
-      request.log.debug(line, 'Requisição atendida');
-    } else {
-      request.log.info(line, 'Requisição atendida');
-    }
+    settle(request, reply.statusCode, reply.elapsedTime, false);
+  });
+
+  // O cliente fechou a conexão antes do fim da resposta (o caso normal do SSE): o `onResponse`
+  // não roda, então a linha de log e a métrica saem daqui, com o status convencional 499.
+  app.addHook('onRequestAbort', async (request) => {
+    settle(request, CLIENT_CLOSED_REQUEST_STATUS, replies.get(request)?.elapsedTime ?? 0, true);
   });
 
   const sendProblem = (request: FastifyRequest, reply: FastifyReply, candidate: Problem) => {
@@ -312,6 +421,10 @@ export function createApiApp(options: ApiAppOptions): FastifyInstance {
         await authorize(request, operation, security);
       },
       preValidation: async (request) => {
+        if (!checks.acceptsContentType(request.headers['content-type'], request.body)) {
+          const accepted = Object.keys(operation.requestBody?.content ?? {}).join(' ou ');
+          throw unsupportedMediaType(`Tipo de conteúdo não aceito. Use ${accepted}.`);
+        }
         const errors = checks.validateRequest({
           params: request.params,
           query: request.query,
@@ -389,6 +502,14 @@ export function createApiApp(options: ApiAppOptions): FastifyInstance {
         ok: false,
       });
     }
+    // Sem rota é o caso normal da janela de contrato: só informa.
+    if (report.pendingOperations.length > 0) {
+      logger.info(
+        { operations: report.pendingOperations },
+        'Operações do contrato com x-nuva-pending ainda sem rota',
+      );
+    }
+    warnPendingWithRoute(report);
   });
 
   return app;

@@ -64,6 +64,20 @@ describe('createMetricsRegistry', () => {
     expect(registry.render()).toContain('# TYPE answer gauge\nanswer 42\n');
   });
 
+  it('lê o valor atual de contador e de medidor', () => {
+    const registry = createMetricsRegistry();
+    const jobs = registry.counter({ name: 'jobs_total', help: 'Tarefas.' });
+    jobs.inc({ type: 'email', outcome: 'done' });
+    jobs.inc({ outcome: 'done', type: 'email' }, 2);
+    expect(jobs.get({ type: 'email', outcome: 'done' })).toBe(3);
+    expect(jobs.get({ type: 'email', outcome: 'failed' })).toBe(0);
+    expect(jobs.get()).toBe(0);
+    const running = registry.gauge({ name: 'jobs_running', help: 'Em execução.' });
+    running.set(4);
+    running.dec();
+    expect(running.get()).toBe(3);
+  });
+
   it('escapa valores de rótulo e texto de ajuda', () => {
     const registry = createMetricsRegistry();
     registry.counter({ name: 'c_total', help: 'Linha 1\nlinha 2 \\ fim' }).inc({ v: 'a"b\\c\nd' });

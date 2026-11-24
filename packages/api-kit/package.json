@@ -6,7 +6,9 @@
   "license": "AGPL-3.0-only",
   "type": "module",
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./health": "./src/health.ts",
+    "./metrics": "./src/metrics.ts"
   },
   "scripts": {
     "test": "vitest run",

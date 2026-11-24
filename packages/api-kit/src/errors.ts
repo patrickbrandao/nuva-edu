@@ -28,10 +28,28 @@ export interface ResolvedError {
   kind: 'expected' | 'unexpected';
 }
 
+/** 413: o corpo passa do limite do serviço ou da operação (spec 003). */
+export function payloadTooLarge(detail?: string): DomainError {
+  return new DomainError({
+    code: 'payload_too_large',
+    status: 413,
+    title: 'Corpo grande demais',
+    detail: detail ?? 'O corpo da requisição passa do tamanho permitido.',
+  });
+}
+
+/** 415: o `Content-Type` da requisição não é aceito pela operação (spec 003). */
+export function unsupportedMediaType(detail?: string): DomainError {
+  return new DomainError({
+    code: 'unsupported_media_type',
+    status: 415,
+    title: 'Tipo de conteúdo não suportado',
+    detail: detail ?? 'Tipo de conteúdo não aceito.',
+  });
+}
+
 /** Erros de requisição do próprio Fastify, com a mensagem que vai ao cliente. */
 const CLIENT_ERRORS: Record<string, string> = {
-  FST_ERR_CTP_BODY_TOO_LARGE: 'O corpo da requisição passa do tamanho permitido.',
-  FST_ERR_CTP_INVALID_MEDIA_TYPE: 'Tipo de conteúdo não aceito.',
   FST_ERR_CTP_INVALID_CONTENT_LENGTH: 'O Content-Length não confere com o corpo enviado.',
   FST_ERR_CTP_EMPTY_JSON_BODY: 'O corpo está vazio, mas o Content-Type é application/json.',
   FST_ERR_CTP_INVALID_JSON_BODY: 'O corpo não é um JSON válido.',
@@ -88,8 +106,9 @@ export function isDatabaseUnavailable(error: unknown, depth = 0): boolean {
 
 /**
  * Converte qualquer erro de uma requisição no problem+json da spec 003:
- * `DomainError` sai como está; erro de requisição do Fastify vira `validation_failed` (400);
- * rota inexistente, `not_found` (404); banco fora do ar, `database_unavailable` (503); o resto,
+ * `DomainError` sai como está; erro de requisição do Fastify vira `validation_failed` (400),
+ * salvo corpo acima do limite (`payload_too_large`, 413) e `Content-Type` sem suporte
+ * (`unsupported_media_type`, 415); rota inexistente, `not_found` (404); banco fora do ar, `database_unavailable` (503); o resto,
  * `internal_error` (500) sem detalhe.
  */
 export function resolveError(error: unknown, instance: string | undefined): ResolvedError {
@@ -137,6 +156,12 @@ function clientError(error: unknown): DomainError | null {
   }
   if (statusCode === 404) {
     return notFound();
+  }
+  if (code === 'FST_ERR_CTP_BODY_TOO_LARGE') {
+    return payloadTooLarge();
+  }
+  if (code === 'FST_ERR_CTP_INVALID_MEDIA_TYPE') {
+    return unsupportedMediaType();
   }
   const known = CLIENT_ERRORS[code];
   const isBody = code.startsWith('FST_ERR_CTP_');

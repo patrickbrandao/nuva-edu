@@ -19,6 +19,11 @@ export interface ContractCheckOptions {
    * na descrição da operação no contrato (spec 003, "CSRF no contrato").
    */
   csrfExceptions?: readonly string[];
+  /**
+   * `false` faz qualquer operação com `x-nuva-pending` (com ou sem rota) virar divergência: é o
+   * `check-contract --no-pending` do `verify:full` e da release (spec 003). Padrão: `true`.
+   */
+  allowPending?: boolean;
 }
 
 export interface ContractReport {
@@ -30,7 +35,22 @@ export interface ContractReport {
   writesWithoutCsrf: string[];
   /** Exceções que não existem mais ou que já declaram `csrfToken`: a lista precisa ser limpa. */
   staleCsrfExceptions: string[];
-  /** Verdadeiro quando as quatro listas estão vazias. */
+  /**
+   * Aviso, não divergência: operações com `x-nuva-pending: true` ainda sem rota
+   * (`MÉTODO /caminho`). Não entram em `ok`.
+   */
+  pendingOperations: string[];
+  /**
+   * Aviso, não divergência: operações com `x-nuva-pending: true` que já têm rota; a marca pode
+   * sair do contrato. Não entram em `ok`.
+   */
+  pendingWithRoute: string[];
+  /**
+   * Divergência: todas as operações pendentes, quando a conferência foi feita com
+   * `allowPending: false`. Vazia no modo padrão.
+   */
+  pendingNotAllowed: string[];
+  /** Verdadeiro quando as listas de divergência estão vazias (avisos não contam). */
   ok: boolean;
 }
 
@@ -58,7 +78,16 @@ export function checkContract(
   const routesMissingInContract = [...registered]
     .filter((key) => !declared.has(key) && !internal.has(key))
     .sort();
-  const operationsMissingInApp = [...declared].filter((key) => !registered.has(key)).sort();
+  const pending = new Set(
+    contract.operations.filter((operation) => operation.pending).map((operation) => operation.key),
+  );
+  // Operação pendente (`x-nuva-pending`): o contrato veio antes; a falta da rota é só aviso.
+  const operationsMissingInApp = [...declared]
+    .filter((key) => !registered.has(key) && !pending.has(key))
+    .sort();
+  const pendingOperations = [...pending].filter((key) => !registered.has(key)).sort();
+  const pendingWithRoute = [...pending].filter((key) => registered.has(key)).sort();
+  const pendingNotAllowed = options.allowPending === false ? [...pending].sort() : [];
 
   const exceptions = new Set(options.csrfExceptions ?? []);
   const withoutCsrf = new Set(findWritesWithoutCsrf(contract));
@@ -70,11 +99,15 @@ export function checkContract(
     operationsMissingInApp,
     writesWithoutCsrf,
     staleCsrfExceptions,
+    pendingOperations,
+    pendingWithRoute,
+    pendingNotAllowed,
     ok:
       routesMissingInContract.length === 0 &&
       operationsMissingInApp.length === 0 &&
       writesWithoutCsrf.length === 0 &&
-      staleCsrfExceptions.length === 0,
+      staleCsrfExceptions.length === 0 &&
+      pendingNotAllowed.length === 0,
   };
 }
 
@@ -93,8 +126,22 @@ export function findWritesWithoutCsrf(contract: Contract): string[] {
     .map((operation) => operation.operationId);
 }
 
-/** Texto das divergências, uma por linha; vazio quando não há nenhuma. */
-export function formatContractReport(report: ContractReport): string {
+export interface FormatContractReportOptions {
+  /**
+   * Acrescenta os avisos (operações pendentes), cada linha começando por `aviso:`. Padrão:
+   * `false`, para o texto continuar vazio quando não há divergência.
+   */
+  warnings?: boolean;
+}
+
+/**
+ * Texto das divergências, uma por linha; vazio quando não há nenhuma. Com `warnings: true`,
+ * lista também as operações pendentes (`x-nuva-pending`), que não são divergência.
+ */
+export function formatContractReport(
+  report: ContractReport,
+  options: FormatContractReportOptions = {},
+): string {
   const lines: string[] = [];
   const add = (title: string, items: readonly string[]) => {
     for (const item of items) {
@@ -105,7 +152,23 @@ export function formatContractReport(report: ContractReport): string {
   add('operação do contrato sem rota', report.operationsMissingInApp);
   add('escrita sem csrfToken no security', report.writesWithoutCsrf);
   add('exceção de CSRF que não se aplica mais', report.staleCsrfExceptions);
+  add('operação ainda marcada com x-nuva-pending', report.pendingNotAllowed);
+  if (options.warnings) {
+    lines.push(...formatContractWarnings(report));
+  }
   return lines.join('\n');
+}
+
+/** Avisos do relatório, um por item, cada um começando por `aviso:`; vazio quando não há. */
+export function formatContractWarnings(report: ContractReport): string[] {
+  return [
+    ...report.pendingOperations.map(
+      (item) => `aviso: operação pendente (x-nuva-pending) ainda sem rota: ${item}`,
+    ),
+    ...report.pendingWithRoute.map(
+      (item) => `aviso: operação pendente (x-nuva-pending) já tem rota; remova a marca: ${item}`,
+    ),
+  ];
 }
 
 /** Contrato e serviço divergem: o serviço não sobe (spec 003, "Casos de erro"). */
