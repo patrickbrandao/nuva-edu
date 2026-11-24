@@ -29,7 +29,7 @@ A `admin-api` é o backend do site de administração (`https://<NUVA_ADMIN_HOST
 
 - Sessão por cookie `nuva_admin_session` (httpOnly, Secure, SameSite=Lax, escopo `NUVA_ADMIN_HOST`), descrita em [007](007-contas-e-autenticacao.md).
 - Toda rota declara a permissão exigida; a checagem usa a matriz de [008](008-papeis-e-permissoes.md), implementada em `packages/core` e compartilhada com o MCP.
-- Requisições que alteram dados exigem o cabeçalho `X-CSRF-Token` igual ao token emitido em `GET /api/v1/session`.
+- Requisições que alteram dados exigem o cabeçalho `X-CSRF-Token` igual ao token emitido em `GET /api/v1/session`. Ausente ou diferente: `403` com `code: csrf_token_invalid`, e nada é alterado. Detalhes em [CSRF no contrato](#csrf-no-contrato).
 - O MCP não usa cookie: autentica por chave no cabeçalho `Authorization: Bearer` ([027](027-mcp.md)).
 
 ### Convenções da API
@@ -38,15 +38,57 @@ A `admin-api` é o backend do site de administração (`https://<NUVA_ADMIN_HOST
 | --- | --- |
 | Caminhos no contrato | O `servers` do contrato é a origem do site (`/`); cada caminho aparece completo (`/api/v1/...`, `/healthz`, `/readyz`), igual à rota registrada. |
 | Formato | JSON em UTF-8; campos em `camelCase`; datas ISO 8601 em UTC; dinheiro em centavos inteiros. |
-| Erros | `application/problem+json` (RFC 9457) com `type`, `title`, `status`, `detail`, `instance`, `code` (identificador estável, ex.: `permission_denied`) e, em validação, `errors[]` com `path` e `message`. |
-| Códigos | `400` validação, `401` sem sessão, `403` sem permissão, `404` inexistente ou fora do alcance do instrutor, `409` conflito de estado, `422` regra de negócio, `429` limite de taxa, `503` dependência indisponível. |
-| Paginação | Por cursor: `?limit=` (padrão 25, máximo 100) e `?cursor=`; resposta `{ items, nextCursor }`, com `nextCursor` nulo na última página. |
+| Erros | `application/problem+json` (RFC 9457) com `type`, `title`, `status`, `detail`, `instance`, `code` (identificador estável, ver [Códigos de erro](#códigos-de-erro)) e, em validação, `errors[]` com `path` e `message`. |
+| Status | `400` validação, `401` sem sessão, `403` sem permissão, `404` inexistente ou fora do alcance do instrutor, `409` conflito de estado, `422` regra de negócio, `429` limite de taxa, `500` erro inesperado, `503` dependência indisponível. |
+| Paginação | Por cursor: `?limit=` (padrão 25, máximo 100) e `?cursor=`; resposta `{ items, nextCursor }`, com `nextCursor` nulo na última página. No contrato, o esquema comum `Page` traz só `nextCursor`; cada listagem o compõe com `allOf` e declara `items` (obrigatório, com o esquema dos itens) no próprio membro, para o cliente gerado tipar os itens. |
 | Ordenação e filtro | `?sort=campo` ou `-campo`; filtros como parâmetros nomeados, todos listados no contrato. |
 | Busca | `?q=` com busca textual simples (`ILIKE` com índice trigram) onde o contrato indicar. |
 | Idempotência | `POST` que cria cobrança, estorno ou concessão aceita `Idempotency-Key`; repetição devolve a primeira resposta por 24 h. |
 | Concorrência | Edição de recurso envia `version` (inteiro); divergência resulta em `409`. |
 | Rastreamento | Toda resposta traz `X-Request-Id`, presente também nos logs. |
 | IP do cliente | Derivado de `X-Forwarded-For` apenas quando o remetente está em `TRUSTED_PROXIES`. |
+
+### Códigos de erro
+
+O `code` do problem+json é o que o cliente usa para decidir o que fazer; `title` e `detail` são texto para pessoas e podem mudar. Os códigos gerais abaixo valem para as duas APIs, estão no esquema `Problem` dos dois contratos e são os que `packages/core` (`errors/`) produz.
+
+| `code` | Status | Quando | Campo extra |
+| --- | --- | --- | --- |
+| `validation_failed` | 400 | Requisição fora do contrato | `errors[]` |
+| `unauthenticated` | 401 | Sem sessão válida | |
+| `permission_denied` | 403 | Sessão válida, sem permissão para a operação | |
+| `csrf_token_invalid` | 403 | Escrita sem `X-CSRF-Token` ou com token diferente do da sessão | |
+| `not_found` | 404 | Recurso inexistente ou fora do alcance de quem pede | |
+| `version_conflict` | 409 | `version` enviada diferente da gravada | |
+| `rate_limited` | 429 | Limite de taxa atingido | `retryAfterSeconds` |
+| `internal_error` | 500 | Erro inesperado; sem `detail`, o erro original vai só para o log | |
+| `database_unavailable` | 503 | Banco indisponível | |
+| `payment_provider_unavailable` | 503 | Provedor de pagamento indisponível | |
+
+Regras:
+
+- Formato: `snake_case` (`^[a-z][a-z0-9_]*$`).
+- `409`, `422` e `503` não têm código genérico: cada ocorrência usa um código próprio da regra (`topic_closed`, `last_admin`), definido na spec do recurso e citado na descrição da operação no contrato. Recusa de acesso com motivo que a interface precisa distinguir também usa código próprio com `403` (`account_suspended`, `entitlement_required`).
+- A lista é aberta: código novo entra pela spec do recurso; um código existente só muda de nome ou de status com mudança de versão da API. Código geral novo entra nesta tabela e no esquema `Problem` dos dois contratos.
+- `retryAfterSeconds` (inteiro) repete o cabeçalho `Retry-After` e acompanha `rate_limited` quando o tempo é conhecido.
+- `unknown_error` não é emitido pelas APIs: é o que `packages/api-client` usa quando a resposta de erro não é um problem+json.
+
+### CSRF no contrato
+
+A API recusa toda requisição que altera dados sem `X-CSRF-Token` válido. No contrato, essa exigência é o esquema de segurança `csrfToken` (cabeçalho `X-CSRF-Token`), declarado na mesma entrada de `sessionCookie` no `security` de cada operação de escrita:
+
+```yaml
+security:
+  - sessionCookie: []
+    csrfToken: []
+```
+
+Não há parâmetro de cabeçalho para o token. Como parâmetro obrigatório, o tipo gerado cobraria o cabeçalho em cada chamada, embora o cliente de `packages/api-client` o preencha sozinho; como parâmetro opcional, o contrato diria que a API aceita escrita sem ele. Como esquema de segurança, o contrato continua dizendo a verdade e a chamada tipada não muda.
+
+- Leituras (`GET`, `HEAD`, `OPTIONS`) usam só o `security` padrão (`sessionCookie`).
+- A checagem é feita pela API antes da rota, junto com a da sessão, e não pela validação de parâmetros; por isso a falta do cabeçalho é `403`, não `400`.
+- Operação de escrita sem `csrfToken` no `security` é exceção e diz o motivo na descrição.
+- O teste de contrato confere que toda operação que não é de leitura declara `csrfToken` ou está na lista de exceções.
 
 ### Grupos de rotas
 
@@ -105,8 +147,9 @@ Lê as demais tabelas. Retenção: [033](033-observabilidade-retencao-backup.md)
 - [ ] Toda rota registrada existe em `apps/admin-api/openapi.yaml` e vice-versa (teste de contrato).
 - [ ] Sessão de `student` recebe `403` em qualquer rota de `/api/v1`, exceto `/auth/*` e `/meta`.
 - [ ] `instructor` recebe `404` ao pedir curso, aula, tópico ou progresso de curso que não é seu.
-- [ ] Erros seguem `application/problem+json` com `code` estável.
-- [ ] Requisição que altera dados sem `X-CSRF-Token` válido recebe `403`.
+- [ ] Erros seguem `application/problem+json` com `code` estável, e os códigos gerais são os da tabela de [Códigos de erro](#códigos-de-erro).
+- [ ] Requisição que altera dados sem `X-CSRF-Token` válido recebe `403` com `code: csrf_token_invalid`.
+- [ ] Toda operação de escrita do contrato declara `csrfToken` no `security`.
 - [ ] Nenhuma resposta de `/users` contém a senha; só a rota de exibição a devolve, e apenas para `admin`.
 - [ ] Toda alteração gera linha em `audit_log`.
 - [ ] `/readyz` responde `503` com banco fora do ar ou em versão de migration diferente da esperada.

@@ -28,14 +28,14 @@ A `classroom-api` é o backend do site do aluno (`https://<NUVA_CLASSROOM_HOST>`
 ### Autenticação e autorização
 
 - Sessão por cookie `nuva_classroom_session` (httpOnly, Secure, SameSite=Lax, escopo `NUVA_CLASSROOM_HOST`), independente do cookie do admin ([007](007-contas-e-autenticacao.md)).
-- Requisições que alteram dados exigem `X-CSRF-Token`, exceto o webhook de pagamento (autenticado por assinatura) e os retornos OAuth (protegidos por `state`).
+- Requisições que alteram dados exigem `X-CSRF-Token` (sem ele, `403` com `code: csrf_token_invalid`), exceto o webhook de pagamento (autenticado por assinatura) e os retornos OAuth (protegidos por `state`). No contrato, a exigência é o esquema de segurança `csrfToken`, como na `admin-api` ([003](003-admin-api.md), "CSRF no contrato"); as exceções não o declaram e dizem o motivo na descrição.
 - Usuário suspenso tem as sessões derrubadas e recebe `403` com `code: account_suspended`.
 - Usuário com e-mail não confirmado navega e assiste a conteúdo aberto, mas recebe `403` com `code: email_not_verified` ao comprar ou publicar.
 - A equipe usa a mesma API com a própria conta; o selo "Equipe" vem do papel.
 
 ### Convenções da API
 
-Iguais às da `admin-api` ([003](003-admin-api.md)): caminhos completos no contrato, JSON em `camelCase`, erros em `application/problem+json` com `code` estável, paginação por cursor (`limit` padrão 25, máximo 100), `Idempotency-Key` em criação de pedido e de assinatura, `X-Request-Id` em toda resposta, IP do cliente por `TRUSTED_PROXIES`.
+Iguais às da `admin-api` ([003](003-admin-api.md)): caminhos completos no contrato, JSON em `camelCase`, erros em `application/problem+json` com `code` estável (os códigos gerais e as regras para código próprio são os de "Códigos de erro" da 003), paginação por cursor (`limit` padrão 25, máximo 100; `Page` composto por `allOf`, com `items` declarado em cada listagem), `Idempotency-Key` em criação de pedido e de assinatura, `X-Request-Id` em toda resposta, IP do cliente por `TRUSTED_PROXIES`.
 
 Regra adicional: recurso que existe mas ao qual o aluno não tem direito responde `403` com `code: entitlement_required` e, no corpo, os produtos que o liberam (para a interface oferecer a compra). Produto `private` sem direito responde `404`.
 

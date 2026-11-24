@@ -14,14 +14,26 @@ info:
     versão da API. `/metrics` (texto Prometheus, só rede interna) não é descrita aqui.
 
     **Convenções.** JSON em UTF-8, campos em `camelCase`, datas ISO 8601 em UTC, dinheiro em
-    centavos inteiros. Erros em `application/problem+json` (RFC 9457) com `code` estável.
-    Listagens paginadas por cursor (`limit`, `cursor`) com resposta `{ items, nextCursor }`.
+    centavos inteiros. Erros em `application/problem+json` (RFC 9457) com `code` estável; os
+    códigos gerais estão no esquema `Problem` e em `specs/003-admin-api.md`.
+    Listagens paginadas por cursor (`limit`, `cursor`) com resposta `{ items, nextCursor }`:
+    cada listagem compõe `Page` por `allOf` e declara o próprio `items` (ver o esquema `Page`).
     Toda resposta traz `X-Request-Id`.
 
-    **Sessão.** Cookie `nuva_classroom_session` (HttpOnly, Secure, SameSite=Lax). Requisições que alteram
-    dados enviam `X-CSRF-Token`, obtido em `GET /api/v1/session`.
+    **Sessão.** Cookie `nuva_classroom_session` (HttpOnly, Secure, SameSite=Lax).
 
-    **Componentes comuns.** Os esquemas, parâmetros, cabeçalhos e respostas marcados como
+    **CSRF.** Toda operação que altera dados exige, além do cookie, o cabeçalho `X-CSRF-Token`
+    com o token devolvido em `GET /api/v1/session`; sem ele, ou com valor diferente, a resposta
+    é `403` com `code: csrf_token_invalid`. No contrato a exigência é o esquema de segurança
+    `csrfToken`, declarado junto de `sessionCookie` no `security` de cada operação de escrita, e
+    não um parâmetro de cabeçalho: é uma credencial da sessão, igual em todas as escritas, que o
+    cliente de `packages/api-client` preenche sozinho. Como parâmetro obrigatório, o tipo gerado
+    cobraria o cabeçalho em cada chamada; como parâmetro opcional, o contrato diria que a API
+    aceita escrita sem ele. Operação de escrita sem `csrfToken` no `security` é exceção e diz o
+    motivo na própria descrição.
+
+    **Componentes comuns.** Os esquemas, parâmetros, cabeçalhos, respostas e o esquema de
+    segurança `csrfToken`, marcados como
     "comum" em `components` são idênticos nos contratos da `admin-api` e da `classroom-api`;
     mudança em um é feita nos dois.
   license:
@@ -186,6 +198,25 @@ components:
       name: nuva_classroom_session
       description: |
         Identificador opaco da sessão (`specs/007-contas-e-autenticacao.md`). Vale só neste site.
+    # --- comum ---
+    csrfToken:
+      type: apiKey
+      in: header
+      name: X-CSRF-Token
+      description: |
+        Token CSRF da sessão, devolvido em `GET /api/v1/session`. Exigido, junto com
+        `sessionCookie`, em toda operação que altera dados:
+
+        ```yaml
+        security:
+          - sessionCookie: []
+            csrfToken: []
+        ```
+
+        Os dois na mesma entrada da lista, porque ambos são exigidos. Cabeçalho ausente ou
+        diferente do token da sessão: `403` com `code: csrf_token_invalid`. Não existe parâmetro
+        de cabeçalho para ele; o cliente gerado o preenche sozinho nas requisições que não são
+        `GET`, `HEAD`, `OPTIONS` ou `TRACE`.
   parameters:
     # --- comum ---
     Limit:
@@ -203,14 +234,6 @@ components:
       description: Valor de `nextCursor` da página anterior. Ausente na primeira página.
       schema:
         $ref: "#/components/schemas/Cursor"
-    CsrfToken:
-      name: X-CSRF-Token
-      in: header
-      required: true
-      description: Token da sessão, devolvido em `GET /api/v1/session`. Exigido em toda requisição que altera dados.
-      schema:
-        type: string
-        minLength: 1
     IdempotencyKey:
       name: Idempotency-Key
       in: header
@@ -259,7 +282,9 @@ components:
           schema:
             $ref: "#/components/schemas/Problem"
     Forbidden:
-      description: Sem permissão para a operação.
+      description: |
+        Sem permissão para a operação (`permission_denied`), escrita sem `X-CSRF-Token` válido
+        (`csrf_token_invalid`) ou outra recusa de acesso com `code` próprio.
       headers:
         X-Request-Id:
           $ref: "#/components/headers/XRequestId"
@@ -277,7 +302,7 @@ components:
           schema:
             $ref: "#/components/schemas/Problem"
     Conflict:
-      description: Conflito de estado (por exemplo, `version` divergente).
+      description: Conflito de estado, com `code` próprio (por exemplo, `version_conflict`).
       headers:
         X-Request-Id:
           $ref: "#/components/headers/XRequestId"
@@ -286,7 +311,7 @@ components:
           schema:
             $ref: "#/components/schemas/Problem"
     UnprocessableEntity:
-      description: Regra de negócio impede a operação.
+      description: Regra de negócio impede a operação; o `code` é o da regra.
       headers:
         X-Request-Id:
           $ref: "#/components/headers/XRequestId"
@@ -295,7 +320,7 @@ components:
           schema:
             $ref: "#/components/schemas/Problem"
     TooManyRequests:
-      description: Limite de taxa atingido.
+      description: Limite de taxa atingido (`rate_limited`); `retryAfterSeconds` repete o `Retry-After`.
       headers:
         X-Request-Id:
           $ref: "#/components/headers/XRequestId"
@@ -306,7 +331,7 @@ components:
           schema:
             $ref: "#/components/schemas/Problem"
     InternalError:
-      description: Erro inesperado.
+      description: Erro inesperado (`internal_error`), sem `detail`.
       headers:
         X-Request-Id:
           $ref: "#/components/headers/XRequestId"
@@ -361,13 +386,28 @@ components:
     Page:
       type: object
       description: |
-        Envelope de listagem paginada por cursor. Cada listagem o compõe com `allOf`,
-        definindo o esquema dos itens.
-      required: [items, nextCursor]
+        Parte comum da resposta de listagem paginada por cursor. Traz só `nextCursor`: cada
+        listagem a compõe com `allOf` e declara `items`, obrigatório, no próprio membro, com o
+        esquema dos itens:
+
+        ```yaml
+        UserPage:
+          allOf:
+            - $ref: "#/components/schemas/Page"
+            - type: object
+              required: [items]
+              properties:
+                items:
+                  type: array
+                  items:
+                    $ref: "#/components/schemas/User"
+        ```
+
+        `items` não é declarado aqui porque a interseção de um `items` genérico com o da
+        listagem tiparia o cliente gerado como `unknown[] & User[]`. Nem este esquema nem o
+        membro da listagem usam `additionalProperties: false`, que invalidaria a composição.
+      required: [nextCursor]
       properties:
-        items:
-          type: array
-          items: {}
         nextCursor:
           description: Cursor da próxima página; `null` na última.
           oneOf:
@@ -386,7 +426,9 @@ components:
           type: string
     Problem:
       type: object
-      description: Erro no formato RFC 9457. Pode trazer campos extras conforme o `code`.
+      description: |
+        Erro no formato RFC 9457. Pode trazer campos extras conforme o `code`; os comuns estão
+        declarados aqui (`errors`, `retryAfterSeconds`).
       required: [type, title, status, code]
       properties:
         type:
@@ -412,13 +454,39 @@ components:
         code:
           type: string
           pattern: "^[a-z][a-z0-9_]*$"
-          description: Identificador estável do erro, para o cliente decidir o que fazer.
+          description: |
+            Identificador estável do erro, para o cliente decidir o que fazer. A lista é aberta:
+            um `code` só muda ou some com mudança de versão da API, e código novo pode surgir.
+
+            Códigos gerais, iguais nas duas APIs (`specs/003-admin-api.md`):
+
+            | `code` | Status | Quando |
+            | --- | --- | --- |
+            | `validation_failed` | 400 | Requisição fora do contrato; `errors` lista os campos |
+            | `unauthenticated` | 401 | Sem sessão válida |
+            | `permission_denied` | 403 | Sessão válida, sem permissão para a operação |
+            | `csrf_token_invalid` | 403 | Escrita sem `X-CSRF-Token` ou com token diferente do da sessão |
+            | `not_found` | 404 | Recurso inexistente ou fora do alcance de quem pede |
+            | `version_conflict` | 409 | `version` enviada diferente da gravada |
+            | `rate_limited` | 429 | Limite de taxa; traz `retryAfterSeconds` |
+            | `internal_error` | 500 | Erro inesperado; sem `detail` |
+            | `database_unavailable` | 503 | Banco indisponível |
+            | `payment_provider_unavailable` | 503 | Provedor de pagamento indisponível |
+
+            Os demais `403`, `409`, `422` e `503` usam um código próprio da regra, definido na
+            spec do recurso e citado na descrição da operação (por exemplo, `entitlement_required`).
           examples: [permission_denied, validation_failed, database_unavailable]
         errors:
           type: array
           description: Presente em erro de validação (`400`).
           items:
             $ref: "#/components/schemas/ProblemFieldError"
+        retryAfterSeconds:
+          type: integer
+          minimum: 0
+          description: |
+            Segundos até poder tentar de novo; o mesmo valor do cabeçalho `Retry-After`.
+            Presente em `rate_limited` (`429`).
       additionalProperties: true
     Health:
       type: object
