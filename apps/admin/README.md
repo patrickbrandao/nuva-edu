@@ -26,6 +26,8 @@ biblioteca, `createBrowserRouter`) e TanStack Query (spec 006).
 | `vite/` | Plugin do Vite que responde `/config.json` no `dev` e no `preview`. |
 | `src/shell/` | Casca (`AdminShell` de `@nuva-edu/ui`), menu lateral (`menu.ts`), rodapé. |
 | `src/pages/` | Telas. Item do menu ainda sem tela usa `UnderConstructionPage`. `pages/users/`: alunos, ficha e equipe, com os diálogos em `dialogs/`. |
+| `src/pages/audit/` | Auditoria: lista com filtros (`AuditPage`) e registro com `details` (`AuditEntryPage`). |
+| `src/pages/terms/` | Termos e privacidade: versões, rascunho (modelo na primeira versão, em `terms.templates` das traduções) e publicação. |
 | `src/forms/` | Campo local de várias linhas (`TextArea`), até `packages/ui` ter o seu (tarefa 191). |
 | `src/routes.tsx` | Rotas; uma por item de `menu.ts`. |
 | `src/test/render.tsx` | `renderApp(caminho, respostas, { config, routes })` para os testes; `findMenu`, `findAlert`, `queryAlerts`. |
@@ -57,6 +59,10 @@ biblioteca, `createBrowserRouter`) e TanStack Query (spec 006).
   diálogo aberto e some ao fechar ou sair da tela (ADR 0002; spec 007, "Exibição da senha").
 - Ações destrutivas (suspender, mudar papel, definir senha, encerrar sessões) passam por
   `ConfirmDialog` com o nome do usuário.
+- Auditoria: cada consulta à lista grava `audit.search` na própria auditoria (spec 028); por isso a
+  lista não se refaz sozinha (`staleTime` infinito) e os filtros de texto só valem ao "Aplicar filtros".
+- Testes de acessibilidade: `expectNoAxeViolations()` (`src/test/axe.ts`, axe-core, regras WCAG A e
+  AA, sem contraste, que o jsdom não calcula).
 - A trilha mostra o nome do item aberto abaixo de um item do menu por `usePageCrumb` (`shell/crumbs.tsx`).
 - Login social: o site navega (`browser.assign`) para `adminOAuthStartUrl`, nunca por `fetch`.
 - Textos de erro por `code` da API; o que a tela não trata cai em `useProblemText` (rede, limite de

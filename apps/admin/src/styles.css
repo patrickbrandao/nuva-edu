@@ -30,12 +30,12 @@ body {
 }
 
 /* Campo de várias linhas (forms/TextArea.tsx): a caixa do AdminField, sem a altura fixa. */
-.nuva-textarea {
+.minui-adm-input.nuva-textarea {
   height: auto;
   padding: 8px 10px;
 }
 
-.nuva-textarea textarea {
+.minui-adm-input.nuva-textarea textarea {
   flex: 1;
   width: 100%;
   min-width: 0;
@@ -48,4 +48,39 @@ body {
   font: inherit;
   font-size: 13.5px;
   line-height: 1.5;
+}
+
+/* Botão com cara de link (ex.: o nome do ator na auditoria, que filtra por ele). */
+.nuva-linkbutton {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--minui-accent-text, var(--adm-ink));
+  font: inherit;
+  text-align: start;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
+
+.nuva-linkbutton:focus-visible {
+  outline: 2px solid var(--adm-focus);
+  outline-offset: 2px;
+  border-radius: 2px;
+}
+
+/* JSON da auditoria: monoespaçado, quebra longa, rola na horizontal se precisar. */
+.nuva-json {
+  margin: 0;
+  padding: 10px 12px;
+  overflow-x: auto;
+  border: 1px solid var(--adm-line);
+  border-radius: var(--adm-r-ctl);
+  background: var(--adm-bg);
+  color: var(--adm-ink);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12.5px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-word;
 }

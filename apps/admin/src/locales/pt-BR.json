@@ -171,6 +171,60 @@
     "documents": {
       "terms": "Termos de Uso",
       "privacy": "Política de Privacidade"
+    },
+    "title": "Termos e privacidade",
+    "subtitle": "Versões dos documentos legais. Publicada, uma versão não muda mais.",
+    "tabsLabel": "Documento",
+    "loading": "Carregando as versões…",
+    "errorTitle": "Não foi possível carregar as versões",
+    "empty": "{{document}}: nenhuma versão ainda",
+    "emptyText": "Crie o primeiro rascunho a partir do texto modelo e publique quando estiver revisado.",
+    "noPublishedTitle": "{{document}} sem versão publicada",
+    "noPublishedText": "Enquanto não houver versão publicada, o cadastro no site do aluno não pede aceite deste documento.",
+    "draft": "Rascunho",
+    "versionNumber": "Versão {{version}}",
+    "yes": "Sim",
+    "no": "Não",
+    "status": {
+      "draft": "Rascunho",
+      "published": "Publicada"
+    },
+    "columns": {
+      "version": "Versão",
+      "status": "Situação",
+      "reacceptance": "Exige novo aceite",
+      "createdAt": "Criada em",
+      "publishedAt": "Publicada em",
+      "actions": "Ações"
+    },
+    "create": {
+      "open": "Novo rascunho",
+      "title": "Novo rascunho: {{document}}",
+      "templateNote": "Primeira versão: o texto vem de um modelo. Revise com a assessoria jurídica da escola antes de publicar.",
+      "note": "Rascunho não é editado depois de criado: para mudar o texto, crie outro.",
+      "body": "Texto (Markdown)",
+      "bodyHint": "{{count}} de {{max}} caracteres.",
+      "reacceptance": "Exigir novo aceite de quem aceitou uma versão anterior",
+      "submit": "Criar rascunho",
+      "done": "Rascunho criado.",
+      "invalid": "Confira o texto: entre 1 e 100.000 caracteres."
+    },
+    "publish": {
+      "open": "Publicar",
+      "openFor": "Publicar o rascunho criado em {{created}}",
+      "confirmTitle": "Publicar esta versão?",
+      "item": "{{document}}, rascunho de {{created}}",
+      "text": "vira a versão vigente agora e não pode mais ser alterada.",
+      "textReaccept": "vira a versão vigente agora, não pode mais ser alterada e quem aceitou uma versão anterior terá de aceitar de novo.",
+      "confirm": "Publicar",
+      "busy": "Publicando…",
+      "done": "{{document}}: versão {{version}} publicada.",
+      "already": "Esta versão já tinha sido publicada. A lista foi atualizada.",
+      "error": "Não foi possível publicar"
+    },
+    "templates": {
+      "terms": "# Termos de Uso\n\n> Modelo inicial. Revise com a assessoria jurídica da escola antes de publicar.\n\n## 1. Aceite\n\nAo criar uma conta ou usar a plataforma da escola, você concorda com estes Termos de Uso e com a Política de Privacidade.\n\n## 2. Conta\n\n- Você é responsável pelos dados informados e pela guarda da sua senha.\n- A conta é pessoal e não pode ser compartilhada.\n\n## 3. Conteúdo e acesso\n\n- Os cursos, ebooks e materiais são da escola ou dos seus autores e não podem ser copiados ou redistribuídos.\n- O acesso a conteúdo pago segue as condições da compra ou da assinatura.\n\n## 4. Conduta na comunidade\n\nNo fórum, nos cases e nas mensagens, trate as pessoas com respeito. Conteúdo ofensivo, ilegal ou de propaganda pode ser removido e a conta, suspensa.\n\n## 5. Pagamentos e reembolso\n\nPreços, formas de pagamento e regras de reembolso aparecem na página de cada produto e no checkout.\n\n## 6. Alterações\n\nA escola pode atualizar estes termos. Mudanças relevantes serão avisadas e poderão pedir um novo aceite.\n\n## 7. Contato\n\nDúvidas: [informe aqui o canal de contato da escola].\n",
+      "privacy": "# Política de Privacidade\n\n> Modelo inicial. Revise com a assessoria jurídica da escola antes de publicar.\n\n## 1. Quem trata os dados\n\n[Nome da escola], responsável pelo tratamento dos dados pessoais nesta plataforma, nos termos da Lei Geral de Proteção de Dados (Lei 13.709/2018).\n\n## 2. Dados coletados\n\n- Cadastro: nome, e-mail e, quando informado, CPF ou CNPJ.\n- Uso: progresso nos cursos, anotações, participação na comunidade.\n- Técnicos: IP, navegador e registros de acesso, para segurança.\n- Pagamentos: tratados pelo provedor de pagamento; a escola não guarda dados de cartão.\n\n## 3. Para que usamos\n\nPrestar os cursos e o suporte, emitir certificados e notas, manter a segurança da conta e cumprir obrigações legais.\n\n## 4. Compartilhamento\n\nSó com quem presta serviço à escola (pagamento, e-mail, hospedagem), na medida do necessário, ou quando a lei exigir.\n\n## 5. Seus direitos\n\nVocê pode acessar, corrigir, exportar e pedir a exclusão dos seus dados pela área da sua conta ou pelo contato abaixo.\n\n## 6. Retenção\n\nGuardamos os dados enquanto a conta existir e pelos prazos exigidos em lei.\n\n## 7. Contato do encarregado\n\n[Informe aqui o nome e o contato do encarregado de dados da escola].\n"
     }
   },
   "termsNotice": {
@@ -397,6 +451,86 @@
       "submit": "Criar conta",
       "busy": "Criando…",
       "done": "Conta de {{name}} criada."
+    }
+  },
+  "settings": {
+    "subtitle": "Ajustes da escola.",
+    "legal": "Documentos legais",
+    "legalText": "Versões dos Termos de Uso e da Política de Privacidade que o site do aluno exibe e pede para aceitar."
+  },
+  "audit": {
+    "subtitle": "Registro imutável das ações feitas no painel, no MCP, no site do aluno e pelo sistema.",
+    "loading": "Carregando os registros…",
+    "errorTitle": "Não foi possível carregar a auditoria",
+    "loadMoreError": "Não foi possível carregar mais registros. Tente de novo.",
+    "empty": "Nenhum registro encontrado",
+    "emptyText": "Não há registros nos últimos 30 dias.",
+    "emptyFilteredText": "Nenhum registro corresponde aos filtros.",
+    "defaultPeriod": "Sem período escolhido, a lista mostra os últimos 30 dias. Cada consulta também fica registrada na auditoria.",
+    "system": "Sistema",
+    "openEntry": "Abrir o registro {{action}} de {{date}}",
+    "columns": {
+      "createdAt": "Quando",
+      "actor": "Ator",
+      "action": "Ação",
+      "target": "Alvo",
+      "origin": "Origem",
+      "outcome": "Resultado"
+    },
+    "origins": {
+      "admin_panel": "Painel",
+      "mcp": "MCP",
+      "classroom": "Site do aluno",
+      "worker": "Tarefa automática",
+      "cli": "Linha de comando"
+    },
+    "outcomes": {
+      "ok": "Concluída",
+      "denied": "Negada",
+      "error": "Erro"
+    },
+    "filters": {
+      "label": "Filtros da auditoria",
+      "from": "De",
+      "to": "Até (inclusive)",
+      "action": "Ação",
+      "actionHint": "Exata (user.suspend) ou prefixo (user.*).",
+      "actionInvalid": "Use uma ação como user.suspend ou um prefixo como user.*.",
+      "targetType": "Tipo do alvo",
+      "targetId": "Identificador do alvo",
+      "allOrigins": "Todas as origens",
+      "allOutcomes": "Todos os resultados",
+      "originLabel": "Origem: {{value}}",
+      "outcomeLabel": "Resultado: {{value}}",
+      "byActor": "Filtrar pelos registros de {{name}}",
+      "actor": "Ator: {{name}}",
+      "removeActor": "Remover o filtro do ator {{name}}",
+      "apply": "Aplicar filtros",
+      "clear": "Limpar filtros",
+      "periodOrder": "A data final precisa ser igual ou depois da inicial.",
+      "periodTooLong": "O período pode ter no máximo {{days}} dias."
+    },
+    "entry": {
+      "crumb": "Registro {{action}}",
+      "title": "Registro da auditoria",
+      "loading": "Carregando o registro…",
+      "errorTitle": "Não foi possível carregar o registro",
+      "notFound": "Registro não encontrado",
+      "notFoundText": "O registro não existe ou já foi expurgado.",
+      "back": "Voltar à auditoria",
+      "summary": "Resumo",
+      "details": "Detalhes",
+      "none": "Não informado",
+      "mcpKey": "Chave MCP",
+      "ip": "IP",
+      "userAgent": "Navegador",
+      "requestId": "Código da requisição",
+      "noDetails": "Este registro não tem detalhes.",
+      "truncated": "Os detalhes passaram de 8 KB e foram cortados.",
+      "before": "Antes",
+      "after": "Depois",
+      "other": "Outros dados",
+      "content": "Conteúdo"
     }
   }
 }

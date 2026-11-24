@@ -1,8 +1,13 @@
 import type { ReactNode } from 'react';
 import type { RouteObject } from 'react-router';
+import { TERMS_PATH } from './api/terms';
+import { AuditEntryPage } from './pages/audit/AuditEntryPage';
+import { AUDIT_PATH, AuditPage } from './pages/audit/AuditPage';
 import { HomePage } from './pages/HomePage';
 import { LoginPage } from './pages/LoginPage';
 import { NotFoundPage } from './pages/NotFoundPage';
+import { SettingsPage } from './pages/SettingsPage';
+import { TermsPage } from './pages/terms/TermsPage';
 import { UnderConstructionPage } from './pages/UnderConstructionPage';
 import { StudentsPage } from './pages/users/StudentsPage';
 import { TeamPage } from './pages/users/TeamPage';
@@ -32,6 +37,14 @@ const PAGES: Partial<Record<MenuItemId, RouteObject[]>> = {
     { path: `${STUDENTS_PATH}/:id`, element: <UserDetailPage /> },
   ],
   team: [{ path: '/equipe', element: <TeamPage /> }],
+  audit: [
+    { path: AUDIT_PATH, element: <AuditPage /> },
+    { path: `${AUDIT_PATH}/:id`, element: <AuditEntryPage /> },
+  ],
+  settings: [
+    { path: '/configuracoes', element: <SettingsPage /> },
+    { path: TERMS_PATH, element: <TermsPage /> },
+  ],
 };
 
 /** Rotas do site: `/entrar` fora da guarda; o resto exige sessão (spec 006, "Sessão"). */
