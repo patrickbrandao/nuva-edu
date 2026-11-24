@@ -41,8 +41,13 @@ RUN if [ -n "${NUVA_VERSION}" ]; then \
       cd apps/admin-api && npm pkg set "version=${NUVA_VERSION}"; \
     fi
 
-# 3. runtime: sem pnpm, sem cache de pacotes e sem usuário privilegiado.
+# 3. runtime: sem pnpm, sem npm, sem cache de pacotes e sem usuário privilegiado.
 FROM ${NODE_IMAGE} AS runtime
+# O npm (e o corepack, quando a base o traz) não é usado em execução: o serviço, o healthcheck e
+# os comandos da imagem chamam `node` direto. Sai da imagem com as dependências dele, que é
+# onde o Trivy acusa as vulnerabilidades da base.
+RUN rm -rf /usr/local/lib/node_modules/npm /usr/local/lib/node_modules/corepack \
+      /usr/local/bin/npm /usr/local/bin/npx /usr/local/bin/corepack
 # PORT não é definida: dentro do contêiner a porta é sempre a padrão, 3000 (spec 031).
 ENV NODE_ENV=production
 COPY --from=build /app /app

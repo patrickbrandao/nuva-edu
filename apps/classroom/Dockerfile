@@ -37,6 +37,10 @@ RUN pnpm --filter "@nuva-edu/classroom" build \
 #    qualquer instalação.
 FROM ${NGINX_IMAGE} AS runtime
 USER root
+# Correções do Alpine publicadas depois da imagem base. O `nginx` e os módulos dele não mudam:
+# a base os fixa na versão empacotada pelo nginx.org (`nginx=<versão>` em /etc/apk/world), e só
+# uma base nova os atualiza (docs/ci.md).
+RUN apk upgrade --no-cache
 RUN rm -f /etc/nginx/conf.d/default.conf /docker-entrypoint.d/*
 COPY proxy/nginx/nginx.conf /etc/nginx/nginx.conf
 COPY --chmod=0755 proxy/nginx/40-nuva-config.sh /docker-entrypoint.d/40-nuva-config.sh

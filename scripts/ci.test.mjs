@@ -306,6 +306,52 @@ test('images: confere as plataformas e a versão do que foi publicado', () => {
   assert.match(published.run, /--pull always/);
 });
 
+test('imagens: o estágio final dos backends sai sem npm e o dos sites aplica o apk upgrade', () => {
+  // O Trivy do fluxo `images` acusa o npm embutido em `node:slim` e os pacotes do Alpine
+  // anteriores à base do Nginx (task 097).
+  const runtimeOf = (app) => {
+    const stages = read(`apps/${app}/Dockerfile`).split(/^FROM /m);
+    const last = stages.at(-1);
+    assert.match(last, /^\S+ AS runtime$/m, `apps/${app}/Dockerfile: o último estágio é o runtime`);
+    // Linhas de continuação unidas e comentários fora: uma instrução por linha.
+    return last
+      .replace(/\\\n\s*/g, '')
+      .split('\n')
+      .filter((line) => !line.startsWith('#'));
+  };
+  for (const app of BACKENDS) {
+    const lines = runtimeOf(app);
+    const remove = lines.find((line) => /^RUN rm -rf /.test(line));
+    assert.ok(remove, `${app}: falta remover o npm`);
+    for (const path of [
+      '/usr/local/lib/node_modules/npm',
+      '/usr/local/lib/node_modules/corepack',
+      '/usr/local/bin/npm',
+      '/usr/local/bin/npx',
+      '/usr/local/bin/corepack',
+    ]) {
+      assert.ok(remove.split(/\s+/).includes(path), `${app}: ${path}`);
+    }
+    // A remoção exige root: vem antes da troca para o usuário sem privilégio, que é a última.
+    const users = lines.filter((line) => line.startsWith('USER '));
+    assert.deepEqual(users, ['USER node'], app);
+    assert.ok(lines.indexOf(remove) < lines.indexOf('USER node'), app);
+    assert.deepEqual(
+      lines.filter((line) => line.startsWith('CMD ')),
+      ['CMD ["node", "src/main.ts"]'],
+    );
+  }
+  for (const app of APPS.filter((name) => !BACKENDS.includes(name))) {
+    const lines = runtimeOf(app);
+    const upgrade = lines.indexOf('RUN apk upgrade --no-cache');
+    assert.notEqual(upgrade, -1, `${app}: falta o apk upgrade`);
+    // Como root, e a imagem termina no usuário 101.
+    const users = lines.filter((line) => line.startsWith('USER '));
+    assert.deepEqual(users, ['USER root', 'USER 101'], app);
+    assert.ok(lines.indexOf('USER root') < upgrade && upgrade < lines.indexOf('USER 101'), app);
+  }
+});
+
 test('security: push na main e semanal; audit, licenças e CodeQL', () => {
   assert.deepEqual(security.on.push, { branches: ['main'] });
   assert.equal(security.on.schedule.length, 1);

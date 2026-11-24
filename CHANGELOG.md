@@ -63,6 +63,7 @@ Detalhe das decisões em `specs/decisions/`.
 - Infra: hosts dos sites derivam de `NUVA_DOMAIN` no Compose (`${NUVA_ADMIN_HOST:-edu-admin.${NUVA_DOMAIN:-localhost}}`, idem classroom); o `.env` deixa de fixar os dois hosts e os sites não recebem mais `NUVA_DOMAIN` (task 089).
 - Infra: Postgres só publica porta no desenvolvimento; `docker-compose.dev.yml` entra pelo `pnpm compose`/`dev:up` conforme `NUVA_POSTGRES_PUBLISH` (vazia: só com `NUVA_DOMAIN=localhost`); teste de que nenhum serviço recebe `PORT` (task 061).
 - Classroom: sai a armadilha de foco própria (`useDialogFocusTrap`); a gaveta do menu usa só a do `ClassroomShell` (task 102).
+- Imagens: `admin-api`, `classroom-api` e `worker` saem sem o npm da base (Trivy limpo); `admin` e `classroom` aplicam `apk upgrade` e ficam só com a pendência do Nginx 1.30.6 da base, descrita em `docs/ci.md` (task 097).
 
 ### Decisões
 - Textos de processo alinhados ao `scripts/task.mjs` (`--as`, `task:list`, push negado, conflito de rebase).

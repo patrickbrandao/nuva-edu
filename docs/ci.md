@@ -43,6 +43,51 @@ Ordem em cada job: build amd64, conferência da versão gravada na imagem, Trivy
 plataformas com publicação, conferência do que ficou no Docker Hub (as duas plataformas e a
 versão). Vulnerabilidade alta ou crítica com correção disponível falha o job antes de publicar.
 
+### O que o Trivy examina e a pendência do Nginx
+
+O Trivy roda com `severity: HIGH,CRITICAL` e `ignore-unfixed: true`. Para a imagem não carregar
+vulnerabilidade da base que o serviço não usa:
+
+- `admin-api`, `classroom-api` e `worker`: o estágio final remove o npm (e o corepack, quando a
+  base o traz) de `node:26-slim`. Em execução só o `node` é chamado: serviço, healthcheck,
+  `migrate` e `check-contract`.
+- `admin` e `classroom`: o estágio final roda `apk upgrade --no-cache` como root e volta ao
+  usuário 101.
+
+**Pendência conhecida (2026-11-24):** os jobs `admin` e `classroom` falham no Trivy por causa do
+próprio Nginx. A base `nginxinc/nginx-unprivileged:stable-alpine` traz o `nginx` 1.30.6-r1, com
+4 críticas (CVE-2026-113425, CVE-2026-121810, CVE-2026-123007, CVE-2026-123633) e 2 altas
+(CVE-2026-118899, CVE-2026-123634), todas corrigidas no 1.30.7. O `apk upgrade` não o troca: a
+base fixa o pacote na versão empacotada pelo nginx.org (`nginx=1.30.6-r1` e os módulos em
+`/etc/apk/world`). A decisão (tarefa 097) foi esperar a imagem `stable` com o 1.30.7, sem mudar
+para `mainline` e sem `.trivyignore`; até lá esses dois jobs ficam vermelhos e os três de backend
+ficam verdes.
+
+Quando a base for atualizada, não é preciso commit: a etiqueta `stable-alpine` é móvel, e o build
+resolve o digest dela a cada execução. Reexecute só os jobs que falharam na última execução do
+`images`:
+
+```bash
+docker buildx imagetools inspect nginxinc/nginx-unprivileged:stable-alpine   # digest novo?
+gh run list --workflow images --branch main --limit 3
+gh run rerun <id> --failed
+gh run watch <id> --exit-status
+```
+
+O mesmo vale para uma correção nova do Alpine: a camada do `apk upgrade` fica no cache do build
+enquanto o digest da base não muda, então ela só é refeita com base nova ou com mudança no
+Dockerfile.
+
+Para conferir uma imagem na máquina, do mesmo jeito que o fluxo:
+
+```bash
+docker build -f apps/admin/Dockerfile -t nuva-prova-admin:local .
+docker run --rm -v trivy-cache:/root/.cache/ -v /var/run/docker.sock:/var/run/docker.sock \
+  aquasec/trivy:0.76.2 image --severity HIGH,CRITICAL --ignore-unfixed --exit-code 1 \
+  nuva-prova-admin:local
+docker rmi nuva-prova-admin:local
+```
+
 ### Segredos
 
 Só dois, cadastrados pelo humano em *Settings → Secrets and variables → Actions*:
