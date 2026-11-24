@@ -101,7 +101,7 @@ Os testes e2e cobrem, no mínimo, os fluxos de medida de sucesso de [000](000-vi
 
 ### Qualidade de código
 
-- **Biome**: lint e formatação, uma configuração na raiz. Cobre JavaScript, TypeScript, JSON, CSS e YAML (os `docker-compose.yml`, os `openapi.yaml`, os fluxos do CI); Markdown, o `pnpm-lock.yaml` e as pastas `generated` ficam de fora. YAML mal formatado falha o `lint` como qualquer outro arquivo, nos dois níveis e no gancho de commit. Hoje só o `verify:full` confere YAML; a tarefa 062 leva a mesma cobertura ao `verify:quick` e ao `pre-commit`.
+- **Biome**: lint e formatação, uma configuração na raiz. Cobre JavaScript, TypeScript, JSON, CSS e YAML (os `docker-compose.yml`, os `openapi.yaml`, os fluxos do CI); Markdown, o `pnpm-lock.yaml` e as pastas `generated` ficam de fora. YAML mal formatado falha o `lint` como qualquer outro arquivo, nos dois níveis e no gancho de commit. O `verify:full` e o `pre-commit` já conferem YAML; a tarefa 062 leva a mesma cobertura ao `verify:quick`.
 - **`tsc`**: modo estrito; referências de projeto por pacote.
 - **lefthook**:
   - `pre-commit`: Biome nos arquivos em stage, YAML inclusive (sem `git add` automático de arquivos alheios), e bloqueio de arquivos proibidos (`.env.local`, dumps).

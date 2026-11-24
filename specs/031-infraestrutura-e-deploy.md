@@ -38,7 +38,7 @@ O nuva-edu é distribuído como imagens Docker e um conjunto de arquivos Compose
 | `database/postgres/docker-compose.yml` | `postgres` e, no perfil `backup`, `backup` |
 | `database/postgres/migrations/` | Arquivos `.sql` numerados |
 | `proxy/traefik/docker-compose.yml` | `traefik` (perfil `traefik`) |
-| `proxy/nginx/` | Nginx dos dois sites, igual nas duas imagens: `nginx.conf` e `40-nuva-config.sh`, que gera o `/config.json` na subida ([Configuração de execução dos sites](#configuração-de-execução-dos-sites)) |
+| `proxy/nginx/` | Nginx dos dois sites, igual nas duas imagens: `nginx.conf`, `40-nuva-config.sh`, que gera o `/config.json` na subida ([Configuração de execução dos sites](#configuração-de-execução-dos-sites)), e `csp.mjs`, que no build calcula a `Content-Security-Policy` do site a partir do `index.html` ([033](033-observabilidade-retencao-backup.md)) |
 | `mail/mailpit/docker-compose.yml` | `mailpit` (perfil `mailpit`) |
 | `apps/<app>/docker-compose.yml` | Um por aplicação: `admin-api`, `classroom-api`, `worker`, `admin`, `classroom`. O da `admin-api` traz também o `migrate`, que usa a imagem e o `build` dela |
 | `apps/<app>/Dockerfile` | Build em stages, com a raiz do repositório como contexto |
