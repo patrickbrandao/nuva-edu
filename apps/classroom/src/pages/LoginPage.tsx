@@ -6,10 +6,10 @@ import { useTranslation } from 'react-i18next';
 import { Link, Navigate, useNavigate, useSearchParams } from 'react-router';
 import { useApi } from '../api/client';
 import { describeError, formatWait } from '../api/errors';
-import { useMeta } from '../api/meta';
 import { AuthLayout, authLinkClass, looksLikeEmail } from '../auth/AuthLayout';
 import { ErrorAlert } from '../auth/ErrorAlert';
 import { LOGIN_NOTICE_PARAM, PASSWORD_RESET_NOTICE } from '../auth/notices';
+import { SocialButtons } from '../auth/SocialButtons';
 import { usePageMeta } from '../lib/usePageMeta';
 import { DEFAULT_AFTER_LOGIN, RETURN_PARAM, safeReturnTo, withReturnTo } from '../session/returnTo';
 import { useRefreshSession, useSession, useStoreSession } from '../session/session';
@@ -38,7 +38,6 @@ interface FieldErrors {
 export function LoginPage() {
   const { t } = useTranslation();
   const api = useApi();
-  const { data: meta } = useMeta();
   const { session } = useSession();
   const storeSession = useStoreSession();
   const refreshSession = useRefreshSession();
@@ -51,7 +50,6 @@ export function LoginPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [errors, setErrors] = useState<FieldErrors>({});
-  const [socialNotice, setSocialNotice] = useState('');
   const emailRef = useRef<HTMLInputElement>(null);
   const passwordRef = useRef<HTMLInputElement>(null);
 
@@ -98,24 +96,17 @@ export function LoginPage() {
       })
     : null;
 
-  const showUnavailable = () => setSocialNotice(t('login.unavailable'));
-
   return (
     <AuthLayout
       title={t('login.title')}
       lead={t('login.lead')}
       after={
-        <>
-          <p role="status" aria-live="polite" className="m-0 min-h-5 text-sm text-ink-2">
-            {socialNotice}
-          </p>
-          <p className="m-0 text-sm text-ink-3">
-            {t('login.noAccount')}{' '}
-            <Link to={withReturnTo('/cadastro', returnTo)} className={authLinkClass}>
-              {t('login.signUp')}
-            </Link>
-          </p>
-        </>
+        <p className="m-0 text-sm text-ink-3">
+          {t('login.noAccount')}{' '}
+          <Link to={withReturnTo('/cadastro', returnTo)} className={authLinkClass}>
+            {t('login.signUp')}
+          </Link>
+        </p>
       }
     >
       <div className="flex flex-col gap-4">
@@ -167,21 +158,7 @@ export function LoginPage() {
         </form>
       </div>
 
-      {meta?.authProviders.length ? (
-        <section
-          aria-labelledby="login-social"
-          className="mt-5 flex flex-col gap-2.5 border-0 border-t border-solid border-line pt-4"
-        >
-          <h2 id="login-social" className="m-0 text-[13px] font-medium text-ink-3">
-            {t('login.social')}
-          </h2>
-          {meta.authProviders.map((provider) => (
-            <AdminButton key={provider} onClick={showUnavailable}>
-              {t('login.continueWith', { provider: t(`auth.providers.${provider}`) })}
-            </AdminButton>
-          ))}
-        </section>
-      ) : null}
+      <SocialButtons title={t('login.social')} returnTo={returnTo ?? DEFAULT_AFTER_LOGIN} />
     </AuthLayout>
   );
 }

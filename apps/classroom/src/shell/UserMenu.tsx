@@ -6,9 +6,7 @@ import { useRuntimeConfig } from '../config/useRuntimeConfig';
 import { browser } from '../lib/browser';
 import { isStaff } from '../session/session';
 import { useSignOut } from '../session/useSignOut';
-
-/** Endereço da conta, no menu do usuário. */
-export const ACCOUNT_PATH = '/conta';
+import { ACCOUNT_PATH } from './navigation';
 
 /**
  * Menu do usuário na barra superior: avatar (ou iniciais do nome), "Minha conta",

@@ -16,6 +16,7 @@ import { useApi } from '../api/client';
 import { describeError, type ErrorText, fieldErrors } from '../api/errors';
 import { AuthLayout, authLinkClass, looksLikeEmail } from '../auth/AuthLayout';
 import { ErrorAlert } from '../auth/ErrorAlert';
+import { SocialButtons } from '../auth/SocialButtons';
 import { useCurrentTerms } from '../legal/legal';
 import { TermsAcceptance } from '../legal/TermsAcceptance';
 import { usePageMeta } from '../lib/usePageMeta';
@@ -241,6 +242,7 @@ export function SignUpPage() {
           {signUp.isPending ? t('signUp.submitting') : t('signUp.submit')}
         </AdminButton>
       </form>
+      <SocialButtons title={t('signUp.social')} returnTo={returnTo ?? DEFAULT_AFTER_LOGIN} />
     </AuthLayout>
   );
 }

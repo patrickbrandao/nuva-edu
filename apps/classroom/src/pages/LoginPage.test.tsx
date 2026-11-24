@@ -180,11 +180,4 @@ describe('login', () => {
     const { router } = renderApp('/entrar?destino=/planos', undefined, { session: SESSION });
     await waitFor(() => expect(router.state.location.pathname).toBe('/planos'));
   });
-
-  it('o login social ainda só avisa que não está disponível (tarefa 161)', async () => {
-    const user = userEvent.setup();
-    renderApp('/entrar');
-    await user.click(await screen.findByRole('button', { name: 'Continuar com Google' }));
-    expect(screen.getByText(ptBR.login.unavailable)).toBeTruthy();
-  });
 });

@@ -275,7 +275,11 @@ describe('casca do classroom', () => {
   });
 
   it('abre todas as rotas do menu por endereço direto', async () => {
-    for (const item of NAV_GROUPS.flatMap((group) => group.items).slice(1)) {
+    // "Configurações" (/conta) já tem tela própria, que exige login: tem teste em AccountPage
+    const pending = NAV_GROUPS.flatMap((group) => group.items).filter(
+      (item) => item.path !== '/' && item.path !== '/conta',
+    );
+    for (const item of pending) {
       const view = renderApp(item.path);
       expect(await screen.findByRole('heading', { level: 1 })).toBeTruthy();
       expect(screen.getByText(ptBR.construction.title)).toBeTruthy();

@@ -121,6 +121,8 @@ export const NAV_GROUPS: readonly NavGroup[] = [
 
 /** Endereço da vitrine, raiz da trilha de navegação. */
 export const HOME_PATH = '/';
+/** Configurações da conta (tem rota própria). */
+export const ACCOUNT_PATH = '/conta';
 /** Endereço da tela de login. */
 export const LOGIN_PATH = '/entrar';
 
@@ -130,6 +132,6 @@ export const LOGIN_PATH = '/entrar';
  */
 export const PENDING_PAGES: readonly { path: string; titleKey: TextKey }[] = [
   ...NAV_GROUPS.flatMap((group) => group.items)
-    .filter((item) => item.path !== HOME_PATH)
+    .filter((item) => item.path !== HOME_PATH && item.path !== ACCOUNT_PATH)
     .map((item) => ({ path: item.path, titleKey: item.labelKey })),
 ];

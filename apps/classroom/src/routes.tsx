@@ -1,7 +1,7 @@
 import type { RouteObject } from 'react-router';
 import { ErrorPage } from './pages/ErrorPage';
 import { HomePage } from './pages/HomePage';
-import { HOME_PATH, LOGIN_PATH, PENDING_PAGES } from './shell/navigation';
+import { ACCOUNT_PATH, HOME_PATH, LOGIN_PATH, PENDING_PAGES } from './shell/navigation';
 import { type RouteHandle, Shell } from './shell/Shell';
 
 const handle = (value: RouteHandle): RouteHandle => value;
@@ -26,6 +26,28 @@ export const routes: RouteObject[] = [
         path: '/cadastro',
         handle: handle({ titleKey: 'pages.signUp' }),
         lazy: async () => ({ Component: (await import('./pages/SignUpPage')).SignUpPage }),
+      },
+      {
+        path: '/cadastro/social',
+        handle: handle({ titleKey: 'pages.socialSignUp' }),
+        lazy: async () => ({
+          Component: (await import('./pages/SocialSignUpPage')).SocialSignUpPage,
+        }),
+      },
+      {
+        path: ACCOUNT_PATH,
+        handle: handle({ titleKey: 'menu.items.settings' }),
+        lazy: async () => ({ Component: (await import('./pages/AccountPage')).AccountPage }),
+      },
+      {
+        path: '/conta/acesso',
+        handle: handle({ titleKey: 'pages.access' }),
+        lazy: async () => ({ Component: (await import('./pages/AccessPage')).AccessPage }),
+      },
+      {
+        path: '/conta/perfil',
+        handle: handle({ titleKey: 'pages.profile' }),
+        lazy: async () => ({ Component: (await import('./pages/ProfilePage')).ProfilePage }),
       },
       {
         path: '/confirmar',
