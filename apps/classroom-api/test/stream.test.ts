@@ -3,7 +3,7 @@ import pg from 'pg';
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 import { type ClassroomAppOptions, userEventStream } from '../src/app.ts';
 import type { SessionAuthenticator } from '../src/session.ts';
-import { createTestApp, type TestApp } from './helpers.ts';
+import { createTestApp, fakeSession as sessionOf, type TestApp } from './helpers.ts';
 import { openSse, type SseConnection } from './sse-client.ts';
 
 const ALICE = '0193a5b2-7c1e-7d3a-9f4b-2a6c8e1d5f70';
@@ -22,7 +22,7 @@ const fakeSession: SessionAuthenticator = (request) => {
   if (typeof userId !== 'string') {
     throw unauthenticated();
   }
-  return { userId };
+  return sessionOf(userId);
 };
 
 interface Served extends TestApp {

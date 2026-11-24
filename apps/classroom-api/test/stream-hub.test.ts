@@ -198,6 +198,24 @@ describe('createStreamHub', () => {
     expect(hub.connectionCount()).toBe(0);
   });
 
+  it('disconnectSession e retainSessions fecham só as conexões das sessões que saíram', () => {
+    hub = createStreamHub();
+    const first = hub.open(ALICE, undefined, 'sessao-1');
+    const second = hub.open(ALICE, undefined, 'sessao-2');
+    const anonymous = hub.open(ALICE);
+    const bruno = hub.open(BRUNO, undefined, 'sessao-3');
+    expect(hub.connectedUsers().sort()).toEqual([ALICE, BRUNO].sort());
+    hub.disconnectSession('sessao-1');
+    expect(first.writableEnded).toBe(true);
+    expect(hub.connectionCount()).toBe(3);
+    hub.retainSessions(ALICE, new Set());
+    expect(second.writableEnded).toBe(true);
+    // Sem sessão associada não é tocada; a de outro usuário também não.
+    expect(anonymous.writableEnded).toBe(false);
+    expect(bruno.writableEnded).toBe(false);
+    expect(hub.connectionCount()).toBe(2);
+  });
+
   it('conexão fechada pelo cliente sai da contagem', async () => {
     hub = createStreamHub();
     const stream = hub.open(ALICE);

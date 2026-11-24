@@ -15,8 +15,8 @@ function readPort(): number {
   return port;
 }
 
-// Nenhum segredo é exigido ainda: `SESSION_SECRET` entra em `required` com a sessão (Fase 1,
-// spec 007). Até lá toda rota protegida, inclusive o fluxo SSE, responde 401.
+// A sessão não é assinada (spec 007, "Cookies"): `SESSION_SECRET` só assina o cookie de retorno
+// do login social e passa a ser exigido com ele (tarefa 153; no Compose, tarefa 157).
 const config = loadConfigOrExit({ service: SERVICE, required: [] });
 const logger = createLogger({ service: SERVICE, level: config.logLevel });
 const db = createDatabase({

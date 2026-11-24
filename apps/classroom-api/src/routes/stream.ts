@@ -18,15 +18,20 @@ export function registerStreamRoutes(app: FastifyInstance, options: StreamRouteO
   const { hub } = options;
 
   app.operation('openStream', (request, reply) => {
-    const user = session.get(request);
-    if (!user) {
+    const current = session.get(request);
+    if (!current) {
       throw unauthenticated();
     }
     // Sem a escuta nenhum evento chegaria: o cliente recebe 503 e tenta de novo depois.
     if (!options.isListening()) {
       throw unavailable('database_unavailable', 'O fluxo de eventos está indisponível.');
     }
-    const stream = hub.open(user.userId, parseEventId(request.headers['last-event-id']));
+    // Com o id da sessão, o fluxo fecha quando ela é encerrada (spec 004, "Casos de erro").
+    const stream = hub.open(
+      current.user.id,
+      parseEventId(request.headers['last-event-id']),
+      current.id,
+    );
     // Cabeçalhos de SSE, contagem em `sse_connections` e fechamento no encerramento do serviço
     // ficam com a base; o fim do fluxo sai na linha de log da própria requisição (499 quando é
     // o cliente que fecha), sem o usuário.

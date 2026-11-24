@@ -23,11 +23,20 @@ export interface StreamHub {
    * passa do limite de conexões do usuário ou num `disconnectUser`/`closeAll`/`stop`. A rota o
    * entrega por `app.eventStreams.open`, que também o encerra quando o serviço para.
    */
-  open(userId: string, lastEventId?: number): Readable;
+  open(userId: string, lastEventId?: number, sessionId?: string): Readable;
   /** Entrega o evento às conexões do destinatário e o guarda para reenvio. Devolve quantas. */
   publish(event: UserEvent): number;
   /** Fecha as conexões de um usuário (sessão encerrada, suspensão `full`). */
   disconnectUser(userId: string): void;
+  /** Fecha as conexões abertas por uma sessão (sair, encerrar a sessão). */
+  disconnectSession(sessionId: string): void;
+  /**
+   * Fecha as conexões do usuário cuja sessão não está em `validSessionIds` (sessões encerradas
+   * por outro processo ou pela troca de senha). Conexão aberta sem sessão não é tocada.
+   */
+  retainSessions(userId: string, validSessionIds: ReadonlySet<string>): void;
+  /** Usuários com conexão aberta agora (para a conferência periódica das sessões). */
+  connectedUsers(): string[];
   /** Fecha todas as conexões (banco indisponível); o navegador reconecta sozinho. */
   closeAll(): void;
   /**
@@ -64,6 +73,8 @@ export function createStreamHub(options: StreamHubOptions = {}): StreamHub {
   /** Conexões por usuário, da mais antiga para a mais nova. */
   const clients = new Map<string, PassThrough[]>();
   const replay = new Map<string, StoredEvent[]>();
+  /** Sessão que abriu cada conexão. */
+  const sessions = new WeakMap<PassThrough, string>();
   let total = 0;
 
   const remove = (userId: string, stream: PassThrough): void => {
@@ -135,8 +146,11 @@ export function createStreamHub(options: StreamHubOptions = {}): StreamHub {
   };
 
   return {
-    open(userId, lastEventId) {
+    open(userId, lastEventId, sessionId) {
       const stream = new PassThrough();
+      if (sessionId !== undefined) {
+        sessions.set(stream, sessionId);
+      }
       const list = clients.get(userId) ?? [];
       clients.set(userId, list);
       while (list.length >= maxPerUser) {
@@ -187,6 +201,27 @@ export function createStreamHub(options: StreamHubOptions = {}): StreamHub {
         end(userId, stream);
       }
     },
+
+    disconnectSession(sessionId) {
+      for (const [userId, list] of [...clients]) {
+        for (const stream of [...list]) {
+          if (sessions.get(stream) === sessionId) {
+            end(userId, stream);
+          }
+        }
+      }
+    },
+
+    retainSessions(userId, validSessionIds) {
+      for (const stream of [...(clients.get(userId) ?? [])]) {
+        const sessionId = sessions.get(stream);
+        if (sessionId !== undefined && !validSessionIds.has(sessionId)) {
+          end(userId, stream);
+        }
+      }
+    },
+
+    connectedUsers: () => [...clients.keys()],
 
     closeAll,
     connectionCount: () => total,

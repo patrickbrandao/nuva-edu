@@ -1,4 +1,5 @@
 import type { FastifyInstance } from '@nuva-edu/api-kit';
+import type { AuthenticatedSession } from '@nuva-edu/core';
 import {
   type Config,
   closeDatabase,
@@ -43,7 +44,16 @@ export function createTestApp(
     },
   });
   const db = createDatabase({ connectionString: config.databaseUrl, maxConnections: 2 });
-  const app = buildClassroomApp({ config, db, logger, ...overrides });
+  // Sem limite de taxa nem conferência periódica das sessões do SSE, salvo quando o teste pede:
+  // cada teste faz muitas requisições do mesmo IP.
+  const app = buildClassroomApp({
+    config,
+    db,
+    logger,
+    rateLimits: [],
+    streamSessionCheckMs: 0,
+    ...overrides,
+  });
   return {
     app,
     config,
@@ -53,6 +63,29 @@ export function createTestApp(
     close: async () => {
       await app.close();
       await closeDatabase(db);
+    },
+  };
+}
+
+/** Sessão de mentira para o tratador injetado nos testes do fluxo SSE. */
+export function fakeSession(userId: string, sessionId: string = userId): AuthenticatedSession {
+  const now = new Date();
+  return {
+    id: sessionId,
+    site: 'classroom',
+    csrfToken: 'csrf-de-teste',
+    expiresAt: new Date(now.getTime() + 86_400_000),
+    lastUsedAt: now,
+    renewed: false,
+    user: {
+      id: userId,
+      name: 'Teste',
+      email: 'teste@example.com',
+      emailVerified: true,
+      role: 'student',
+      hasPassword: true,
+      avatarImageId: null,
+      suspendedKind: null,
     },
   };
 }

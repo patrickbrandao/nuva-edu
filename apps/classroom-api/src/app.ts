@@ -3,24 +3,43 @@ import {
   createApiApp,
   databaseReadiness,
   type FastifyInstance,
+  type FastifyReply,
+  type FastifyRequest,
+  type RateLimiterOptions,
+  type RateLimitRule,
   type ReadinessChecks,
   registerMetaRoute,
 } from '@nuva-edu/api-kit';
 import {
+  assertCsrfToken,
+  assertTermsGate,
   type ChannelListener,
   type Config,
   createSettingsReader,
   type Database,
   databasePoolStats,
+  type ImageProcessingLimiter,
   type Logger,
   listenChannel,
+  listSessions,
   type SettingsReader,
   USER_EVENTS_CHANNEL,
 } from '@nuva-edu/core';
 import { loadClassroomContract } from './contract.ts';
 import { readServiceVersion } from './meta.ts';
+import { CLASSROOM_RATE_LIMITS } from './rate-limits.ts';
+import { registerAccountRoutes } from './routes/account.ts';
+import { registerAuthRoutes } from './routes/auth.ts';
+import type { RouteContext } from './routes/context.ts';
+import { registerImageRoutes } from './routes/images.ts';
+import { registerLegalRoutes } from './routes/legal.ts';
 import { registerStreamRoutes } from './routes/stream.ts';
-import { rejectEverySession, type SessionAuthenticator, session } from './session.ts';
+import {
+  createSessionAuthenticator,
+  establishSession,
+  type SessionAuthenticator,
+  session,
+} from './session.ts';
 import { parseUserEventPayload, toStreamEvent } from './stream/events.ts';
 import { createStreamHub, type StreamHub, type StreamHubOptions } from './stream/hub.ts';
 
@@ -35,10 +54,22 @@ export interface ClassroomAppOptions {
   /** Verificações do `/readyz`. Padrão: banco e migrations. */
   readiness?: ReadinessChecks;
   /**
-   * Tratador da sessão (`sessionCookie` do contrato). Padrão: recusa sempre com `401`, até a
-   * sessão real existir (Fase 1, spec 007). Os testes injetam um que identifica um usuário.
+   * Tratador da sessão (`sessionCookie` do contrato). Padrão: o cookie conferido no banco
+   * (`authenticateSession` do núcleo, spec 007). Os testes do fluxo SSE injetam um falso.
    */
   authenticate?: SessionAuthenticator;
+  /** Limites de taxa. Padrão: os da spec 004, RNF-04 (`CLASSROOM_RATE_LIMITS`). */
+  rateLimits?: readonly RateLimitRule[];
+  /** Relógio e limpeza do limite de taxa; para os testes. */
+  rateLimiter?: RateLimiterOptions;
+  /**
+   * Intervalo da conferência das sessões dos fluxos SSE abertos, em ms: fluxo de sessão
+   * encerrada por outro processo (a admin-api suspende, outro processo encerra) é fechado.
+   * Padrão: 30 s; `0` desliga.
+   */
+  streamSessionCheckMs?: number;
+  /** Limitador do processamento de imagens; padrão, o do processo. */
+  imageLimiter?: ImageProcessingLimiter;
   /** Ajustes do fluxo SSE (intervalo do `ping`, limites); os padrões são os da spec 004. */
   stream?: StreamHubOptions;
   /** Contrato a servir. Padrão: o `openapi.yaml` do serviço. Só o teste do `check-contract` troca. */
@@ -63,6 +94,8 @@ export interface UserEventStream {
   isListening(): boolean;
   /** Sobe o serviço, se ainda não subiu, e resolve quando a escuta fica ativa. */
   whenListening(): Promise<void>;
+  /** Confere agora as sessões dos fluxos abertos (o mesmo que roda a cada intervalo). */
+  checkSessions(): Promise<void>;
 }
 
 const streams = new WeakMap<FastifyInstance, UserEventStream>();
@@ -83,7 +116,10 @@ export function userEventStream(app: FastifyInstance): UserEventStream {
  */
 export function buildClassroomApp(options: ClassroomAppOptions): FastifyInstance {
   const { config, db, logger } = options;
-  const authenticate = options.authenticate ?? rejectEverySession;
+  const ttlDays = config.retention.sessionDays;
+  const authenticate = options.authenticate ?? createSessionAuthenticator(db, ttlDays);
+  // O tratador de segurança só recebe o `request`; o cookie é apagado ou regravado na resposta.
+  const replies = new WeakMap<FastifyRequest, FastifyReply>();
 
   const app = createApiApp({
     contract: options.contract ?? loadClassroomContract(),
@@ -92,16 +128,47 @@ export function buildClassroomApp(options: ClassroomAppOptions): FastifyInstance
     readiness: options.readiness ?? databaseReadiness({ db, connectionString: config.databaseUrl }),
     security: {
       sessionCookie: async (request) => {
-        session.set(request, await authenticate(request));
+        const reply = replies.get(request);
+        if (!reply) {
+          throw new TypeError('Resposta da requisição não registrada.');
+        }
+        await establishSession(request, reply, authenticate, ttlDays);
       },
-      // `csrfToken` entra com a primeira operação de escrita (Fase 1, spec 007).
+      // Escritas: o `X-CSRF-Token` da sessão e, depois, a trava dos termos pendentes (spec 007).
+      csrfToken: async (request) => {
+        const current = session.require(request);
+        assertCsrfToken(current, request.headers['x-csrf-token']);
+        await assertTermsGate(db, current, { method: request.method, path: request.url });
+      },
     },
+    rateLimits: options.rateLimits ?? CLASSROOM_RATE_LIMITS,
+    ...(options.rateLimiter ? { rateLimiter: options.rateLimiter } : {}),
+    ...(config.sessionSecret === null ? {} : { cookieSecret: config.sessionSecret }),
     // Medidor `sse_connections` e fechamento dos fluxos abertos no encerramento do serviço.
     eventStreams: true,
   });
 
+  app.addHook('onRequest', async (request, reply) => {
+    replies.set(request, reply);
+  });
+
   const hub = createStreamHub(options.stream);
   let listener: ChannelListener | null = null;
+  let sessionCheck: NodeJS.Timeout | null = null;
+
+  // Fecha os fluxos cujas sessões deixaram de valer (encerradas em outro processo). Suspensão
+  // `full` e exclusão também encerram as sessões, então a lista das válidas basta.
+  const checkStreamSessions = async (): Promise<void> => {
+    for (const userId of hub.connectedUsers()) {
+      try {
+        const valid = await listSessions(db, userId);
+        hub.retainSessions(userId, new Set(valid.map((item) => item.id)));
+      } catch (error) {
+        logger.warn({ err: error }, 'Falha ao conferir as sessões dos fluxos SSE');
+        return;
+      }
+    }
+  };
 
   app.metrics.gauge({
     name: 'db_pool_connections',
@@ -152,6 +219,7 @@ export function buildClassroomApp(options: ClassroomAppOptions): FastifyInstance
       await app.ready();
       await listener?.whenConnected();
     },
+    checkSessions: () => checkStreamSessions(),
   });
 
   // Depois da conferência do contrato (gancho registrado antes, na base): se o serviço não
@@ -170,9 +238,18 @@ export function buildClassroomApp(options: ClassroomAppOptions): FastifyInstance
       // navegador reconecta com espera crescente (spec 004, "Casos de erro").
       onDisconnected: () => hub.closeAll(),
     });
+    const interval = options.streamSessionCheckMs ?? 30_000;
+    if (interval > 0) {
+      sessionCheck = setInterval(() => void checkStreamSessions(), interval);
+      sessionCheck.unref();
+    }
   });
   // Os fluxos abertos já foram encerrados pela base no `preClose`; sobra parar o batimento.
   app.addHook('onClose', async () => {
+    if (sessionCheck) {
+      clearInterval(sessionCheck);
+      sessionCheck = null;
+    }
     hub.stop();
     await listener?.close();
     listener = null;
@@ -189,5 +266,11 @@ export function buildClassroomApp(options: ClassroomAppOptions): FastifyInstance
     settings,
   });
   registerStreamRoutes(app, { hub, isListening: () => listener?.isConnected() ?? false });
+
+  const routes: RouteContext = { config, db, hub, ttlDays };
+  registerAuthRoutes(app, routes);
+  registerAccountRoutes(app, routes);
+  registerLegalRoutes(app, routes);
+  registerImageRoutes(app, routes, options.imageLimiter ? { limiter: options.imageLimiter } : {});
   return app;
 }
