@@ -1,0 +1,16 @@
+# nuva-edu — acréscimo de desenvolvimento ao compose principal (spec 031).
+# Publica o PostgreSQL em 127.0.0.1:${NUVA_POSTGRES_PORT}, para `pnpm db:migrate` e os testes
+# rodarem fora dos contêineres. Fora do desenvolvimento o banco não publica porta.
+#
+# Quem inclui este arquivo é o `scripts/dev.mjs` (`pnpm compose`, `pnpm dev:up`, `pnpm dev:down`),
+# conforme NUVA_POSTGRES_PUBLISH:
+#   true    publica
+#   false   não publica
+#   vazio   publica só quando NUVA_DOMAIN é `localhost` (máquina de desenvolvimento)
+# O `docker compose` chamado direto, sem `-f docker-compose.yml -f docker-compose.dev.yml`, nunca
+# publica.
+
+services:
+  postgres:
+    ports:
+      - "127.0.0.1:${NUVA_POSTGRES_PORT:-5432}:5432"

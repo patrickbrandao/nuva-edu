@@ -15,7 +15,7 @@ pnpm dev:down                # derruba; os volumes (postgres-data) ficam
 | http://edu-admin.localhost:8080 | Site admin; `/api/`, `/mcp` e `/healthz` vão para a admin-api |
 | http://classroom.localhost:8080 | Site do aluno; `/api/` e `/healthz` vão para a classroom-api |
 | http://localhost:8025 | Mailpit (e-mails enviados em desenvolvimento) |
-| `127.0.0.1:${NUVA_POSTGRES_PORT}` | PostgreSQL, para `pnpm db:migrate` e os testes |
+| `127.0.0.1:${NUVA_POSTGRES_PORT}` | PostgreSQL, para `pnpm db:migrate` e os testes (só no desenvolvimento; veja "Porta do PostgreSQL no hospedeiro") |
 
 `pnpm compose <args>` é o `docker compose` com `--env-file .env --env-file .env.local`:
 
@@ -25,6 +25,31 @@ pnpm compose logs -f classroom-api
 pnpm compose up -d --wait postgres     # só o banco, como os testes precisam
 pnpm compose --profile traefik --profile mailpit up -d --build admin   # refaz um serviço
 ```
+
+### Porta do PostgreSQL no hospedeiro
+
+O serviço `postgres` não publica porta. Quem a publica, em `127.0.0.1:${NUVA_POSTGRES_PORT}`, é o
+`docker-compose.dev.yml` da raiz, que o `pnpm compose`, o `pnpm dev:up` e o `pnpm dev:down`
+acrescentam (`-f docker-compose.yml -f docker-compose.dev.yml`) conforme `NUVA_POSTGRES_PUBLISH`,
+lida do ambiente do processo, do `.env.local` e do `.env`, nessa ordem:
+
+| `NUVA_POSTGRES_PUBLISH` | Resultado |
+| --- | --- |
+| vazia (padrão) | Publica só quando `NUVA_DOMAIN` é `localhost`, isto é, na máquina de desenvolvimento |
+| `true` | Publica, seja qual for o domínio |
+| `false` | Não publica |
+
+- Na máquina de desenvolvimento nada muda: `pnpm dev:up`, `pnpm db:migrate` e o `pnpm verify:quick`
+  continuam achando o banco na porta de sempre.
+- No servidor de testes e na instalação da escola, `NUVA_DOMAIN` é o domínio real e o banco fica
+  só na rede interna do Compose. O `docker compose` chamado direto, sem os dois `-f`, também não
+  publica.
+- Ligar ou desligar: ponha `NUVA_POSTGRES_PUBLISH=true` (ou `false`) no `.env.local` e rode
+  `pnpm compose up -d postgres`. O contêiner do banco é recriado (os dados ficam no volume
+  `postgres-data`), então avise quem estiver usando o banco.
+- Quem passa `-f` próprio ao `pnpm compose` escolhe os arquivos: o de desenvolvimento não entra.
+- Use sempre o mesmo caminho (`pnpm compose` ou `docker compose` direto) na mesma máquina: alternar
+  entre os dois com a publicação ligada recria o banco a cada troca.
 
 Porta 8080 ocupada por outro projeto: defina `TRAEFIK_HTTP_PORT` e `NUVA_PUBLIC_PORT` com a mesma
 porta livre no `.env.local`.

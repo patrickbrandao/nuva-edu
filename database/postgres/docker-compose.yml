@@ -21,9 +21,8 @@ services:
       - shared_buffers=${POSTGRES_SHARED_BUFFERS:-256MB}
     volumes:
       - postgres_data:/var/lib/postgresql
-    # Porta publicada só no próprio host, para migrations e testes locais (verify:quick).
-    ports:
-      - "127.0.0.1:${NUVA_POSTGRES_PORT:-5432}:5432"
+    # Nenhuma porta publicada aqui: no desenvolvimento, o `docker-compose.dev.yml` da raiz publica
+    # 127.0.0.1:${NUVA_POSTGRES_PORT} (spec 031; `pnpm compose` e `pnpm dev:up` o incluem).
     networks:
       - internal
     read_only: true

@@ -5,6 +5,7 @@ import { spawnSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { test } from 'node:test';
+import { DEV_COMPOSE_FILES } from './dev.mjs';
 
 const root = resolve(import.meta.dirname, '..');
 const hasCompose = spawnSync('docker', ['compose', 'version'], { stdio: 'ignore' }).status === 0;
@@ -126,8 +127,10 @@ test('postgres, traefik e mailpit seguem o padrão completo e os limites da spec
   assert.equal(services.postgres.user, 'postgres');
   assert.ok(services.postgres.tmpfs.includes('/run:mode=1777'), 'postgres: /run gravável');
   assert.deepEqual(services.mailpit.healthcheck.test, ['CMD', '/mailpit', 'readyz']);
-  // Portas publicadas: todas acima de 1024; banco e Mailpit só no próprio hospedeiro.
-  for (const name of Object.keys(expected)) {
+  // Portas publicadas: todas acima de 1024; o Mailpit só no próprio hospedeiro. O banco só publica
+  // com o arquivo de desenvolvimento (teste próprio, abaixo).
+  assert.equal(services.postgres.ports, undefined, 'postgres: não publica porta');
+  for (const name of ['traefik', 'mailpit']) {
     for (const port of services[name].ports) {
       assert.ok(Number(port.published) > 1024, `${name}: porta ${port.published}`);
       assert.ok(Number(port.target) > 1024, `${name}: porta interna ${port.target}`);
@@ -339,4 +342,65 @@ test('o .env versionado não fixa os hosts: o padrão vem de NUVA_DOMAIN', () =>
   const text = readFileSync(resolve(root, '.env'), 'utf8');
   assert.match(text, /^NUVA_DOMAIN=localhost$/m);
   assert.doesNotMatch(text, /^\s*NUVA_(ADMIN|CLASSROOM)_HOST=/m);
+});
+
+const published = (services) =>
+  Object.entries(services)
+    .filter(([, service]) => service.ports?.length > 0)
+    .map(([name]) => name)
+    .sort();
+
+test('sem o arquivo de desenvolvimento, o Postgres não publica porta', { skip }, () => {
+  // Com os perfis do desenvolvimento, só o proxy e a tela do Mailpit publicam.
+  assert.deepEqual(published(config().services), ['mailpit', 'traefik']);
+  // Como no servidor de testes: sem perfil, com o Traefik que já existe lá.
+  const result = spawnSync(
+    'docker',
+    ['compose', '--env-file', '.env', 'config', '--format', 'json'],
+    {
+      cwd: root,
+      encoding: 'utf8',
+      env: {
+        PATH: process.env.PATH,
+        HOME: process.env.HOME,
+        POSTGRES_PASSWORD: 'senha-so-do-teste',
+        TRAEFIK_NETWORK: 'network_public',
+        TRAEFIK_NETWORK_EXTERNAL: 'true',
+      },
+    },
+  );
+  assert.equal(result.status, 0, result.stderr);
+  assert.deepEqual(published(JSON.parse(result.stdout).services), []);
+});
+
+test('com o docker-compose.dev.yml, o Postgres publica só em 127.0.0.1', { skip }, () => {
+  const result = compose({ POSTGRES_PASSWORD: 'senha-so-do-teste', NUVA_POSTGRES_PORT: '54329' }, [
+    ...DEV_COMPOSE_FILES.flatMap((file) => ['-f', file]),
+    'config',
+    '--format',
+    'json',
+  ]);
+  assert.equal(result.status, 0, result.stderr);
+  const { name, services } = JSON.parse(result.stdout);
+  assert.equal(name, 'nuva-edu');
+  assert.deepEqual(published(services), ['mailpit', 'postgres', 'traefik']);
+  assert.equal(services.postgres.ports.length, 1);
+  const [port] = services.postgres.ports;
+  assert.equal(port.host_ip, '127.0.0.1');
+  assert.equal(port.published, '54329');
+  assert.equal(port.target, 5432);
+  // O arquivo de desenvolvimento só acrescenta a porta do banco.
+  const text = readFileSync(resolve(root, 'docker-compose.dev.yml'), 'utf8');
+  const keys = [...text.matchAll(/^ {0,4}([a-z][\w-]*):/gm)].map((match) => match[1]);
+  assert.deepEqual(keys, ['services', 'postgres', 'ports']);
+});
+
+test('nenhum serviço recebe PORT no environment', { skip }, () => {
+  // PORT fica fora do Compose (spec 031): a porta interna é fixa, e o healthcheck e o proxy contam
+  // com ela. Vale também com a variável presente na interpolação.
+  for (const env of [{}, { PORT: '3001' }]) {
+    for (const [name, service] of Object.entries(config(env).services)) {
+      assert.equal(service.environment?.PORT, undefined, `${name}: PORT no environment`);
+    }
+  }
 });

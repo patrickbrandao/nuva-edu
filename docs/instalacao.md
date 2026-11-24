@@ -6,6 +6,15 @@ Este guia cresce a cada fase; o passo a passo completo de uma instalação limpa
 versão 1.0. Por ora ele cobre a porta dos serviços e o IP real do cliente atrás do proxy. Para o
 ambiente de desenvolvimento, veja [ambiente-local.md](ambiente-local.md).
 
+## Porta do PostgreSQL
+
+Fora do desenvolvimento o banco não publica porta no hospedeiro: fica só na rede interna do
+Compose. Com `NUVA_DOMAIN` diferente de `localhost` esse é o padrão do `pnpm compose`; o
+`docker compose` chamado direto nunca publica. Para abrir `127.0.0.1:${NUVA_POSTGRES_PORT}` numa
+manutenção, ponha `NUVA_POSTGRES_PUBLISH=true` no `.env.local` e rode
+`pnpm compose up -d postgres`; para fechar, `false` (ou tire a linha) e rode de novo. Cada troca
+recria o contêiner do banco. Detalhes em [ambiente-local.md](ambiente-local.md).
+
 ## Porta dos serviços (`PORT`)
 
 As duas APIs e o worker escutam na porta de `PORT`, com padrão 3000. No Compose a variável não é
