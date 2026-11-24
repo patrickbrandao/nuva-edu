@@ -102,6 +102,7 @@ Detalhe das decisões em `specs/decisions/`.
 - Sites: CSP aceita `blob:` só em `img-src`, para a prévia do `ImagePicker` antes do envio (task 170).
 - Specs 007, 024, 026, 028, 029 e 030: decisões de esquema das migrations 0004 a 0007 registradas; uma identidade por provedor em cada conta (`provider_already_linked`); anonimização substitui `email` e `name` (task 198).
 - `scripts/compose.test.mjs`: o volume do banco tem de se chamar `nuva-edu-postgres-data`; o nome antigo `postgres-data` deixa de ser aceito (task 184).
+- Spec 006: mapa de telas do admin ganha a ação do menu por item e segue a 008; instrutor vê eventos, novidades, gamificação e chamados (task 192).
 
 ### Decisões
 - Textos de processo alinhados ao `scripts/task.mjs` (`--as`, `task:list`, push negado, conflito de rebase).

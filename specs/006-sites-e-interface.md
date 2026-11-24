@@ -98,29 +98,31 @@ Conteúdo sem direito de acesso mostra o programa, um aviso de bloqueio e o bot�
 
 ### Mapa de telas — admin
 
-| Grupo | Tela | Rota | Papel mínimo | Spec |
-| --- | --- | --- | --- | --- |
-| — | Entrar | `/entrar` | — | [007](007-contas-e-autenticacao.md) |
-| Visão geral | Painel (vendas do período, novos alunos, chamados abertos, denúncias, falhas de operação) | `/` | instructor (versão reduzida) | [003](003-admin-api.md) |
-| Pessoas | Alunos (lista, filtros) e ficha do aluno (dados, acessos, compras, progresso, sessões, senha) — base `ClientOverview` | `/alunos`, `/alunos/:id` | manager | [007](007-contas-e-autenticacao.md), [010](010-direitos-de-acesso.md) |
-| Pessoas | Equipe | `/equipe` | admin | [008](008-papeis-e-permissoes.md) |
-| Conteúdo | Cursos, editor de curso (dados, módulos e aulas com arrastar, ebooks vinculados) | `/cursos`, `/cursos/:id` | instructor | [009](009-catalogo-e-conteudo.md) |
-| Conteúdo | Ebooks, pacotes | `/ebooks`, `/pacotes` | manager | [009](009-catalogo-e-conteudo.md) |
-| Conteúdo | Calendário de eventos | `/eventos` | manager | [018](018-calendario-e-eventos.md) |
-| Conteúdo | Novidades | `/novidades` | manager | [025](025-novidades.md) |
-| Vendas | Pedidos, detalhe do pedido, reembolso | `/pedidos`, `/pedidos/:id` | manager (reembolso: admin) | [011](011-vendas-e-checkout.md) |
-| Vendas | Assinaturas | `/assinaturas` | manager | [012](012-assinaturas.md) |
-| Vendas | Planos, cupons, preços | `/planos`, `/cupons` | admin | [011](011-vendas-e-checkout.md), [012](012-assinaturas.md) |
-| Vendas | Exportar vendas (CSV) | `/pedidos/exportar` | manager | [011](011-vendas-e-checkout.md) |
-| Comunidade | Fórum (categorias livres, tópicos) | `/forum` | instructor | [017](017-forum.md) |
-| Comunidade | Denúncias | `/denuncias` | instructor | [026](026-moderacao-e-denuncias.md) |
-| Comunidade | Cases (destaque, ocultar) | `/cases` | manager | [022](022-cases.md) |
-| Comunidade | Gamificação (pontos, níveis, medalhas) | `/gamificacao` | manager (tabela: admin) | [020](020-gamificacao.md) |
-| Suporte | Chamados em quadro — base `CasesBoard` — e conversa do chamado | `/chamados`, `/chamados/:id` | manager | [023](023-chamados-de-suporte.md) |
-| Sistema | Chaves MCP (as próprias) | `/chaves-mcp` | manager | [027](027-mcp.md) |
-| Sistema | Auditoria | `/auditoria` | admin | [028](028-auditoria.md) |
-| Sistema | Operação (fila, e-mails, webhooks) | `/operacao` | admin | [005](005-worker-e-fila.md) |
-| Sistema | Configurações (escola e marca, termos, pagamento, login social, e-mail) | `/configuracoes` | admin | [030](030-lgpd.md), [031](031-infraestrutura-e-deploy.md) |
+| Grupo | Tela | Rota | Ação do menu | Papel mínimo | Spec |
+| --- | --- | --- | --- | --- | --- |
+| — | Entrar | `/entrar` | — | — | [007](007-contas-e-autenticacao.md) |
+| Visão geral | Painel (vendas do período, novos alunos, chamados abertos, denúncias, falhas de operação) | `/` | `dashboard.view` | instructor (◐ versão reduzida) | [003](003-admin-api.md) |
+| Pessoas | Alunos (lista, filtros) e ficha do aluno (dados, acessos, compras, progresso, sessões, senha) — base `ClientOverview` | `/alunos`, `/alunos/:id` | `users.view_private` | manager | [007](007-contas-e-autenticacao.md), [010](010-direitos-de-acesso.md) |
+| Pessoas | Equipe | `/equipe` | `staff.manage` | admin | [008](008-papeis-e-permissoes.md) |
+| Conteúdo | Cursos, editor de curso (dados, módulos e aulas com arrastar, ebooks vinculados) | `/cursos`, `/cursos/:id` | `course.edit` | instructor (◐ os seus cursos) | [009](009-catalogo-e-conteudo.md) |
+| Conteúdo | Ebooks, pacotes | `/ebooks`, `/pacotes` | `ebook_bundle.manage` | manager | [009](009-catalogo-e-conteudo.md) |
+| Conteúdo | Calendário de eventos | `/eventos` | `event.manage` | instructor (◐ eventos dos seus cursos) | [018](018-calendario-e-eventos.md) |
+| Conteúdo | Novidades | `/novidades` | `announcement.publish` | instructor (◐ ligadas aos seus cursos) | [025](025-novidades.md) |
+| Vendas | Pedidos, detalhe do pedido, reembolso | `/pedidos`, `/pedidos/:id` | `sales.view` | manager (reembolso: admin) | [011](011-vendas-e-checkout.md) |
+| Vendas | Assinaturas | `/assinaturas` | `sales.view` | manager | [012](012-assinaturas.md) |
+| Vendas | Planos, cupons, preços | `/planos`, `/cupons` | `plan.manage`, `coupon.manage` | admin | [011](011-vendas-e-checkout.md), [012](012-assinaturas.md) |
+| Vendas | Exportar vendas (CSV) | `/pedidos/exportar` | `sales.view` | manager | [011](011-vendas-e-checkout.md) |
+| Comunidade | Fórum (categorias livres, tópicos) | `/forum` | `forum.moderate` | instructor (◐ fórum dos seus cursos) | [017](017-forum.md) |
+| Comunidade | Denúncias | `/denuncias` | `report.handle` | instructor (◐ do fórum dos seus cursos) | [026](026-moderacao-e-denuncias.md) |
+| Comunidade | Cases (destaque, ocultar) | `/cases` | `case.moderate` | manager | [022](022-cases.md) |
+| Comunidade | Gamificação (pontos, níveis, medalhas) | `/gamificacao` | `badge.award` | instructor (◐ medalha manual a alunos dos seus cursos; tabela: admin) | [020](020-gamificacao.md) |
+| Suporte | Chamados em quadro — base `CasesBoard` — e conversa do chamado | `/chamados`, `/chamados/:id` | `ticket.handle` | instructor (◐ chamados de conteúdo dos seus cursos) | [023](023-chamados-de-suporte.md) |
+| Sistema | Chaves MCP (as próprias) | `/chaves-mcp` | `mcp_key.own` | manager | [027](027-mcp.md) |
+| Sistema | Auditoria | `/auditoria` | `audit.view` | admin | [028](028-auditoria.md) |
+| Sistema | Operação (fila, e-mails, webhooks) | `/operacao` | `ops.manage` | admin | [005](005-worker-e-fila.md) |
+| Sistema | Configurações (escola e marca, termos, pagamento, login social, e-mail) | `/configuracoes` | `settings.manage` | admin | [030](030-lgpd.md), [031](031-infraestrutura-e-deploy.md) |
+
+O menu mostra o item quando a "Ação do menu" vem na lista `permissions` de `/session` ([008](008-papeis-e-permissoes.md), "Identificadores das ações"). O "Papel mínimo" é consequência da matriz da 008: o menor papel que tem a ação, mesmo em parte (◐); onde as duas divergirem, vale a 008. Para o instrutor, a ação ◐ abre a tela, e a API limita o que ela lista e altera ao alcance da 008. Alunos usa `users.view_private`, e não `users.list` (que o instrutor tem em parte), para a tela só aparecer a quem vê os dados privados.
 
 A tela de configurações mostra o estado das integrações definidas por variável de ambiente (configurada ou não, último teste), sem exibir segredos.
 
