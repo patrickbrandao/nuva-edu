@@ -43,16 +43,19 @@ export {
   toRoutePath,
 } from './contract.ts';
 export {
+  API_PREFIX,
   type ContractCheckOptions,
   ContractMismatchError,
   type ContractReport,
   checkContract,
   DEFAULT_INTERNAL_ROUTES,
   type FormatContractReportOptions,
+  findMissingErrorResponses,
   findWritesWithoutCsrf,
   formatContractReport,
   formatContractWarnings,
   type RegisteredRoute,
+  requiredErrorResponses,
 } from './contract-check.ts';
 export {
   isDatabaseUnavailable,
@@ -73,6 +76,16 @@ export {
   type ReadinessReport,
   runReadinessChecks,
 } from './health.ts';
+export {
+  type InstallationMeta,
+  installationMeta,
+  META_OPERATION,
+  type MetaConfig,
+  type MetaRouteOptions,
+  type MetaSettings,
+  readPackageVersion,
+  registerMetaRoute,
+} from './meta.ts';
 export {
   type Counter,
   createMetricsRegistry,

@@ -1,4 +1,4 @@
-import { type Contract, CSRF_SCHEME, toContractPath } from './contract.ts';
+import { type Contract, type ContractOperation, CSRF_SCHEME, toContractPath } from './contract.ts';
 
 /** Uma rota registrada no Fastify. */
 export interface RegisteredRoute {
@@ -36,6 +36,11 @@ export interface ContractReport {
   /** Exceções que não existem mais ou que já declaram `csrfToken`: a lista precisa ser limpa. */
   staleCsrfExceptions: string[];
   /**
+   * Operações que não declaram todas as respostas de erro da tabela "Respostas de erro
+   * declaradas" da spec 003, com os status que faltam: `GET /api/v1/users/{id}: 404, 429`.
+   */
+  missingErrorResponses: string[];
+  /**
    * Aviso, não divergência: operações com `x-nuva-pending: true` ainda sem rota
    * (`MÉTODO /caminho`). Não entram em `ok`.
    */
@@ -57,13 +62,65 @@ export interface ContractReport {
 /** `/metrics` é a única rota fora do contrato nas duas APIs. */
 export const DEFAULT_INTERNAL_ROUTES: readonly string[] = ['GET /metrics'];
 
+/** Prefixo das operações de negócio; fora dele ficam as sondas (`/healthz`, `/readyz`). */
+export const API_PREFIX = '/api/v1';
+
+/**
+ * Status de erro que a operação precisa declarar (spec 003, "Respostas de erro declaradas"):
+ *
+ * | Operação | Declara |
+ * | --- | --- |
+ * | Toda operação de `/api/v1` | `400`, `429`, `500`, `503` |
+ * | Com sessão (`security` não vazio) | também `401` e `403` |
+ * | Com corpo de requisição | também `413` e `415` |
+ * | Com parâmetro de caminho | também `404` |
+ * | Fora de `/api/v1` (sondas) | nada: só as próprias |
+ *
+ * `409` e `422` não entram: são declarados só onde a spec do recurso define um código.
+ */
+export function requiredErrorResponses(operation: ContractOperation): string[] {
+  if (operation.path !== API_PREFIX && !operation.path.startsWith(`${API_PREFIX}/`)) {
+    return [];
+  }
+  const required = ['400', '429', '500', '503'];
+  if (operation.security.length > 0) {
+    required.push('401', '403');
+  }
+  if (operation.requestBody !== null) {
+    required.push('413', '415');
+  }
+  if (operation.path.includes('{') || operation.parameters.some((param) => param.in === 'path')) {
+    required.push('404');
+  }
+  return required.sort();
+}
+
+/**
+ * Operações que deixam de declarar alguma resposta de erro exigida, uma linha por operação:
+ * `GET /api/v1/users/{id}: 404, 429`. O status precisa estar escrito na operação: faixa (`4XX`)
+ * e `default` não contam, porque o cliente gerado tipa cada status declarado. Vale também para
+ * operação pendente.
+ */
+export function findMissingErrorResponses(contract: Contract): string[] {
+  const missing: string[] = [];
+  for (const operation of contract.operations) {
+    const declared = new Set(operation.responses.map((response) => response.status));
+    const absent = requiredErrorResponses(operation).filter((status) => !declared.has(status));
+    if (absent.length > 0) {
+      missing.push(`${operation.key}: ${absent.join(', ')}`);
+    }
+  }
+  return missing.sort();
+}
+
 /** Rota do Fastify na forma usada na comparação: `GET /api/v1/users/{id}`. */
 export function routeKey(route: RegisteredRoute): string {
   return `${route.method.toUpperCase()} ${toContractPath(route.path)}`;
 }
 
 /**
- * Compara rotas e contrato nos dois sentidos (spec 003, RF-04) e confere a regra do CSRF.
+ * Compara rotas e contrato nos dois sentidos (spec 003, RF-04), confere a regra do CSRF e as
+ * respostas de erro que cada operação precisa declarar.
  * Não lança: devolve as divergências para o teste de contrato mostrar todas de uma vez.
  */
 export function checkContract(
@@ -93,12 +150,14 @@ export function checkContract(
   const withoutCsrf = new Set(findWritesWithoutCsrf(contract));
   const writesWithoutCsrf = [...withoutCsrf].filter((id) => !exceptions.has(id)).sort();
   const staleCsrfExceptions = [...exceptions].filter((id) => !withoutCsrf.has(id)).sort();
+  const missingErrorResponses = findMissingErrorResponses(contract);
 
   return {
     routesMissingInContract,
     operationsMissingInApp,
     writesWithoutCsrf,
     staleCsrfExceptions,
+    missingErrorResponses,
     pendingOperations,
     pendingWithRoute,
     pendingNotAllowed,
@@ -107,6 +166,7 @@ export function checkContract(
       operationsMissingInApp.length === 0 &&
       writesWithoutCsrf.length === 0 &&
       staleCsrfExceptions.length === 0 &&
+      missingErrorResponses.length === 0 &&
       pendingNotAllowed.length === 0,
   };
 }
@@ -152,6 +212,7 @@ export function formatContractReport(
   add('operação do contrato sem rota', report.operationsMissingInApp);
   add('escrita sem csrfToken no security', report.writesWithoutCsrf);
   add('exceção de CSRF que não se aplica mais', report.staleCsrfExceptions);
+  add('resposta de erro não declarada', report.missingErrorResponses);
   add('operação ainda marcada com x-nuva-pending', report.pendingNotAllowed);
   if (options.warnings) {
     lines.push(...formatContractWarnings(report));

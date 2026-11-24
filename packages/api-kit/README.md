@@ -8,11 +8,12 @@ Roda direto no Node 26, sem build: os imports levam `.ts` e a sintaxe é só a q
 | --- | --- |
 | `src/contract.ts` | Leitura do `openapi.yaml` (3.1) e lista de operações |
 | `src/validation.ts` | Validação de requisição e de resposta (Ajv, JSON Schema 2020-12) |
-| `src/contract-check.ts` | Comparação rotas x contrato, regra do `csrfToken` e operações pendentes |
+| `src/contract-check.ts` | Comparação rotas x contrato, regra do `csrfToken`, respostas de erro declaradas e operações pendentes |
 | `src/app.ts` | `createApiApp`: o Fastify com tudo ligado |
 | `src/errors.ts` | Qualquer erro → problem+json com os códigos da spec 003 |
 | `src/client-ip.ts` | IP real conforme `TRUSTED_PROXIES` (spec 031) |
 | `src/health.ts` | Verificações do `/readyz` (banco e migrations) |
+| `src/meta.ts` | `GET /api/v1/meta`, igual nas duas APIs: `registerMetaRoute`, `installationMeta`, `readPackageVersion` |
 | `src/metrics.ts` | Registro de métricas no formato de texto do Prometheus |
 | `src/sse.ts` | Cabeçalhos e formato de evento SSE, e o conjunto dos fluxos abertos |
 | `src/request-state.ts` | `createRequestState`: dado tipado da API por requisição |
@@ -139,7 +140,7 @@ Uma operação marcada com `x-nuva-pending: true` no `openapi.yaml` pode chegar 
 
 ## Comando `check-contract`
 
-`runCheckContract` é o comando `check-contract` da spec 003 ("Subida estrita"), igual nas duas APIs: monta o app, repete a conferência da subida e do teste de contrato (rotas x contrato nos dois sentidos, `csrfToken` das escritas) e devolve o código de saída. Não escuta em porta e não precisa de banco. Cada API tem um `src/check-contract.ts` e o script `check-contract` no `package.json`:
+`runCheckContract` é o comando `check-contract` da spec 003 ("Subida estrita"), igual nas duas APIs: monta o app, repete a conferência da subida e do teste de contrato (rotas x contrato nos dois sentidos, `csrfToken` das escritas, respostas de erro declaradas) e devolve o código de saída. Não escuta em porta e não precisa de banco. Cada API tem um `src/check-contract.ts` e o script `check-contract` no `package.json`:
 
 ```ts
 import { runCheckContract } from '@nuva-edu/api-kit';
@@ -196,7 +197,40 @@ const report = app.checkContract({ csrfExceptions: ['login'] });
 expect(formatContractReport(report)).toBe(''); // lista cada divergência
 ```
 
-O relatório acusa rota fora do contrato, operação sem rota (salvo as pendentes), escrita sem `csrfToken` no `security` (em qualquer alternativa) fora da lista de exceções, e exceção que deixou de valer.
+O relatório acusa rota fora do contrato, operação sem rota (salvo as pendentes), escrita sem `csrfToken` no `security` (em qualquer alternativa) fora da lista de exceções, exceção que deixou de valer e resposta de erro não declarada.
+
+### Respostas de erro declaradas
+
+A mesma conferência cobre a tabela "Respostas de erro declaradas" da spec 003, sem nada a fazer em cada API: `report.missingErrorResponses` lista as operações que deixam de declarar um status exigido (`resposta de erro não declarada: GET /api/v1/users/{id}: 404, 429`), e isso reprova o teste de contrato e o `check-contract`. Não impede a subida, como a regra do `csrfToken`: é propriedade só do contrato.
+
+| Operação | Precisa declarar |
+| --- | --- |
+| Toda operação de `/api/v1` | `400`, `429`, `500`, `503` |
+| Com sessão (`security` não vazio) | também `401` e `403` |
+| Com corpo de requisição | também `413` e `415` |
+| Com parâmetro de caminho | também `404` |
+| Fora de `/api/v1` (`/healthz`, `/readyz`) | nada |
+
+O status precisa estar escrito na operação: faixa (`4XX`) e `default` não contam. A regra vale também para operação pendente. `requiredErrorResponses(operation)` devolve a lista de uma operação; `findMissingErrorResponses(contract)`, as faltas do contrato inteiro.
+
+## `GET /api/v1/meta`
+
+As duas APIs devolvem o mesmo esquema `Meta` (spec 003, "Meta"); a rota fica aqui:
+
+```ts
+import { readPackageVersion, registerMetaRoute } from '@nuva-edu/api-kit';
+import { createSettingsReader } from '@nuva-edu/core';
+
+// Um leitor por processo, com o logger: sem ele o aviso de valor inválido em `settings` não sai.
+const settings = createSettingsReader(db, { logger });
+registerMetaRoute(app, {
+  config,
+  version: readPackageVersion(new URL('../package.json', import.meta.url)),
+  settings,
+});
+```
+
+Registra a operação `getMeta`. `schoolName`, `logoUrl`, `accentColor` e `sourceCodeUrl` vêm de `settings` pelo leitor do núcleo (padrão no que falta ou é inválido); `logoUrl` e `accentColor` vão sempre na resposta, `null` quando não há valor. Banco fora do ar com o cache do leitor vencido responde `503 database_unavailable`. `installationMeta(config, version, settings)` é a montagem pura.
 
 ## Testes
 

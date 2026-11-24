@@ -503,6 +503,7 @@ export function createApiApp(options: ApiAppOptions): FastifyInstance {
         ...report,
         writesWithoutCsrf: [],
         staleCsrfExceptions: [],
+        missingErrorResponses: [],
         ok: false,
       });
     }

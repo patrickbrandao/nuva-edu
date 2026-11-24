@@ -2,11 +2,13 @@ import { describe, expect, it } from 'vitest';
 import {
   ContractMismatchError,
   checkContract,
+  findMissingErrorResponses,
   findWritesWithoutCsrf,
   formatContractReport,
   formatContractWarnings,
   parseContract,
   type RegisteredRoute,
+  requiredErrorResponses,
 } from '../src/index.ts';
 import { fixtureContract } from './helpers.ts';
 
@@ -27,6 +29,7 @@ describe('checkContract', () => {
       operationsMissingInApp: [],
       writesWithoutCsrf: [],
       staleCsrfExceptions: [],
+      missingErrorResponses: [],
       pendingOperations: [],
       pendingWithRoute: [],
       pendingNotAllowed: [],
@@ -93,6 +96,106 @@ describe('checkContract', () => {
     expect(text).toContain('escrita sem csrfToken no security: login');
     expect(new ContractMismatchError('openapi.yaml', report).message).toContain(text);
     expect(formatContractReport(checkContract(contract, allRoutes, exceptions))).toBe('');
+  });
+});
+
+describe('respostas de erro declaradas (spec 003)', () => {
+  type Document = { paths: Record<string, Record<string, { responses: Record<string, unknown> }>> };
+  /** O contrato de teste sem alguns status numa operação. */
+  function without(
+    path: string,
+    method: string,
+    statuses: string[],
+    extra?: (d: Document) => void,
+  ) {
+    const document = structuredClone(contract.document) as Document;
+    for (const status of statuses) {
+      delete document.paths[path]?.[method]?.responses[status];
+    }
+    extra?.(document);
+    return parseContract(document, 'sem-erros.yaml');
+  }
+
+  it('o que cada operação precisa declarar segue a tabela da spec', () => {
+    const required = (id: string) => requiredErrorResponses(contract.operation(id));
+    // Pública, sem corpo e sem parâmetro de caminho: só as de toda operação de /api/v1.
+    expect(required('listItems')).toEqual(['400', '429', '500', '503']);
+    // Com sessão e corpo.
+    expect(required('createItem')).toEqual([
+      '400',
+      '401',
+      '403',
+      '413',
+      '415',
+      '429',
+      '500',
+      '503',
+    ]);
+    // Com sessão e parâmetro de caminho.
+    expect(required('getItem')).toEqual(['400', '401', '403', '404', '429', '500', '503']);
+    expect(required('deleteItem')).toEqual(['400', '401', '403', '404', '429', '500', '503']);
+    // Pública com corpo.
+    expect(required('login')).toEqual(['400', '413', '415', '429', '500', '503']);
+    // Sondas, fora de /api/v1: só as próprias.
+    expect(required('getHealth')).toEqual([]);
+    expect(required('getReadiness')).toEqual([]);
+  });
+
+  it('o contrato de teste declara tudo', () => {
+    expect(findMissingErrorResponses(contract)).toEqual([]);
+  });
+
+  it('acusa cada operação com os status que faltam, e o relatório reprova', () => {
+    const broken = without('/api/v1/items/{id}', 'get', ['404', '429'], (document) => {
+      delete document.paths['/api/v1/items']?.post?.responses['415'];
+      delete document.paths['/api/v1/items']?.get?.responses['503'];
+    });
+    const report = checkContract(broken, allRoutes, exceptions);
+    expect(report.ok).toBe(false);
+    expect(report.missingErrorResponses).toEqual([
+      'GET /api/v1/items/{id}: 404, 429',
+      'GET /api/v1/items: 503',
+      'POST /api/v1/items: 415',
+    ]);
+    expect(formatContractReport(report).split('\n')).toEqual([
+      'resposta de erro não declarada: GET /api/v1/items/{id}: 404, 429',
+      'resposta de erro não declarada: GET /api/v1/items: 503',
+      'resposta de erro não declarada: POST /api/v1/items: 415',
+    ]);
+  });
+
+  it('401 e 403 só são exigidos de operação com sessão', () => {
+    expect(findMissingErrorResponses(without('/api/v1/items/{id}', 'get', ['401', '403']))).toEqual(
+      ['GET /api/v1/items/{id}: 401, 403'],
+    );
+    // `login` é pública e não declara 401 nem 403: nada a acusar.
+    expect(contract.operation('login').responses.map((r) => r.status)).not.toContain('401');
+  });
+
+  it('faixa de status e default não substituem o status escrito', () => {
+    const ranged = without('/api/v1/items', 'get', ['400', '500'], (document) => {
+      const responses = document.paths['/api/v1/items']?.get?.responses;
+      if (responses) {
+        responses['4XX'] = { $ref: '#/components/responses/Problem' };
+        responses.default = { $ref: '#/components/responses/Problem' };
+      }
+    });
+    expect(findMissingErrorResponses(ranged)).toEqual(['GET /api/v1/items: 400, 500']);
+  });
+
+  it('vale também para operação pendente', () => {
+    const pending = without('/api/v1/items/{id}', 'get', ['404'], (document) => {
+      const getItem = document.paths['/api/v1/items/{id}']?.get as Record<string, unknown>;
+      getItem['x-nuva-pending'] = true;
+    });
+    const report = checkContract(
+      pending,
+      allRoutes.filter((r) => !(r.method === 'GET' && r.path === '/api/v1/items/:id')),
+      exceptions,
+    );
+    expect(report.pendingOperations).toEqual(['GET /api/v1/items/{id}']);
+    expect(report.missingErrorResponses).toEqual(['GET /api/v1/items/{id}: 404']);
+    expect(report.ok).toBe(false);
   });
 });
 

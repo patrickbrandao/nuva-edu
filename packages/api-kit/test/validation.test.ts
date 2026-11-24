@@ -195,6 +195,82 @@ describe('validação da resposta', () => {
   });
 });
 
+describe('campo que aceita nulo (type: [string, "null"]) com format ou pattern', () => {
+  // As formas do esquema `Meta` dos dois contratos: `logoUrl`, `accentColor`, `sourceCodeUrl`.
+  const nullable = parseContract({
+    openapi: '3.1.0',
+    paths: {
+      '/api/v1/brand': {
+        get: {
+          operationId: 'getBrand',
+          responses: {
+            '200': {
+              description: 'ok',
+              content: { 'application/json': { schema: { $ref: '#/components/schemas/Brand' } } },
+            },
+          },
+        },
+      },
+    },
+    components: {
+      schemas: {
+        Brand: {
+          type: 'object',
+          required: ['logoUrl', 'accentColor', 'sourceCodeUrl'],
+          properties: {
+            logoUrl: { type: ['string', 'null'], format: 'uri-reference' },
+            accentColor: { type: ['string', 'null'], pattern: '^#[0-9A-Fa-f]{6}$' },
+            sourceCodeUrl: { type: 'string', format: 'uri' },
+          },
+          additionalProperties: false,
+        },
+      },
+    },
+  });
+  const operation = createContractValidator(nullable).for(nullable.operation('getBrand'));
+  const brand = {
+    logoUrl: '/api/v1/images/0193a5b2-7c1e-7d3a-9f4b-2a6c8e1d5f70/256.webp',
+    accentColor: '#1F6FEB',
+    sourceCodeUrl: 'https://example.com/escola/codigo',
+  };
+  const respond = (body: unknown) => operation.validateResponse(200, 'application/json', body);
+
+  it('aceita o valor no formato e aceita null', () => {
+    expect(respond(brand)).toEqual({ ok: true });
+    expect(respond({ ...brand, logoUrl: null, accentColor: null })).toEqual({ ok: true });
+  });
+
+  it('recusa valor fora do pattern ou do format', () => {
+    for (const accentColor of ['azul', '#1F6FE', '#1F6FEB0', 'x#1F6FEB', '']) {
+      expect(respond({ ...brand, accentColor })).toMatchObject({
+        ok: false,
+        reason: 'schema_mismatch',
+      });
+    }
+    expect(respond({ ...brand, logoUrl: 'com espaço.webp' })).toMatchObject({
+      ok: false,
+      reason: 'schema_mismatch',
+    });
+    expect(respond({ ...brand, sourceCodeUrl: '/so-o-caminho' })).toMatchObject({
+      ok: false,
+      reason: 'schema_mismatch',
+    });
+  });
+
+  it('null não vale para campo só de texto, e campo obrigatório não pode faltar', () => {
+    expect(respond({ ...brand, sourceCodeUrl: null })).toMatchObject({ reason: 'schema_mismatch' });
+    expect(respond({ ...brand, accentColor: 7 })).toMatchObject({ reason: 'schema_mismatch' });
+    const { logoUrl: _logoUrl, ...semLogo } = brand;
+    expect(respond(semLogo)).toMatchObject({ reason: 'schema_mismatch' });
+  });
+
+  it('o esquema avulso segue a mesma regra', () => {
+    const schema = createContractValidator(nullable).schema('Brand');
+    expect(schema({ ...brand, accentColor: null })).toEqual([]);
+    expect(schema({ ...brand, accentColor: 'azul' })).toHaveLength(1);
+  });
+});
+
 describe('contrato com esquema inválido', () => {
   const broken = (schema: unknown) =>
     parseContract({

@@ -49,7 +49,18 @@ describe('loadContract', () => {
       'application/json',
     ]);
     const statuses = contract.operation('createItem').responses.map((r) => r.status);
-    expect(statuses).toEqual(['201', '400', '401', '403', '422', '429']);
+    expect(statuses).toEqual([
+      '201',
+      '400',
+      '401',
+      '403',
+      '413',
+      '415',
+      '422',
+      '429',
+      '500',
+      '503',
+    ]);
     expect(contract.operation('deleteItem').responses[0]?.content).toEqual({});
   });
 
