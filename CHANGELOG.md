@@ -6,6 +6,7 @@ Detalhe das decisões em `specs/decisions/`.
 ## [Não lançado]
 
 ### Adicionado
+- Specs da Fase 1 (contas) prontas para implementar: rotas, cookies, OAuth com provedor simulado (ADR 0024), e-mails, auditoria imutável por gatilho, termos no cadastro, volumes com prefixo; plano da fase em `PLAN.md`.
 - `task:finish` repete o push uma vez na corrida entre dois finish (remoto ancestral da `main` local); senão, código 7.
 - `task:start` simultâneos: o `pnpm install` do worktree não reinstala os ganchos do Git (confere e instala sob trava se faltarem) e o `git worktree add` roda um de cada vez (task 112).
 - Exceção temporária no Trivy (`.trivyignore.yaml`, só nos jobs `admin` e `classroom`, só o `nginx` 1.30.6-r1, vence em 2026-12-24) para publicar os sites; teste barra exceção sem motivo, sem prazo ou vencida (task 118).

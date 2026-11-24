@@ -119,6 +119,7 @@ Expurgo diário às 03:30 (fuso da escola, `settings.timezone`), tarefa `retenti
 | Sessão sem uso | 30 dias | `NUVA_RETENTION_SESSION_DAYS` |
 | Links de confirmação e de redefinição | 24 horas | `NUVA_RETENTION_EMAIL_TOKEN_HOURS` |
 | Tentativas de login | 30 dias | `NUVA_RETENTION_LOGIN_ATTEMPT_DAYS` |
+| Dispositivos conhecidos (`user_devices`) sem uso | 1 ano | fixo |
 | Tarefas concluídas da fila | 7 dias | `NUVA_RETENTION_JOB_DONE_DAYS` |
 | Tarefas com falha | 30 dias | `NUVA_RETENTION_JOB_FAILED_DAYS` |
 | Notificações lidas | 90 dias | `NUVA_RETENTION_NOTIFICATION_DAYS` |
@@ -136,7 +137,7 @@ Expurgo diário às 03:30 (fuso da escola, `settings.timezone`), tarefa `retenti
 | Registros de venda | 5 anos, depois anonimizados | `NUVA_RETENTION_FISCAL_YEARS` ([030](030-lgpd.md)) |
 | Logs dos contêineres | 10 MB x 5 arquivos | configuração do Compose |
 
-Esta tabela é a lista completa e única de prazos; as demais specs usam estes números. Conteúdo de fórum, mensagens, progresso e compras não expiram. O cookie de sessão é o único cookie e segue o prazo da sessão.
+Esta tabela é a lista completa e única de prazos; as demais specs usam estes números. Conteúdo de fórum, mensagens, progresso e compras não expiram. Os únicos cookies são o de sessão, que segue o prazo da sessão, e o de retorno do login social, de 10 minutos (30 no cadastro pendente) ([007](007-contas-e-autenticacao.md), "Cookies").
 
 ### Backup e restauração
 

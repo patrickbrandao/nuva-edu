@@ -45,6 +45,7 @@ Regra adicional: recurso que existe mas ao qual o aluno não tem direito respond
 | --- | --- | --- | --- |
 | `/meta` | Não | Dados públicos da instalação e da marca, com os mesmos campos da `admin-api` | [003](003-admin-api.md), "Meta" |
 | `/auth/*`, `/session` | Não | Cadastro, login, OAuth, confirmação, redefinição | [007](007-contas-e-autenticacao.md) |
+| `/account/*`, `/me/profile/avatar` | Sim | Senha, provedores vinculados, sessões, avatar | [007](007-contas-e-autenticacao.md) |
 | `/catalog` | Não | Vitrine: produtos e planos não privados | [009](009-catalogo-e-conteudo.md) |
 | `/courses`, `/lessons`, `/ebooks`, `/library` | Sim (programa: não) | Programa, player, links, estante | [009](009-catalogo-e-conteudo.md), [014](014-aprendizado-e-progresso.md) |
 | `/cart`, `/checkout`, `/orders`, `/coupons/validate` | Sim | Cesta, checkout, pedidos | [011](011-vendas-e-checkout.md) |

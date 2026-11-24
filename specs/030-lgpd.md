@@ -17,7 +17,7 @@ Cada instalação trata dados pessoais de alunos brasileiros: nome, e-mail, CPF/
 - RF-06: A exclusão anonimiza: apaga os dados pessoais, mantém os registros de venda pelo prazo fiscal e mantém as publicações sem autor identificável.
 - RF-07: O admin pode executar exportação e exclusão em nome de um usuário (pedido recebido por chamado), com registro na auditoria.
 - RF-08: Publicar um case exige aceite explícito de exibição pública, registrado no próprio case ([022](022-cases.md)).
-- RF-09: O banner de cookies não é necessário: o sistema usa apenas o cookie de sessão, estritamente necessário, e nenhuma ferramenta de rastreamento. Isso consta na política.
+- RF-09: O banner de cookies não é necessário: o sistema usa apenas cookies estritamente necessários (o de sessão e o de retorno do login social, de 10 minutos; [007](007-contas-e-autenticacao.md), "Cookies") e nenhuma ferramenta de rastreamento. Isso consta na política.
 - RNF-01: A exportação fica pronta em até 10 minutos e o link vale 24 horas.
 - RNF-02: A exclusão tem carência de 7 dias (`NUVA_ACCOUNT_DELETION_GRACE_DAYS`), durante a qual o usuário pode cancelar entrando de novo; depois é irreversível.
 - RNF-03: Registros de venda são mantidos por 5 anos a partir do pagamento (`NUVA_RETENTION_FISCAL_YEARS`, padrão 5) e então anonimizados por completo.
@@ -30,6 +30,24 @@ Cada instalação trata dados pessoais de alunos brasileiros: nome, e-mail, CPF/
 - Dois documentos: `terms` e `privacy`. Cada versão tem número sequencial, texto em Markdown, data de vigência e o indicador `requires_reacceptance`.
 - A vitrine exibe as versões vigentes em `/termos` e `/privacidade`, sem login. O conteúdo jurídico é responsabilidade da escola; a instalação nova vem com um modelo marcado como rascunho. O cadastro não é bloqueado enquanto não houver versão publicada: nesse caso não há aceite a registrar, e o admin vê um aviso fixo no painel até publicar a primeira versão. Publicada a primeira versão, quem se cadastrou antes aceita no próximo acesso.
 - O histórico de aceites de um usuário é visível para ele e para o admin.
+
+### Termos na Fase 1
+
+A Fase 1 entrega o que o cadastro exige; exportação e exclusão ficam para a Fase 7.
+
+| Operação | API | Regra |
+| --- | --- | --- |
+| `GET /api/v1/terms?document=` | admin | Só `admin` (`settings.manage`). Lista as versões do documento, mais nova primeiro: `id`, `document`, `version`, `status` (`draft` ou `published`), `requiresReacceptance`, `effectiveAt`, `publishedAt`, `createdAt` |
+| `POST /api/v1/terms` | admin | Cria um rascunho: `document`, `bodyMd` (1 a 100.000 caracteres), `requiresReacceptance`. O número da versão é dado na publicação |
+| `POST /api/v1/terms/{id}/publish` | admin | Publica o rascunho: recebe o próximo `version` do documento, `effective_at = published_at = now()`, vira a vigente e fica imutável. Já publicado: `409` `terms_already_published`. Auditado (`terms.publish`) |
+| `GET /api/v1/legal/{document}` | classroom | Público. A vigente: `id`, `document`, `version`, `bodyMd`, `effectiveAt`. Sem versão publicada: `404` |
+| `POST /api/v1/me/terms-acceptance` | classroom | `termsVersionIds` (uuid[]): grava um aceite por versão, com IP e navegador. `id` que não é o vigente do documento: `422` `terms_version_outdated`. Aceitar de novo a mesma versão não duplica |
+
+- Rascunho não é editado: para mudar o texto, cria-se outro rascunho. Rascunhos antigos ficam na lista.
+- Vigente = a publicada de maior `version` do documento. O esquema `TermsVersion` (sessão, cadastro social) traz `id`, `document`, `version`, `effectiveAt`, sem o texto.
+- Pendente para um usuário ([007](007-contas-e-autenticacao.md), "Termos no cadastro e aceite pendente"): vigente sem aceite dele, quando é a primeira versão publicada do documento ou tem `requires_reacceptance`. Versão nova sem `requires_reacceptance` não bloqueia quem aceitou uma anterior.
+- O site admin oferece um texto modelo ao criar a primeira versão de cada documento; o modelo vive no código do site, não no banco.
+- Aviso fixo no painel do admin enquanto algum dos dois documentos não tem versão publicada.
 
 ### Exportação
 

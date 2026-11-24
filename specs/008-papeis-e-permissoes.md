@@ -110,6 +110,24 @@ Legenda: ✓ permitido · ◐ só nos próprios cursos · — negado.
 
 "Acesso ativo" = ao menos um direito vigente a produto `paid` ou `private`, ou assinatura ativa.
 
+### Identificadores das ações
+
+Cada linha das matrizes é uma ação de `packages/core`, com o identificador abaixo. É ele que vai em `x-permission` no contrato, em `can(user, action, resource)` e na lista `permissions` de `GET /api/v1/session`. Ação ◐ é devolvida na lista para o papel que a tem em parte; o filtro pelo alcance é aplicado na consulta.
+
+| Grupo | Identificadores (na ordem das linhas da matriz) |
+| --- | --- |
+| Acesso | `admin.access`, `dashboard.view` |
+| Pessoas | `users.list`, `users.view_private`, `users.edit`, `users.suspend`, `users.sessions.revoke`, `users.password.view`, `users.password.set`, `staff.manage`, `users.delete` |
+| Conteúdo | `course.create`, `course.edit`, `course.publish`, `course.delete`, `course.delete_with_students`, `course.set_owner`, `ebook_bundle.manage`, `ebook.link`, `product.set_access`, `product.set_price`, `event.manage`, `announcement.publish` |
+| Acessos e vendas | `entitlement.manage`, `sales.view`, `order.refund`, `subscription.cancel`, `plan.manage`, `coupon.manage` |
+| Comunidade e suporte | `forum.category.manage`, `forum.moderate`, `report.handle`, `case.moderate`, `badge.award`, `gamification.configure`, `ticket.handle`, `progress.view`, `certificate.revoke` |
+| Sistema | `mcp_key.own`, `mcp_key.manage_all`, `audit.view`, `ops.manage`, `settings.manage` |
+| Classroom | `catalog.view`, `course.view_program`, `lesson.watch_open`, `lesson.watch_sample`, `content.access_paid`, `purchase.create`, `learning.track`, `forum.course.participate`, `forum.free.participate`, `members.view`, `dm.send`, `case.publish`, `ticket.open`, `report.create`, `account.self_service` |
+
+- Nas rotas de usuário da `admin-api`, `users.view` (ver a ficha) é a mesma ação de `users.list`; `users.view_private` decide se e-mail, CPF/CNPJ e compras vão na resposta.
+- `users.list` do `instructor` (alunos dos seus cursos) é servido pelas rotas do curso ([009](009-catalogo-e-conteudo.md), [014](014-aprendizado-e-progresso.md)), na Fase 2. Na Fase 1 não há curso: `GET /users` exige `users.list` com alcance total (`manager` e `admin`), e o `instructor` recebe `403`.
+- Ação sobre conta de equipe (`instructor`, `manager`, `admin`) exige `staff.manage`, mesmo que a ação sobre aluno exija outra (`users.edit`, `users.suspend`, `users.sessions.revoke`).
+
 ### Regra do instrutor
 
 - Cada curso tem `owner_id`. Quem cria o curso como `instructor` vira o dono; `manager` e `admin` podem atribuir o dono.
@@ -134,6 +152,9 @@ Legenda: ✓ permitido · ◐ só nos próprios cursos · — negado.
 - O que permanece: compras, direitos de acesso, progresso e conteúdo já publicado (que pode ser ocultado pela moderação). A suspensão não cancela assinatura: a cobrança segue até o admin cancelar ([012](012-assinaturas.md)).
 - Suspensão exige motivo (texto), guardado em `user_suspensions.reason` (resumo em `users.suspended_reason`), auditado e visível só à equipe. O usuário é avisado por e-mail, sem o motivo interno.
 - Reativar restaura o acesso; sessões e chaves MCP não voltam sozinhas (o usuário entra de novo; chaves seguem válidas se não foram revogadas).
+- Pela `admin-api` ([007](007-contas-e-autenticacao.md), "Interfaces e contratos"): `POST /users/{id}/suspend` com `kind`, `reason` (1 a 500 caracteres) e `durationDays` (1, 7, 30 ou nulo = indeterminado), e `POST /users/{id}/reactivate`. Suspender quem já está suspenso: `409` `already_suspended` (para mudar o tipo ou o prazo, reativa e suspende de novo); reativar quem não está: `409` `not_suspended`.
+- Cada suspensão é uma linha em `user_suspensions` (`starts_at = now()`, `ends_at` pelo prazo, `created_by`); `users.suspended_*` espelham a suspensão vigente. Reativar ou o fim do prazo (tarefa `suspension.expire`) preenchem `lifted_at` e limpam `users.suspended_*`, com `user.unsuspend` na auditoria (`origin = worker` no fim do prazo).
+- E-mail ao suspender: `moderation.suspended` com o tipo e o prazo, sem o motivo. Nesta fase ele sai só por e-mail; o canal "plataforma" entra com as notificações ([024](024-notificacoes-e-email.md)). Mudança de papel envia `account.role_changed`.
 
 ### Casos de erro
 

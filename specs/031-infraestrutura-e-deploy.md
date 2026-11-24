@@ -11,7 +11,7 @@ O nuva-edu é distribuído como imagens Docker e um conjunto de arquivos Compose
 
 - RF-01: Um único `docker compose up -d` na raiz sobe uma instalação completa, com proxy próprio, a partir de `.env` e `.env.local`.
 - RF-02: Cada sistema tem o seu `docker-compose.yml` na própria pasta; o `docker-compose.yml` da raiz apenas os inclui (`include:`).
-- RF-03: O Traefik próprio, o backup e o Mailpit são perfis opcionais.
+- RF-03: O Traefik próprio, o backup, o Mailpit e o provedor OAuth simulado são perfis opcionais.
 - RF-04: Os nomes de host dos dois sites vêm de variáveis de ambiente.
 - RF-05: Nenhuma senha ou chave tem valor padrão: o Compose falha com mensagem clara se faltar (`${VAR:?}`). A exigência de cada segredo entra junto com o código que o usa ([Segredos exigidos](#segredos-exigidos)).
 - RF-06: As migrations são aplicadas por um serviço de execução única antes de as APIs e o worker subirem.
@@ -40,6 +40,7 @@ O nuva-edu é distribuído como imagens Docker e um conjunto de arquivos Compose
 | `proxy/traefik/docker-compose.yml` | `traefik` (perfil `traefik`) |
 | `proxy/lighttpd/` | lighttpd dos dois sites, igual nas duas imagens ([0023](decisions/0023-lighttpd-nos-sites.md)): `lighttpd.conf`, o script de entrada, que gera o `/config.json` na subida ([Configuração de execução dos sites](#configuração-de-execução-dos-sites)), e o gerador da CSP, que no build calcula a `Content-Security-Policy` do site a partir do `index.html` ([033](033-observabilidade-retencao-backup.md)) |
 | `mail/mailpit/docker-compose.yml` | `mailpit` (perfil `mailpit`) |
+| `scripts/oauth-mock/` | Provedor OAuth simulado ([0024](decisions/0024-provedor-oauth-simulado.md)): o servidor e o `docker-compose.yml` do serviço `oauth-mock` (perfil `oauth-mock`) |
 | `apps/<app>/docker-compose.yml` | Um por aplicação: `admin-api`, `classroom-api`, `worker`, `admin`, `classroom`. O da `admin-api` traz também o `migrate`, que usa a imagem e o `build` dela |
 | `apps/<app>/Dockerfile` | Build em stages, com a raiz do repositório como contexto |
 
@@ -73,8 +74,9 @@ Consequências da entrega por `env_file`:
 | `traefik` | `traefik:v3` | 8080 / 8443 | 1 | 128 MB | `traefik` |
 | `backup` | `postgres:18` com script | — | 1 | 256 MB | `backup` |
 | `mailpit` | `axllent/mailpit` | 1025 / 8025 | 1 | 64 MB | `mailpit` |
+| `oauth-mock` | `node:26-slim` com `scripts/oauth-mock/` | 8080 | 1 | 64 MB | `oauth-mock` |
 
-CPU e memória de cada serviço são ajustáveis por `NUVA_<SERVICO>_CPUS` e `NUVA_<SERVICO>_MEMORY`, com o nome do serviço em maiúsculas e `_` no lugar do hífen: `POSTGRES`, `MIGRATE`, `ADMIN_API`, `CLASSROOM_API`, `WORKER`, `ADMIN`, `CLASSROOM`, `TRAEFIK`, `BACKUP`, `MAILPIT`.
+CPU e memória de cada serviço são ajustáveis por `NUVA_<SERVICO>_CPUS` e `NUVA_<SERVICO>_MEMORY`, com o nome do serviço em maiúsculas e `_` no lugar do hífen: `POSTGRES`, `MIGRATE`, `ADMIN_API`, `CLASSROOM_API`, `WORKER`, `ADMIN`, `CLASSROOM`, `TRAEFIK`, `BACKUP`, `MAILPIT`, `OAUTH_MOCK`.
 
 O `migrate` executa o comando de migrations que vai dentro da imagem da `admin-api` (`database/postgres/src/cli.ts up`), termina, e só então as APIs e o worker sobem.
 
@@ -83,7 +85,7 @@ As duas APIs e o worker escutam na porta de `PORT` (padrão 3000). No Compose a 
 ### Padrões de todo contêiner
 
 - `deploy.resources.limits` com CPU e memória (tabela acima).
-- `read_only: true`; `/run` e `/tmp` em `tmpfs`; escrita apenas em volumes nomeados (`postgres-data`, `backup-data`, `traefik-acme`).
+- `read_only: true`; `/run` e `/tmp` em `tmpfs`; escrita apenas em volumes nomeados ([Volumes](#volumes)).
 - `ulimits.nofile` explícito: 65536 para `postgres`, `traefik` e as APIs; 4096 para os demais.
 - Usuário sem privilégios, `cap_drop: [ALL]`, `security_opt: [no-new-privileges:true]`.
 - `healthcheck` em todos; dependências com `condition: service_healthy` (ou `service_completed_successfully` para `migrate`).
@@ -116,6 +118,7 @@ Os sites são estáticos: o que depende da instalação e não vem da API chega 
 | `NUVA_CLASSROOM_HOST` | `/api/` | `classroom-api` |
 | `NUVA_CLASSROOM_HOST` | `/healthz` | `classroom-api` |
 | `NUVA_CLASSROOM_HOST` | demais | `classroom` |
+| `oauth-mock.${NUVA_DOMAIN}` | todos | `oauth-mock` (só com o perfil `oauth-mock`) |
 
 - `/healthz` é a única sonda roteada para fora, para monitoramento externo; `/readyz` e `/metrics` ficam só na rede interna ([033](033-observabilidade-retencao-backup.md)).
 - Os rótulos do Traefik ficam no `docker-compose.yml` de cada aplicação e usam `TRAEFIK_NETWORK`, `TRAEFIK_ENTRYPOINTS` e `TRAEFIK_CERTRESOLVER`.
@@ -159,13 +162,14 @@ O fluxo `GET /api/v1/stream` ([004](004-classroom-api.md)) tem um roteador próp
 
 | Item | `dev` (Docker Desktop) | `teste` (servidor opencode) |
 | --- | --- | --- |
-| Perfis | `traefik`, `mailpit` | nenhum (Traefik já existe) |
+| Perfis | `traefik`, `mailpit`, `oauth-mock` | `mailpit` (Traefik já existe) |
 | `NUVA_DOMAIN` | `localhost` | `opencode.tmsoft.com.br` |
 | Sites | `http://edu-admin.localhost:8080`, `http://classroom.localhost:8080` | `https://edu-admin.opencode.tmsoft.com.br`, `https://classroom.opencode.tmsoft.com.br` |
 | `TRAEFIK_NETWORK` | `nuva-edu-proxy` (criada pelo Compose) | `network_public` (externa) |
 | `TRAEFIK_ENTRYPOINTS` | `web` | `websecure` |
 | `TRAEFIK_CERTRESOLVER` | vazio | `letsencrypt` |
-| E-mail | Mailpit (`http://localhost:8025`) | SMTP real de teste |
+| E-mail | Mailpit (`http://localhost:8025`) | Mailpit, com a tela só por túnel SSH, até haver SMTP real de teste (credencial do humano); com ele, `SMTP_*` no `.env.local` do servidor e o perfil sai |
+| Login social | Provedor simulado (`NUVA_OAUTH_MOCK_URL=http://oauth-mock.localhost:8080`) | Credenciais reais quando o humano as fornecer; até lá, os botões sociais não aparecem |
 | Mercado Pago | credenciais de teste | credenciais de teste |
 | Imagens | build local | Docker Hub, etiqueta do commit |
 | Postgres no hospedeiro | `127.0.0.1:${NUVA_POSTGRES_PORT}` | não publicado (depende da tarefa 061; ver "Padrões de todo contêiner") |
@@ -223,7 +227,7 @@ O script só age sobre o projeto Compose `nuva-edu`; qualquer outra ação no se
 | `DATABASE_URL` | montada de `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_DB`, `POSTGRES_HOST` e `NUVA_POSTGRES_PORT` | Conexão usada pelas aplicações; definida, vale no lugar das cinco |
 | `NUVA_POSTGRES_PORT` | `5432` | Porta do banco para os processos fora do contêiner e porta publicada em `127.0.0.1` no desenvolvimento; no Compose os serviços usam sempre `5432` |
 | `POSTGRES_IMAGE`, `POSTGRES_MAX_CONNECTIONS`, `POSTGRES_SHARED_BUFFERS`, `POSTGRES_SHM_SIZE` | `postgres:18-alpine`, `100`, `256MB`, `128mb` | Imagem e ajustes do contêiner do banco |
-| `SESSION_SECRET` | segredo | Assinatura de cookies e tokens |
+| `SESSION_SECRET` | segredo | Assinatura do cookie de retorno do login social ([007](007-contas-e-autenticacao.md), "Cookies"); no mínimo 32 caracteres, senão o serviço não sobe. Gerar com `openssl rand -base64 48` |
 | `SMTP_HOST` | `mailpit` | Servidor SMTP |
 | `SMTP_PORT` | `1025` | Porta SMTP |
 | `SMTP_USER` | vazio | Usuário SMTP |
@@ -235,7 +239,8 @@ O script só age sobre o projeto Compose `nuva-edu`; qualquer outra ação no se
 | `MP_WEBHOOK_SECRET` | segredo | Assinatura dos webhooks |
 | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | vazio | Login Google; vazio desliga o provedor |
 | `FACEBOOK_APP_ID`, `FACEBOOK_APP_SECRET` | vazio | Login Facebook; vazio desliga |
-| `APPLE_CLIENT_ID`, `APPLE_TEAM_ID`, `APPLE_KEY_ID`, `APPLE_PRIVATE_KEY` | vazio | Login Apple; vazio desliga |
+| `APPLE_CLIENT_ID`, `APPLE_TEAM_ID`, `APPLE_KEY_ID`, `APPLE_PRIVATE_KEY` | vazio | Login Apple; vazio desliga. `APPLE_PRIVATE_KEY` é o conteúdo PEM da chave `.p8`, com `\n` no lugar das quebras de linha |
+| `NUVA_OAUTH_MOCK_URL`, `NUVA_OAUTH_MOCK_INTERNAL_URL` | vazio; o interno, igual ao público | Liga o provedor simulado no lugar dos três ([0024](decisions/0024-provedor-oauth-simulado.md)); recusado com `NUVA_ENV=production`. No Compose de desenvolvimento: `http://oauth-mock.localhost:8080` e `http://oauth-mock:8080` |
 | `TRAEFIK_NETWORK` | `nuva-edu-proxy` | Rede do proxy |
 | `TRAEFIK_NETWORK_EXTERNAL` | `false` | `true` quando a rede pertence a um Traefik já instalado (o Compose não a cria) |
 | `TRAEFIK_ENTRYPOINTS` | `web` | Entrypoints dos roteadores |
@@ -347,16 +352,34 @@ Regras:
 - Escrita só pela `admin-api` ([003](003-admin-api.md)), que valida antes de gravar e registra auditoria.
 - `settings.timezone`, citado em outras specs, é a chave `school.timezone`.
 
+### Volumes
+
+Os volumes têm nome fixo com o prefixo do projeto, para não colidir com volumes de outros projetos no mesmo Docker (caso do servidor de testes):
+
+| Volume | Declarado em | Conteúdo |
+| --- | --- | --- |
+| `nuva-edu-postgres-data` | `database/postgres/docker-compose.yml` | Dados do banco |
+| `nuva-edu-backup-data` | `database/postgres/docker-compose.yml` (perfil `backup`) | Dumps |
+| `nuva-edu-traefik-acme` | `proxy/traefik/docker-compose.yml` | Certificados do Traefik próprio |
+
+Transição de quem já tem os nomes antigos (`postgres-data`, `traefik-acme`, da Fase 0):
+
+- `scripts/volume-migrate.sh` copia `postgres-data` para `nuva-edu-postgres-data` quando: o Compose declara o nome novo, o volume novo não existe, e o antigo existe com o rótulo `com.docker.compose.project=nuva-edu`. Antes da cópia o serviço `postgres` é parado; o volume novo é criado pelo Compose (com os rótulos dele) e recebe a cópia por um contêiner descartável da mesma imagem do Postgres (`cp -a`). O volume antigo nunca é apagado pelo script.
+- Em qualquer outro caso o script não faz nada: volume antigo de outro projeto (sem o rótulo) é ignorado, e volume novo já existente não é sobrescrito.
+- `pnpm dev:up` chama o script antes de subir. No servidor, `pnpm deploy:test` só migra com a opção `--migrate-volume`; sem ela, se a migração for necessária, para com a instrução (é ação sobre dados do servidor, decidida pelo humano).
+- Apagar o volume antigo depois de conferir o banco novo é feito à mão pelo humano (`docker volume rm postgres-data`).
+- `traefik-acme` e `backup-data` não são copiados: no desenvolvimento não guardam nada que precise ficar, e o servidor de testes não usa os perfis `traefik` e `backup`.
+
 ### Comandos
 
 - `pnpm compose <args>` — `docker compose --env-file .env --env-file .env.local <args>`.
-- `pnpm dev:up` / `pnpm dev:down` — sobe (construindo as imagens e esperando a saúde) e derruba o ambiente local com os perfis `traefik` e `mailpit`; os volumes ficam.
+- `pnpm dev:up` / `pnpm dev:down` — sobe (construindo as imagens e esperando a saúde) e derruba o ambiente local com os perfis `traefik`, `mailpit` e `oauth-mock`; os volumes ficam. O `dev:up` faz antes a [migração de volume](#volumes), quando houver.
 - `pnpm db:migrate` — aplica migrations pendentes.
 - `pnpm deploy:test` — publica no servidor de testes.
 
 ## Dados
 
-- Volumes nomeados: `postgres-data`, `backup-data`, `traefik-acme`.
+- Volumes nomeados: [Volumes](#volumes).
 - Nenhuma aplicação grava em disco: imagens e exportações ficam no banco.
 - No servidor de testes, os arquivos ficam em `/opt/nuva-edu`.
 

@@ -19,12 +19,19 @@ Cada fase termina em algo utilizável. As tarefas de uma fase são criadas em `t
 ## Fase 1 — Contas
 
 - **Objetivo:** cadastro, login por todos os métodos, papéis e gestão de usuários.
-- **Specs:** [007](007-contas-e-autenticacao.md), [008](008-papeis-e-permissoes.md), [028](028-auditoria.md), [029](029-imagens.md), [024](024-notificacoes-e-email.md) (só o envio de e-mail).
+- **Specs:** [007](007-contas-e-autenticacao.md), [008](008-papeis-e-permissoes.md), [028](028-auditoria.md), [029](029-imagens.md) (só avatar e entrega), [024](024-notificacoes-e-email.md) (só o envio de e-mail), [030](030-lgpd.md) (só termos e aceite), [031](031-infraestrutura-e-deploy.md) (segredos, volumes, perfil `oauth-mock`); [0024](decisions/0024-provedor-oauth-simulado.md).
 - **Depende de:** Fase 0.
-- **Em paralelo:** `api-classroom` (cadastro, login, sessão) e `api-admin` (gestão de usuários, equipe, auditoria), depois de contrato, migration e núcleo; em seguida `web-classroom` e `web-admin`; `testador` ao final.
-- **Itens de infraestrutura da fase:** o Compose passa a exigir `SESSION_SECRET` (nas duas APIs) e `ADMIN_EMAIL` e `ADMIN_PASSWORD` (na `admin-api`) com `${VAR:?}`, no mesmo conjunto de tarefas em que o código começa a usá-los ([031](031-infraestrutura-e-deploy.md), "Segredos exigidos"); o `.env.local` do servidor de testes recebe os três antes do primeiro `pnpm deploy:test` da fase (humano).
-- **Critério de saída:** uma pessoa se cadastra por senha e por cada provedor, confirma o e-mail e redefine a senha; o admin inicial nasce das variáveis; o admin cria gerente e instrutor, suspende um aluno e vê a senha de um usuário com registro na auditoria; e2e desses fluxos passa.
-- **Precisa do humano:** credenciais de Google, Facebook e Apple.
+- **Tarefas:** 131 a 168 em `tasks/`. A antiga 116 (nome do volume) foi decidida na 031 e virou as tarefas 134 e 135.
+- **Frentes paralelas, por onda** (cada uma começa quando as dependências da tarefa saem da fila):
+  1. Logo após a spec: janela 131 (`arquiteto` publica os dois contratos da fase com `x-nuva-pending`, `interface` regenera o cliente na 132); `interface` 133 (diálogo, aviso, campo de senha, seletor de imagem); `infra` 134 (migração de volume) e 158 (provedor OAuth simulado); `api-admin` 136 (base HTTP: cookies, limite de taxa, formulário, multipart); `banco` 137 (imagens).
+  2. Migrations em sequência (`banco` 138 → 139 → 140) e, à parte, 135 (nome dos volumes). Com o cliente da 132: sites começam contra o cliente, com respostas simuladas nos testes: `web-classroom` 160 → 161 e `web-admin` 162 → 163 → 164.
+  3. Núcleo: 141 (tipos e base) → em paralelo 142 (permissões), 143 (auditoria), 144 (e-mail e fila), 145 (imagens), 147 (termos) → 146 (contas) → em paralelo 148 (OAuth) e 149 (gestão pela equipe).
+  4. APIs, cada uma no próprio worktree (as operações já estão no contrato): `api-classroom` 152 → 153 e worker 150 → 151; `api-admin` 154 → 155 → 156. Depois, `infra` 157 (segredos exigidos no Compose, `oauth-mock` no `dev:up` e no CI) e `arquiteto` 165 (retira `x-nuva-pending`).
+  5. `testador` 166 (e2e do critério de saída), com o ambiente reconstruído pelo humano.
+- **Itens de infraestrutura da fase:** o Compose passa a exigir `SESSION_SECRET` (nas duas APIs) e `ADMIN_EMAIL` e `ADMIN_PASSWORD` (na `admin-api`) com `${VAR:?}` na tarefa 157, depois de o código usá-los ([031](031-infraestrutura-e-deploy.md), "Segredos exigidos"); o humano acrescenta os três ao `.env.local` local antes do próximo `pnpm dev:up` e ao do servidor de testes antes do primeiro `pnpm deploy:test` da fase (tarefa 159). Os volumes passam a ter o prefixo do projeto, com migração automática no `dev:up` e, no servidor, por `pnpm deploy:test --migrate-volume` (humano).
+- **E-mail:** o critério de saída é cumprido com o Mailpit local; o servidor de testes passa a subir o perfil `mailpit` até haver SMTP real (credencial do humano, não exigida nesta fase).
+- **Critério de saída:** uma pessoa se cadastra por senha e por cada provedor (contra o provedor simulado), confirma o e-mail e redefine a senha, com os e-mails conferidos no Mailpit; cadastro com termos publicados exige o aceite; 5 senhas erradas bloqueiam a conta; o admin inicial nasce das variáveis; o admin cria gerente e instrutor, suspende um aluno (que perde a sessão e não entra) e vê a senha de um usuário com registro na auditoria; o gerente não vê senha nem auditoria; o aluno troca o avatar; a varredura não encontra a senha de teste fora da rota de exibição; e2e desses fluxos passa; `pnpm deploy:test` publica a fase no servidor de testes.
+- **Precisa do humano:** segredos no `.env.local` local e do servidor; `--migrate-volume` no servidor e remoção do volume antigo; credenciais de Google, Facebook e Apple, só para ligar os provedores reais (tarefa 168, fora do critério de saída); SMTP real de teste, opcional.
 
 ## Fase 2 — Catálogo e aprendizado
 

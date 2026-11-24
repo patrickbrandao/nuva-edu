@@ -11,7 +11,7 @@ As specs são a fonte da verdade. Carregue apenas a que a tarefa pedir. Decisõe
 | [004-classroom-api.md](004-classroom-api.md) | classroom-api | Serviço da API do aluno, SSE | 001 | aprovada |
 | [005-worker-e-fila.md](005-worker-e-fila.md) | Worker e fila | Tarefas em segundo plano | 001 | aprovada |
 | [006-sites-e-interface.md](006-sites-e-interface.md) | Sites e interface | Sites admin e classroom, telas, `packages/ui`, uso do `/config.json` | 001 | aprovada |
-| [007-contas-e-autenticacao.md](007-contas-e-autenticacao.md) | Contas e autenticação | Cadastro, login, senha, sessão, admin inicial | 001 | aprovada |
+| [007-contas-e-autenticacao.md](007-contas-e-autenticacao.md) | Contas e autenticação | Cadastro, login, senha, sessão, cookies, OAuth e provedor simulado, admin inicial, equipe, avatar, rotas da Fase 1 | 001 | aprovada |
 | [008-papeis-e-permissoes.md](008-papeis-e-permissoes.md) | Papéis e permissões | Matriz de permissões por papel | 007 | aprovada |
 | [009-catalogo-e-conteudo.md](009-catalogo-e-conteudo.md) | Catálogo e conteúdo | Cursos, módulos, aulas, ebooks, pacotes, vitrine | 008 | aprovada |
 | [010-direitos-de-acesso.md](010-direitos-de-acesso.md) | Direitos de acesso | Quem acessa o quê, cascata, concessão manual | 009 | aprovada |

@@ -14,7 +14,7 @@ A equipe tem poderes amplos (inclusive ver senhas, no caso do admin) e agentes d
 - RF-03: Leituras sensíveis feitas pelo painel também são registradas: visualização de senha, exportação de vendas em CSV, exportação de dados de um usuário, consulta à própria auditoria.
 - RF-04: Eventos de segurança de qualquer conta são registrados: login, falha de login com bloqueio, troca de senha, vínculo e desvínculo de provedor, exclusão de conta.
 - RF-05: O registro é imutável: a aplicação só insere. Não há rota, ferramenta ou comando que altere ou apague um registro individual.
-- RF-06: `admin` e `manager` consultam a auditoria no site admin, com filtros por período, ator, ação, alvo, origem e chave MCP. O `manager` não vê registros cuja ação seja exclusiva de `admin`.
+- RF-06: O `admin` consulta a auditoria no site admin, com filtros por período, ator, ação, alvo, origem e chave MCP. Só o `admin`: a matriz de [008](008-papeis-e-permissoes.md) (`audit.view`) é a referência única.
 - RF-07: O registro nunca contém senha, valor de chave, token ou segredo; campos sensíveis alterados aparecem como `"[alterado]"`.
 - RNF-01: Retenção de 2 anos (`NUVA_RETENTION_AUDIT_DAYS`, padrão 730); o expurgo diário do worker apaga o que passar disso.
 - RNF-02: A gravação do registro acontece na mesma transação da ação; se o registro falhar, a ação falha.
@@ -50,9 +50,25 @@ A equipe tem poderes amplos (inclusive ver senhas, no caso do admin) e agentes d
 
 ### Imutabilidade
 
-- O usuário de banco das aplicações tem apenas `INSERT` e `SELECT` em `audit_log`.
-- O expurgo por retenção é feito por uma função do banco (`SECURITY DEFINER`) que só aceita apagar registros mais antigos que o prazo mínimo de 365 dias; o worker chama essa função.
-- Um gatilho recusa `UPDATE` em qualquer linha, exceto a anonimização de `ip` e de rótulos de usuário feita pela função de exclusão de conta.
+As aplicações e as migrations usam hoje o mesmo usuário de banco, dono das tabelas ([031](031-infraestrutura-e-deploy.md)); revogar privilégio do dono não protege nada, porque ele pode concedê-lo de volta. Por isso a imutabilidade é garantida por gatilhos, que valem para qualquer usuário:
+
+- Gatilho `BEFORE UPDATE` (`audit_log_guard_update`): recusa a atualização, exceto quando a única diferença entre a linha antiga e a nova é `ip` e `user_agent` passando a nulo (a anonimização da exclusão de conta, [030](030-lgpd.md)). "Usuário removido" não é gravado no registro: vem de `users.deleted_at` na leitura.
+- Gatilho `BEFORE DELETE` (`audit_log_guard_delete`): recusa a exclusão, exceto dentro da função `audit_log_purge(retention_days integer)`, que marca a transação (`SET LOCAL nuva.audit_purge = 'on'`), aceita só `retention_days >= 365`, apaga os registros mais antigos que o prazo em lotes e devolve quantos apagou. O worker chama essa função no expurgo diário.
+- Gatilho `BEFORE TRUNCATE`: sempre recusa.
+- Erro dos gatilhos: `SQLSTATE` `P0001` com a mensagem `audit_log é imutável`.
+- Limite conhecido: quem tem acesso SQL com o usuário dono pode desligar os gatilhos. Um usuário de banco só da aplicação, com `INSERT` e `SELECT` em `audit_log`, entra com a revisão de ameaças da Fase 7 ([033](033-observabilidade-retencao-backup.md), ameaça 1).
+
+### Gravação
+
+- Função `recordAudit(trx, entry)` de `packages/core` (módulo `audit`), sempre na transação da ação (RNF-02). `request_id`, `ip` e `user_agent` vêm do contexto da requisição.
+- A redação de `details` é feita por ela, não por quem chama: chaves `password`, `adminPassword`, `currentPassword`, `newPassword`, `token`, `csrfToken`, `secret` e as terminadas em `Password`, `Token` ou `Secret` viram `"[alterado]"`, em qualquer profundidade.
+- Negação por permissão na `admin-api` (`outcome = denied`) é gravada pela base da API, fora da transação da ação (que não chega a existir), com a ação do contrato (`x-permission`) em `details.permission`.
+
+### Consulta
+
+- `GET /api/v1/audit` filtra por `from` e `to` (padrão: últimos 30 dias; janela máxima de 366 dias), `actorId`, `action` (exata ou prefixo com `.*`, como `user.*`), `targetType`, `targetId`, `origin`, `mcpKeyId`, `outcome`, com paginação por cursor e ordem do mais novo para o mais antigo. Cada item traz o registro sem `details` e o nome do ator e do alvo, quando são usuários (`"usuário removido"` se excluído).
+- `GET /api/v1/audit/{id}` traz o registro com `details`.
+- A própria consulta gera `audit.search` (com os filtros em `details`), uma por chamada de lista ou de exportação; abrir um registro não gera nada.
 
 ## Interfaces e contratos
 
@@ -60,7 +76,7 @@ Em `apps/admin-api/openapi.yaml`:
 
 - `GET /api/v1/audit` — lista paginada por cursor, com os filtros de RF-06.
 - `GET /api/v1/audit/{id}` — um registro com `details`.
-- `GET /api/v1/audit/export` — CSV do filtro atual, só `admin`, limitado a 100.000 linhas.
+- `GET /api/v1/audit/export` — CSV do filtro atual, só `admin`, limitado a 100.000 linhas. Entra na Fase 5, com o MCP; a Fase 1 traz a lista e o registro.
 
 Ferramenta MCP `audit_search` ([027](027-mcp.md)), com os mesmos filtros.
 
@@ -90,9 +106,9 @@ Tabela `audit_log`, de propriedade da `admin-api` (a `classroom-api` e o `worker
 - [ ] Cada rota de escrita da `admin-api` tem teste que confere o registro gerado.
 - [ ] Ver a senha de um usuário gera `user.password_view` com ator, alvo e IP.
 - [ ] Chamada MCP gera `mcp.tool_call` com `mcp_key_id` e sem valores sensíveis em `details`.
-- [ ] `UPDATE` e `DELETE` diretos em `audit_log` com o usuário da aplicação são recusados pelo banco.
+- [ ] `UPDATE`, `DELETE` e `TRUNCATE` diretos em `audit_log` são recusados pelo banco; `audit_log_purge(30)` é recusada; a anonimização de `ip` e `user_agent` é aceita.
 - [ ] Ação que falha ao gravar a auditoria é desfeita (mesma transação).
-- [ ] O `manager` não enxerga `settings.update` nem `order.refund` na consulta.
+- [ ] O `manager` recebe `403` na consulta à auditoria; o `admin` vê `user.password_view` com ator, alvo e IP.
 - [ ] O expurgo apaga registros com mais de 730 dias e nenhum mais novo.
 
 ## Fora de escopo

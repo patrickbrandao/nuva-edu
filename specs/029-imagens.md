@@ -49,6 +49,16 @@ Qualidade WebP 80; se a variante passar de 400 KB, a qualidade cai em passos de 
 4. Responde com `image_id` e as URLs das variantes.
 5. O cliente usa o `image_id` ao salvar o perfil, o curso ou o case. Só então a imagem passa a ter referência.
 
+Detalhes do envio:
+
+- Campos do `multipart/form-data`: `purpose` (texto, primeiro) e `file` (o arquivo, um só). Campo a mais, segundo arquivo ou `purpose` ausente: `400` `validation_failed`.
+- Finalidade que o site não aceita ou que o papel não pode enviar: `403` `permission_denied`.
+- Resposta `201`: `{ "id", "purpose", "width", "height", "variants": [{ "width", "height", "url" }] }`, com `url` no formato da entrega.
+- Códigos próprios: `413` `payload_too_large`; `415` `image_type_unsupported`; `422` `image_dimensions_exceeded` (RNF-02) e `image_too_heavy` (variante acima de 400 KB mesmo na qualidade 50); `429` `rate_limited`; `503` `image_processing_busy` com `Retry-After`.
+- Biblioteca de processamento: `sharp` (libvips), em `packages/core` (módulo `images`), que roda nas duas APIs.
+
+Na Fase 1 só existe a finalidade `avatar`, enviada pelo classroom ([007](007-contas-e-autenticacao.md), "Avatar"); o admin só entrega imagens. As demais finalidades entram com os recursos que as usam, e a referência de `avatar` é `profiles.avatar_image_id`.
+
 O processamento acontece na API (não na fila), porque o usuário espera o resultado; a API limita a 2 processamentos simultâneos por instância e devolve 503 com `Retry-After` quando a fila interna passa de 10.
 
 ### Entrega

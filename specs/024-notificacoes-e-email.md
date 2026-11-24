@@ -17,7 +17,7 @@ Vários recursos precisam avisar o usuário: resposta no fórum, compra aprovada
 - RF-06: Cada tipo tem um modelo de e-mail em pt-BR (assunto, texto e HTML), com nome e logotipo da escola vindos de `settings`.
 - RF-07: Todo e-mail não obrigatório tem link de descadastro de um clique para o grupo correspondente, sem exigir login.
 - RNF-01: Notificação na central em até 5 segundos após o fato (p95); contador do sino atualizado em até 2 segundos após a criação.
-- RNF-02: E-mail: até 5 tentativas com espera crescente (1 min, 5 min, 30 min, 2 h, 12 h); depois marca `failed`.
+- RNF-02: E-mail: até 5 tentativas da tarefa `email.send`, com espera própria (1 min, 5 min, 30 min, 2 h, 12 h) no lugar da regra geral da fila ([005](005-worker-e-fila.md)); depois marca `failed`.
 - RNF-03: No máximo 1 e-mail por usuário, por tipo e por alvo a cada 15 minutos (agrupamento).
 - RNF-04: Notificações lidas são apagadas após 90 dias; não lidas após 180 dias (`NUVA_RETENTION_*`, ver [033](033-observabilidade-retencao-backup.md)).
 
@@ -27,7 +27,7 @@ Vários recursos precisam avisar o usuário: resposta no fórum, compra aprovada
 
 | Grupo (preferência) | Tipos | Plataforma | E-mail (padrão) |
 | --- | --- | --- | --- |
-| `account` (obrigatório) | `account.verify_email`, `account.password_reset`, `account.new_login`, `account.password_changed`, `account.deleted` | — | sempre |
+| `account` (obrigatório) | `account.verify_email`, `account.password_reset`, `account.exists`, `account.new_login`, `account.locked`, `account.password_changed`, `account.role_changed`, `account.deleted` | — | sempre |
 | `purchase` (obrigatório) | `order.approved`, `order.refunded`, `subscription.renewed`, `subscription.payment_failed`, `subscription.canceled`, `subscription.expired`, `access.granted`, `access.revoked` | sim | sempre |
 | `courses` | `lesson.published` (curso que o usuário possui), `course.published`, `certificate.issued` | sim | ligado |
 | `forum` | `forum.reply` (tópico seguido), `forum.mention`, `forum.solution` | sim | ligado |
@@ -51,10 +51,34 @@ Vários recursos precisam avisar o usuário: resposta no fórum, compra aprovada
 
 ### E-mail
 
-- Transporte SMTP configurado por `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD`, `SMTP_FROM`; TLS obrigatório fora do desenvolvimento. No desenvolvimento, Mailpit ([031](031-infraestrutura-e-deploy.md)).
+- Transporte SMTP configurado por `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD`, `SMTP_FROM`. Porta 465: TLS desde a conexão; outra porta: `STARTTLS` obrigatório. A única exceção é `SMTP_HOST=mailpit` (o Mailpit do Compose), que dispensa TLS. Com `SMTP_USER` definido, `SMTP_PASSWORD` é obrigatório e a autenticação é feita; sem ele, não há autenticação. No desenvolvimento, Mailpit ([031](031-infraestrutura-e-deploy.md)).
 - Cada e-mail é uma linha em `email_outbox`, processada pela tarefa `email.send` ([005](005-worker-e-fila.md)). SMTP fora do ar não bloqueia nenhuma ação do usuário.
 - Modelos ficam no código do worker, em arquivos por tipo e por idioma; textos via arquivos de tradução. O admin edita apenas nome da escola, logotipo, cor e rodapé.
 - Links de confirmação e de redefinição expiram em 24 h ([007](007-contas-e-autenticacao.md)); o e-mail nunca contém a senha.
+
+### E-mails do grupo `account` e da Fase 1
+
+O grupo `account` não tem canal "plataforma", então não passa pela tarefa `notify`: a função `enqueueEmail(trx, { userId, type, data })` de `packages/core` grava a linha de `email_outbox` (com `to` = e-mail atual do usuário) e enfileira `email.send` na mesma transação da ação. Na Fase 1, antes da central de notificações, `moderation.suspended` usa o mesmo caminho; com a Fase 4 ele passa a sair por `notify`, com os dois canais.
+
+| Tipo | Quando ([007](007-contas-e-autenticacao.md), [008](008-papeis-e-permissoes.md)) | `data` | Link |
+| --- | --- | --- | --- |
+| `account.verify_email` | Cadastro por senha, reenvio, conta criada pelo admin, e-mail trocado, cadastro social sem e-mail verificado | — | `<classroomUrl>/confirmar?token=` (token `verify`) |
+| `account.password_reset` | "Esqueci a senha" | — | `<classroomUrl>/redefinir?token=` (token `reset`) |
+| `account.exists` | Cadastro com e-mail que já tem conta | — | `<classroomUrl>/entrar` e `<classroomUrl>/redefinir` |
+| `account.new_login` | Login em dispositivo novo | `at`, `ip`, `browser`, `os`, `site` | `<classroomUrl>/conta/acesso` |
+| `account.locked` | Primeiro bloqueio da conta na janela | `until` | `<classroomUrl>/redefinir` |
+| `account.password_changed` | Senha definida, trocada, redefinida ou definida pelo admin | `by` (`self` ou `admin`) | `<classroomUrl>/redefinir` |
+| `account.role_changed` | Papel alterado pelo admin | `role` | `<adminUrl>` quando o papel novo é de equipe |
+| `moderation.suspended` | Suspensão aplicada | `kind`, `endsAt` (ou nulo) | — |
+
+- Assunto e textos em pt-BR, nos arquivos de tradução do worker; o nome da escola vem de `settings` (`school.name`) no momento do envio.
+- `data` não leva senha, token nem motivo interno de suspensão.
+
+### Links com token
+
+- A tarefa `email.send` cria o token do link no momento de montar o e-mail (tipos `account.verify_email` e `account.password_reset`): gera o valor aleatório, grava o SHA-256 em `email_tokens` com validade de 24 h, invalida os anteriores do mesmo usuário e propósito e põe o valor em claro só no corpo enviado ([007](007-contas-e-autenticacao.md), "Tokens de e-mail").
+- Nova tentativa do mesmo e-mail gera token novo; o anterior deixa de valer.
+- Se o usuário já confirmou o e-mail quando `account.verify_email` vai sair, a linha é marcada `sent` sem envio (`last_error = 'skipped: already_verified'`).
 - Cabeçalhos `List-Unsubscribe` e `List-Unsubscribe-Post` nos e-mails não obrigatórios; o token de descadastro identifica usuário e grupo e não expira.
 - Tela de operação no admin: e-mails pendentes e com falha, com motivo e botão "reenviar".
 
@@ -78,7 +102,7 @@ Vários recursos precisam avisar o usuário: resposta no fórum, compra aprovada
 | --- | --- | --- |
 | `notifications` | `user_id`, `type`, `actor_id`, `target_type`, `target_id`, `data` (JSON), `group_key`, `count`, `read_at`, `created_at` | `worker` (criação); `classroom-api` e `admin-api` (leitura, limpeza) |
 | `notification_prefs` | `user_id`, `group`, `in_app`, `email` | `classroom-api` |
-| `email_outbox` | `user_id`, `to`, `type`, `subject`, `data` (JSON), `status` (`queued`/`sent`/`failed`), `attempts`, `last_error`, `sent_at` | `worker` |
+| `email_outbox` | `id`, `user_id`, `to`, `type`, `subject`, `data` (JSON), `status` (`queued`/`sent`/`failed`), `attempts`, `last_error`, `created_at`, `sent_at` | `worker` (envio); APIs e worker inserem por `enqueueEmail` |
 
 Retenção: `notifications` conforme RNF-04; `email_outbox` enviados por 30 dias e com falha por 90 dias. O corpo renderizado do e-mail não é guardado; `data` não contém senha nem token em claro.
 
