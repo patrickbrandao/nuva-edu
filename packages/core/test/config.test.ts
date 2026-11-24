@@ -86,6 +86,39 @@ describe('loadConfig', () => {
     });
   });
 
+  it('lê os prazos de retenção da Fase 1 e recusa zero (spec 033)', () => {
+    const retention = loadConfig({
+      env: {
+        ...base,
+        NUVA_RETENTION_AUDIT_DAYS: '365',
+        NUVA_RETENTION_SESSION_DAYS: '14',
+        NUVA_RETENTION_EMAIL_TOKEN_HOURS: '2',
+        NUVA_RETENTION_LOGIN_ATTEMPT_DAYS: '10',
+        NUVA_RETENTION_EMAIL_SENT_DAYS: '5',
+        NUVA_RETENTION_EMAIL_FAILED_DAYS: '60',
+      },
+    }).retention;
+    expect(retention).toMatchObject({
+      auditDays: 365,
+      sessionDays: 14,
+      emailTokenHours: 2,
+      loginAttemptDays: 10,
+      emailSentDays: 5,
+      emailFailedDays: 60,
+    });
+    const error = issuesOf({
+      ...base,
+      NUVA_RETENTION_AUDIT_DAYS: '0',
+      NUVA_RETENTION_EMAIL_TOKEN_HOURS: '0',
+      NUVA_RETENTION_EMAIL_FAILED_DAYS: 'muito',
+    });
+    expect(error.issues.map((issue) => issue.variable).sort()).toEqual([
+      'NUVA_RETENTION_AUDIT_DAYS',
+      'NUVA_RETENTION_EMAIL_FAILED_DAYS',
+      'NUVA_RETENTION_EMAIL_TOKEN_HOURS',
+    ]);
+  });
+
   it('lê process.env quando nenhum ambiente é passado', () => {
     const before = process.env.DATABASE_URL;
     process.env.DATABASE_URL = base.DATABASE_URL;
