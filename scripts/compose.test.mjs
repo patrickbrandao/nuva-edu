@@ -269,7 +269,6 @@ test('os sites recebem só as variáveis do config.json, sem segredo algum', { s
     assert.deepEqual(Object.keys(environment).sort(), [
       'NUVA_ADMIN_HOST',
       'NUVA_CLASSROOM_HOST',
-      'NUVA_DOMAIN',
       'NUVA_PUBLIC_PORT',
       'NUVA_PUBLIC_SCHEME',
     ]);
@@ -288,4 +287,56 @@ test('os sites recebem só as variáveis do config.json, sem segredo algum', { s
       site,
     );
   }
+});
+
+// Spec 031, "Padrão dos hosts": a mesma expressão nos rótulos do Traefik e no ambiente dos sites.
+function hosts(env) {
+  const { services } = config(env);
+  const rule = (service, router) =>
+    services[service].labels[`traefik.http.routers.nuva-edu-${router}.rule`].match(
+      /^Host\(`([^`]*)`\)/,
+    )[1];
+  const admin = new Set([
+    rule('admin', 'admin'),
+    rule('admin-api', 'admin-api'),
+    services.admin.environment.NUVA_ADMIN_HOST,
+    services.classroom.environment.NUVA_ADMIN_HOST,
+  ]);
+  const classroom = new Set([
+    rule('classroom', 'classroom'),
+    rule('classroom-api', 'classroom-api'),
+    rule('classroom-api', 'classroom-stream'),
+    services.admin.environment.NUVA_CLASSROOM_HOST,
+    services.classroom.environment.NUVA_CLASSROOM_HOST,
+  ]);
+  assert.equal(admin.size, 1, `host do admin diverge: ${[...admin].join(', ')}`);
+  assert.equal(classroom.size, 1, `host do classroom diverge: ${[...classroom].join(', ')}`);
+  return { admin: [...admin][0], classroom: [...classroom][0] };
+}
+
+test('os hosts dos sites derivam de NUVA_DOMAIN quando não são informados', { skip }, () => {
+  // Com o `.env` versionado (NUVA_DOMAIN=localhost e nenhum host fixo).
+  assert.deepEqual(hosts(), { admin: 'edu-admin.localhost', classroom: 'classroom.localhost' });
+  assert.deepEqual(hosts({ NUVA_DOMAIN: 'escola.test' }), {
+    admin: 'edu-admin.escola.test',
+    classroom: 'classroom.escola.test',
+  });
+  // Vazio vale como ausente, nos dois níveis da interpolação.
+  assert.deepEqual(hosts({ NUVA_DOMAIN: '', NUVA_ADMIN_HOST: '', NUVA_CLASSROOM_HOST: '' }), {
+    admin: 'edu-admin.localhost',
+    classroom: 'classroom.localhost',
+  });
+  // Host explícito ganha do domínio; o outro continua derivado.
+  assert.deepEqual(hosts({ NUVA_DOMAIN: 'escola.test', NUVA_ADMIN_HOST: 'painel.outra.test' }), {
+    admin: 'painel.outra.test',
+    classroom: 'classroom.escola.test',
+  });
+});
+
+test('o .env versionado não fixa os hosts: o padrão vem de NUVA_DOMAIN', () => {
+  // As APIs e o worker leem o `.env` por `env_file`; um host fixo ali ganharia do NUVA_DOMAIN
+  // definido no `.env.local` e separaria as URLs das APIs do roteamento do proxy.
+  const text = readFileSync(resolve(root, '.env'), 'utf8');
+  assert.match(text, /^NUVA_DOMAIN=localhost$/m);
+  assert.doesNotMatch(text, /^\s*NUVA_(ADMIN|CLASSROOM)_HOST=/m);
 });

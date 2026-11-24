@@ -75,7 +75,11 @@ Cada `apps/<app>/Dockerfile` usa a raiz do repositório como contexto e tem trê
   porta some da URL quando está vazia ou é a padrão do esquema. Moeda, idioma e versão vêm do
   `GET /api/v1/meta`. O arquivo é público e sai com `Cache-Control: no-store`; os sites não
   recebem segredo nem `env_file`. Valor fora do formato impede a subida, com a variável citada no
-  log. Trocar `NUVA_ADMIN_HOST` e subir de novo não refaz a imagem; mudança no
+  log. Sem `NUVA_ADMIN_HOST` e `NUVA_CLASSROOM_HOST`, o Compose os deriva de `NUVA_DOMAIN`
+  (`edu-admin.<domínio>` e `classroom.<domínio>`), com a mesma expressão nos rótulos do Traefik;
+  o `.env` versionado só traz `NUVA_DOMAIN=localhost`. Defina `NUVA_DOMAIN` (e os hosts, se
+  fugirem do formato) no `.env.local`, não só no ambiente do shell: as APIs e o worker leem os
+  arquivos por `env_file`. Trocar `NUVA_ADMIN_HOST` e subir de novo não refaz a imagem; mudança no
   script, porém, só vale depois de reconstruir as imagens dos dois sites (`pnpm dev:up`).
 - Sites: o `index.html` sai com `Content-Security-Policy` sem `unsafe-inline`. No build,
   `proxy/nginx/csp.mjs` lê o `dist/index.html` e grava `/etc/nginx/nuva-csp.conf` com o hash do

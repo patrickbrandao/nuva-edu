@@ -32,9 +32,9 @@ COPY proxy/nginx/csp.mjs proxy/nginx/csp.mjs
 RUN pnpm --filter "@nuva-edu/classroom" build \
     && node proxy/nginx/csp.mjs apps/classroom/dist/index.html > /app/nuva-csp.conf
 
-# 3. runtime: só o resultado do build. Nomes de host e moeda chegam por /config.json, gerado na
-#    subida do contêiner (proxy/nginx/40-nuva-config.sh); a mesma imagem serve a qualquer
-#    instalação.
+# 3. runtime: só o resultado do build. O /config.json (`app`, `adminUrl` e `classroomUrl`) é
+#    gerado na subida do contêiner (proxy/nginx/40-nuva-config.sh); a mesma imagem serve a
+#    qualquer instalação.
 FROM ${NGINX_IMAGE} AS runtime
 USER root
 RUN rm -f /etc/nginx/conf.d/default.conf /docker-entrypoint.d/*

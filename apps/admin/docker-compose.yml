@@ -10,10 +10,10 @@ services:
     restart: unless-stopped
     # Viram o /config.json gerado na subida; trocar um valor e subir de novo não refaz a imagem.
     # O arquivo é público: aqui não entra segredo nem `env_file` (spec 031).
+    # Os hosts usam a mesma expressão dos rótulos do Traefik: sem eles, derivam de NUVA_DOMAIN.
     environment:
-      NUVA_DOMAIN: ${NUVA_DOMAIN:-localhost}
-      NUVA_ADMIN_HOST: ${NUVA_ADMIN_HOST:-edu-admin.localhost}
-      NUVA_CLASSROOM_HOST: ${NUVA_CLASSROOM_HOST:-classroom.localhost}
+      NUVA_ADMIN_HOST: ${NUVA_ADMIN_HOST:-edu-admin.${NUVA_DOMAIN:-localhost}}
+      NUVA_CLASSROOM_HOST: ${NUVA_CLASSROOM_HOST:-classroom.${NUVA_DOMAIN:-localhost}}
       NUVA_PUBLIC_SCHEME: ${NUVA_PUBLIC_SCHEME:-http}
       NUVA_PUBLIC_PORT: ${NUVA_PUBLIC_PORT-8080}
     networks:
@@ -52,7 +52,7 @@ services:
       - "traefik.enable=true"
       - "traefik.docker.network=${TRAEFIK_NETWORK:-nuva-edu-proxy}"
       - "traefik.http.services.nuva-edu-admin.loadbalancer.server.port=8080"
-      - "traefik.http.routers.nuva-edu-admin.rule=Host(`${NUVA_ADMIN_HOST:-edu-admin.localhost}`)"
+      - "traefik.http.routers.nuva-edu-admin.rule=Host(`${NUVA_ADMIN_HOST:-edu-admin.${NUVA_DOMAIN:-localhost}}`)"
       - "traefik.http.routers.nuva-edu-admin.priority=10"
       - "traefik.http.routers.nuva-edu-admin.entrypoints=${TRAEFIK_ENTRYPOINTS:-web}"
       - "traefik.http.routers.nuva-edu-admin.service=nuva-edu-admin"

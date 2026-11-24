@@ -56,6 +56,7 @@ Detalhe das decisões em `specs/decisions/`.
 - Specs pós-esqueletos (ADRs 0019 e 0020): janela de contrato e `x-nuva-pending`, erros `payload_too_large` (413) e `unsupported_media_type` (415), marca da escola no `/meta`, chaves `school.*` de `settings`, `PORT`, lista padrão de `TRUSTED_PROXIES` com CGNAT e link-local, carga e reenvio dos eventos do SSE, regras das recorrentes e da tabela `jobs`, métricas do worker, um arquivo de tradução por idioma; `Locale` dos contratos aceita o mesmo formato de `NUVA_LOCALE`.
 - Classroom: casca, rodapé, títulos e estados passam a usar `ClassroomShell`, `ShellFooter`, `PageTitle`, `LoadingState` e `ErrorState` de `@nuva-edu/ui`; links internos pelo `LinkProvider` (task 041).
 - Contratos das duas APIs: `Meta` com `logoUrl`, `accentColor` e `sourceCodeUrl` (obrigatórios; os dois primeiros aceitam `null`), códigos `payload_too_large` (413) e `unsupported_media_type` (415) com as respostas `PayloadTooLarge` e `UnsupportedMediaType`, `400` declarado em `getMeta` e `openStream`, origem do `id` e reenvio em memória na descrição do stream; spec 031 fixa que o padrão dos hosts deriva de `NUVA_DOMAIN` (task 029).
+- Infra: hosts dos sites derivam de `NUVA_DOMAIN` no Compose (`${NUVA_ADMIN_HOST:-edu-admin.${NUVA_DOMAIN:-localhost}}`, idem classroom); o `.env` deixa de fixar os dois hosts e os sites não recebem mais `NUVA_DOMAIN` (task 089).
 
 ### Decisões
 - Textos de processo alinhados ao `scripts/task.mjs` (`--as`, `task:list`, push negado, conflito de rebase).

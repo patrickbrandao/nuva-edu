@@ -113,7 +113,7 @@ services:
       - "traefik.enable=true"
       - "traefik.docker.network=${TRAEFIK_NETWORK:-nuva-edu-proxy}"
       - "traefik.http.services.nuva-edu-admin-api.loadbalancer.server.port=3000"
-      - "traefik.http.routers.nuva-edu-admin-api.rule=Host(`${NUVA_ADMIN_HOST:-edu-admin.localhost}`) && (PathPrefix(`/api/`) || PathPrefix(`/mcp`) || Path(`/healthz`))"
+      - "traefik.http.routers.nuva-edu-admin-api.rule=Host(`${NUVA_ADMIN_HOST:-edu-admin.${NUVA_DOMAIN:-localhost}}`) && (PathPrefix(`/api/`) || PathPrefix(`/mcp`) || Path(`/healthz`))"
       - "traefik.http.routers.nuva-edu-admin-api.priority=20"
       - "traefik.http.routers.nuva-edu-admin-api.entrypoints=${TRAEFIK_ENTRYPOINTS:-web}"
       - "traefik.http.routers.nuva-edu-admin-api.service=nuva-edu-admin-api"
