@@ -1,0 +1,17 @@
+{
+  "name": "@nuva-edu/e2e",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Testes de ponta a ponta do nuva-edu (Playwright) contra o ambiente Compose.",
+  "license": "AGPL-3.0-only",
+  "type": "module",
+  "scripts": {
+    "test": "playwright test",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "browsers": "playwright install chromium"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.65.1",
+    "@types/node": "26.6.6"
+  }
+}
