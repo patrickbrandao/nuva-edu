@@ -1,0 +1,39 @@
+{
+  "name": "@nuva-edu/classroom",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Site do aluno do nuva-edu: vitrine, aprendizado, comunidade e conta.",
+  "license": "AGPL-3.0-only",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "typecheck": "pnpm --workspace-root exec tsc --noEmit -p apps/classroom/tsconfig.json",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@nuva-edu/api-client": "workspace:*",
+    "@nuva-edu/ui": "workspace:*",
+    "@tanstack/react-query": "5.108.3",
+    "i18next": "27.2.4",
+    "lucide-react": "1.77.0",
+    "react": "19.3.1",
+    "react-dom": "19.3.1",
+    "react-i18next": "18.0.3",
+    "react-router": "8.5.2"
+  },
+  "devDependencies": {
+    "@tailwindcss/vite": "4.3.5",
+    "@testing-library/react": "16.3.3",
+    "@testing-library/user-event": "14.6.13",
+    "@types/node": "26.6.6",
+    "@types/react": "19.3.0",
+    "@types/react-dom": "19.3.0",
+    "@vitejs/plugin-react": "6.3.0",
+    "jsdom": "31.0.1",
+    "tailwindcss": "4.3.5",
+    "vite": "8.3.8",
+    "vitest": "5.1.1"
+  }
+}

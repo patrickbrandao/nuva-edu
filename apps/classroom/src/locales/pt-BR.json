@@ -1,0 +1,133 @@
+{
+  "app": {
+    "name": "nuva-edu"
+  },
+  "common": {
+    "loading": "Carregando…",
+    "retry": "Tentar de novo",
+    "backHome": "Voltar à vitrine",
+    "requestId": "Código da requisição: {{id}}",
+    "newTab": "(abre em nova aba)"
+  },
+  "theme": {
+    "group": "Tema da página",
+    "system": { "label": "Sistema", "hint": "Usar o tema do sistema" },
+    "light": { "label": "Claro", "hint": "Tema claro" },
+    "dark": { "label": "Escuro", "hint": "Tema escuro" }
+  },
+  "shell": {
+    "skipToContent": "Ir para o conteúdo",
+    "menu": "Menu principal",
+    "openMenu": "Abrir o menu",
+    "closeMenu": "Fechar o menu",
+    "collapseMenu": "Recolher o menu",
+    "expandMenu": "Expandir o menu",
+    "breadcrumb": "Trilha de navegação",
+    "notifications": "Notificações",
+    "signIn": "Entrar",
+    "pageChanged": "Página: {{title}}"
+  },
+  "menu": {
+    "groups": {
+      "explore": "Explorar",
+      "learning": "Aprendizado",
+      "community": "Comunidade",
+      "communication": "Comunicação",
+      "purchase": "Compra",
+      "account": "Conta"
+    },
+    "items": {
+      "showcase": "Vitrine",
+      "plans": "Planos",
+      "cases": "Cases",
+      "start": "Início",
+      "myCourses": "Meus cursos",
+      "myEbooks": "Meus ebooks",
+      "calendar": "Calendário",
+      "notes": "Anotações",
+      "progress": "Meu progresso",
+      "forum": "Fórum",
+      "members": "Membros",
+      "ranking": "Ranking",
+      "myCases": "Meus cases",
+      "messages": "Mensagens",
+      "cart": "Cesta",
+      "purchases": "Minhas compras",
+      "news": "Novidades",
+      "notifications": "Notificações",
+      "support": "Suporte",
+      "settings": "Configurações"
+    }
+  },
+  "pages": {
+    "signUp": "Criar conta",
+    "resetPassword": "Redefinir senha",
+    "terms": "Termos de uso",
+    "privacy": "Privacidade"
+  },
+  "footer": {
+    "source": "Código-fonte",
+    "version": "Versão {{version}}"
+  },
+  "home": {
+    "title": "Vitrine",
+    "description": "Cursos, pacotes, ebooks e planos de {{school}}.",
+    "descriptionFallback": "Cursos, pacotes, ebooks e planos da escola.",
+    "welcome": "Boas-vindas",
+    "lead": "Cursos, pacotes, ebooks e planos para aprender no seu ritmo.",
+    "catalog": {
+      "title": "Catálogo",
+      "emptyTitle": "Ainda não há cursos publicados",
+      "emptyText": "Assim que a escola publicar cursos, pacotes, ebooks ou planos, eles aparecem aqui.",
+      "action": "Criar conta"
+    },
+    "about": {
+      "title": "Sobre esta escola",
+      "loading": "Carregando os dados da escola…",
+      "errorTitle": "Não foi possível carregar os dados da escola",
+      "errorText": "Confira a conexão e tente de novo em instantes.",
+      "school": "Escola",
+      "version": "Versão",
+      "currency": "Moeda",
+      "locale": "Idioma",
+      "signIn": "Formas de entrar",
+      "emailAndPassword": "E-mail e senha"
+    }
+  },
+  "auth": {
+    "providers": {
+      "google": "Google",
+      "facebook": "Facebook",
+      "apple": "Apple"
+    }
+  },
+  "login": {
+    "title": "Entrar",
+    "description": "Entre com a sua conta para acessar os cursos e a comunidade.",
+    "lead": "Use o e-mail e a senha da sua conta.",
+    "email": "E-mail",
+    "password": "Senha",
+    "submit": "Entrar",
+    "social": "Ou entre com",
+    "continueWith": "Continuar com {{provider}}",
+    "unavailable": "O login ainda não está disponível nesta versão.",
+    "forgot": "Esqueci a senha",
+    "noAccount": "Ainda não tem conta?",
+    "signUp": "Criar conta"
+  },
+  "construction": {
+    "title": "Em construção",
+    "text": "A página {{page}} ainda está sendo preparada. Volte em breve.",
+    "description": "A página {{page}} ainda está em construção."
+  },
+  "notFound": {
+    "title": "Página não encontrada",
+    "text": "O endereço não existe ou mudou de lugar.",
+    "description": "O endereço não foi encontrado neste site."
+  },
+  "error": {
+    "title": "Algo deu errado",
+    "text": "Aconteceu um erro inesperado ao mostrar esta página.",
+    "reload": "Recarregar a página"
+  }
+}

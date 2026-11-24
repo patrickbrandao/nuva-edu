@@ -1,0 +1,41 @@
+/*
+ * Tailwind 4 sem o preflight: os componentes de @nuva-edu/ui foram desenhados sobre os padrões
+ * do navegador e trazem o próprio CSS. Aqui ficam só o tema e as classes utilitárias, usadas
+ * no que é específico deste site (casca do aluno, grades das páginas).
+ */
+@layer theme, utilities;
+@import "tailwindcss/theme.css" layer(theme);
+@import "tailwindcss/utilities.css" layer(utilities);
+
+/* Cores e fonte vêm dos tokens do pacote de interface; --adm-* valem dentro de .minui-adm. */
+@theme inline {
+  --font-sans: var(--minui-font);
+  --color-stage: var(--minui-stage);
+  --color-panel: var(--adm-bg);
+  --color-side: var(--adm-side);
+  --color-card: var(--adm-card);
+  --color-hover: var(--adm-hover);
+  --color-active: var(--adm-active);
+  --color-line: var(--adm-line);
+  --color-ink: var(--adm-ink);
+  --color-ink-2: var(--adm-ink-2);
+  --color-ink-3: var(--adm-ink-3);
+  --color-danger: var(--adm-red);
+  --color-focus: var(--adm-focus);
+}
+
+html,
+body,
+#root {
+  min-height: 100%;
+}
+
+html {
+  /* Sem ajuste automático de fonte no celular; a página nunca rola para o lado (spec 006). */
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--minui-stage);
+}
