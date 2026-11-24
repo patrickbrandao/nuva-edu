@@ -1,0 +1,82 @@
+# Fluxo `verify` (spec 032, "CI"): a verificação completa, com os testes de ponta a ponta.
+# Roda em todo push na `main` e em todo PR; o `release` também o chama (workflow_call).
+# Não usa segredo nenhum: em PR de fork o token é só de leitura e nada é publicado.
+# Com o `verify` verde na `main`, o fluxo `images` constrói e publica as imagens.
+
+name: verify
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+  workflow_call:
+
+permissions: {}
+
+# Um push novo no mesmo ref cancela a execução anterior.
+concurrency:
+  group: verify-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    name: verify:full --e2e
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    steps:
+      - name: Código
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # A versão do pnpm vem do campo "packageManager" do package.json.
+      - name: pnpm
+        uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
+
+      - name: Node 26
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 26
+          cache: pnpm
+
+      - name: Dependências
+        run: pnpm install --frozen-lockfile
+
+      - name: Chromium do Playwright
+        run: pnpm --filter @nuva-edu/e2e exec playwright install --with-deps chromium
+
+      # O Chromium já resolve `*.localhost` para 127.0.0.1; o `fetch` do Node (sonda do e2e)
+      # depende do resolvedor do sistema. A linha no /etc/hosts tira a dúvida.
+      - name: Hosts do ambiente local
+        run: echo "127.0.0.1 edu-admin.localhost classroom.localhost" | sudo tee -a /etc/hosts
+
+      # O e2e sobe o ambiente Compose com `pnpm dev:up`, que exige POSTGRES_PASSWORD no
+      # .env.local. A senha é sorteada aqui, vale só para esta execução e não é impressa.
+      - name: .env.local descartável
+        run: |
+          umask 077
+          printf 'POSTGRES_PASSWORD=%s\n' "$(openssl rand -hex 24)" > .env.local
+
+      - name: pnpm verify:full --e2e
+        run: pnpm verify:full --e2e
+
+      - name: Estado do Compose (só em falha)
+        if: failure()
+        run: |
+          pnpm compose ps --all || true
+          pnpm compose logs --no-color --tail 200 || true
+
+      # Relatórios de cobertura e do Playwright ficam em tmp/ (spec 032, "Dados").
+      - name: Relatórios
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: relatorios-verify
+          path: |
+            tmp/coverage
+            tmp/playwright
+          retention-days: 14
+          if-no-files-found: ignore

@@ -17,6 +17,7 @@
     "typecheck": "pnpm -r --if-present run typecheck",
     "verify:quick": "node scripts/verify.mjs quick",
     "verify:full": "node scripts/verify.mjs full",
+    "licenses:check": "node scripts/check-licenses.mjs",
     "db:migrate": "pnpm --filter @nuva-edu/database run migrate",
     "compose": "node scripts/dev.mjs compose",
     "dev:up": "node scripts/dev.mjs up",
@@ -33,6 +34,7 @@
     "@nuva-edu/database": "workspace:*",
     "@testcontainers/postgresql": "12.2.2",
     "lefthook": "2.2.2",
-    "typescript": "7.0.2"
+    "typescript": "7.0.2",
+    "yaml": "2.9.1"
   }
 }

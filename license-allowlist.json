@@ -1,0 +1,23 @@
+{
+  "descricao": "Licenças de dependências aceitas no nuva-edu (AGPL-3.0, ADR 0016). Conferida por `pnpm licenses:check` no fluxo `security` do CI. Licença nova só entra aqui depois de confirmada a compatibilidade com a AGPL-3.0.",
+  "allowed": [
+    "0BSD",
+    "AGPL-3.0-only",
+    "AGPL-3.0-or-later",
+    "Apache-2.0",
+    "BlueOak-1.0.0",
+    "BSD-2-Clause",
+    "BSD-3-Clause",
+    "CC0-1.0",
+    "GPL-3.0-only",
+    "GPL-3.0-or-later",
+    "ISC",
+    "LGPL-3.0-only",
+    "LGPL-3.0-or-later",
+    "MIT",
+    "MPL-2.0",
+    "Python-2.0",
+    "Unlicense"
+  ],
+  "exceptions": {}
+}

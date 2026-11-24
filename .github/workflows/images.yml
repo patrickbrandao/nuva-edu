@@ -1,0 +1,215 @@
+# Fluxo `images` (specs 031, "Publicação de imagens", e 032, "CI"): constrói as cinco imagens
+# para linux/amd64 e linux/arm64, passa o Trivy em cada uma e publica no Docker Hub.
+#
+# Sempre depois do `verify`:
+#   - `verify` verde num push na `main` (workflow_run): etiquetas `sha-<7>` e `main`,
+#     NUVA_VERSION=<versão do package.json da raiz>-sha-<7>;
+#   - chamado pelo `release` numa tag vX.Y.Z (workflow_call, depois do job `verify` de lá):
+#     etiquetas `X.Y.Z`, `X.Y` e `latest`, NUVA_VERSION=X.Y.Z.
+#
+# Segredos: DOCKERHUB_USERNAME e DOCKERHUB_TOKEN, cadastrados pelo humano. Sem eles, na `main`
+# as imagens são construídas e examinadas, mas não publicadas (aviso na execução); numa tag, o
+# job falha: release sem imagem não passa.
+
+name: images
+
+on:
+  workflow_run:
+    workflows:
+      - verify
+    types:
+      - completed
+    branches:
+      - main
+  workflow_call:
+    secrets:
+      DOCKERHUB_USERNAME:
+        required: false
+      DOCKERHUB_TOKEN:
+        required: false
+
+permissions: {}
+
+# Na `main`, um `verify` mais novo cancela a publicação anterior; numa tag, nunca cancela.
+concurrency:
+  group: images-${{ github.event.workflow_run.head_branch || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'workflow_run' }}
+
+jobs:
+  images:
+    name: ${{ matrix.app }}
+    # O workflow_run roda com os segredos do repositório: só vale para `verify` verde de um
+    # push na `main` deste repositório, nunca para PR (inclusive de fork com branch `main`).
+    if: >-
+      github.event_name != 'workflow_run' ||
+      (github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.event == 'push' &&
+      github.event.workflow_run.head_branch == 'main' &&
+      github.event.workflow_run.head_repository.full_name == github.repository)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # nuva_version: a imagem recebe o argumento de build NUVA_VERSION (só os backends).
+          - app: admin-api
+            nuva_version: true
+          - app: classroom-api
+            nuva_version: true
+          - app: worker
+            nuva_version: true
+          - app: admin
+            nuva_version: false
+          - app: classroom
+            nuva_version: false
+    env:
+      IMAGE: tmsoftbrasil/nuva-edu-${{ matrix.app }}
+      COMMIT: ${{ github.event.workflow_run.head_sha || github.sha }}
+    steps:
+      - name: Código
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ env.COMMIT }}
+          persist-credentials: false
+
+      - name: Segredos do Docker Hub
+        id: hub
+        env:
+          DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+          DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+        run: |
+          if [ -n "$DOCKERHUB_USERNAME" ] && [ -n "$DOCKERHUB_TOKEN" ]; then
+            echo "publish=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          echo "publish=false" >> "$GITHUB_OUTPUT"
+          if [ "$GITHUB_REF_TYPE" = "tag" ]; then
+            echo "::error title=Release sem imagem::Faltam os segredos DOCKERHUB_USERNAME e DOCKERHUB_TOKEN no repositório; a imagem $IMAGE não pode ser publicada."
+            exit 1
+          fi
+          echo "::warning title=Imagem não publicada::Faltam os segredos DOCKERHUB_USERNAME e DOCKERHUB_TOKEN no repositório; a imagem $IMAGE foi construída e examinada, mas NÃO foi publicada."
+
+      - name: Versão e etiquetas
+        id: meta
+        run: |
+          short="${COMMIT::7}"
+          if [ "$GITHUB_REF_TYPE" = "tag" ]; then
+            version="${GITHUB_REF_NAME#v}"
+            if ! [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+              echo "::error::A tag $GITHUB_REF_NAME não tem o formato vX.Y.Z."
+              exit 1
+            fi
+            tags=("$version" "${version%.*}" "latest")
+            nuva_version="$version"
+          else
+            tags=("sha-$short" "main")
+            nuva_version="$(jq -r .version package.json)-sha-$short"
+          fi
+          {
+            echo "nuva_version=$nuva_version"
+            echo "first_tag=${tags[0]}"
+            echo "tags<<FIM"
+            for tag in "${tags[@]}"; do
+              echo "$IMAGE:$tag"
+            done
+            echo "FIM"
+          } >> "$GITHUB_OUTPUT"
+          echo "$IMAGE — etiquetas: ${tags[*]} — NUVA_VERSION=$nuva_version"
+
+      - name: QEMU (arm64)
+        uses: docker/setup-qemu-action@99012661954931238ded8c8b007157a8430204e1 # v4.4.0
+        with:
+          platforms: arm64
+
+      - name: Buildx
+        uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+
+      - name: Login no Docker Hub
+        if: steps.hub.outputs.publish == 'true'
+        uses: docker/login-action@8aa5831fb8d48d8f76594c7ddde61ae58019f550 # v4.8.0
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      # Primeiro só amd64, carregada no Docker do runner, para conferir a versão e passar o
+      # Trivy antes de qualquer publicação.
+      - name: Build para exame (amd64)
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: .
+          file: apps/${{ matrix.app }}/Dockerfile
+          platforms: linux/amd64
+          load: true
+          tags: ${{ env.IMAGE }}:exame
+          build-args: ${{ matrix.nuva_version && format('NUVA_VERSION={0}', steps.meta.outputs.nuva_version) || '' }}
+          cache-from: type=gha,scope=${{ matrix.app }}
+
+      - name: Versão gravada na imagem
+        if: matrix.nuva_version
+        env:
+          NUVA_VERSION: ${{ steps.meta.outputs.nuva_version }}
+        run: |
+          found="$(docker run --rm --entrypoint cat "$IMAGE:exame" package.json | jq -r .version)"
+          echo "package.json do serviço na imagem: $found"
+          if [ "$found" != "$NUVA_VERSION" ]; then
+            echo "::error::A imagem $IMAGE traz a versão $found; o esperado é $NUVA_VERSION."
+            exit 1
+          fi
+
+      # Vulnerabilidade alta ou crítica com correção disponível falha o fluxo (spec 032).
+      - name: Trivy
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          image-ref: ${{ env.IMAGE }}:exame
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: "1"
+          format: table
+
+      # As duas plataformas num único manifesto. Sem os segredos, o build acontece (valida o
+      # arm64 e aquece o cache), mas nada é enviado.
+      - name: Build e publicação (amd64 e arm64)
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: .
+          file: apps/${{ matrix.app }}/Dockerfile
+          platforms: linux/amd64,linux/arm64
+          push: ${{ steps.hub.outputs.publish == 'true' }}
+          tags: ${{ steps.meta.outputs.tags }}
+          build-args: ${{ matrix.nuva_version && format('NUVA_VERSION={0}', steps.meta.outputs.nuva_version) || '' }}
+          labels: |
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+            org.opencontainers.image.revision=${{ env.COMMIT }}
+            org.opencontainers.image.version=${{ steps.meta.outputs.nuva_version }}
+            org.opencontainers.image.licenses=AGPL-3.0-only
+          cache-from: type=gha,scope=${{ matrix.app }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.app }}
+
+      # Confere o que ficou no Docker Hub: as duas plataformas e, nos backends, a versão.
+      - name: Imagem publicada
+        if: steps.hub.outputs.publish == 'true'
+        env:
+          REF: ${{ env.IMAGE }}:${{ steps.meta.outputs.first_tag }}
+          NUVA_VERSION: ${{ steps.meta.outputs.nuva_version }}
+          HAS_VERSION: ${{ matrix.nuva_version }}
+        run: |
+          platforms="$(docker buildx imagetools inspect "$REF" --format '{{json .Manifest}}' |
+            jq -r '.manifests[].platform | "\(.os)/\(.architecture)"')"
+          echo "$REF: $(echo "$platforms" | sort -u | tr '\n' ' ')"
+          for platform in linux/amd64 linux/arm64; do
+            if ! echo "$platforms" | grep -qx "$platform"; then
+              echo "::error::$REF foi publicada sem a plataforma $platform."
+              exit 1
+            fi
+          done
+          if [ "$HAS_VERSION" = "true" ]; then
+            found="$(docker run --rm --pull always --entrypoint cat "$REF" package.json | jq -r .version)"
+            if [ "$found" != "$NUVA_VERSION" ]; then
+              echo "::error::$REF responde a versão $found; o esperado é $NUVA_VERSION."
+              exit 1
+            fi
+            echo "$REF responde a versão $found."
+          fi

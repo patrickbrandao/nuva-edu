@@ -1,0 +1,33 @@
+# Fluxo `release` (spec 032, "CI"): numa tag vX.Y.Z, roda o `verify` e, com ele verde, publica
+# as imagens com as etiquetas `X.Y.Z`, `X.Y` e `latest` e NUVA_VERSION=X.Y.Z.
+# Sem os segredos do Docker Hub o job de imagens falha: release sem imagem não passa.
+# O teste de restauração de backup (spec 033) e a documentação no GitHub Pages entram aqui
+# em tarefas próprias.
+
+name: release
+
+on:
+  push:
+    tags:
+      - "v[0-9]+.[0-9]+.[0-9]+"
+
+permissions: {}
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  verify:
+    uses: ./.github/workflows/verify.yml
+    permissions:
+      contents: read
+
+  images:
+    needs: verify
+    uses: ./.github/workflows/images.yml
+    permissions:
+      contents: read
+    secrets:
+      DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+      DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
