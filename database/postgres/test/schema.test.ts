@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { after, before, describe, test } from 'node:test';
 import { setTimeout as sleep } from 'node:timers/promises';
+import type pg from 'pg';
 import { defaultMigrationsDir } from '../src/config.ts';
 import { loadMigrations } from '../src/migrations.ts';
 import { migrateDown, migrateUp } from '../src/migrator.ts';
@@ -37,7 +38,9 @@ describe('migrations reais', () => {
 
   test('do zero, depois down de todas e up de novo, sem sobras', async () => {
     const full = await publicObjects(db);
-    assert.ok(full.includes('tabela settings'));
+    for (const item of ['tabela settings', 'tabela jobs', 'função jobs_notify']) {
+      assert.ok(full.includes(item), item);
+    }
 
     const total = (await loadMigrations(dir)).length;
     const reverted = await migrateDown(db.client, { dir, to: 0 });
@@ -120,5 +123,406 @@ describe('migrations reais', () => {
   test('0001: pg_trgm disponível para índice de busca', async () => {
     const { rows } = await db.client.query(`SELECT similarity('curso', 'cursos') > 0.5 AS ok`);
     assert.deepEqual(rows, [{ ok: true }]);
+  });
+
+  test('0002: jobs tem as colunas da spec 005, com tipos e padrões', async () => {
+    const { rows: columns } = await db.client.query(
+      `SELECT column_name, data_type, is_nullable FROM information_schema.columns
+        WHERE table_schema = 'public' AND table_name = 'jobs' ORDER BY ordinal_position`,
+    );
+    const tz = 'timestamp with time zone';
+    assert.deepEqual(columns, [
+      { column_name: 'id', data_type: 'uuid', is_nullable: 'NO' },
+      { column_name: 'type', data_type: 'text', is_nullable: 'NO' },
+      { column_name: 'payload', data_type: 'jsonb', is_nullable: 'NO' },
+      { column_name: 'status', data_type: 'text', is_nullable: 'NO' },
+      { column_name: 'priority', data_type: 'smallint', is_nullable: 'NO' },
+      { column_name: 'run_at', data_type: tz, is_nullable: 'NO' },
+      { column_name: 'attempts', data_type: 'smallint', is_nullable: 'NO' },
+      { column_name: 'max_attempts', data_type: 'smallint', is_nullable: 'NO' },
+      { column_name: 'unique_key', data_type: 'text', is_nullable: 'YES' },
+      { column_name: 'locked_by', data_type: 'text', is_nullable: 'YES' },
+      { column_name: 'locked_at', data_type: tz, is_nullable: 'YES' },
+      { column_name: 'heartbeat_at', data_type: tz, is_nullable: 'YES' },
+      { column_name: 'last_error', data_type: 'text', is_nullable: 'YES' },
+      { column_name: 'created_at', data_type: tz, is_nullable: 'NO' },
+      { column_name: 'finished_at', data_type: tz, is_nullable: 'YES' },
+    ]);
+
+    const { rows } = await db.client.query(
+      `INSERT INTO jobs (type) VALUES ('email.send')
+       RETURNING uuid_extract_version(id) AS version, payload, status, priority, attempts,
+                 max_attempts, run_at = created_at AS now, unique_key, locked_by, finished_at`,
+    );
+    assert.deepEqual(rows, [
+      {
+        version: 7,
+        payload: {},
+        status: 'queued',
+        priority: 0,
+        attempts: 0,
+        max_attempts: 5,
+        now: true,
+        unique_key: null,
+        locked_by: null,
+        finished_at: null,
+      },
+    ]);
+    await db.client.query('DELETE FROM jobs');
+  });
+
+  test('0002: jobs tem os índices de consumo, deduplicação, batimento e retenção', async () => {
+    const { rows } = await db.client.query<{ indexname: string; indexdef: string }>(
+      `SELECT indexname, indexdef FROM pg_indexes
+        WHERE schemaname = 'public' AND tablename = 'jobs' ORDER BY indexname`,
+    );
+    const defs = Object.fromEntries(rows.map((row) => [row.indexname, row.indexdef]));
+    assert.deepEqual(Object.keys(defs), [
+      'jobs_finished_idx',
+      'jobs_pkey',
+      'jobs_ready_idx',
+      'jobs_running_heartbeat_idx',
+      'jobs_unique_key_active_unique',
+    ]);
+    assert.match(
+      defs.jobs_ready_idx ?? '',
+      /\(priority DESC, run_at\) WHERE \(status = 'queued'::text\)/,
+    );
+    assert.match(defs.jobs_unique_key_active_unique ?? '', /^CREATE UNIQUE INDEX .*\(unique_key\)/);
+    assert.match(defs.jobs_running_heartbeat_idx ?? '', /\(heartbeat_at\) WHERE/);
+    assert.match(defs.jobs_finished_idx ?? '', /\(status, finished_at\) WHERE/);
+  });
+
+  test('0002: jobs recusa estado, tipo, payload e tentativas inválidos', async () => {
+    const cases: [string, string, string][] = [
+      ['jobs_status_valid', `(type, status) VALUES ('notify', 'paused')`, 'estado desconhecido'],
+      ['jobs_type_format', `(type) VALUES ('Email.Send')`, 'tipo com maiúscula'],
+      ['jobs_type_format', `(type) VALUES ('')`, 'tipo vazio'],
+      ['jobs_payload_object', `(type, payload) VALUES ('notify', '[1]')`, 'payload lista'],
+      ['jobs_payload_object', `(type, payload) VALUES ('notify', '"x"')`, 'payload texto'],
+      ['jobs_attempts_range', `(type, attempts) VALUES ('notify', -1)`, 'tentativa negativa'],
+      [
+        'jobs_attempts_range',
+        `(type, attempts, max_attempts) VALUES ('notify', 4, 3)`,
+        'acima do máximo',
+      ],
+      ['jobs_max_attempts_range', `(type, max_attempts) VALUES ('notify', 0)`, 'máximo zero'],
+      ['jobs_unique_key_not_empty', `(type, unique_key) VALUES ('notify', '')`, 'chave vazia'],
+    ];
+    for (const [constraint, values, label] of cases) {
+      await assert.rejects(
+        db.client.query(`INSERT INTO jobs ${values}`),
+        { code: '23514', constraint },
+        label,
+      );
+    }
+    for (const column of ['payload', 'status', 'priority', 'run_at', 'attempts', 'max_attempts']) {
+      await assert.rejects(
+        db.client.query(`INSERT INTO jobs (type, ${column}) VALUES ('notify', NULL)`),
+        { code: '23502' },
+        `coluna ${column}`,
+      );
+    }
+    await assert.rejects(db.client.query('INSERT INTO jobs (type) VALUES (NULL)'), {
+      code: '23502',
+    });
+  });
+
+  test('0002: trava e finished_at acompanham o estado em todo o ciclo de vida', async () => {
+    const bad: [string, string, string][] = [
+      ['jobs_lock_matches_status', `(type, status) VALUES ('notify', 'running')`, 'sem trava'],
+      [
+        'jobs_lock_matches_status',
+        `(type, status, locked_by, locked_at) VALUES ('notify', 'running', 'w1', now())`,
+        'running sem batimento',
+      ],
+      [
+        'jobs_lock_matches_status',
+        `(type, locked_by, locked_at, heartbeat_at) VALUES ('notify', 'w1', now(), now())`,
+        'queued com trava',
+      ],
+      ['jobs_finished_at_matches_status', `(type, status) VALUES ('notify', 'done')`, 'done'],
+      ['jobs_finished_at_matches_status', `(type, status) VALUES ('notify', 'failed')`, 'failed'],
+      [
+        'jobs_finished_at_matches_status',
+        `(type, finished_at) VALUES ('notify', now())`,
+        'queued com finished_at',
+      ],
+    ];
+    for (const [constraint, values, label] of bad) {
+      await assert.rejects(
+        db.client.query(`INSERT INTO jobs ${values}`),
+        { code: '23514', constraint },
+        label,
+      );
+    }
+
+    // queued → running → queued (nova tentativa) → running → failed → queued (reenfileirada) → done
+    const { rows } = await db.client.query<{ id: string }>(
+      `INSERT INTO jobs (type, max_attempts) VALUES ('order.fulfill', 2) RETURNING id`,
+    );
+    const id = rows[0]?.id;
+    const start = `UPDATE jobs SET status = 'running', attempts = attempts + 1, locked_by = 'w1',
+                     locked_at = now(), heartbeat_at = now() WHERE id = $1`;
+    const release = 'locked_by = NULL, locked_at = NULL, heartbeat_at = NULL';
+    await db.client.query(start, [id]);
+    await assert.rejects(
+      db.client.query(`UPDATE jobs SET status = 'queued' WHERE id = $1`, [id]),
+      { code: '23514', constraint: 'jobs_lock_matches_status' },
+      'devolver à fila sem limpar a trava',
+    );
+    await db.client.query(
+      `UPDATE jobs SET status = 'queued', run_at = now() + interval '60 seconds',
+              last_error = 'falhou', ${release} WHERE id = $1`,
+      [id],
+    );
+    await db.client.query(start, [id]);
+    await assert.rejects(
+      db.client.query(start, [id]),
+      { code: '23514', constraint: 'jobs_attempts_range' },
+      'terceira tentativa com máximo 2',
+    );
+    await db.client.query(
+      `UPDATE jobs SET status = 'failed', finished_at = now(), last_error = 'esgotou' WHERE id = $1`,
+      [id],
+    );
+    await db.client.query(
+      `UPDATE jobs SET status = 'queued', attempts = 0, run_at = now(), finished_at = NULL,
+              ${release} WHERE id = $1`,
+      [id],
+    );
+    await db.client.query(start, [id]);
+    const done = await db.client.query(
+      `UPDATE jobs SET status = 'done', finished_at = now() WHERE id = $1
+       RETURNING status, attempts, locked_by`,
+      [id],
+    );
+    assert.deepEqual(done.rows, [{ status: 'done', attempts: 1, locked_by: 'w1' }]);
+    await db.client.query('DELETE FROM jobs');
+  });
+
+  test('0002: unique_key é única só entre tarefas queued e running', async () => {
+    const key = 'payment.reconcile_orders:2026-11-24T10:05';
+    const insert = `INSERT INTO jobs (type, unique_key) VALUES ('payment.reconcile_orders', $1)`;
+    const first = await db.client.query<{ id: string }>(`${insert} RETURNING id`, [key]);
+    const id = first.rows[0]?.id;
+
+    await assert.rejects(db.client.query(insert, [key]), {
+      code: '23505',
+      constraint: 'jobs_unique_key_active_unique',
+    });
+    // Forma usada pelo enqueue: não cria a segunda e não dá erro.
+    const onConflict = `${insert}
+      ON CONFLICT (unique_key) WHERE status IN ('queued', 'running') DO NOTHING`;
+    assert.equal((await db.client.query(onConflict, [key])).rowCount, 0);
+
+    await db.client.query(
+      `UPDATE jobs SET status = 'running', locked_by = 'w1', locked_at = now(),
+              heartbeat_at = now() WHERE id = $1`,
+      [id],
+    );
+    assert.equal((await db.client.query(onConflict, [key])).rowCount, 0, 'running ainda segura');
+
+    await db.client.query(`UPDATE jobs SET status = 'done', finished_at = now() WHERE id = $1`, [
+      id,
+    ]);
+    assert.equal((await db.client.query(onConflict, [key])).rowCount, 1, 'done libera a chave');
+
+    // A concluída não pode voltar à fila enquanto houver outra ativa com a mesma chave.
+    await assert.rejects(
+      db.client.query(
+        `UPDATE jobs SET status = 'queued', finished_at = NULL, locked_by = NULL,
+                locked_at = NULL, heartbeat_at = NULL WHERE id = $1`,
+        [id],
+      ),
+      { code: '23505', constraint: 'jobs_unique_key_active_unique' },
+    );
+
+    // Sem chave não há deduplicação; chaves diferentes convivem.
+    await db.client.query(`INSERT INTO jobs (type) VALUES ('notify'), ('notify')`);
+    await db.client.query(insert, [`${key}:outra`]);
+    await db.client.query('DELETE FROM jobs');
+  });
+
+  test('0002: duas inserções simultâneas com a mesma unique_key criam uma tarefa só', async () => {
+    const other = await db.connect();
+    const insert = `INSERT INTO jobs (type, unique_key) VALUES ('ops.digest', 'ops.digest:dia')
+      ON CONFLICT (unique_key) WHERE status IN ('queued', 'running') DO NOTHING`;
+    await db.client.query('BEGIN');
+    assert.equal((await db.client.query(insert)).rowCount, 1);
+    // A segunda espera a primeira transação decidir e, com o COMMIT, não insere.
+    const second = other.query(insert);
+    await sleep(50);
+    await db.client.query('COMMIT');
+    assert.equal((await second).rowCount, 0);
+    const { rows } = await db.client.query('SELECT count(*)::int AS total FROM jobs');
+    assert.deepEqual(rows, [{ total: 1 }]);
+    await db.client.query('DELETE FROM jobs');
+  });
+
+  const claim = `
+    UPDATE jobs SET status = 'running', attempts = attempts + 1, locked_by = $1,
+           locked_at = now(), heartbeat_at = now()
+     WHERE id IN (
+       SELECT id FROM jobs
+        WHERE status = 'queued' AND run_at <= now()
+        ORDER BY priority DESC, run_at
+        LIMIT $2
+        FOR UPDATE SKIP LOCKED)
+    RETURNING id, type`;
+
+  test('0002: consumo segue prioridade e run_at e ignora agendada e não queued', async () => {
+    await db.client.query(`
+      INSERT INTO jobs (type, priority, run_at) VALUES
+        ('a.old', 0, now() - interval '2 minutes'),
+        ('a.new', 0, now() - interval '1 minute'),
+        ('a.pay', 10, now() - interval '1 second'),
+        ('a.future', 10, now() + interval '1 hour')`);
+    await db.client.query(
+      `INSERT INTO jobs (type, status, priority, finished_at) VALUES
+        ('a.done', 'done', 10, now()), ('a.failed', 'failed', 10, now())`,
+    );
+    const order: string[] = [];
+    for (;;) {
+      const { rows } = await db.client.query<{ type: string }>(claim, ['w1', 1]);
+      if (rows[0] === undefined) break;
+      order.push(rows[0].type);
+    }
+    assert.deepEqual(order, ['a.pay', 'a.old', 'a.new']);
+    await db.client.query('DELETE FROM jobs');
+  });
+
+  test('0002: a consulta de consumo usa jobs_ready_idx sem ordenar', async () => {
+    await db.client.query(
+      `INSERT INTO jobs (type, status, finished_at)
+       SELECT 'x.done', 'done', now() FROM generate_series(1, 2000)`,
+    );
+    await db.client.query(`INSERT INTO jobs (type) SELECT 'x.q' FROM generate_series(1, 50)`);
+    await db.client.query('ANALYZE jobs');
+    const { rows } = await db.client.query<{ 'QUERY PLAN': string }>(
+      `EXPLAIN SELECT id FROM jobs WHERE status = 'queued' AND run_at <= now()
+        ORDER BY priority DESC, run_at LIMIT 10 FOR UPDATE SKIP LOCKED`,
+    );
+    const plan = rows.map((row) => row['QUERY PLAN']).join('\n');
+    assert.match(plan, /Index Scan using jobs_ready_idx/, plan);
+    assert.doesNotMatch(plan, /Sort/, plan);
+    await db.client.query('DELETE FROM jobs');
+  });
+
+  test('0002: com SKIP LOCKED, duas transações abertas não pegam a mesma tarefa', async () => {
+    const a = await db.connect();
+    const b = await db.connect();
+    const lock = `SELECT id FROM jobs WHERE status = 'queued' AND run_at <= now()
+      ORDER BY priority DESC, run_at LIMIT 1 FOR UPDATE SKIP LOCKED`;
+    const inserted = await db.client.query<{ id: string }>(
+      `INSERT INTO jobs (type, run_at) VALUES
+         ('s.one', now() - interval '2 seconds'), ('s.two', now() - interval '1 second')
+       RETURNING id`,
+    );
+    const [one, two] = inserted.rows.map((row) => row.id);
+
+    await a.query('BEGIN');
+    await b.query('BEGIN');
+    const fromA = await a.query<{ id: string }>(lock);
+    // A ainda não fez COMMIT: B não espera e não recebe a mesma linha.
+    const fromB = await b.query<{ id: string }>(lock);
+    assert.deepEqual(fromA.rows, [{ id: one }]);
+    assert.deepEqual(fromB.rows, [{ id: two }]);
+    // Uma terceira conexão, com as duas travadas, não recebe nada (e não fica esperando).
+    assert.deepEqual((await db.client.query(lock)).rows, []);
+    await a.query('ROLLBACK');
+    // Desfeita a transação de A, a tarefa volta a ser visível.
+    assert.deepEqual((await db.client.query(lock)).rows, [{ id: one }]);
+    await b.query('ROLLBACK');
+    await db.client.query('DELETE FROM jobs');
+  });
+
+  test('0002: dois consumidores concorrentes esvaziam 1.000 tarefas sem repetir nenhuma', async () => {
+    const total = 1000;
+    await db.client.query(
+      `INSERT INTO jobs (type, priority) SELECT 'load.test', n % 3 FROM generate_series(1, $1) n`,
+      [total],
+    );
+    const consume = async (worker: string, client: pg.Client): Promise<string[]> => {
+      const taken: string[] = [];
+      for (;;) {
+        const { rows } = await client.query<{ id: string }>(claim, [worker, 7]);
+        if (rows.length === 0) return taken;
+        taken.push(...rows.map((row) => row.id));
+      }
+    };
+    // Conexões abertas antes, para os três começarem juntos.
+    const clients = [await db.connect(), await db.connect(), await db.connect()];
+    const lists = await Promise.all(clients.map((client, i) => consume(`w${i + 1}`, client)));
+    const all = lists.flat();
+    assert.equal(all.length, total);
+    assert.equal(new Set(all).size, total, 'nenhuma tarefa entregue duas vezes');
+    assert.ok(
+      lists.filter((list) => list.length > 0).length > 1,
+      'mais de um consumidor trabalhou',
+    );
+    const { rows } = await db.client.query(
+      `SELECT status, count(*)::int AS total, max(attempts) AS attempts FROM jobs GROUP BY status`,
+    );
+    assert.deepEqual(rows, [{ status: 'running', total, attempts: 1 }]);
+    await db.client.query('DELETE FROM jobs');
+  });
+
+  test('0002: NOTIFY nuva_jobs só para tarefa executável e só depois do COMMIT', async () => {
+    const listener = await db.connect();
+    let received = 0;
+    listener.on('notification', (message) => {
+      if (message.channel === 'nuva_jobs') received += 1;
+    });
+    await listener.query('LISTEN nuva_jobs');
+    /** Avisos chegados desde a última leitura; a consulta vazia faz o cliente ler o socket. */
+    const drain = async (): Promise<number> => {
+      await sleep(100);
+      await listener.query('SELECT 1');
+      const count = received;
+      received = 0;
+      return count;
+    };
+
+    await db.client.query(`INSERT INTO jobs (type) VALUES ('email.send')`);
+    assert.equal(await drain(), 1, 'inserção de tarefa pronta');
+
+    await db.client.query(
+      `INSERT INTO jobs (type, run_at) VALUES ('event.reminder', now() + interval '1 hour')`,
+    );
+    assert.equal(await drain(), 0, 'agendada para depois não acorda');
+
+    await db.client.query(
+      `INSERT INTO jobs (type, status, finished_at) VALUES ('notify', 'done', now())`,
+    );
+    assert.equal(await drain(), 0, 'inserida já concluída não acorda');
+
+    await db.client.query('BEGIN');
+    await db.client.query(`INSERT INTO jobs (type) VALUES ('notify')`);
+    assert.equal(await drain(), 0, 'antes do COMMIT ninguém é avisado');
+    await db.client.query('ROLLBACK');
+    assert.equal(await drain(), 0, 'transação desfeita não avisa');
+
+    await db.client.query('BEGIN');
+    await db.client.query(`INSERT INTO jobs (type) SELECT 'notify' FROM generate_series(1, 20)`);
+    await db.client.query('COMMIT');
+    assert.equal(await drain(), 1, 'várias tarefas na mesma transação viram um aviso');
+
+    // Antecipar a agendada e reenfileirar uma falha também acordam.
+    await db.client.query(`UPDATE jobs SET run_at = now() WHERE type = 'event.reminder'`);
+    assert.equal(await drain(), 1, 'run_at antecipado');
+    await db.client.query(
+      `UPDATE jobs SET status = 'failed', finished_at = now() WHERE type = 'email.send'`,
+    );
+    assert.equal(await drain(), 0, 'falha não acorda');
+    await db.client.query(
+      `UPDATE jobs SET status = 'queued', finished_at = NULL, attempts = 0
+        WHERE type = 'email.send'`,
+    );
+    assert.equal(await drain(), 1, 'reenfileirada');
+    // Mudança que não torna a tarefa executável (payload, prioridade) não avisa.
+    await db.client.query(`UPDATE jobs SET priority = 10 WHERE type = 'email.send'`);
+    assert.equal(await drain(), 0, 'mudança de prioridade');
+    await db.client.query('DELETE FROM jobs');
   });
 });
