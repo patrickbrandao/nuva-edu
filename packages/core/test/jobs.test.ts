@@ -1,5 +1,14 @@
 import { sql } from 'kysely';
-import { afterAll, beforeAll, beforeEach, describe, expect, inject, it } from 'vitest';
+import {
+  afterAll,
+  beforeAll,
+  beforeEach,
+  describe,
+  expect,
+  expectTypeOf,
+  inject,
+  it,
+} from 'vitest';
 import {
   claimJobs,
   closeDatabase,
@@ -22,8 +31,10 @@ import {
   isPermanentJobError,
   JOB_DEFINITIONS,
   type Job,
+  type JobHandlers,
   type JobListener,
   listenForJobs,
+  type PendingHandlerJobType,
   PermanentJobError,
   recurringKey,
   releaseJob,
@@ -79,6 +90,18 @@ describe('registro de tipos', () => {
     expect(isJobType('email.send')).toBe(true);
     expect(isJobType('notify')).toBe(false);
     expect(isJobType('toString')).toBe(false);
+  });
+
+  it('exige o manipulador de todos os tipos, email.send incluído', () => {
+    expectTypeOf<PendingHandlerJobType>().toBeNever();
+    expectTypeOf<keyof JobHandlers>().toEqualTypeOf<
+      'email.send' | 'example.echo' | 'retention.purge'
+    >();
+    const noop = async (): Promise<void> => {};
+    // @ts-expect-error falta o manipulador de `email.send`.
+    const missing: JobHandlers = { 'example.echo': noop, 'retention.purge': noop };
+    const complete: JobHandlers = { ...missing, 'email.send': noop };
+    expect(Object.keys(complete).sort()).toEqual(Object.keys(JOB_DEFINITIONS).sort());
   });
 });
 

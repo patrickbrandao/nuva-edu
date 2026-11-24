@@ -6,6 +6,7 @@ Detalhe das decisões em `specs/decisions/`.
 ## [Não lançado]
 
 ### Adicionado
+- `@nuva-edu/core`: `JobHandlers` passa a exigir o manipulador de `email.send` (`PendingHandlerJobType = never`) (task 225).
 - `@nuva-edu/core`: contas da spec 007 (`registerWithPassword`, `loginWithPassword` em tempo constante com bloqueio por e-mail e por IP, sessões com CSRF e renovação por minuto, `buildSessionView` com `termsPending` e trava `terms_acceptance_pending`, confirmação e reenvio de e-mail, esqueci/redefinir/trocar senha, dispositivo novo, provedores vinculados, avatar, `ensureInitialAdmin`, `createOrPromoteAdmin` e regra do último admin) (task 146).
 - `@nuva-edu/ui`: `AdminTextArea`, campo de várias linhas com o visual do `AdminField`, limite de caracteres, contador opcional e erro com `aria-invalid`/`aria-describedby` (task 191).
 - Classroom: login e cadastro social (só os provedores de `authProviders`), `/cadastro/social`, `/conta/acesso` (senha, provedores vinculados, sessões dos dois sites) e `/conta/perfil` (foto de perfil), com as respostas da API simuladas nos testes (task 161).

@@ -53,10 +53,11 @@ export const JOB_DEFINITIONS: { readonly [T in JobType]: JobDefinition } = {
 
 /**
  * Tipos já no registro cujo manipulador ainda não existe no worker (chega em outra tarefa).
- * `email.send`: tarefa 150. Ao entrar o manipulador, tire o tipo daqui para voltar a exigi-lo.
- * Tarefa sem manipulador falha como erro comum e segue as tentativas do tipo.
+ * Hoje a união é vazia: `JobHandlers` exige o manipulador de todos os tipos do registro.
+ * Tipo novo cujo manipulador venha depois entra aqui até ele chegar; tarefa sem manipulador
+ * falha como erro comum e segue as tentativas do tipo.
  */
-export type PendingHandlerJobType = 'email.send';
+export type PendingHandlerJobType = never;
 
 export const JOB_STATUSES = ['queued', 'running', 'done', 'failed'] as const;
 export type JobStatus = (typeof JOB_STATUSES)[number];
