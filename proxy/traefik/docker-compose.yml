@@ -35,10 +35,16 @@ services:
     tmpfs:
       - /run
       - /tmp
+    # Escuta só em portas acima de 1024 e lê o soquete do Docker como dono (root): nenhuma
+    # capacidade é necessária.
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
     ulimits:
       nofile:
-        soft: ${TRAEFIK_NOFILE:-8192}
-        hard: ${TRAEFIK_NOFILE:-8192}
+        soft: ${TRAEFIK_NOFILE:-65536}
+        hard: ${TRAEFIK_NOFILE:-65536}
     deploy:
       resources:
         limits:

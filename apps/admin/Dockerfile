@@ -26,7 +26,11 @@ COPY tsconfig.base.json ./
 COPY packages/ui packages/ui
 COPY packages/api-client packages/api-client
 COPY apps/admin apps/admin
-RUN pnpm --filter "@nuva-edu/admin" build
+COPY proxy/nginx/csp.mjs proxy/nginx/csp.mjs
+# A política de segurança de conteúdo sai do index.html gerado: o hash do script inline do tema
+# acompanha o que a imagem realmente serve.
+RUN pnpm --filter "@nuva-edu/admin" build \
+    && node proxy/nginx/csp.mjs apps/admin/dist/index.html > /app/nuva-csp.conf
 
 # 3. runtime: só o resultado do build. Nomes de host e moeda chegam por /config.json, gerado na
 #    subida do contêiner (proxy/nginx/40-nuva-config.sh); a mesma imagem serve a qualquer
@@ -36,6 +40,7 @@ USER root
 RUN rm -f /etc/nginx/conf.d/default.conf /docker-entrypoint.d/*
 COPY proxy/nginx/nginx.conf /etc/nginx/nginx.conf
 COPY --chmod=0755 proxy/nginx/40-nuva-config.sh /docker-entrypoint.d/40-nuva-config.sh
+COPY --from=build /app/nuva-csp.conf /etc/nginx/nuva-csp.conf
 COPY --from=build /app/apps/admin/dist /usr/share/nginx/html
 ENV NUVA_APP=admin
 USER 101

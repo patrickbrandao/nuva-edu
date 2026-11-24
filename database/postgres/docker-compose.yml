@@ -5,6 +5,10 @@ services:
   postgres:
     image: ${POSTGRES_IMAGE:-postgres:18-alpine}
     restart: unless-stopped
+    # Sem root: a entrada da imagem oficial pula o `chown` e a troca de usuário quando já começa
+    # como `postgres`, e por isso o contêiner não precisa de capacidade nenhuma. O volume nomeado
+    # nasce com o dono certo (copiado de /var/lib/postgresql da imagem).
+    user: postgres
     environment:
       POSTGRES_DB: ${POSTGRES_DB:-nuva_edu}
       POSTGRES_USER: ${POSTGRES_USER:-nuva_edu}
@@ -24,13 +28,19 @@ services:
       - internal
     read_only: true
     tmpfs:
-      - /run
+      # O usuário `postgres` cria /run/postgresql (soquete e trava); o uid muda conforme a
+      # imagem (70 na alpine, 999 na debian), então a permissão vai pelo modo, não pelo dono.
+      - /run:mode=1777
       - /tmp
     shm_size: ${POSTGRES_SHM_SIZE:-128mb}
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
     ulimits:
       nofile:
-        soft: ${POSTGRES_NOFILE:-8192}
-        hard: ${POSTGRES_NOFILE:-8192}
+        soft: ${POSTGRES_NOFILE:-65536}
+        hard: ${POSTGRES_NOFILE:-65536}
     deploy:
       resources:
         limits:

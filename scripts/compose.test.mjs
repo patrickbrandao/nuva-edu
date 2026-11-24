@@ -102,6 +102,42 @@ test('as aplicações seguem o padrão completo e os limites da spec', { skip },
   assert.ok(total <= 3 * 1024 * MB, `soma dos limites de memória: ${total / MB} MB`);
 });
 
+test('postgres, traefik e mailpit seguem o padrão completo e os limites da spec', { skip }, () => {
+  const { services } = config();
+  const expected = {
+    postgres: { memory: 1024, nofile: 65536 },
+    traefik: { memory: 128, nofile: 65536 },
+    mailpit: { memory: 64, nofile: 4096 },
+  };
+  for (const [name, want] of Object.entries(expected)) {
+    const service = services[name];
+    assert.equal(Number(service.deploy.resources.limits.memory), want.memory * MB, name);
+    assert.equal(Number(service.deploy.resources.limits.cpus), 1, name);
+    assert.deepEqual(service.ulimits.nofile, { soft: want.nofile, hard: want.nofile }, name);
+    assert.deepEqual(service.cap_drop, ['ALL'], `${name}: cap_drop`);
+    // Nenhum dos três precisa de capacidade de volta (provado na tarefa 053).
+    assert.equal(service.cap_add, undefined, `${name}: cap_add`);
+    assert.deepEqual(service.security_opt, ['no-new-privileges:true'], `${name}: security_opt`);
+    assert.equal(service.restart, 'unless-stopped', `${name}: restart`);
+    assert.ok(service.healthcheck?.test?.length > 0, `${name}: healthcheck`);
+  }
+  // Sem root, a entrada da imagem do Postgres não precisa de CHOWN nem de SETUID/SETGID; em troca,
+  // o usuário tem de conseguir criar /run/postgresql no tmpfs.
+  assert.equal(services.postgres.user, 'postgres');
+  assert.ok(services.postgres.tmpfs.includes('/run:mode=1777'), 'postgres: /run gravável');
+  assert.deepEqual(services.mailpit.healthcheck.test, ['CMD', '/mailpit', 'readyz']);
+  // Portas publicadas: todas acima de 1024; banco e Mailpit só no próprio hospedeiro.
+  for (const name of Object.keys(expected)) {
+    for (const port of services[name].ports) {
+      assert.ok(Number(port.published) > 1024, `${name}: porta ${port.published}`);
+      assert.ok(Number(port.target) > 1024, `${name}: porta interna ${port.target}`);
+      if (name !== 'traefik') {
+        assert.equal(port.host_ip, '127.0.0.1', `${name}: só em 127.0.0.1`);
+      }
+    }
+  }
+});
+
 test('migrations rodam até o fim antes das APIs e do worker', { skip }, () => {
   const { services } = config();
   assert.equal(services.migrate.image, services['admin-api'].image);

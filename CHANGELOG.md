@@ -34,6 +34,7 @@ Detalhe das decisões em `specs/decisions/`.
 - `check-contract [--no-pending]` (`runCheckContract` do `@nuva-edu/api-kit`, script `check-contract` na `admin-api`): confere rotas e contrato sem banco e falha com operação `x-nuva-pending`; HTTP malformado responde `400 validation_failed` em problem+json.
 
 ### Alterado
+- Infra: `postgres`, `traefik` e `mailpit` sem capacidades (`cap_drop: ALL`, `no-new-privileges`), Postgres sem root, `nofile` 65536 no banco e no proxy, `healthcheck` no Mailpit; sites com `Content-Security-Policy` sem `unsafe-inline` (hash do script do tema gerado no build da imagem); pre-commit confere YAML; `verify:quick` sobe o banco por `pnpm compose`.
 - `@nuva-edu/admin`: contornos trocados pelos componentes de `@nuva-edu/ui` (link do roteador, casca em página inteira, rodapé, estados de carregando e erro, script de tema pelo plugin); abaixo de 1024 px o menu lateral é uma gaveta.
 - Contratos base: `Page` só com `nextCursor` (cada listagem declara `items`), CSRF como esquema de segurança `csrfToken` em vez de parâmetro, e códigos de erro gerais fixados na spec 003 e no esquema `Problem` (com `retryAfterSeconds`).
 - `@nuva-edu/api-client`: gerado em dia com os contratos da tarefa 019; `ApiError.retryAfter` usa `retryAfterSeconds` quando falta o `Retry-After`; script `test:files` para o `verify:quick` filtrar os testes.

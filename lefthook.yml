@@ -7,7 +7,7 @@ pre-commit:
       # Só confere os arquivos em stage; não corrige nem faz `git add` por conta própria.
       run: pnpm exec biome check --no-errors-on-unmatched --files-ignore-unknown=true {staged_files}
       glob:
-        - "*.{js,mjs,cjs,ts,mts,cts,jsx,tsx,json,jsonc,css}"
+        - "*.{js,mjs,cjs,ts,mts,cts,jsx,tsx,json,jsonc,css,yml,yaml}"
 
     - name: arquivos-proibidos
       run: 'echo "Arquivo proibido no Git: {staged_files}" && exit 1'

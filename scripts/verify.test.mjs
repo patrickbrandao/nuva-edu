@@ -100,7 +100,7 @@ describe('Postgres local do modo rápido', () => {
       },
     });
     assert.equal(result.ok, false);
-    assert.match(result.message, /docker compose --env-file \.env .*up -d --wait postgres/);
+    assert.match(result.message, /^ {2}pnpm compose up -d --wait postgres$/m);
     assert.equal(prepared, false);
   });
 

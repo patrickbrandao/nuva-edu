@@ -31,9 +31,8 @@ import {
 } from './lib/verify-plan.mjs';
 
 const root = resolve(import.meta.dirname, '..');
-const COMPOSE_UP = `docker compose --env-file .env${
-  existsSync(join(root, '.env.local')) ? ' --env-file .env.local' : ''
-} up -d --wait postgres`;
+// `pnpm compose` (scripts/dev.mjs) já passa os arquivos de ambiente na ordem certa.
+const COMPOSE_UP = 'pnpm compose up -d --wait postgres';
 
 const exists = (path) => existsSync(join(root, path));
 

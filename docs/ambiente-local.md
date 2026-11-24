@@ -44,10 +44,15 @@ O `docker-compose.yml` da raiz só inclui o compose de cada sistema.
 | `admin`, `classroom` | `apps/<app>/docker-compose.yml` | do proxy | Nginx sem privilégios na porta 8080 |
 | `traefik`, `mailpit` | `proxy/traefik/`, `mail/mailpit/` | do proxy; interna | Perfis opcionais |
 
-Todo contêiner das aplicações roda com raiz somente leitura, `/run` e `/tmp` em tmpfs, sem
-capacidades (`cap_drop: ALL`), `no-new-privileges`, limites de CPU e memória
-(`NUVA_<SERVICO>_CPUS` e `NUVA_<SERVICO>_MEMORY`) e `ulimits.nofile`. O teste
+Todo contêiner (aplicações, `postgres`, `traefik` e `mailpit`) roda com raiz somente leitura,
+`/run` e `/tmp` em tmpfs, sem capacidades (`cap_drop: ALL`, sem `cap_add`), `no-new-privileges`,
+`healthcheck`, limites de CPU e memória (`NUVA_<SERVICO>_CPUS` e `NUVA_<SERVICO>_MEMORY`) e
+`ulimits.nofile` (65536 no `postgres`, no `traefik` e nas APIs; 4096 nos demais). O teste
 `scripts/compose.test.mjs` confere isso lendo o `docker compose config`.
+
+O `postgres` roda como o usuário `postgres` da imagem, não como root: assim a entrada da imagem
+oficial não precisa de `chown` nem de troca de usuário. Um volume `postgres-data` criado antes
+dessa mudança continua valendo (os dados já pertencem a esse usuário).
 
 `/readyz` e `/metrics` não passam pelo proxy. Para consultá-los:
 
@@ -67,6 +72,11 @@ Cada `apps/<app>/Dockerfile` usa a raiz do repositório como contexto e tem trê
   rotas da SPA. Na subida, `proxy/nginx/40-nuva-config.sh` gera `/config.json` com os endereços
   públicos, a moeda e o idioma, a partir das variáveis do contêiner; trocar `NUVA_ADMIN_HOST` e
   subir de novo não refaz a imagem.
+- Sites: o `index.html` sai com `Content-Security-Policy` sem `unsafe-inline`. No build,
+  `proxy/nginx/csp.mjs` lê o `dist/index.html` e grava `/etc/nginx/nuva-csp.conf` com o hash do
+  script inline do tema; a política só aceita a própria origem (API, SSE, imagens, fontes,
+  estilos) e `data:` em imagens. O servidor de desenvolvimento do Vite não envia esse cabeçalho:
+  para conferir a política, use a imagem (`pnpm dev:up`).
 - `--build-arg NUVA_VERSION=X.Y.Z` grava a versão da release no `package.json` do serviço dentro
   da imagem; é ela que aparece em `/api/v1/meta`. Sem o argumento, vale a versão do repositório.
 
