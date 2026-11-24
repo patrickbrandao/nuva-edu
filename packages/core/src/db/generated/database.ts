@@ -23,6 +23,24 @@ export type JsonValue = JsonArray | JsonObject | JsonPrimitive;
 
 export type Timestamp = ColumnType<Date, Date | string, Date | string>;
 
+export interface Jobs {
+  attempts: Generated<number>;
+  createdAt: Generated<Timestamp>;
+  finishedAt: Timestamp | null;
+  heartbeatAt: Timestamp | null;
+  id: Generated<string>;
+  lastError: string | null;
+  lockedAt: Timestamp | null;
+  lockedBy: string | null;
+  maxAttempts: Generated<number>;
+  payload: Generated<Json>;
+  priority: Generated<number>;
+  runAt: Generated<Timestamp>;
+  status: Generated<string>;
+  type: string;
+  uniqueKey: string | null;
+}
+
 export interface Settings {
   createdAt: Generated<Timestamp>;
   id: Generated<string>;
@@ -32,5 +50,6 @@ export interface Settings {
 }
 
 export interface DB {
+  jobs: Jobs;
   settings: Settings;
 }

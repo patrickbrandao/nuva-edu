@@ -16,6 +16,7 @@ Detalhe das decisões em `specs/decisions/`.
 - `packages/api-client` (`@nuva-edu/api-client`): clientes tipados da admin-api e da classroom-api gerados dos contratos, erro problem+json (`ApiError`), fluxo SSE tipado e verificação de gerado desatualizado.
 - `packages/core` (`@nuva-edu/core`): configuração validada por variável de ambiente, conexão Kysely com tipos gerados do banco, logger JSON com máscara de campos proibidos e erro de domínio em problem+json.
 - Migration 0002: tabela `jobs` da fila (spec 005) com índice parcial de consumo para `SKIP LOCKED`, `unique_key` única entre tarefas ativas e gatilho de `NOTIFY nuva_jobs`.
+- `@nuva-edu/core`: fila de tarefas sobre `jobs` (`enqueue`, `enqueueRecurring`, claim com `SKIP LOCKED`, batimento, nova tentativa com espera crescente, tarefa presa, reenfileirar, contagens), registro tipado de tipos e escuta do `NOTIFY nuva_jobs` com reconexão.
 - `pnpm verify:quick` e `pnpm verify:full` (`scripts/verify.mjs`): lint, tipos e testes só do que mudou no rápido; suíte inteira com Postgres isolado por Testcontainers no completo; `scripts/test-db.mjs` como setup global do banco dos testes (`NUVA_TEST_DB=local`).
 - `apps/admin` (`@nuva-edu/admin`): esqueleto do site admin com casca `AdminShell`, menu lateral da spec 006, tema Sistema/Claro/Escuro, traduções pt-BR (i18next), painel com os dados de `/api/v1/meta`, estrutura da tela de login e rodapé com o link "Código-fonte".
 
