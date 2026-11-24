@@ -49,6 +49,9 @@ describe('migrations reais', () => {
       'função jobs_notify',
       'índice jobs_unique_key_idx',
       'sequência user_event_id_seq',
+      'tabela images',
+      'tabela image_variants',
+      'índice images_created_at_idx',
     ]) {
       assert.ok(full.includes(item), item);
     }
@@ -649,5 +652,238 @@ describe('migrations reais', () => {
     const ids = (await Promise.all([take(db.client), take(other)])).flat();
     assert.equal(new Set(ids).size, ids.length);
     assert.ok(ids.every((id) => id > d));
+  });
+
+  const owner = '0192f0c1-0000-7000-8000-000000000001';
+
+  async function insertImage(purpose = 'avatar', width = 800, height = 600): Promise<string> {
+    const { rows } = await db.client.query<{ id: string }>(
+      `INSERT INTO images (owner_user_id, purpose, original_width, original_height)
+       VALUES ($1, $2, $3, $4) RETURNING id`,
+      [owner, purpose, width, height],
+    );
+    return rows[0]?.id ?? '';
+  }
+
+  /** Variante com `size` bytes; bytes e sha256 coerentes com data, salvo o que vier em `override`. */
+  function variantSql(
+    override: Partial<Record<'width' | 'height' | 'bytes' | 'sha256', string>> = {},
+  ) {
+    const data = `decode(repeat('ab', $2::integer), 'hex')`;
+    return `INSERT INTO image_variants (image_id, width, height, bytes, sha256, data)
+      VALUES ($1, ${override.width ?? '256'}, ${override.height ?? '256'},
+              ${override.bytes ?? '$2'}, ${override.sha256 ?? `encode(sha256(${data}), 'hex')`},
+              ${data})`;
+  }
+
+  test('0004: images e image_variants têm as colunas da spec 029', async () => {
+    const columnsOf = async (table: string) =>
+      (
+        await db.client.query(
+          `SELECT column_name, data_type, is_nullable FROM information_schema.columns
+            WHERE table_schema = 'public' AND table_name = $1 ORDER BY ordinal_position`,
+          [table],
+        )
+      ).rows;
+    const tz = 'timestamp with time zone';
+    assert.deepEqual(await columnsOf('images'), [
+      { column_name: 'id', data_type: 'uuid', is_nullable: 'NO' },
+      { column_name: 'owner_user_id', data_type: 'uuid', is_nullable: 'NO' },
+      { column_name: 'purpose', data_type: 'text', is_nullable: 'NO' },
+      { column_name: 'original_width', data_type: 'integer', is_nullable: 'NO' },
+      { column_name: 'original_height', data_type: 'integer', is_nullable: 'NO' },
+      { column_name: 'created_at', data_type: tz, is_nullable: 'NO' },
+      { column_name: 'hidden_at', data_type: tz, is_nullable: 'YES' },
+    ]);
+    assert.deepEqual(await columnsOf('image_variants'), [
+      { column_name: 'image_id', data_type: 'uuid', is_nullable: 'NO' },
+      { column_name: 'width', data_type: 'integer', is_nullable: 'NO' },
+      { column_name: 'height', data_type: 'integer', is_nullable: 'NO' },
+      { column_name: 'bytes', data_type: 'integer', is_nullable: 'NO' },
+      { column_name: 'sha256', data_type: 'text', is_nullable: 'NO' },
+      { column_name: 'data', data_type: 'bytea', is_nullable: 'NO' },
+    ]);
+
+    const id = await insertImage();
+    const { rows } = await db.client.query(
+      `SELECT uuid_extract_version(id) AS version, hidden_at, created_at <= now() AS past
+         FROM images WHERE id = $1`,
+      [id],
+    );
+    assert.deepEqual(rows, [{ version: 7, hidden_at: null, past: true }]);
+    await db.client.query('DELETE FROM images');
+  });
+
+  test('0004: data usa armazenamento EXTERNAL e é guardada sem compressão', async () => {
+    const { rows } = await db.client.query(
+      `SELECT attstorage FROM pg_attribute
+        WHERE attrelid = 'image_variants'::regclass AND attname = 'data'`,
+    );
+    assert.deepEqual(rows, [{ attstorage: 'e' }]);
+
+    // Conteúdo repetitivo comprimiria muito; com EXTERNAL o tamanho guardado é o tamanho real.
+    const id = await insertImage();
+    await db.client.query(variantSql(), [id, 300000]);
+    const { rows: stored } = await db.client.query(
+      `SELECT pg_column_size(data) >= 300000 AS raw, pg_column_compression(data) AS method
+         FROM image_variants WHERE image_id = $1`,
+      [id],
+    );
+    assert.deepEqual(stored, [{ raw: true, method: null }]);
+    await db.client.query('DELETE FROM images');
+  });
+
+  test('0004: images aceita as sete finalidades e recusa finalidade e dimensões inválidas', async () => {
+    for (const purpose of [
+      'avatar',
+      'profile_cover',
+      'product_cover',
+      'event_cover',
+      'case_image',
+      'content_image',
+      'school_logo',
+    ]) {
+      await insertImage(purpose);
+    }
+    // Limites exatos da RNF-02: 8000 px no maior lado e 40 megapixels.
+    await insertImage('avatar', 8000, 5000);
+    await insertImage('avatar', 1, 8000);
+
+    const cases: [string, string, number, number, string][] = [
+      ['images_purpose_valid', 'gif', 10, 10, 'finalidade desconhecida'],
+      ['images_purpose_valid', 'Avatar', 10, 10, 'finalidade com maiúscula'],
+      ['images_original_width_range', 'avatar', 0, 10, 'largura zero'],
+      ['images_original_width_range', 'avatar', 8001, 10, 'largura acima de 8000'],
+      ['images_original_height_range', 'avatar', 10, -1, 'altura negativa'],
+      ['images_original_height_range', 'avatar', 10, 8001, 'altura acima de 8000'],
+      ['images_original_pixels_range', 'avatar', 8000, 5001, 'acima de 40 megapixels'],
+    ];
+    for (const [constraint, purpose, width, height, label] of cases) {
+      await assert.rejects(
+        insertImage(purpose, width, height),
+        { code: '23514', constraint },
+        label,
+      );
+    }
+    const valid: Record<string, string> = {
+      owner_user_id: `'${owner}'`,
+      purpose: `'avatar'`,
+      original_width: '10',
+      original_height: '10',
+    };
+    for (const column of Object.keys(valid)) {
+      const values = Object.keys(valid).map((key) => (key === column ? 'NULL' : valid[key]));
+      await assert.rejects(
+        db.client.query(
+          `INSERT INTO images (${Object.keys(valid).join(', ')}) VALUES (${values.join(', ')})`,
+        ),
+        { code: '23502' },
+        `coluna ${column}`,
+      );
+    }
+    await db.client.query('DELETE FROM images');
+  });
+
+  test('0004: image_variants recusa largura, altura, tamanho e hash inválidos', async () => {
+    const id = await insertImage();
+    for (const width of ['64', '256', '480', '512', '1280', '1600']) {
+      await db.client.query(variantSql({ width, height: '1' }), [id, 10]);
+    }
+    await db.client.query('DELETE FROM image_variants');
+    // Limite exato da RNF-03: 400 KB.
+    await db.client.query(variantSql({ height: '1600' }), [id, 409600]);
+    await db.client.query('DELETE FROM image_variants');
+
+    const cases: [string, Parameters<typeof variantSql>[0], number, string][] = [
+      ['image_variants_width_valid', { width: '128' }, 10, 'largura fora da tabela'],
+      ['image_variants_width_valid', { width: '2000' }, 10, 'largura acima de 1600'],
+      ['image_variants_height_range', { height: '0' }, 10, 'altura zero'],
+      ['image_variants_height_range', { height: '1601' }, 10, 'altura acima de 1600'],
+      ['image_variants_bytes_range', {}, 409601, 'acima de 400 KB'],
+      ['image_variants_bytes_range', {}, 0, 'vazia'],
+      ['image_variants_bytes_matches_data', { bytes: '11' }, 10, 'bytes diferente de data'],
+      ['image_variants_sha256_format', { sha256: `repeat('A', 64)` }, 10, 'hash maiúsculo'],
+      ['image_variants_sha256_format', { sha256: `repeat('a', 63)` }, 10, 'hash curto'],
+      ['image_variants_sha256_format', { sha256: `'x'` }, 10, 'hash não hexadecimal'],
+    ];
+    for (const [constraint, override, size, label] of cases) {
+      await assert.rejects(
+        db.client.query(variantSql(override), [id, size]),
+        { code: '23514', constraint },
+        label,
+      );
+    }
+    for (const column of ['width', 'height', 'bytes', 'sha256']) {
+      await assert.rejects(
+        db.client.query(variantSql({ [column]: 'NULL' }), [id, 10]),
+        { code: '23502' },
+        `coluna ${column}`,
+      );
+    }
+    await assert.rejects(
+      db.client.query(
+        `INSERT INTO image_variants (image_id, width, height, bytes, sha256, data)
+         VALUES ($1, 64, 64, 1, repeat('a', 64), NULL)`,
+        [id],
+      ),
+      { code: '23502' },
+      'coluna data',
+    );
+    await db.client.query('DELETE FROM images');
+  });
+
+  test('0004: uma variante por largura, imagem obrigatória e apagada junto com a imagem', async () => {
+    const id = await insertImage();
+    const other = await insertImage();
+    await db.client.query(variantSql({ width: '64' }), [id, 10]);
+    await db.client.query(variantSql({ width: '256' }), [id, 10]);
+    await db.client.query(variantSql({ width: '64' }), [other, 10]);
+    await assert.rejects(db.client.query(variantSql({ width: '64' }), [id, 20]), {
+      code: '23505',
+      constraint: 'image_variants_pkey',
+    });
+    await assert.rejects(
+      db.client.query(variantSql(), ['0192f0c1-0000-7000-8000-0000000000ff', 10]),
+      { code: '23503', constraint: 'image_variants_image_id_fkey' },
+    );
+
+    await db.client.query('DELETE FROM images WHERE id = $1', [id]);
+    const { rows } = await db.client.query(
+      'SELECT image_id, width FROM image_variants ORDER BY width',
+    );
+    assert.deepEqual(rows, [{ image_id: other, width: 64 }]);
+    await db.client.query('DELETE FROM images');
+  });
+
+  test('0004: índices do expurgo por created_at e dos envios por usuário', async () => {
+    const { rows } = await db.client.query<{ indexname: string; indexdef: string }>(
+      `SELECT indexname, indexdef FROM pg_indexes
+        WHERE schemaname = 'public' AND tablename IN ('images', 'image_variants')
+        ORDER BY indexname`,
+    );
+    const defs = Object.fromEntries(rows.map((row) => [row.indexname, row.indexdef]));
+    assert.deepEqual(Object.keys(defs), [
+      'image_variants_pkey',
+      'images_created_at_idx',
+      'images_owner_created_idx',
+      'images_pkey',
+    ]);
+    assert.match(defs.images_created_at_idx ?? '', /^CREATE INDEX .*\(created_at\)$/);
+    assert.match(defs.images_owner_created_idx ?? '', /\(owner_user_id, created_at\)$/);
+    assert.match(defs.image_variants_pkey ?? '', /\(image_id, width\)$/);
+
+    // A varredura do expurgo usa o índice, mesmo com a tabela cheia de imagens recentes.
+    await db.client.query(
+      `INSERT INTO images (owner_user_id, purpose, original_width, original_height, created_at)
+       SELECT $1, 'avatar', 10, 10, now() - make_interval(secs => g)
+         FROM generate_series(1, 5000) AS g`,
+      [owner],
+    );
+    await db.client.query('ANALYZE images');
+    const { rows: plan } = await db.client.query<{ 'QUERY PLAN': string }>(
+      `EXPLAIN SELECT id FROM images WHERE created_at < now() - interval '24 hours'`,
+    );
+    assert.match(plan.map((row) => row['QUERY PLAN']).join('\n'), /images_created_at_idx/);
+    await db.client.query('DELETE FROM images');
   });
 });
