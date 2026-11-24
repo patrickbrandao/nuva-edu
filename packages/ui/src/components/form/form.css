@@ -1,0 +1,146 @@
+/*
+ * Campo de senha e seletor de imagem. Tokens --adm-* (dentro de .minui-adm). Sem `style` no
+ * HTML (CSP style-src 'self').
+ */
+
+/* =================== Campo de senha =================== */
+.minui-password__box {
+  padding-right: 3px;
+}
+
+.minui-password__toggle {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  background: none;
+  color: var(--adm-ink-3);
+  cursor: pointer;
+}
+
+.minui-password__toggle:hover {
+  background: var(--adm-hover);
+  color: var(--adm-ink);
+}
+
+.minui-password__toggle:focus-visible {
+  outline: 2px solid var(--adm-focus);
+  outline-offset: 0;
+}
+
+.minui-password__toggle:disabled {
+  opacity: 0.45;
+  pointer-events: none;
+}
+
+.minui-password__toggle > svg {
+  width: 15px;
+  height: 15px;
+}
+
+.minui-password__notes {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.minui-password__count {
+  flex: none;
+  color: var(--adm-ink-3);
+  font-size: 12.5px;
+  font-variant-numeric: tabular-nums;
+}
+
+.minui-password__count[data-valid="true"] {
+  color: var(--adm-green);
+}
+
+/* =================== Seletor de imagem =================== */
+.minui-image-picker {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+  font-size: 13px;
+}
+
+.minui-image-picker__row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 14px;
+}
+
+/* corte quadrado central: a moldura é quadrada e a imagem a cobre a partir do centro */
+.minui-image-picker__frame {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 72px;
+  aspect-ratio: 1;
+  overflow: hidden;
+  border: 1px solid var(--adm-line);
+  border-radius: var(--adm-r-card);
+  background: var(--adm-sunken);
+  color: var(--adm-ink-3);
+}
+
+.minui-image-picker__frame[data-shape="round"] {
+  border-radius: 50%;
+}
+
+.minui-image-picker__img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center;
+}
+
+.minui-image-picker__empty {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+}
+
+.minui-image-picker__side {
+  display: flex;
+  flex: 1 1 200px;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.minui-image-picker__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.minui-image-picker__error {
+  color: var(--adm-red);
+  font-size: 12.5px;
+}
+
+.minui-image-picker--error .minui-image-picker__frame {
+  border-color: var(--adm-red);
+}
+
+fieldset.minui-image-picker {
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.minui-image-picker__legend {
+  padding: 0;
+  margin-bottom: 8px;
+}

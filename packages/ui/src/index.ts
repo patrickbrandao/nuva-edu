@@ -190,6 +190,20 @@ export {
   relativeLuminance,
 } from './accent/accent';
 export { ICON_PATHS } from './components/core/iconPaths.js';
+// avisos e diálogos: Dialog, ConfirmDialog, Toast com provedor, Alert (TypeScript)
+export type { AlertProps, AlertTone } from './components/feedback/Alert';
+export { Alert } from './components/feedback/Alert';
+export type { ConfirmDialogProps, DialogProps } from './components/feedback/Dialog';
+export { ConfirmDialog, Dialog } from './components/feedback/Dialog';
+export type {
+  ToastAction,
+  ToastApi,
+  ToastOptions,
+  ToastProps,
+  ToastProviderProps,
+  ToastTone,
+} from './components/feedback/Toast';
+export { Toast, ToastProvider, useToast } from './components/feedback/Toast';
 // fluxo: título de página, link de texto, estados de carregando e erro (TypeScript)
 export type {
   ErrorStateProps,
@@ -198,6 +212,20 @@ export type {
   TextLinkProps,
 } from './components/flow/flow';
 export { ErrorState, LoadingState, PageTitle, TextLink } from './components/flow/flow';
+// formulário: campo de senha e seletor de imagem (TypeScript)
+export type { ImagePickerProps, ImageRejection } from './components/form/ImagePicker';
+export {
+  checkImageFile,
+  IMAGE_MAX_BYTES,
+  IMAGE_TYPES,
+  ImagePicker,
+} from './components/form/ImagePicker';
+export type { PasswordCounterInfo, PasswordInputProps } from './components/form/PasswordInput';
+export {
+  PASSWORD_MAX_LENGTH,
+  PASSWORD_MIN_LENGTH,
+  PasswordInput,
+} from './components/form/PasswordInput';
 // link do roteador (TypeScript)
 export type {
   LinkComponent,
@@ -221,7 +249,6 @@ export { ClassroomShell, ShellFooter } from './components/shell/ClassroomShell';
 export { useMediaQuery, useNarrowViewport } from './components/shell/drawer';
 // utilitários
 export { cx, firstName, hueOf } from './lib/util.js';
-
 // tema (TypeScript)
 export type { ThemeBootPlugin } from './theme/boot';
 export { themeBootPlugin } from './theme/boot';

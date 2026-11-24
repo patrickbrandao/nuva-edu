@@ -17,6 +17,29 @@ import { AdminButton, ThemeSwitch, useTheme } from '@nuva-edu/ui';
   configuração consegue importar; também exporta `THEME_BOOT_SCRIPT` e `THEME_STORAGE_KEY`).
 - Os textos padrão dos componentes são exemplos; os sites passam os das suas traduções pelas props.
 
+## Avisos, diálogos e formulário
+
+Em TypeScript, com tipos de propriedade e sem texto fixo (tudo por propriedade; um teste confere):
+
+- `Dialog`: modal em portal com o escopo `.minui-adm`; foco preso (Tab dá a volta), `Esc` fecha
+  (só o do topo, se houver dois), foco volta a quem abriu, página atrás não rola.
+  `dismissible={false}` enquanto algo está em andamento.
+- `ConfirmDialog`: `alertdialog` com o nome do item em destaque, foco inicial em "cancelar",
+  botão vermelho (`minui-adm-btn--danger`) e, com `typeToConfirmLabel`, campo em que a pessoa
+  digita o nome para liberar a ação.
+- `ToastProvider` + `useToast()`: regiões vivas sempre montadas (`status` educada; `alert` para
+  erro). Erro fica até ser dispensado; os outros somem após `duration`, com o tempo parado sob
+  o ponteiro ou o foco. `Toast` solto é só a caixa.
+- `Alert`: aviso em linha ou faixa (`layout="banner"`, presa ao topo); `alert` para erro e
+  `status` para o resto (`role={null}` tira o papel).
+- `PasswordInput`: `autoComplete` obrigatório (`current-password` ou `new-password`), limites
+  8 a 128 (spec 007), botão de mostrar/ocultar com nome acessível, contador opcional por função.
+- `ImagePicker`: JPEG, PNG ou WebP até 5 MB (`IMAGE_MAX_BYTES`, `checkImageFile`), recusa no
+  navegador com a mensagem recebida, prévia `blob:` com corte quadrado central em CSS. A CSP
+  do site precisa de `blob:` em `img-src`.
+
+Os testes rodam o axe-core (`src/test/axe.ts`) sobre cada componente.
+
 ## Cor de destaque da escola
 
 A escola escolhe uma cor `#RRGGBB` (spec 006, RF-06) e o site a grava em `--minui-accent` no

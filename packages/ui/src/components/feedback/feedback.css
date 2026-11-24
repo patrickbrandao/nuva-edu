@@ -1,0 +1,299 @@
+/*
+ * Diálogo, avisos passageiros (toast) e aviso fixo (Alert). Tokens --adm-* (valem dentro de
+ * .minui-adm; o diálogo e a região dos avisos montam o próprio escopo no portal). Sem
+ * `style` no HTML: tudo aqui, por classe e atributo (CSP style-src 'self').
+ */
+
+/* página atrás do diálogo não rola */
+.minui-scroll-locked {
+  overflow: hidden;
+}
+
+/* botão de ação destrutiva (ConfirmDialog) */
+.minui-adm-btn--danger,
+.minui-adm-btn--danger:hover {
+  border-color: transparent;
+  background: var(--adm-red);
+  /* branco sobre o vermelho do claro (4,8:1); quase preto sobre o do escuro (6:1) */
+  color: light-dark(#ffffff, #1a0a06);
+}
+
+.minui-adm-btn--danger:hover {
+  background: color-mix(in srgb, var(--adm-red), light-dark(#000000, #ffffff) 14%);
+}
+
+.minui-adm-btn--danger > svg {
+  color: inherit;
+}
+
+.minui-adm-btn:focus-visible {
+  outline: 2px solid var(--adm-focus);
+  outline-offset: 2px;
+}
+
+/* =================== Diálogo =================== */
+.minui-dialog-layer {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: grid;
+  place-items: center;
+  padding: 16px;
+  overflow-y: auto;
+}
+
+.minui-dialog-backdrop {
+  position: fixed;
+  inset: 0;
+  background: light-dark(rgba(15, 15, 20, 0.42), rgba(0, 0, 0, 0.62));
+}
+
+.minui-dialog {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: min(100%, 520px);
+  max-height: calc(100dvh - 32px);
+  padding: 18px 20px;
+  overflow-y: auto;
+  border: 1px solid var(--adm-line);
+  border-radius: var(--adm-r-panel);
+  background: var(--adm-pop);
+  box-shadow: var(--adm-shadow-pop);
+  color: var(--adm-ink);
+}
+
+.minui-dialog[data-size="sm"] {
+  width: min(100%, 420px);
+}
+
+.minui-dialog[data-size="lg"] {
+  width: min(100%, 720px);
+}
+
+.minui-dialog:focus {
+  outline: none;
+}
+
+.minui-dialog:focus-visible {
+  outline: 2px solid var(--adm-focus);
+  outline-offset: 2px;
+}
+
+.minui-dialog__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.minui-dialog__title {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+  letter-spacing: -0.015em;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
+.minui-dialog__desc {
+  margin: 0;
+  color: var(--adm-ink-2);
+  font-size: 13.5px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.minui-dialog__item {
+  display: block;
+  margin-bottom: 2px;
+  color: var(--adm-ink);
+  font-weight: 600;
+}
+
+.minui-dialog__body {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+}
+
+.minui-dialog__foot {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+@media (max-width: 480px) {
+  .minui-dialog__foot {
+    flex-direction: column-reverse;
+  }
+
+  .minui-dialog__foot > .minui-adm-btn {
+    width: 100%;
+  }
+}
+
+/* =================== Tons (aviso e toast) =================== */
+.minui-toast,
+.minui-alert {
+  --fb-tone: var(--adm-blue);
+}
+
+:is(.minui-toast, .minui-alert)[data-tone="success"] {
+  --fb-tone: var(--adm-green);
+}
+
+:is(.minui-toast, .minui-alert)[data-tone="warning"] {
+  --fb-tone: var(--adm-amber);
+}
+
+:is(.minui-toast, .minui-alert)[data-tone="error"] {
+  --fb-tone: var(--adm-red);
+}
+
+/* =================== Toast =================== */
+.minui-toast-region {
+  position: fixed;
+  right: 16px;
+  bottom: 16px;
+  z-index: 1100;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: min(calc(100vw - 32px), 380px);
+  pointer-events: none;
+}
+
+.minui-toast-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.minui-toast-list:empty {
+  display: none;
+}
+
+.minui-toast-item {
+  pointer-events: auto;
+  animation: minui-toast-in 0.16s ease-out;
+}
+
+.minui-toast {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 10px 10px 10px 12px;
+  border: 1px solid var(--adm-line);
+  border-left: 3px solid var(--fb-tone);
+  border-radius: var(--adm-r-card);
+  background: var(--adm-pop);
+  box-shadow: var(--adm-shadow-pop);
+  color: var(--adm-ink);
+  font-size: 13.5px;
+  line-height: 1.45;
+}
+
+.minui-toast__icon,
+.minui-alert__icon {
+  display: inline-flex;
+  flex: none;
+  padding-top: 1px;
+  color: var(--fb-tone);
+}
+
+.minui-toast__icon > svg,
+.minui-alert__icon > svg {
+  width: 16px;
+  height: 16px;
+}
+
+.minui-toast__text,
+.minui-alert__text {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.minui-toast__title,
+.minui-alert__title {
+  font-weight: 600;
+}
+
+.minui-toast__message {
+  color: var(--adm-ink-2);
+}
+
+@keyframes minui-toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+}
+
+@media (max-width: 480px) {
+  .minui-toast-region {
+    right: 16px;
+    left: 16px;
+    width: auto;
+  }
+}
+
+/* =================== Aviso fixo =================== */
+.minui-alert {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 10px 12px;
+  padding: 10px 12px;
+  border: 1px solid color-mix(in srgb, var(--fb-tone), transparent 60%);
+  border-radius: var(--adm-r-card);
+  background: color-mix(in srgb, var(--fb-tone), var(--adm-card) 90%);
+  color: var(--adm-ink);
+  font-size: 13.5px;
+  line-height: 1.45;
+}
+
+.minui-alert[data-layout="banner"] {
+  position: sticky;
+  top: 0;
+  z-index: 15;
+  border-width: 0 0 1px;
+  border-radius: 0;
+  padding-inline: var(--adm-gutter, 16px);
+}
+
+.minui-alert__body {
+  color: var(--adm-ink-2);
+}
+
+.minui-alert__body > p {
+  margin: 0;
+}
+
+.minui-alert__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+@media (max-width: 560px) {
+  .minui-alert__actions {
+    flex-basis: 100%;
+    padding-left: 26px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .minui-toast-item {
+    animation: none;
+  }
+}

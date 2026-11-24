@@ -22,6 +22,14 @@ describe('ponto de entrada do pacote', () => {
       'PricingPage',
       'ThemeSwitch',
       'useTheme',
+      'Dialog',
+      'ConfirmDialog',
+      'Toast',
+      'ToastProvider',
+      'useToast',
+      'PasswordInput',
+      'ImagePicker',
+      'Alert',
     ];
     for (const name of expected) expect(ui, name).toHaveProperty(name);
   });
