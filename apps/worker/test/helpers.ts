@@ -73,6 +73,7 @@ export function handlersWith(overrides: Partial<JobHandlers> = {}): JobHandlers 
   return {
     'example.echo': async () => {},
     'retention.purge': async () => {},
+    'email.send': async () => {},
     ...overrides,
   };
 }
