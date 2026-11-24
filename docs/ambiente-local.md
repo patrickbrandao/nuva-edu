@@ -66,7 +66,7 @@ O `docker-compose.yml` da raiz só inclui o compose de cada sistema.
 | `migrate` | `apps/admin-api/docker-compose.yml` | interna | Imagem da admin-api com `node /app/database/postgres/src/cli.ts up`; roda até o fim antes das APIs e do worker |
 | `admin-api`, `classroom-api` | `apps/<app>/docker-compose.yml` | interna e do proxy | Porta 3000 |
 | `worker` | `apps/worker/docker-compose.yml` | interna | Porta 3000 só para saúde e métricas |
-| `admin`, `classroom` | `apps/<app>/docker-compose.yml` | do proxy | Nginx sem privilégios na porta 8080 |
+| `admin`, `classroom` | `apps/<app>/docker-compose.yml` | do proxy | lighttpd sem privilégios (usuário 101) na porta 8080 |
 | `traefik`, `mailpit` | `proxy/traefik/`, `mail/mailpit/` | do proxy; interna | Perfis opcionais |
 
 Todo contêiner (aplicações, `postgres`, `traefik` e `mailpit`) roda com raiz somente leitura,
@@ -93,9 +93,17 @@ Cada `apps/<app>/Dockerfile` usa a raiz do repositório como contexto e tem trê
 - APIs e worker rodam TypeScript direto no Node 26, sem compilação. A imagem mantém a árvore do
   workspace (`/app/apps`, `/app/packages`, `/app/database/postgres`) porque o Node só executa
   `.ts` fora de `node_modules`.
-- Sites: `vite build` e Nginx (`proxy/nginx/nginx.conf`), com retorno ao `index.html` para as
-  rotas da SPA. Na subida, `proxy/nginx/40-nuva-config.sh` gera `/config.json` só com `app`
-  (`admin` ou `classroom`), `adminUrl` e `classroomUrl`, a partir de `NUVA_APP` (fixada na
+- Sites: `vite build` e, no estágio final, `alpine` com o `lighttpd` do próprio Alpine
+  (`proxy/lighttpd/lighttpd.conf`), rodando como o usuário `nuva` (UID e GID 101, o dono do
+  tmpfs `/run` nos composes) na porta 8080. Rotas da SPA caem no `index.html`; `/api/`, `/mcp`,
+  `/healthz`, `/readyz` e `/metrics`, a pasta `/assets/` e arquivo de `/assets/` que não existe
+  respondem 404. Arquivos de `/assets/` saem com cache longo e imutável, o `index.html` com
+  `Cache-Control: no-cache`, e texto acima de 1 KiB vai em gzip. O build confere a configuração
+  com `lighttpd -tt`.
+- Sites: a entrada do contêiner é `proxy/lighttpd/entrypoint.sh`, que gera
+  `/run/nuva/config.json` (tmpfs; a raiz do site tem um atalho para ele) e troca o processo
+  pelo lighttpd, que fica como PID 1 e recebe os sinais do Docker. O `/config.json` traz só
+  `app` (`admin` ou `classroom`), `adminUrl` e `classroomUrl`, a partir de `NUVA_APP` (fixada na
   imagem), `NUVA_PUBLIC_SCHEME`, `NUVA_ADMIN_HOST`, `NUVA_CLASSROOM_HOST` e `NUVA_PUBLIC_PORT`; a
   porta some da URL quando está vazia ou é a padrão do esquema. Moeda, idioma e versão vêm do
   `GET /api/v1/meta`. O arquivo é público e sai com `Cache-Control: no-store`; os sites não
@@ -107,10 +115,13 @@ Cada `apps/<app>/Dockerfile` usa a raiz do repositório como contexto e tem trê
   arquivos por `env_file`. Trocar `NUVA_ADMIN_HOST` e subir de novo não refaz a imagem; mudança no
   script, porém, só vale depois de reconstruir as imagens dos dois sites (`pnpm dev:up`).
 - Sites: o `index.html` sai com `Content-Security-Policy` sem `unsafe-inline`. No build,
-  `proxy/nginx/csp.mjs` lê o `dist/index.html` e grava `/etc/nginx/nuva-csp.conf` com o hash do
-  script inline do tema; a política só aceita a própria origem (API, SSE, imagens, fontes,
-  estilos) e `data:` em imagens. O servidor de desenvolvimento do Vite não envia esse cabeçalho:
-  para conferir a política, use a imagem (`pnpm dev:up`).
+  `proxy/lighttpd/csp.mjs` lê o `dist/index.html` e grava `/etc/lighttpd/nuva-csp.conf` com o
+  hash do script inline do tema; a política só aceita a própria origem (API, SSE, imagens,
+  fontes, estilos) e `data:` em imagens. O servidor de desenvolvimento do Vite não envia esse
+  cabeçalho: para conferir a política, use a imagem (`pnpm dev:up`).
+- Sites: para conferir a configuração sem subir o ambiente,
+  `NUVA_TEST_DOCKER=1 node --test scripts/lighttpd.test.mjs` roda o `lighttpd -tt` num contêiner
+  descartável.
 - `--build-arg NUVA_VERSION=X.Y.Z` grava a versão da release no `package.json` do serviço dentro
   da imagem; é ela que aparece em `/api/v1/meta`. Sem o argumento, vale a versão do repositório.
 

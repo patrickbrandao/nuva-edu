@@ -1,7 +1,7 @@
 #!/usr/bin/env node
-// Gera o trecho do Nginx com a Content-Security-Policy de um site (specs 031 e 033).
+// Gera o trecho do lighttpd com a Content-Security-Policy de um site (specs 031 e 033).
 //
-//   node proxy/nginx/csp.mjs apps/admin/dist/index.html > nuva-csp.conf
+//   node proxy/lighttpd/csp.mjs apps/admin/dist/index.html > nuva-csp.conf
 //
 // Roda no build da imagem, sobre o `index.html` que o Vite acabou de gerar: cada <script> inline
 // (hoje, o do tema: `THEME_BOOT_SCRIPT` de @nuva-edu/ui) entra na política pelo seu hash, e por
@@ -55,16 +55,19 @@ export function buildPolicy(html) {
   ).join('; ');
 }
 
-/** Arquivo incluído pelo `nginx.conf` na rota que entrega o `index.html`. */
-export function nginxSnippet(html) {
+/**
+ * Arquivo incluído pelo `lighttpd.conf`: define `var.nuva_csp`, usada no bloco de cabeçalhos da
+ * rota que entrega o `index.html`.
+ */
+export function lighttpdSnippet(html) {
   const policy = buildPolicy(html);
-  // O valor vai entre aspas duplas na configuração do Nginx.
-  if (/["\\$\n]/.test(policy)) {
-    throw new Error(`Política com caractere que o Nginx interpretaria: ${policy}`);
+  // O valor vai entre aspas duplas na configuração do lighttpd, onde a barra invertida escapa.
+  if (/["\\\n\r]/.test(policy)) {
+    throw new Error(`Política com caractere que o lighttpd interpretaria: ${policy}`);
   }
   return [
-    '# Gerado no build da imagem por proxy/nginx/csp.mjs a partir do index.html. Não edite.',
-    `add_header Content-Security-Policy "${policy}" always;`,
+    '# Gerado no build da imagem por proxy/lighttpd/csp.mjs a partir do index.html. Não edite.',
+    `var.nuva_csp = "${policy}"`,
     '',
   ].join('\n');
 }
@@ -72,8 +75,8 @@ export function nginxSnippet(html) {
 if (import.meta.main) {
   const [file] = process.argv.slice(2);
   if (!file) {
-    console.error('Uso: node proxy/nginx/csp.mjs <caminho do index.html>');
+    console.error('Uso: node proxy/lighttpd/csp.mjs <caminho do index.html>');
     process.exit(1);
   }
-  process.stdout.write(nginxSnippet(readFileSync(file, 'utf8')));
+  process.stdout.write(lighttpdSnippet(readFileSync(file, 'utf8')));
 }

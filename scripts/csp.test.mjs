@@ -1,4 +1,4 @@
-// Content-Security-Policy dos sites (specs 031 e 033): gerada por proxy/nginx/csp.mjs no build
+// Content-Security-Policy dos sites (specs 031 e 033): gerada por proxy/lighttpd/csp.mjs no build
 // da imagem, a partir do index.html que o Vite produziu.
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
@@ -8,7 +8,7 @@ import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { test } from 'node:test';
 import { THEME_BOOT_SCRIPT } from '../packages/ui/src/theme/boot.ts';
-import { buildPolicy, inlineScripts, nginxSnippet, scriptHash } from '../proxy/nginx/csp.mjs';
+import { buildPolicy, inlineScripts, lighttpdSnippet, scriptHash } from '../proxy/lighttpd/csp.mjs';
 
 const root = resolve(import.meta.dirname, '..');
 const read = (path) => readFileSync(resolve(root, path), 'utf8');
@@ -66,22 +66,24 @@ test('script trocado muda o hash; script repetido não duplica', () => {
   assert.match(buildPolicy('<script src="/a.js"></script>'), /script-src 'self';/);
 });
 
-test('o trecho do Nginx é um add_header numa linha, com aspas duplas por fora', () => {
-  const lines = nginxSnippet(html).trim().split('\n');
+test('o trecho do lighttpd define var.nuva_csp numa linha, com aspas duplas por fora', () => {
+  const lines = lighttpdSnippet(html).trim().split('\n');
   assert.match(lines[0], /^# Gerado no build/);
-  assert.equal(lines[1], `add_header Content-Security-Policy "${buildPolicy(html)}" always;`);
+  assert.equal(lines[1], `var.nuva_csp = "${buildPolicy(html)}"`);
   assert.equal(lines.length, 2);
+  // Nada na política fecha a string nem escapa dentro dela.
+  assert.doesNotMatch(buildPolicy(html), /["\\]/);
 });
 
 test('linha de comando: lê o index.html e escreve o trecho; sem arquivo, sai com 1', () => {
-  const script = resolve(root, 'proxy/nginx/csp.mjs');
+  const script = resolve(root, 'proxy/lighttpd/csp.mjs');
   const dir = mkdtempSync(join(tmpdir(), 'nuva-csp-'));
   try {
     const file = join(dir, 'index.html');
     writeFileSync(file, html);
     const ok = spawnSync(process.execPath, [script, file], { encoding: 'utf8' });
     assert.equal(ok.status, 0, ok.stderr);
-    assert.equal(ok.stdout, nginxSnippet(html));
+    assert.equal(ok.stdout, lighttpdSnippet(html));
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
@@ -90,23 +92,25 @@ test('linha de comando: lê o index.html e escreve o trecho; sem arquivo, sai co
   assert.match(missing.stderr, /Uso:/);
 });
 
-test('o Nginx inclui o arquivo gerado e as duas imagens o geram do dist', () => {
-  const conf = read('proxy/nginx/nginx.conf');
-  // Na rota que entrega o index.html, junto dos outros cabeçalhos dela.
-  const spa = conf.slice(conf.indexOf('location / {'));
-  assert.match(spa, /include \/etc\/nginx\/nuva-csp\.conf;/);
-  // Nenhum Content-Security-Policy escrito à mão: a única fonte é o arquivo gerado.
-  assert.doesNotMatch(conf, /add_header Content-Security-Policy/);
+test('o lighttpd inclui o arquivo gerado e as duas imagens o geram do dist', () => {
+  const conf = read('proxy/lighttpd/lighttpd.conf');
+  assert.match(conf, /^include "\/etc\/lighttpd\/nuva-csp\.conf"$/m);
+  // No bloco que entrega o index.html (o `else` final), junto dos outros cabeçalhos dele.
+  const spa = conf.slice(conf.lastIndexOf('\nelse {'));
+  assert.match(spa, /"Content-Security-Policy" => var\.nuva_csp\n/);
+  // Nenhuma política escrita à mão: a única fonte é o arquivo gerado.
+  assert.equal(conf.match(/Content-Security-Policy"/g).length, 1);
+  assert.doesNotMatch(conf, /default-src|script-src|sha256-/);
   for (const app of ['admin', 'classroom']) {
     const dockerfile = read(`apps/${app}/Dockerfile`);
     assert.ok(
       dockerfile.includes(
-        `node proxy/nginx/csp.mjs apps/${app}/dist/index.html > /app/nuva-csp.conf`,
+        `node proxy/lighttpd/csp.mjs apps/${app}/dist/index.html > /app/nuva-csp.conf`,
       ),
       `${app}: gera a política no build`,
     );
     assert.ok(
-      dockerfile.includes('COPY --from=build /app/nuva-csp.conf /etc/nginx/nuva-csp.conf'),
+      dockerfile.includes('COPY --from=build /app/nuva-csp.conf /etc/lighttpd/nuva-csp.conf'),
       `${app}: copia a política para a imagem final`,
     );
   }

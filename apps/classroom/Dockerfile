@@ -1,10 +1,10 @@
 # syntax=docker/dockerfile:1
-# Imagem do site classroom (spec 031): arquivos estáticos servidos por Nginx sem privilégios.
+# Imagem do site classroom (spec 031): arquivos estáticos servidos por lighttpd sem privilégios.
 # Contexto de build: a raiz do repositório.
 #   docker build -f apps/classroom/Dockerfile -t tmsoftbrasil/nuva-edu-classroom:local .
 
 ARG NODE_IMAGE=node:26-slim
-ARG NGINX_IMAGE=nginxinc/nginx-unprivileged:stable-alpine
+ARG ALPINE_IMAGE=alpine:3.24
 
 # 1. deps: só os manifestos, para o cache das dependências sobreviver a mudanças de código.
 FROM ${NODE_IMAGE} AS deps
@@ -26,26 +26,34 @@ COPY tsconfig.base.json ./
 COPY packages/ui packages/ui
 COPY packages/api-client packages/api-client
 COPY apps/classroom apps/classroom
-COPY proxy/nginx/csp.mjs proxy/nginx/csp.mjs
+COPY proxy/lighttpd/csp.mjs proxy/lighttpd/csp.mjs
 # A política de segurança de conteúdo sai do index.html gerado: o hash do script inline do tema
 # acompanha o que a imagem realmente serve.
 RUN pnpm --filter "@nuva-edu/classroom" build \
-    && node proxy/nginx/csp.mjs apps/classroom/dist/index.html > /app/nuva-csp.conf
+    && node proxy/lighttpd/csp.mjs apps/classroom/dist/index.html > /app/nuva-csp.conf
 
-# 3. runtime: só o resultado do build. O /config.json (`app`, `adminUrl` e `classroomUrl`) é
-#    gerado na subida do contêiner (proxy/nginx/40-nuva-config.sh); a mesma imagem serve a
-#    qualquer instalação.
-FROM ${NGINX_IMAGE} AS runtime
-USER root
-# Correções do Alpine publicadas depois da imagem base. O `nginx` e os módulos dele não mudam:
-# a base os fixa na versão empacotada pelo nginx.org (`nginx=<versão>` em /etc/apk/world), e só
-# uma base nova os atualiza (docs/ci.md).
+# 3. runtime: Alpine com o lighttpd do próprio Alpine e o resultado do build. O /config.json
+#    (`app`, `adminUrl` e `classroomUrl`) é gerado na subida do contêiner
+#    (proxy/lighttpd/entrypoint.sh); a mesma imagem serve a qualquer instalação.
+FROM ${ALPINE_IMAGE} AS runtime
+# Correções do Alpine publicadas depois da imagem base.
 RUN apk upgrade --no-cache
-RUN rm -f /etc/nginx/conf.d/default.conf /docker-entrypoint.d/*
-COPY proxy/nginx/nginx.conf /etc/nginx/nginx.conf
-COPY --chmod=0755 proxy/nginx/40-nuva-config.sh /docker-entrypoint.d/40-nuva-config.sh
-COPY --from=build /app/nuva-csp.conf /etc/nginx/nuva-csp.conf
-COPY --from=build /app/apps/classroom/dist /usr/share/nginx/html
+# Usuário sem privilégio com UID e GID fixos (101), criado antes do pacote para o número não
+# depender da ordem de instalação; é o dono do tmpfs /run nos composes. O lighttpd já sobe como
+# ele, sem trocar de usuário. Os exemplos de configuração do pacote não são usados.
+RUN addgroup -S -g 101 nuva \
+    && adduser -S -D -H -u 101 -G nuva -h /nonexistent -s /sbin/nologin nuva \
+    && apk add --no-cache lighttpd \
+    && rm -rf /etc/lighttpd/* /var/www/localhost /var/log/lighttpd /etc/logrotate.d/lighttpd
+COPY proxy/lighttpd/lighttpd.conf /etc/lighttpd/lighttpd.conf
+COPY --chmod=0755 proxy/lighttpd/entrypoint.sh /usr/local/bin/nuva-entrypoint.sh
+COPY --from=build /app/nuva-csp.conf /etc/lighttpd/nuva-csp.conf
+COPY --from=build /app/apps/classroom/dist /srv/nuva/site
+# O atalho só aponta para um arquivo depois da subida: /run é tmpfs.
+RUN ln -s /run/nuva/config.json /srv/nuva/site/config.json \
+    && lighttpd -tt -f /etc/lighttpd/lighttpd.conf
 ENV NUVA_APP=classroom
-USER 101
+USER 101:101
 EXPOSE 8080
+ENTRYPOINT ["/usr/local/bin/nuva-entrypoint.sh"]
+CMD ["lighttpd", "-D", "-f", "/etc/lighttpd/lighttpd.conf"]

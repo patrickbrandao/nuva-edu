@@ -17,7 +17,7 @@ readonly POSTGRES_VOLUME='postgres-data'
 readonly WAIT_SECONDS=120
 
 # Tudo o que vai para o servidor. Só arquivos Compose e o `.env` versionado: as imagens já trazem
-# o código, as migrations e a configuração do Nginx (nada de `proxy/nginx/` é montado).
+# o código, as migrations e a configuração do lighttpd (nada de `proxy/lighttpd/` é montado).
 # Os composes do Traefik e do Mailpit vão porque o `include:` da raiz os exige; os serviços deles
 # ficam em perfis que este script nunca ativa.
 readonly DEPLOY_FILES='docker-compose.yml

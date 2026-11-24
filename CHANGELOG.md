@@ -71,6 +71,7 @@ Detalhe das decisões em `specs/decisions/`.
 - Classroom: sai a armadilha de foco própria (`useDialogFocusTrap`); a gaveta do menu usa só a do `ClassroomShell` (task 102).
 - Imagens: `admin-api`, `classroom-api` e `worker` saem sem o npm da base (Trivy limpo); `admin` e `classroom` aplicam `apk upgrade` e ficam só com a pendência do Nginx 1.30.6 da base, descrita em `docs/ci.md` (task 097).
 - `packages/ui`: anel de foco do `ThemeSwitch` segue a cor de destaque; iniciais do `AdminAvatar` com texto de contraste 4,5:1 e marca do `ClassroomShell` na cor da escola.
+- Sites `admin` e `classroom` servidos pelo lighttpd do Alpine (`proxy/lighttpd/`, usuário 101; mesmas respostas do Nginx em rotas, 404, cabeçalhos, CSP e `/config.json`); saem `proxy/nginx/` e a exceção do Trivy (`.trivyignore.yaml`, `trivyignores`), e o teste passa a exigir que não haja exceção (task 121).
 
 ### Decisões
 - Textos de processo alinhados ao `scripts/task.mjs` (`--as`, `task:list`, push negado, conflito de rebase).

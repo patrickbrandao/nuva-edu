@@ -1,8 +1,12 @@
 #!/bin/sh
-# Gera /run/nuva/config.json na subida do contêiner dos sites (spec 031, "Configuração de execução
-# dos sites"): qual site é este e o endereço público dos dois, para a mesma imagem servir a
-# qualquer instalação. Moeda, idioma e versão vêm do /api/v1/meta, não daqui.
-# O arquivo é público: nunca recebe segredo. O primeiro argumento troca a pasta de saída (testes).
+# Entrada dos contêineres dos sites (spec 031, "Configuração de execução dos sites").
+#
+# 1. Gera o config.json na subida: qual site é este e o endereço público dos dois, para a mesma
+#    imagem servir a qualquer instalação. Moeda, idioma e versão vêm do /api/v1/meta, não daqui.
+#    O arquivo é público: nunca recebe segredo. A pasta de saída é /run/nuva (tmpfs gravável;
+#    a raiz do site tem um atalho para lá); NUVA_CONFIG_DIR a troca nos testes.
+# 2. Troca este processo pelo comando recebido (`exec`): o lighttpd fica como PID 1 e recebe os
+#    sinais do Docker direto. Sem comando, só gera o arquivo.
 set -eu
 
 fail() {
@@ -32,7 +36,7 @@ admin_host="${NUVA_ADMIN_HOST:-edu-admin.$domain}"
 classroom_host="${NUVA_CLASSROOM_HOST:-classroom.$domain}"
 scheme="${NUVA_PUBLIC_SCHEME:-http}"
 port="${NUVA_PUBLIC_PORT-8080}"
-out_dir="${1:-/run/nuva}"
+out_dir="${NUVA_CONFIG_DIR:-/run/nuva}"
 
 check NUVA_APP "$app" '^(admin|classroom)$'
 check NUVA_ADMIN_HOST "$admin_host" '^[A-Za-z0-9]([A-Za-z0-9.-]*[A-Za-z0-9])?$'
@@ -56,3 +60,7 @@ cat > "$out_dir/config.json" <<JSON
 }
 JSON
 echo "nuva-config: $out_dir/config.json gerado para o site $app"
+
+if [ "$#" -gt 0 ]; then
+  exec "$@"
+fi

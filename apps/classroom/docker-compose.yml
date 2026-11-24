@@ -1,4 +1,4 @@
-# classroom: site do aluno, arquivos estáticos servidos por Nginx sem privilégios
+# classroom: site do aluno, arquivos estáticos servidos por lighttpd sem privilégios
 # (specs 006 e 031). Recebe tudo o que, no host do classroom, não é /api/ nem /healthz.
 
 services:
@@ -20,7 +20,7 @@ services:
       - public
     read_only: true
     tmpfs:
-      # O Nginx roda como o usuário 101 e grava o config.json em /run/nuva.
+      # O lighttpd roda como o usuário 101; a entrada grava o config.json em /run/nuva.
       - /run:uid=101,gid=101,mode=0755
       - /tmp
     cap_drop:

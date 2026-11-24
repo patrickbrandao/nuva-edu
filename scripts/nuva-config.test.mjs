@@ -1,5 +1,6 @@
-// Roda o `proxy/nginx/40-nuva-config.sh` fora do contêiner, gravando numa pasta temporária, e
-// confere o `/config.json` dos sites (spec 031, "Configuração de execução dos sites").
+// Roda o `proxy/lighttpd/entrypoint.sh` fora do contêiner, gravando numa pasta temporária
+// (NUVA_CONFIG_DIR), e confere o `/config.json` dos sites (spec 031, "Configuração de execução
+// dos sites") e a troca pelo comando recebido.
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
@@ -7,15 +8,15 @@ import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { test } from 'node:test';
 
-const script = resolve(import.meta.dirname, '..', 'proxy/nginx/40-nuva-config.sh');
+const script = resolve(import.meta.dirname, '..', 'proxy/lighttpd/entrypoint.sh');
 
 /** Só as variáveis do teste chegam ao script: nada do ambiente de quem roda. */
-function run(env) {
+function run(env, command = []) {
   const dir = mkdtempSync(join(tmpdir(), 'nuva-config-'));
   try {
-    const result = spawnSync('sh', [script, dir], {
+    const result = spawnSync('sh', [script, ...command], {
       encoding: 'utf8',
-      env: { PATH: process.env.PATH, ...env },
+      env: { PATH: process.env.PATH, NUVA_CONFIG_DIR: dir, ...env },
     });
     const file = join(dir, 'config.json');
     return { ...result, text: existsSync(file) ? readFileSync(file, 'utf8') : null };
@@ -108,4 +109,29 @@ test('valor fora do formato impede a subida e cita a variável', () => {
     assert.match(result.stderr, new RegExp(variable), JSON.stringify(env));
     assert.equal(result.text, null, `${JSON.stringify(env)}: não grava o arquivo`);
   }
+});
+
+test('depois de gerar o arquivo, a entrada troca o processo pelo comando recebido', () => {
+  const result = run({ NUVA_APP: 'admin' }, [
+    'sh',
+    '-c',
+    'echo "pid=$$ args=$*" && exit 7',
+    'x',
+    'a',
+    'b',
+  ]);
+  // O código de saída e a saída são os do comando: não sobra um `sh` pai entre o Docker e ele.
+  assert.equal(result.status, 7, result.stderr);
+  assert.match(result.stdout, /config\.json gerado para o site admin\n.*args=a b\n$/);
+  assert.ok(result.text, 'o arquivo é gravado antes do comando');
+  const text = readFileSync(script, 'utf8');
+  assert.match(text, /^set -eu$/m);
+  assert.match(text, /^ {2}exec "\$@"$/m);
+});
+
+test('com variável inválida o comando não chega a rodar', () => {
+  const result = run({ NUVA_APP: 'admin', NUVA_PUBLIC_SCHEME: 'ftp' }, ['sh', '-c', 'echo rodou']);
+  assert.notEqual(result.status, 0);
+  assert.doesNotMatch(result.stdout, /rodou/);
+  assert.match(result.stderr, /nuva-config: NUVA_PUBLIC_SCHEME inválida/);
 });

@@ -298,105 +298,35 @@ test('images: Trivy falha com alta ou crítica, antes de publicar', () => {
   assert.equal(steps[trivy]['continue-on-error'], undefined);
 });
 
-// Exceções do Trivy (.trivyignore.yaml): sempre temporárias, com motivo, prazo curto e pacote.
-const SITES = APPS.filter((app) => !BACKENDS.includes(app));
-const IGNORE_FILE = '.trivyignore.yaml';
-const MAX_EXCEPTION_DAYS = 60;
-const DAY_MS = 24 * 60 * 60 * 1000;
-
-/** Problemas das entradas de um arquivo de exceções do Trivy, na data `today` (AAAA-MM-DD, UTC). */
-function exceptionProblems(file, today) {
-  const problems = [];
-  const groups = Object.entries(file ?? {});
-  for (const [kind, entries] of groups) {
-    if (kind !== 'vulnerabilities') {
-      problems.push(`${kind}: só exceções de vulnerabilidade são aceitas`);
-      continue;
-    }
-    for (const entry of entries ?? []) {
-      const id = entry?.id ?? '(sem id)';
-      if (typeof entry?.id !== 'string' || !/^[A-Z]+-[\w-]+$/.test(entry.id)) {
-        problems.push(`${id}: sem id válido`);
-      }
-      if (typeof entry?.statement !== 'string' || entry.statement.trim().length < 20) {
-        problems.push(`${id}: sem motivo (statement)`);
-      }
-      if (!Array.isArray(entry?.purls) || entry.purls.length === 0) {
-        problems.push(`${id}: sem pacote (purls)`);
-      } else if (entry.purls.some((purl) => !/^pkg:[a-z]+\/\S+$/.test(String(purl)))) {
-        problems.push(`${id}: purl inválido`);
-      }
-      const expires = String(entry?.expired_at ?? '');
-      if (!/^\d{4}-\d{2}-\d{2}$/.test(expires) || Number.isNaN(Date.parse(expires))) {
-        problems.push(`${id}: sem prazo (expired_at no formato AAAA-MM-DD)`);
-        continue;
-      }
-      // O Trivy deixa de aplicar a entrada à 0h UTC do dia do prazo.
-      const days = (Date.parse(expires) - Date.parse(today)) / DAY_MS;
-      if (days <= 0) {
-        problems.push(`${id}: prazo vencido em ${expires}; retire a exceção (docs/ci.md)`);
-      } else if (days > MAX_EXCEPTION_DAYS) {
-        problems.push(`${id}: prazo a mais de ${MAX_EXCEPTION_DAYS} dias (${expires})`);
-      }
-    }
-  }
-  return problems;
-}
-
-test('trivy: toda exceção tem motivo, pacote e prazo de até 60 dias, e nenhuma está vencida', () => {
-  const today = new Date().toISOString().slice(0, 10);
-  // O YAML é lido como texto: datas não viram Date, e uma chave repetida falha a leitura.
-  assert.deepEqual(exceptionProblems(load(IGNORE_FILE), today), []);
-});
-
-test('trivy: a conferência das exceções acusa motivo, pacote e prazo errados', () => {
-  const entry = {
-    id: 'CVE-2026-0001',
-    purls: ['pkg:apk/alpine/nginx@1.30.6-r1'],
-    expired_at: '2026-12-24',
-    statement: 'Motivo escrito com detalhe suficiente.',
-  };
-  const check = (change, today = '2026-11-24') =>
-    exceptionProblems({ vulnerabilities: [{ ...entry, ...change }] }, today);
-  assert.deepEqual(check({}), []);
-  assert.deepEqual(check({}, '2026-12-23'), []);
-  assert.match(check({}, '2026-12-24')[0], /prazo vencido/);
-  assert.match(check({}, '2027-01-10')[0], /prazo vencido/);
-  assert.match(check({ expired_at: '2027-01-24' })[0], /a mais de 60 dias/);
-  assert.deepEqual(check({ expired_at: '2027-01-23' }), []);
-  assert.match(check({ expired_at: undefined })[0], /sem prazo/);
-  assert.match(check({ expired_at: '24/12/2026' })[0], /sem prazo/);
-  assert.match(check({ statement: undefined })[0], /sem motivo/);
-  assert.match(check({ statement: '  ' })[0], /sem motivo/);
-  assert.match(check({ purls: undefined })[0], /sem pacote/);
-  assert.match(check({ purls: [] })[0], /sem pacote/);
-  assert.match(check({ id: undefined })[0], /sem id/);
-  assert.match(exceptionProblems({ secrets: [{ id: 'x' }] }, '2026-11-24')[0], /só exceções de/);
-});
-
-test('images: o arquivo de exceções do Trivy vai só aos jobs dos sites', () => {
+test('trivy: nenhuma exceção no repositório nem no fluxo', () => {
   const job = images.jobs.images;
   const trivy = job.steps.filter((step) => step.uses?.startsWith('aquasecurity/trivy-action@'));
   assert.equal(trivy.length, 1);
-  assert.equal(trivy[0].with.trivyignores, `${OPEN} matrix.trivyignores }}`);
-  // Nenhum outro caminho para exceção: sem política, sem configuração e sem variável do Trivy.
-  for (const input of ['ignore-policy', 'trivy-config', 'skip-dirs', 'skip-files', 'vuln-type']) {
+  // Nenhum caminho para exceção: sem arquivo, sem política, sem configuração e sem variável.
+  for (const input of [
+    'trivyignores',
+    'ignore-policy',
+    'trivy-config',
+    'skip-dirs',
+    'skip-files',
+    'vuln-type',
+  ]) {
     assert.equal(trivy[0].with[input], undefined, `Trivy com ${input}`);
   }
   assert.equal(trivy[0].env, undefined);
-  assert.doesNotMatch(read('.github/workflows/images.yml'), /TRIVY_/);
-  const byApp = Object.fromEntries(
-    job.strategy.matrix.include.map((item) => [item.app, item.trivyignores]),
+  assert.doesNotMatch(read('.github/workflows/images.yml'), /TRIVY_|trivyignore/i);
+  // As cinco imagens passam pelo mesmo exame: a matriz só distingue quem recebe NUVA_VERSION.
+  for (const item of job.strategy.matrix.include) {
+    assert.deepEqual(Object.keys(item).sort(), ['app', 'nuva_version'], item.app);
+  }
+  // Nem `.trivyignore` (que o Trivy carregaria sozinho) nem `.trivyignore.yaml`, em pasta alguma
+  // versionada; `trivy.yaml` também não.
+  const found = readdirSync(root, { recursive: true }).filter(
+    (name) =>
+      !/(^|[\\/])(node_modules|\.git|\.worktrees)([\\/]|$)/.test(name) &&
+      /(^|[\\/])(\.trivyignore[^\\/]*|trivy\.ya?ml)$/.test(name),
   );
-  for (const app of BACKENDS) {
-    assert.equal(byApp[app], '', `${app}: backend não recebe exceção do Trivy`);
-  }
-  for (const app of SITES) {
-    assert.equal(byApp[app], IGNORE_FILE, `${app}: arquivo de exceções`);
-  }
-  // Um arquivo só na raiz, e nenhum `.trivyignore` de texto, que o Trivy carregaria sozinho.
-  const found = readdirSync(root).filter((name) => name.startsWith('.trivyignore'));
-  assert.deepEqual(found, [IGNORE_FILE]);
+  assert.deepEqual(found, []);
 });
 
 test('images: confere as plataformas e a versão do que foi publicado', () => {
@@ -409,7 +339,7 @@ test('images: confere as plataformas e a versão do que foi publicado', () => {
 
 test('imagens: o estágio final dos backends sai sem npm e o dos sites aplica o apk upgrade', () => {
   // O Trivy do fluxo `images` acusa o npm embutido em `node:slim` e os pacotes do Alpine
-  // anteriores à base do Nginx (task 097).
+  // anteriores à imagem base (task 097).
   const runtimeOf = (app) => {
     const stages = read(`apps/${app}/Dockerfile`).split(/^FROM /m);
     const last = stages.at(-1);
@@ -446,10 +376,30 @@ test('imagens: o estágio final dos backends sai sem npm e o dos sites aplica o 
     const lines = runtimeOf(app);
     const upgrade = lines.indexOf('RUN apk upgrade --no-cache');
     assert.notEqual(upgrade, -1, `${app}: falta o apk upgrade`);
-    // Como root, e a imagem termina no usuário 101.
+    // Alpine puro, com o lighttpd do próprio Alpine: nenhuma imagem de servidor de terceiros.
+    assert.match(read(`apps/${app}/Dockerfile`), /^ARG ALPINE_IMAGE=alpine:\d+\.\d+$/m, app);
+    assert.match(lines[0], /^\$\{ALPINE_IMAGE\} AS runtime$/, app);
+    assert.doesNotMatch(read(`apps/${app}/Dockerfile`), /nginx/i, app);
+    const install = lines.findIndex((line) => / apk add --no-cache lighttpd /.test(line));
+    assert.ok(upgrade < install, `${app}: apk upgrade antes de instalar o lighttpd`);
+    // O usuário 101 é criado antes do pacote, e a imagem termina nele (sem `USER root`: o
+    // Alpine já começa como root).
+    assert.match(
+      lines[install],
+      /^RUN addgroup -S -g 101 nuva && adduser -S .*-u 101 -G nuva /,
+      app,
+    );
     const users = lines.filter((line) => line.startsWith('USER '));
-    assert.deepEqual(users, ['USER root', 'USER 101'], app);
-    assert.ok(lines.indexOf('USER root') < upgrade && upgrade < lines.indexOf('USER 101'), app);
+    assert.deepEqual(users, ['USER 101:101'], app);
+    assert.ok(install < lines.indexOf('USER 101:101'), app);
+    // A configuração é conferida no build, e a entrada troca o processo pelo lighttpd.
+    assert.ok(
+      lines.some((line) => line.includes('lighttpd -tt -f /etc/lighttpd/lighttpd.conf')),
+      `${app}: falta conferir a configuração no build`,
+    );
+    assert.ok(lines.includes('ENTRYPOINT ["/usr/local/bin/nuva-entrypoint.sh"]'), app);
+    assert.ok(lines.includes('CMD ["lighttpd", "-D", "-f", "/etc/lighttpd/lighttpd.conf"]'), app);
+    assert.ok(lines.includes('EXPOSE 8080'), app);
   }
 });
 

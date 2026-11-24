@@ -94,7 +94,7 @@ O que acontece, nesta ordem. Até o passo 3, nada muda no servidor.
 4. **Envio.** Um `tar` pela conexão SSH, só com estes arquivos:
    `docker-compose.yml`, `.env` e o `docker-compose.yml` de `database/postgres`, `proxy/traefik`,
    `mail/mailpit` e de cada app. Nenhum código-fonte: as imagens já trazem o código, as
-   migrations e a configuração do Nginx. Os composes do Traefik e do Mailpit vão porque o
+   migrations e a configuração do lighttpd. Os composes do Traefik e do Mailpit vão porque o
    `include:` da raiz os exige; os serviços deles ficam em perfis que o deploy não ativa.
 5. **Publicação.** No servidor, sempre com
    `docker compose -p nuva-edu -f docker-compose.yml --env-file .env --env-file .env.local`:
