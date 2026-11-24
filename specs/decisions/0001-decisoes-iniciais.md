@@ -79,6 +79,8 @@ A entrevista de início do projeto produziu dezenas de decisões. As de maior im
 - O-06: Definition of Done: código implementado; testes do nível acordado escritos e passando; lint, formatação e tipos limpos; spec e contratos atualizados se mudaram (via arquiteto); `docs/` atualizado quando aplicável; `CHANGELOG.md` com resumo compacto; arquivo da tarefa removido; `verify:quick` verde e nível de verificação informado no relato final.
 - O-07: Escalonar ao humano: conflito entre spec e pedido; decisão irreversível ou destrutiva; mudança de contrato já publicado em release; qualquer coisa que toque a regra da senha em texto; credencial ou gasto externo (Mercado Pago, provedores de login, Docker Hub, DNS); ação no servidor de testes além do `deploy:test`; tarefa que falhou em mais de uma tentativa de correção; necessidade de alterar arquivo de outro papel.
 
+Nota (2026-11-24): os itens F5-03, O-01, O-02 e O-03 da entrevista (commit direto na `main`, regras do diretório compartilhado, base do `verify:quick` e push após o commit), registrados na [0013](0013-commit-direto-na-main-diretorio-compartilhado.md), foram substituídos pela [0021](0021-worktree-por-tarefa.md). O F5-04 (sem PR e sem agente revisor) segue valendo.
+
 ## Alternativas consideradas
 
 Para cada item, as alternativas foram apresentadas na entrevista e descartadas pelo usuário. As mais relevantes:

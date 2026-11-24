@@ -5,12 +5,12 @@ Depende de: 001, 002, 031
 
 ## Contexto
 
-Vários agentes trabalham ao mesmo tempo, no mesmo diretório, com commit direto na `main`. A verificação precisa ser rápida o bastante para rodar a cada tarefa e completa o bastante para a `main` não quebrar. Por isso há dois níveis: um rápido, que olha só o que mudou, e um completo, que roda tudo.
+Vários agentes trabalham ao mesmo tempo, cada tarefa em um worktree próprio, e a `main` avança por fast-forward ao fim de cada uma ([002](002-organizacao-do-trabalho.md), "Worktree por tarefa"). A verificação precisa ser rápida o bastante para rodar a cada tarefa e completa o bastante para a `main` não quebrar. Por isso há dois níveis: um rápido, que olha só o que mudou, e um completo, que roda tudo.
 
 ## Requisitos
 
 - RF-01: `scripts/verify.mjs` implementa os modos `quick` e `full`, expostos como `pnpm verify:quick` e `pnpm verify:full`.
-- RF-02: O modo rápido é o padrão durante o desenvolvimento e ao concluir cada tarefa.
+- RF-02: O modo rápido é o padrão durante o desenvolvimento e ao concluir cada tarefa. O `pnpm task:finish` o roda no worktree, depois do rebase e antes de avançar a `main`; se falhar, a `main` não avança.
 - RF-03: O modo completo roda só quando o usuário pedir ("verificação completa", "rode tudo"), antes de release e sempre no CI.
 - RF-04: Toda mudança vem com o teste que a cobre. O nível decide quanto da suíte roda, nunca se o teste é escrito.
 - RF-05: Ao terminar uma tarefa, o agente informa qual nível rodou e o resultado.
@@ -26,11 +26,12 @@ Vários agentes trabalham ao mesmo tempo, no mesmo diretório, com commit direto
 
 ### Nível rápido — `pnpm verify:quick`
 
-O que ele considera "mudou" (adaptação ao diretório compartilhado, em que todos trabalham na `main`):
+O que ele considera "mudou" ([0021](decisions/0021-worktree-por-tarefa.md)):
 
-- sem argumentos: arquivos alterados e ainda não commitados (inclusive novos) mais os commits ainda não enviados (`origin/main..HEAD`);
-- com `--files <caminhos>`: apenas os caminhos informados, que devem ser os do campo `arquivos` da tarefa. É a forma recomendada quando outros agentes têm alterações pendentes no mesmo diretório;
-- num branch que não seja a `main` (contribuição externa): tudo desde `git merge-base HEAD origin/main`.
+- sem argumentos: tudo desde a base `git merge-base HEAD main` (a `main` local, não a `origin/main`), mais os arquivos alterados e ainda não commitados (inclusive novos). No worktree de uma tarefa, isso é exatamente a mudança da tarefa: os commits do branch `task/NNN` e o que estiver pendente;
+- com `--files <caminhos>`: apenas os caminhos informados. Continua existindo para limitar a execução a parte da mudança, mas deixa de ser a forma normal: o worktree só contém a mudança da tarefa.
+
+Quem chama: o agente, à mão, durante a tarefa; e o `pnpm task:finish`, sempre, no worktree já rebaseado sobre a `main`.
 
 Passos:
 
@@ -68,6 +69,7 @@ Passo sem nada a fazer aparece como "pulado", não como sucesso.
 
 Os testes que dependem de banco rodam contra o Postgres local já no ar (o do ambiente de desenvolvimento), sem subir contêiner a cada vez:
 
+- O Postgres local é um só para todos os worktrees; o isolamento entre execuções vem do banco por execução, descrito abaixo.
 - `NUVA_TEST_DB=local` liga esse modo no setup global dos testes; o `verify:quick` define a variável sozinho.
 - Banco modelo `nuva_edu_tpl`: contém todas as migrations aplicadas. O hash da pasta `database/postgres/migrations` fica gravado no `COMMENT` do banco. O modelo só é refeito quando o hash muda.
 - Cada execução recria o banco dos testes copiando o modelo (`CREATE DATABASE nuva_edu_test_<id> TEMPLATE nuva_edu_tpl`), então começa limpo em menos de um segundo. O `<id>` é único por execução, para que dois agentes possam testar ao mesmo tempo.
@@ -154,7 +156,9 @@ Exemplo de resumo:
 ## Critérios de aceite
 
 - [ ] Alterar um arquivo de `packages/core` faz o `verify:quick` checar os tipos de `core` e dos pacotes que dependem dele, e rodar só o teste correspondente.
-- [ ] `verify:quick --files` ignora alterações pendentes fora dos caminhos informados.
+- [ ] Num worktree de tarefa com dois commits e um arquivo pendente, o `verify:quick` sem argumentos considera os três e nada do que já está na `main`.
+- [ ] `verify:quick --files` ignora alterações fora dos caminhos informados.
+- [ ] `pnpm task:finish` com o `verify:quick` vermelho não avança a `main`.
 - [ ] Argumentos depois de `--` chegam ao Vitest.
 - [ ] Com um passo falhando, o `verify:quick` ainda roda os demais e sai com código 1.
 - [ ] O `verify:full` para no primeiro passo que falhar.
@@ -178,5 +182,5 @@ Exemplo de resumo:
 ## Decisões relacionadas
 
 - [0014 — Verificação em dois níveis](decisions/0014-verificacao-em-dois-niveis.md)
-- [0013 — Commit direto na main, diretório compartilhado (provisória)](decisions/0013-commit-direto-na-main-diretorio-compartilhado.md)
+- [0021 — Um worktree por tarefa](decisions/0021-worktree-por-tarefa.md)
 - [0009 — Stack TypeScript, Fastify e Kysely](decisions/0009-stack-typescript-fastify-kysely.md)

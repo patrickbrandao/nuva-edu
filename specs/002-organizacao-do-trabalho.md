@@ -5,7 +5,7 @@ Depende de: 000, 001
 
 ## Contexto
 
-Vários agentes (Claude Code e OpenCode) trabalham no mesmo repositório, no mesmo diretório e direto na `main`, coordenados por uma pessoa. Esta spec define quem pode mexer em quê e como o trabalho flui sem conflito.
+Vários agentes (Claude Code e OpenCode) trabalham no mesmo repositório, coordenados por uma pessoa. Cada tarefa roda em um worktree próprio, e a `main` só avança por fast-forward ([0021](decisions/0021-worktree-por-tarefa.md)). Esta spec define quem pode mexer em quê e como o trabalho flui sem conflito.
 
 ## Requisitos
 
@@ -14,7 +14,11 @@ Vários agentes (Claude Code e OpenCode) trabalham no mesmo repositório, no mes
 - RF-03: Toda mudança de comportamento começa pela spec; contrato e migration vêm antes do código que os usa.
 - RF-04: Toda mudança vem com o teste que a cobre.
 - RF-05: Mudança de contrato, a rota que a atende e o cliente gerado entram na mesma janela de trabalho ([Janela de contrato](#janela-de-contrato)).
+- RF-06: Cada tarefa roda em um worktree e um branch próprios, abertos por `pnpm task:start` e encerrados por `pnpm task:finish`. Nenhum agente edita arquivo versionado no checkout principal.
+- RF-07: A `main` só avança por fast-forward, a partir de um branch de tarefa que passou por rebase sobre a `main` e por `pnpm verify:quick`.
 - RNF-01: Nenhum commit contém arquivo fora das pastas do papel de quem o fez (verificável pelo histórico).
+- RNF-02: O histórico da `main` é linear: sem merge commit (verificável por `git log --merges main`, que deve ser vazio).
+- RNF-03: Com nenhuma tarefa em andamento, `git status` no checkout principal não mostra alteração e `git worktree list` mostra só ele.
 
 ## Comportamento
 
@@ -43,42 +47,79 @@ Regras de propriedade:
 
 ### Git
 
-- Um único branch: `main`. Não há PR nem branch de tarefa.
-- Todos os agentes trabalham no mesmo diretório.
+- A `main` é o único branch permanente e o único enviado ao GitHub. Cada tarefa usa um branch local `task/NNN`, que nunca é enviado e some ao fim da tarefa. Não há PR.
+- A `main` só avança por fast-forward (`git merge --ff-only`). Não há merge commit nem squash: os commits da tarefa entram como estão.
 - Mensagens no padrão Conventional Commits, em português, citando a tarefa: `feat(api-admin): lista de usuários com filtro (task 012)`.
 - O escopo do commit é o nome do papel ou do pacote.
-- Depois do commit da entrega: `git push origin main`.
+- Quem leva o trabalho à `main` e faz `git push origin main` é o `pnpm task:finish`, não o agente à mão.
 - O usuário revisa os commits depois. Não há agente revisor.
 
-### Regras do diretório compartilhado
+### Worktree por tarefa
 
-Como todos editam o mesmo checkout, cada agente:
+**Checkout principal.** É o diretório do repositório (o primeiro de `git worktree list`). Fica sempre na `main` e limpo. Ninguém edita código nele. Ali vivem a fila `tasks/`, `tmp/`, o `.env.local` e o ambiente Docker.
 
-1. Altera só os arquivos listados na tarefa e dentro das pastas do seu papel.
-2. Faz `git add` e `git commit` citando os caminhos. Nunca usa `git add -A`, `git add .` nem `git commit -a`.
-3. Nunca usa `stash`, `reset`, `checkout`, `restore`, `clean` ou `rebase` de forma que afete arquivos que não são seus.
-4. Não troca de branch e não reescreve histórico.
-5. Ignora alterações não commitadas de outros agentes: não as corrige, não as commita, não as desfaz.
-6. Se encontrar um arquivo seu alterado por outro, para e escala ao humano.
+**Worktree da tarefa.** Cada tarefa roda em `.worktrees/task-NNN/` (pasta no `.gitignore`), no branch local `task/NNN`, criado a partir da `main`.
+
+| Comando | O que faz |
+| --- | --- |
+| `pnpm task:start NNN` | Roda no checkout principal. Cria o branch e o worktree, liga o `.env.local` do checkout principal por link simbólico, roda `pnpm install --frozen-lockfile` no worktree, marca a tarefa como `em-andamento` e imprime o caminho do worktree. Recusa se a tarefa já está `em-andamento` ou se o worktree existe. |
+| `pnpm task:finish NNN` | Roda no worktree ou no checkout principal. Leva a tarefa à `main` (passos abaixo). |
+| `pnpm task:abort NNN` | Remove worktree e branch e devolve a tarefa a `aberta`. Só com o worktree limpo; com alterações pendentes exige `--force`, que é ação destrutiva e depende de confirmação do humano. |
+| `pnpm task:path` | Imprime o caminho do checkout principal. |
+| `pnpm task:list` | Lista as tarefas com worktree aberto. |
+
+Os cinco comandos são implementados por `scripts/task.mjs`.
+
+Dentro do worktree, o agente:
+
+1. Edita e commita só ali. Usa o caminho absoluto que o `task:start` imprimiu.
+2. Altera só os arquivos listados na tarefa e dentro das pastas do seu papel. O worktree isola o trabalho de cada tarefa; a propriedade das pastas não muda.
+3. Pode usar `git add -A`: o worktree é só dele.
+4. Não sobe nem reconstrói o ambiente Docker a partir do worktree.
+
+`pnpm task:finish NNN` faz, nesta ordem:
+
+1. confere que o worktree está limpo (tudo commitado);
+2. `git rebase main` no branch da tarefa. Conflito: para e avisa;
+3. `pnpm verify:quick` no worktree. Falha: para;
+4. `git merge --ff-only task/NNN` no checkout principal. Se a `main` andou no meio, repete o rebase e a verificação uma vez;
+5. `git push origin main`;
+6. remove o worktree e o branch;
+7. remove o arquivo da tarefa.
+
+Se o push for negado, o script termina com aviso claro e código de saída próprio, e a `main` local fica já avançada. O agente relata o fato e para: não repete o push, não tenta outro caminho e não pede a outro agente que o faça.
+
+Arquivos com regra própria:
+
+- **`pnpm-lock.yaml`**: cada tarefa commita o lockfile junto com a mudança de dependência. Conflito no rebase se resolve refazendo `pnpm install` no worktree, nunca à mão.
+- **`CHANGELOG.md`**: continua editado direto, uma linha por entrega em "Não lançado". O `.gitattributes` declara `CHANGELOG.md merge=union`, para o rebase não conflitar a cada tarefa. Essa junção não avisa quando dois lados mexem na mesma linha, por isso a regra de só acrescentar linhas vale sem exceção.
+
+O que os worktrees **não** isolam:
+
+- **Banco e Docker.** Há um Postgres local e um ambiente Compose para todos. O ambiente Docker é reconstruído a partir do checkout principal (`pnpm dev:up` lá), nunca de um worktree. O e2e roda contra o que está no ar.
+- **Fila `tasks/` e `tmp/`.** Estão fora do Git e existem só no checkout principal. Do worktree, o agente os alcança pelo caminho que `pnpm task:path` imprime.
 
 ### Fluxo das tarefas
 
-A fila fica em `tasks/`, fora do Git, no formato do template de tarefa.
+A fila fica em `tasks/` do checkout principal, fora do Git, no formato do template de tarefa.
 
-1. Um problema encontrado por inspeção vira uma tarefa nova (qualquer papel pode criar; o `arquiteto` cria as de cada fase do plano).
+1. Um problema encontrado por inspeção vira uma tarefa nova (qualquer papel pode criar; o `arquiteto` cria as de cada fase do plano). Tarefa nova é sempre gravada em `tasks/` do checkout principal, mesmo quando quem a cria está num worktree.
 2. O agente pega uma tarefa `aberta`, do seu papel, cujas dependências já foram removidas da fila.
-3. Antes de começar, muda o status para `em-andamento` e preenche `responsavel`. Ninguém pega tarefa `em-andamento`.
-4. Ao concluir, atende a Definition of Done, remove o arquivo da tarefa e faz o commit citando o ID.
-5. Tarefa descartada também é removida; se o descarte for uma decisão, o `arquiteto` registra uma ADR.
-6. Tarefa que não pode avançar fica `bloqueada`, com o motivo escrito no corpo.
+3. Para começar, roda `pnpm task:start NNN` no checkout principal. O comando marca a tarefa como `em-andamento`; o agente preenche `responsavel`. Ninguém pega tarefa `em-andamento`.
+4. Trabalha e commita no worktree, citando o ID em cada commit.
+5. Ao concluir, atende a Definition of Done e roda `pnpm task:finish NNN`, que leva os commits à `main`, envia e remove o worktree, o branch e o arquivo da tarefa.
+6. Tarefa abandonada: `pnpm task:abort NNN` remove o worktree e o branch e devolve a tarefa a `aberta`. Tarefa descartada também é removida da fila; se o descarte for uma decisão, o `arquiteto` registra uma ADR.
+7. Tarefa que não pode avançar fica `bloqueada`, com o motivo escrito no corpo.
 
 O status `em-revisao` do template não é usado, porque não há revisão antes da `main`.
 
 ### Paralelismo
 
-- Duas tarefas rodam em paralelo quando os campos `arquivos` não se cruzam.
+- Cada tarefa em andamento tem o próprio worktree; várias rodam ao mesmo tempo sem enxergar o trabalho pendente umas das outras.
+- Duas tarefas rodam em paralelo quando os campos `arquivos` não se cruzam. O worktree não dispensa essa regra: com arquivos cruzados, a segunda a terminar para no rebase com conflito.
 - Dentro de um recurso a ordem é fixa: spec → migration → `packages/core` → contrato → APIs e `packages/api-client` → sites → e2e. A spec decide o contrato antes de tudo; o arquivo `openapi.yaml` só muda quando a API pode alcançá-lo em seguida ([Janela de contrato](#janela-de-contrato)).
-- Mudança de contrato e migration são sempre sequenciais entre si.
+- Mudança de contrato e migration são sempre sequenciais entre si. Migrations continuam uma tarefa por vez, também porque o Postgres local é compartilhado entre os worktrees.
+- O fim das tarefas é serializado: o `task:finish` só avança a `main` por fast-forward, e quem chega depois refaz rebase e verificação.
 - As frentes paralelas de cada fase estão no [PLAN](PLAN.md).
 
 ### Janela de contrato
@@ -97,7 +138,8 @@ Mudança de contrato que não altera o cliente gerado nem a validação (hoje, s
 
 ### Verificação
 
-- Padrão: `pnpm verify:quick`, ao concluir cada tarefa. Com `--files <caminhos>` limita-se aos arquivos da tarefa.
+- Padrão: `pnpm verify:quick`. O `pnpm task:finish` o roda no worktree, depois do rebase, antes de avançar a `main`; o agente também pode rodá-lo à mão durante a tarefa.
+- No worktree, "o que mudou" é tudo desde `git merge-base HEAD main`, mais o que ainda não foi commitado: só a mudança da tarefa. `--files <caminhos>` continua existindo, mas deixa de ser a forma normal.
 - `pnpm verify:full` só quando o usuário pedir e antes de release. O CI roda o nível completo com e2e na `main` a cada push.
 - Ao terminar, o agente diz qual nível rodou e o resultado.
 - Se o CI da `main` quebrar, a correção vira tarefa de prioridade máxima para o dono do arquivo, e ninguém inicia tarefa nova naquela área até resolver.
@@ -110,12 +152,12 @@ Uma tarefa está concluída quando tudo abaixo é verdade:
 - o código está implementado;
 - os testes do nível acordado foram escritos e estão passando;
 - lint, formatação e checagem de tipos estão limpos;
-- `pnpm verify:quick` está verde, e o nível rodado foi informado no relato final;
+- `pnpm verify:quick` está verde (o `task:finish` o roda), e o nível rodado foi informado no relato final;
 - a spec e os contratos estão atualizados, se mudaram (pelo `arquiteto`);
 - a documentação em `docs/` está atualizada, quando aplicável;
 - o `CHANGELOG.md` recebeu o resumo compactado da entrega;
-- o arquivo da tarefa foi removido;
-- o commit cita o ID da tarefa e foi enviado à `main`.
+- todo commit da tarefa cita o ID dela;
+- `pnpm task:finish NNN` terminou sem erro: os commits estão na `main` por fast-forward e foram enviados, e o worktree, o branch e o arquivo da tarefa foram removidos. Se o push foi negado, a tarefa só está concluída depois que o humano resolver o envio, e o relato final diz isso.
 
 ### Escalonamento ao humano
 
@@ -128,32 +170,55 @@ O agente para e pergunta quando houver:
 - necessidade de credencial ou gasto externo: Mercado Pago, provedores de login, Docker Hub, DNS, SMTP;
 - ação no servidor de testes além do `pnpm deploy:test`;
 - tarefa que falhou em mais de uma tentativa de correção;
-- necessidade de alterar arquivo de outro papel, ou arquivo próprio alterado por outro agente.
+- necessidade de alterar arquivo de outro papel, ou arquivo próprio alterado por outro agente;
+- push negado no `pnpm task:finish`: o agente relata e para; não insiste, não tenta outro caminho e não pede a outro agente que envie;
+- `pnpm task:abort --force`, que descarta trabalho não commitado: exige a confirmação do humano.
 
 ## Interfaces e contratos
 
 - Template de tarefa, de spec e de ADR: os definidos no roteiro do projeto e usados nos arquivos existentes.
 - Definições de papel para as ferramentas: `.claude/agents/<papel>.md` e `.opencode/agent/<papel>.md`.
+- Comandos de tarefa, implementados em `scripts/task.mjs`:
+
+```
+pnpm task:start <NNN>
+pnpm task:finish <NNN>
+pnpm task:abort <NNN> [--force]
+pnpm task:path
+pnpm task:list
+```
+
+- Nomes fixos: pasta `.worktrees/task-NNN/`, branch `task/NNN`.
 
 ## Dados
 
-- `tasks/` e `tmp/` ficam fora do Git. O histórico do Git preserva o registro das tarefas concluídas pelo ID no commit.
+- `tasks/` e `tmp/` ficam fora do Git e só existem no checkout principal. O histórico do Git preserva o registro das tarefas concluídas pelo ID no commit.
+- `.worktrees/` fica no `.gitignore`. O `.env.local` de cada worktree é um link simbólico para o do checkout principal.
 
 ## Critérios de aceite
 
 - [ ] Existe uma definição por papel nas duas ferramentas.
 - [ ] Todo commit de entrega cita uma tarefa.
 - [ ] Nenhum commit mistura pastas de papéis diferentes, salvo `CHANGELOG.md`.
+- [ ] `pnpm task:start NNN` cria `.worktrees/task-NNN/` no branch `task/NNN` e marca a tarefa como `em-andamento`; repetido, recusa.
+- [ ] `pnpm task:finish NNN` com alteração não commitada, conflito no rebase ou `verify:quick` vermelho para sem tocar a `main`.
+- [ ] Depois de um `pnpm task:finish NNN` bem-sucedido, a `main` contém os commits da tarefa sem merge commit, e o worktree, o branch e o arquivo da tarefa não existem mais.
+- [ ] Push negado no `task:finish` termina com código de saída próprio e a `main` local avançada.
+- [ ] `pnpm task:abort NNN` com alteração pendente recusa sem `--force`.
+- [ ] Duas tarefas que acrescentam linhas ao `CHANGELOG.md` terminam sem conflito de rebase.
 - [ ] Toda mudança de `openapi.yaml` que altera o cliente gerado tem, criadas antes do commit, a tarefa da API e a do `interface`.
 - [ ] Nenhuma tag de release contém operação com `x-nuva-pending`.
 
 ## Fora de escopo
 
-- Pull requests internos, worktrees e agente revisor.
+- Pull requests internos e agente revisor.
+- Banco de dados ou ambiente Docker por worktree.
+- Envio dos branches de tarefa ao GitHub.
 
 ## Decisões relacionadas
 
-- [0013 — Commit direto na main, diretório compartilhado](decisions/0013-commit-direto-na-main-diretorio-compartilhado.md)
+- [0021 — Um worktree por tarefa](decisions/0021-worktree-por-tarefa.md)
+- [0013 — Commit direto na main, diretório compartilhado (substituída por 0021)](decisions/0013-commit-direto-na-main-diretorio-compartilhado.md)
 - [0014 — Verificação em dois níveis](decisions/0014-verificacao-em-dois-niveis.md)
 - [0019 — Janela de contrato e operações pendentes](decisions/0019-janela-de-contrato-e-operacoes-pendentes.md)
 - [0001 — Decisões iniciais](decisions/0001-decisoes-iniciais.md)

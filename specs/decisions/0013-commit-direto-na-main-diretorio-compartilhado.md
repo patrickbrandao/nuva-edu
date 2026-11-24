@@ -1,6 +1,6 @@
 # 0013 — Commit direto na main, em diretório compartilhado
 
-Status: provisória (revisar se houver commit com arquivo de outro papel ou se a main quebrar por trabalho misturado)
+Status: substituída por 0021
 Data: 2026-11-24
 
 ## Contexto

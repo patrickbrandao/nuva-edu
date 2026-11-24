@@ -51,3 +51,4 @@ Detalhe das decisões em `specs/decisions/`.
 - Venda avulsa e assinatura via Mercado Pago; conteúdo por link externo.
 - TypeScript, Node 26, Fastify contrato primeiro, Kysely, React 19, minui em `packages/ui`.
 - Commit direto na `main`, diretório compartilhado; `verify:quick` e `verify:full`.
+- Um worktree por tarefa (`pnpm task:start`/`task:finish`, branch `task/NNN`, `main` só por fast-forward) no lugar do commit direto em diretório compartilhado: ADR 0021 substitui a 0013; specs 002 e 032, `AGENTS.md` e definições de papel atualizados.
