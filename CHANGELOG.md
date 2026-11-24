@@ -62,6 +62,7 @@ Detalhe das decisões em `specs/decisions/`.
 - Contratos das duas APIs: `Meta` com `logoUrl`, `accentColor` e `sourceCodeUrl` (obrigatórios; os dois primeiros aceitam `null`), códigos `payload_too_large` (413) e `unsupported_media_type` (415) com as respostas `PayloadTooLarge` e `UnsupportedMediaType`, `400` declarado em `getMeta` e `openStream`, origem do `id` e reenvio em memória na descrição do stream; spec 031 fixa que o padrão dos hosts deriva de `NUVA_DOMAIN` (task 029).
 - Infra: hosts dos sites derivam de `NUVA_DOMAIN` no Compose (`${NUVA_ADMIN_HOST:-edu-admin.${NUVA_DOMAIN:-localhost}}`, idem classroom); o `.env` deixa de fixar os dois hosts e os sites não recebem mais `NUVA_DOMAIN` (task 089).
 - Infra: Postgres só publica porta no desenvolvimento; `docker-compose.dev.yml` entra pelo `pnpm compose`/`dev:up` conforme `NUVA_POSTGRES_PUBLISH` (vazia: só com `NUVA_DOMAIN=localhost`); teste de que nenhum serviço recebe `PORT` (task 061).
+- Classroom: sai a armadilha de foco própria (`useDialogFocusTrap`); a gaveta do menu usa só a do `ClassroomShell` (task 102).
 
 ### Decisões
 - Textos de processo alinhados ao `scripts/task.mjs` (`--as`, `task:list`, push negado, conflito de rebase).

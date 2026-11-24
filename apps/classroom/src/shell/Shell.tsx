@@ -10,7 +10,6 @@ import { BrandLogo, useBrandLogo } from './BrandLogo';
 import { useBrandAccent } from './brand';
 import { Footer } from './Footer';
 import { HOME_PATH, LOGIN_PATH, NAV_GROUPS, type TextKey } from './navigation';
-import { useDialogFocusTrap } from './useDialogFocusTrap';
 import { useThemeLabels } from './useThemeLabels';
 
 /** O que cada rota informa à casca: a chave do nome legível da página. */
@@ -53,7 +52,6 @@ export function Shell() {
   const { pathname } = useLocation();
   const matches = useMatches();
 
-  useDialogFocusTrap();
   useBrandAccent();
 
   const [collapsed, setCollapsed] = useState(readCollapsed);

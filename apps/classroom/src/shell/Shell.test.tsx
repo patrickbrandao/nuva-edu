@@ -148,10 +148,17 @@ describe('casca do classroom', () => {
     // o Tab dá a volta dentro da gaveta, sem chegar ao link "Ir para o conteúdo"
     const close = within(drawer).getByRole('button', { name: ptBR.shell.closeMenu });
     const lastLink = within(drawer).getAllByRole('link').at(-1);
+    const skip = screen.getByText(ptBR.shell.skipToContent).closest('a');
+    expect(skip?.closest('[inert]')).not.toBeNull();
     await user.tab({ shift: true });
     expect(document.activeElement).toBe(lastLink);
     await user.tab();
     expect(document.activeElement).toBe(close);
+    // a volta completa passa só por controles da gaveta
+    for (let step = 0; step < within(drawer).getAllByRole('link').length + 2; step += 1) {
+      await user.tab();
+      expect(drawer.contains(document.activeElement)).toBe(true);
+    }
 
     await user.keyboard('{Escape}');
     expect(screen.queryByRole('dialog')).toBeNull();
