@@ -101,6 +101,7 @@ Detalhe das decisões em `specs/decisions/`.
 - Sites `admin` e `classroom` servidos pelo lighttpd do Alpine (`proxy/lighttpd/`, usuário 101; mesmas respostas do Nginx em rotas, 404, cabeçalhos, CSP e `/config.json`); saem `proxy/nginx/` e a exceção do Trivy (`.trivyignore.yaml`, `trivyignores`), e o teste passa a exigir que não haja exceção (task 121).
 - Sites: CSP aceita `blob:` só em `img-src`, para a prévia do `ImagePicker` antes do envio (task 170).
 - Specs 007, 024, 026, 028, 029 e 030: decisões de esquema das migrations 0004 a 0007 registradas; uma identidade por provedor em cada conta (`provider_already_linked`); anonimização substitui `email` e `name` (task 198).
+- `scripts/compose.test.mjs`: o volume do banco tem de se chamar `nuva-edu-postgres-data`; o nome antigo `postgres-data` deixa de ser aceito (task 184).
 
 ### Decisões
 - Textos de processo alinhados ao `scripts/task.mjs` (`--as`, `task:list`, push negado, conflito de rebase).

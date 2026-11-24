@@ -428,11 +428,11 @@ test('volumes nomeados com o prefixo do projeto; o do banco é o que a migraçã
   );
   assert.equal(printed.status, 0, printed.stderr);
   assert.equal(printed.stdout.trim(), postgresVolume);
-  // Todo volume tem nome fixo com o prefixo; o do banco ainda pode estar no nome antigo, que só
-  // muda junto com a migração (spec 031, "Volumes").
+  // Todo volume tem nome fixo com o prefixo do projeto (spec 031, "Volumes"); o nome antigo do
+  // banco (`postgres-data`) não é mais aceito desde a migração da tarefa 135.
   for (const [key, volume] of Object.entries(volumes)) {
-    if (key === mount.source && volume.name === 'postgres-data') continue;
     assert.match(volume.name, /^nuva-edu-/, `volume ${key}: ${volume.name}`);
   }
+  assert.equal(postgresVolume, 'nuva-edu-postgres-data');
   assert.equal(volumes.traefik_letsencrypt.name, 'nuva-edu-traefik-acme');
 });
