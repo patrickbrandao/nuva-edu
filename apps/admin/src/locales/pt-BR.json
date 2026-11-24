@@ -203,7 +203,7 @@
       "templateNote": "Primeira versão: o texto vem de um modelo. Revise com a assessoria jurídica da escola antes de publicar.",
       "note": "Rascunho não é editado depois de criado: para mudar o texto, crie outro.",
       "body": "Texto (Markdown)",
-      "bodyHint": "{{count}} de {{max}} caracteres.",
+      "bodyCount": "{{count}} de {{max}} caracteres.",
       "reacceptance": "Exigir novo aceite de quem aceitou uma versão anterior",
       "submit": "Criar rascunho",
       "done": "Rascunho criado.",

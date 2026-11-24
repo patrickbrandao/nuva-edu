@@ -1,11 +1,10 @@
-import { AdminButton, AdminMenu, Alert, ConfirmDialog, Dialog } from '@nuva-edu/ui';
+import { AdminButton, AdminMenu, AdminTextArea, Alert, ConfirmDialog, Dialog } from '@nuva-edu/ui';
 import { useQueryClient } from '@tanstack/react-query';
 import { type FormEvent, useId, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useAction } from '../../../api/action';
 import { useApi } from '../../../api/client';
 import { type SuspensionKind, type UserDetail, userChanged } from '../../../api/users';
-import { TextArea } from '../../../forms/TextArea';
 import { useUserActionError } from '../errors';
 
 const KINDS: readonly SuspensionKind[] = ['posting', 'full'];
@@ -119,7 +118,7 @@ export function SuspendDialog({ user, onClose, onDone }: Props) {
               })}
             />
           </div>
-          <TextArea
+          <AdminTextArea
             label={t('users.suspend.reason')}
             hint={t('users.suspend.reasonHint')}
             value={reason}

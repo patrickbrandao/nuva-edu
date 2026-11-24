@@ -7,6 +7,7 @@ import {
   AdminStatus,
   AdminTable,
   AdminTabs,
+  AdminTextArea,
   Alert,
   ConfirmDialog,
   Dialog,
@@ -29,7 +30,6 @@ import {
   useTermsVersions,
 } from '../../api/terms';
 import { formatDateTime } from '../../format';
-import { TextArea } from '../../forms/TextArea';
 import { usePageCrumb } from '../../shell/crumbs';
 
 const BODY_MAX = 100_000;
@@ -258,9 +258,9 @@ function CreateDraftDialog({
         </Alert>
       ) : null}
       <form id={formId} className="flex flex-col gap-4" noValidate onSubmit={onSubmit}>
-        <TextArea
+        <AdminTextArea
           label={t('terms.create.body')}
-          hint={t('terms.create.bodyHint', { count: body.length, max: BODY_MAX })}
+          counter={({ length, max }) => t('terms.create.bodyCount', { count: length, max })}
           value={body}
           onChange={setBody}
           rows={10}
