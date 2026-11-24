@@ -1,6 +1,6 @@
 # Módulos do núcleo
 
-Uma pasta por área de negócio; `jobs`, `settings` e `stream` estão implementados, `images` tem só o caminho de entrega, as demais ainda vazias. Cada módulo ganha seu código (entidades, regras, consultas Kysely) junto com a tarefa que o implementa.
+Uma pasta por área de negócio; `accounts`, `audit`, `images` (envio, variantes, entrega, exclusão e expurgo das órfãs), `jobs`, `notifications`, `permissions`, `privacy`, `settings` e `stream` têm código; `oauth` e as demais ainda estão vazias. Cada módulo ganha seu código (entidades, regras, consultas Kysely) junto com a tarefa que o implementa.
 
 Os módulos da Fase 1 (`accounts`, `audit`, `images`, `jobs`, `notifications`, `oauth`, `permissions`, `privacy`) exportam pelo próprio `index.ts`, ligado ao `src/index.ts` por `export *`: a tarefa de um módulo altera só a pasta dele. Em `accounts`, a gestão pela equipe fica em `management/`, com `index.ts` próprio reexportado pelo do módulo. Os demais seguem com exportação nomeada no `src/index.ts` até ganharem o seu `index.ts`.
 
