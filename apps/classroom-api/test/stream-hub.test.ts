@@ -1,4 +1,4 @@
-import type { Readable } from 'node:stream';
+import type { PassThrough, Readable } from 'node:stream';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   eventFrame,
@@ -200,19 +200,21 @@ describe('createStreamHub', () => {
 
   it('disconnectSession e retainSessions fecham só as conexões das sessões que saíram', () => {
     hub = createStreamHub();
+    // O hub devolve um `PassThrough`: `end` do servidor marca `writableEnded`.
+    const ended = (stream: Readable) => (stream as PassThrough).writableEnded;
     const first = hub.open(ALICE, undefined, 'sessao-1');
     const second = hub.open(ALICE, undefined, 'sessao-2');
     const anonymous = hub.open(ALICE);
     const bruno = hub.open(BRUNO, undefined, 'sessao-3');
     expect(hub.connectedUsers().sort()).toEqual([ALICE, BRUNO].sort());
     hub.disconnectSession('sessao-1');
-    expect(first.writableEnded).toBe(true);
+    expect(ended(first)).toBe(true);
     expect(hub.connectionCount()).toBe(3);
     hub.retainSessions(ALICE, new Set());
-    expect(second.writableEnded).toBe(true);
+    expect(ended(second)).toBe(true);
     // Sem sessão associada não é tocada; a de outro usuário também não.
-    expect(anonymous.writableEnded).toBe(false);
-    expect(bruno.writableEnded).toBe(false);
+    expect(ended(anonymous)).toBe(false);
+    expect(ended(bruno)).toBe(false);
     expect(hub.connectionCount()).toBe(2);
   });
 
