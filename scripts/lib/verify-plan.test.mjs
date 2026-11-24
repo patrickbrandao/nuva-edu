@@ -275,6 +275,36 @@ describe('plano do modo rápido', () => {
     assert.deepEqual(plan.types, []);
   });
 
+  test('YAML alterado (compose, contrato, fluxo do CI) entra no lint; o lockfile não', () => {
+    const plan = planQuick({
+      changed: changedOf(
+        'docker-compose.yml',
+        'apps/classroom-api/docker-compose.yml',
+        'apps/classroom-api/openapi.yaml',
+        '.github/workflows/verify.yml',
+        'pnpm-lock.yaml',
+      ),
+      packages,
+      exists: disk(),
+    });
+    assert.deepEqual(plan.lint, [
+      'docker-compose.yml',
+      'apps/classroom-api/docker-compose.yml',
+      'apps/classroom-api/openapi.yaml',
+      '.github/workflows/verify.yml',
+    ]);
+    assert.deepEqual(plan.types, []);
+  });
+
+  test('YAML apagado não vai para o lint', () => {
+    const plan = planQuick({
+      changed: [{ path: 'apps/admin/docker-compose.yml', deleted: true }],
+      packages,
+      exists: disk(),
+    });
+    assert.deepEqual(plan.lint, []);
+  });
+
   test('arquivo apagado não vai para o lint, mas afeta os tipos; teste apagado não roda', () => {
     const plan = planQuick({
       changed: [

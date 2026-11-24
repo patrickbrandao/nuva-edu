@@ -17,7 +17,10 @@ export const CONTRACT_DIR = 'test/contract';
 /** Nome usado para a raiz do repositório quando ela é tratada como um pacote. */
 export const ROOT_PACKAGE = '(raiz)';
 
-const LINT_EXTENSIONS = /\.(?:[cm]?[jt]s|[jt]sx|jsonc?|css)$/;
+// O que o Biome confere (specs/032, "Qualidade de código"): YAML inclusive (composes, contratos,
+// fluxos do CI). O `pnpm-lock.yaml` é gerado e fica de fora, como no `biome.json`.
+const LINT_EXTENSIONS = /\.(?:[cm]?[jt]s|[jt]sx|jsonc?|css|ya?ml)$/;
+const LINT_EXCLUDED = /(?:^|\/)pnpm-lock\.yaml$/;
 const TYPE_EXTENSIONS = /\.(?:[cm]?[jt]s|[jt]sx|json)$/;
 const TEST_FILE = /\.(?:test|spec)\.[cm]?[jt]sx?$/;
 const TEST_EXTENSIONS = ['ts', 'tsx', 'mts', 'cts', 'js', 'jsx', 'mjs', 'cjs'];
@@ -277,7 +280,7 @@ export function planQuick({ changed, packages, exists }) {
     const relative = relativeTo(pkg, path);
     const isDatabase = pkg.name === DATABASE_PACKAGE;
 
-    if (!deleted && LINT_EXTENSIONS.test(path)) {
+    if (!deleted && LINT_EXTENSIONS.test(path) && !LINT_EXCLUDED.test(path)) {
       plan.lint.push(path);
     }
     if (path === 'tsconfig.base.json') {
