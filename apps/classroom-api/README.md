@@ -8,6 +8,7 @@ API do site do aluno (`@nuva-edu/classroom-api`), descrita em `openapi.yaml` e e
 | `src/main.ts` | Entrada do processo: configuração, banco, subida e encerramento |
 | `src/app.ts` | `buildClassroomApp`: a API montada sobre `@nuva-edu/api-kit`, com o fluxo SSE |
 | `src/contract.ts` | Caminho do contrato e exceções de CSRF |
+| `src/check-contract.ts` | Comando `check-contract`: rotas x contrato, sem banco e sem porta |
 | `src/session.ts` | Tratador da sessão (entra por parâmetro) e o usuário da requisição |
 | `src/routes/` | Uma função `register...Routes` por grupo de rotas |
 | `src/stream/` | SSE: leitura do aviso, formato no fio e distribuição por usuário |
@@ -32,6 +33,16 @@ Escuta na porta 3000 (spec 031); `PORT` troca a porta fora do contêiner. Precis
 | `GET /metrics` | Texto do Prometheus (inclui `sse_connections` e `db_pool_connections{state}`); fora do contrato, só rede interna |
 | `GET /api/v1/meta` | Dados públicos da instalação, sem sessão |
 | `GET /api/v1/stream` | Fluxo SSE do usuário da sessão |
+
+## Conferir o contrato
+
+```bash
+pnpm --filter @nuva-edu/classroom-api check-contract                # avisa das operações com x-nuva-pending
+pnpm --filter @nuva-edu/classroom-api check-contract --no-pending   # falha se houver alguma (verify:full, release)
+docker run --rm <imagem> node src/check-contract.ts --no-pending
+```
+
+Sai com `0` quando confere, `1` com divergência (lista no `stderr`) e `2` em opção desconhecida. Não precisa de banco nem de variáveis da instalação: a API é montada com `listenUserEvents: false`, sem a escuta do `nuva_user_events`.
 
 ## Sessão
 

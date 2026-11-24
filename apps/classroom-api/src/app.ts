@@ -1,4 +1,5 @@
 import {
+  type Contract,
   createApiApp,
   databaseReadiness,
   type FastifyInstance,
@@ -38,6 +39,14 @@ export interface ClassroomAppOptions {
   authenticate?: SessionAuthenticator;
   /** Ajustes do fluxo SSE (intervalo do `ping`, limites); os padrões são os da spec 004. */
   stream?: StreamHubOptions;
+  /** Contrato a servir. Padrão: o `openapi.yaml` do serviço. Só o teste do `check-contract` troca. */
+  contract?: Contract;
+  /**
+   * `false` monta a API sem abrir a escuta do `nuva_user_events`: nenhuma conexão com o banco é
+   * aberta na subida e o fluxo SSE responde `503`. É para o comando `check-contract`, que só lê
+   * rotas e contrato. Padrão: `true`.
+   */
+  listenUserEvents?: boolean;
 }
 
 /** O fluxo SSE deste processo, para a subida, os testes e quem precisar derrubar conexões. */
@@ -70,7 +79,7 @@ export function buildClassroomApp(options: ClassroomAppOptions): FastifyInstance
   const authenticate = options.authenticate ?? rejectEverySession;
 
   const app = createApiApp({
-    contract: loadClassroomContract(),
+    contract: options.contract ?? loadClassroomContract(),
     logger,
     trustedProxies: config.trustedProxies,
     readiness: options.readiness ?? databaseReadiness({ db, connectionString: config.databaseUrl }),
@@ -141,6 +150,9 @@ export function buildClassroomApp(options: ClassroomAppOptions): FastifyInstance
   // Depois da conferência do contrato (gancho registrado antes, na base): se o serviço não
   // sobe, nenhuma conexão com o banco fica para trás.
   app.addHook('onReady', async () => {
+    if (options.listenUserEvents === false) {
+      return;
+    }
     listener = listenChannel({
       connectionString: config.databaseUrl,
       channel: USER_EVENTS_CHANNEL,
