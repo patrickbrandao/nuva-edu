@@ -1,10 +1,15 @@
 import { type RateLimitRule, rateLimitByIp } from '@nuva-edu/api-kit';
 import { session } from './session.ts';
 
-/** Operações de login, cadastro e redefinição: 10 por minuto por IP (spec 004, RNF-04). */
+/**
+ * Operações de login, cadastro e redefinição: 10 por minuto por IP (spec 004, RNF-04). Do login
+ * social contam o início e a conclusão do cadastro; o retorno vem do provedor, depois do início.
+ */
 export const AUTH_RATE_LIMITED_OPERATIONS: readonly string[] = [
   'register',
   'login',
+  'startOAuth',
+  'completeSocialSignup',
   'requestPasswordReset',
   'resetPassword',
 ];

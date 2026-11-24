@@ -15,13 +15,16 @@ import {
   assertTermsGate,
   type ChannelListener,
   type Config,
+  createOAuth,
   createSettingsReader,
   type Database,
   databasePoolStats,
   type ImageProcessingLimiter,
+  isDomainError,
   type Logger,
   listenChannel,
   listSessions,
+  type OAuth,
   type SettingsReader,
   USER_EVENTS_CHANNEL,
 } from '@nuva-edu/core';
@@ -33,6 +36,7 @@ import { registerAuthRoutes } from './routes/auth.ts';
 import type { RouteContext } from './routes/context.ts';
 import { registerImageRoutes } from './routes/images.ts';
 import { registerLegalRoutes } from './routes/legal.ts';
+import { registerOAuthRoutes } from './routes/oauth.ts';
 import { registerStreamRoutes } from './routes/stream.ts';
 import {
   createSessionAuthenticator,
@@ -85,6 +89,11 @@ export interface ClassroomAppOptions {
    * e o `logger` do serviço. Só consulta o banco na primeira leitura, nunca na montagem.
    */
   settings?: SettingsReader;
+  /**
+   * Login social (`createOAuth` do núcleo), um por processo. Padrão: o montado da configuração,
+   * com o `fetch` global. Os testes passam o do provedor falso (`createFakeOAuthProvider`).
+   */
+  oauth?: OAuth;
 }
 
 /** O fluxo SSE deste processo, para a subida, os testes e quem precisar derrubar conexões. */
@@ -260,8 +269,18 @@ export function buildClassroomApp(options: ClassroomAppOptions): FastifyInstance
   const settings = options.settings ?? createSettingsReader(db, { logger });
 
   // `GET /api/v1/meta`: dados públicos da instalação e da marca, sem sessão (spec 004, RF-02).
+  const oauth = options.oauth ?? createOAuth(config);
+  const enabledProviders = new Set<string>(oauth.enabledProviders);
   registerMetaRoute(app, {
-    config,
+    // `authProviders`: só os provedores que o login social montou (spec 007, RF-13).
+    config: {
+      ...config,
+      authProviders: {
+        google: enabledProviders.has('google') ? config.authProviders.google : null,
+        facebook: enabledProviders.has('facebook') ? config.authProviders.facebook : null,
+        apple: enabledProviders.has('apple') ? config.authProviders.apple : null,
+      },
+    },
     version: options.version ?? readServiceVersion(),
     settings,
   });
@@ -269,6 +288,21 @@ export function buildClassroomApp(options: ClassroomAppOptions): FastifyInstance
 
   const routes: RouteContext = { config, db, hub, ttlDays };
   registerAuthRoutes(app, routes);
+  registerOAuthRoutes(app, {
+    ...routes,
+    oauth,
+    // Operações públicas: sessão ausente ou inválida vale `null` (o cookie inválido é apagado).
+    optionalSession: async (request, reply) => {
+      try {
+        return await establishSession(request, reply, authenticate, ttlDays);
+      } catch (error) {
+        if (isDomainError(error) && (error.status === 401 || error.status === 403)) {
+          return null;
+        }
+        throw error;
+      }
+    },
+  });
   registerAccountRoutes(app, routes);
   registerLegalRoutes(app, routes);
   registerImageRoutes(app, routes, options.imageLimiter ? { limiter: options.imageLimiter } : {});
