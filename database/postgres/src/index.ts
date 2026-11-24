@@ -22,9 +22,11 @@ export {
 } from './migrator.ts';
 export {
   createTestDatabase,
+  dropStaleTemplates,
   dropStaleTestDatabases,
   dropTestDatabase,
   ensureTemplate,
+  type StaleTemplateOptions,
   type TemplateOptions,
   type TemplateResult,
   type TestDatabase,

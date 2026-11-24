@@ -67,6 +67,7 @@ Detalhe das decisões em `specs/decisions/`.
 - `scripts/task.mjs` conhece a janela de contrato: `task:start MMM --as <papel> --join NNN`, `task:finish MMM` marca `pronta`, `task:finish NNN` exige todas prontas e remove os arquivos da janela; `task:list` com a coluna `JANELA` (task 104).
 
 ### Alterado
+- Banco modelo dos testes passa a ser um por conjunto de migrations (`<db>_tpl_<12 hex do hash>`): worktrees com migrations diferentes não refazem mais o modelo um do outro; criação sob trava do conjunto e expurgo dos modelos sem uso há 7 dias (`dropStaleTemplates`, guarda os 3 últimos) (task 182).
 - Spec 002 e papéis `banco` e `nucleo`: a tarefa de migration regenera e commita os tipos gerados do banco (escopo `nucleo`); exceções de CSRF de operações novas entram na janela de contrato, pelas tarefas das APIs, com o precedente da janela 131 (task 180).
 - Volume do banco passa a `nuva-edu-postgres-data` (spec 031); o `pnpm dev:up` copia o `postgres-data` antigo, que o humano apaga à mão depois de conferir (task 135).
 - Infra: `postgres`, `traefik` e `mailpit` sem capacidades (`cap_drop: ALL`, `no-new-privileges`), Postgres sem root, `nofile` 65536 no banco e no proxy, `healthcheck` no Mailpit; sites com `Content-Security-Policy` sem `unsafe-inline` (hash do script do tema gerado no build da imagem); pre-commit confere YAML; `verify:quick` sobe o banco por `pnpm compose`.

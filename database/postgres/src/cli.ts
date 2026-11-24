@@ -2,7 +2,7 @@
 import { parseArgs } from 'node:util';
 import { connect, defaultMigrationsDir, loadConfig, loadEnvFiles } from './config.ts';
 import { MigrationError, migrateDown, migrateUp, migrationStatus } from './migrator.ts';
-import { dropStaleTestDatabases, ensureTemplate } from './template.ts';
+import { dropStaleTemplates, dropStaleTestDatabases, ensureTemplate } from './template.ts';
 
 const USAGE = `Uso: pnpm db:migrate <comando> [opções]
 
@@ -10,7 +10,8 @@ Comandos:
   up [--to N]                 aplica as migrations pendentes (até a versão N)
   down [--steps N | --to N]   desfaz a última migration, as N últimas, ou até restar a versão N
   status                      mostra a situação de cada migration
-  template                    cria ou atualiza o banco modelo dos testes (<db>_tpl)
+  template                    cria o banco modelo dos testes do conjunto de migrations
+                              (<db>_tpl_<hash>) e expurga os modelos sem uso
 
 Conexão: DATABASE_URL, ou POSTGRES_* e NUVA_POSTGRES_PORT (lidos também de .env e .env.local).
 Saída: 0 certo; 1 erro; 2 banco inacessível.`;
@@ -70,9 +71,15 @@ async function main(argv: string[]): Promise<number> {
     const result = await ensureTemplate({ config, dir, log });
     log(
       result.rebuilt
-        ? `Banco modelo ${result.name} refeito (${result.hash.slice(0, 12)}).`
+        ? `Banco modelo ${result.name} criado (${result.hash.slice(0, 12)}).`
         : `Banco modelo ${result.name} em dia (${result.hash.slice(0, 12)}).`,
     );
+    if (!result.rebuilt) {
+      // Com modelo novo, o ensureTemplate já expurgou.
+      for (const name of await dropStaleTemplates({ config, dir })) {
+        log(`Banco modelo sem uso removido: ${name}`);
+      }
+    }
     return 0;
   }
 
