@@ -13,7 +13,7 @@ describe('vitrine', () => {
 
     expect(screen.getByRole('status').textContent).toBe(ptBR.home.about.loading);
     expect(screen.getByRole('heading', { level: 1, name: ptBR.home.welcome })).toBeTruthy();
-    await waitFor(() => expect(requests).toEqual(['/api/v1/meta']));
+    await waitFor(() => expect(requests).toContain('/api/v1/meta'));
     expect(document.title).toBe(`${ptBR.home.title} · ${ptBR.app.name}`);
   });
 

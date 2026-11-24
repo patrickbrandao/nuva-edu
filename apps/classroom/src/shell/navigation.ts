@@ -132,8 +132,4 @@ export const PENDING_PAGES: readonly { path: string; titleKey: TextKey }[] = [
   ...NAV_GROUPS.flatMap((group) => group.items)
     .filter((item) => item.path !== HOME_PATH)
     .map((item) => ({ path: item.path, titleKey: item.labelKey })),
-  { path: '/cadastro', titleKey: 'pages.signUp' },
-  { path: '/redefinir', titleKey: 'pages.resetPassword' },
-  { path: '/termos', titleKey: 'pages.terms' },
-  { path: '/privacidade', titleKey: 'pages.privacy' },
 ];

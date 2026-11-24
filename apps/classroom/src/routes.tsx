@@ -22,6 +22,41 @@ export const routes: RouteObject[] = [
         handle: handle({ titleKey: 'login.title' }),
         lazy: async () => ({ Component: (await import('./pages/LoginPage')).LoginPage }),
       },
+      {
+        path: '/cadastro',
+        handle: handle({ titleKey: 'pages.signUp' }),
+        lazy: async () => ({ Component: (await import('./pages/SignUpPage')).SignUpPage }),
+      },
+      {
+        path: '/confirmar',
+        handle: handle({ titleKey: 'pages.confirmEmail' }),
+        lazy: async () => ({
+          Component: (await import('./pages/ConfirmEmailPage')).ConfirmEmailPage,
+        }),
+      },
+      {
+        path: '/redefinir',
+        handle: handle({ titleKey: 'pages.resetPassword' }),
+        lazy: async () => ({
+          Component: (await import('./pages/ResetPasswordPage')).ResetPasswordPage,
+        }),
+      },
+      {
+        path: '/termos',
+        handle: handle({ titleKey: 'pages.terms' }),
+        lazy: async () => {
+          const { LegalPage } = await import('./pages/LegalPage');
+          return { element: <LegalPage document="terms" /> };
+        },
+      },
+      {
+        path: '/privacidade',
+        handle: handle({ titleKey: 'pages.privacy' }),
+        lazy: async () => {
+          const { LegalPage } = await import('./pages/LegalPage');
+          return { element: <LegalPage document="privacy" /> };
+        },
+      },
       ...PENDING_PAGES.map(
         ({ path, titleKey }): RouteObject => ({
           path,

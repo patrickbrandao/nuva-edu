@@ -11,9 +11,18 @@
   },
   "theme": {
     "group": "Tema da página",
-    "system": { "label": "Sistema", "hint": "Usar o tema do sistema" },
-    "light": { "label": "Claro", "hint": "Tema claro" },
-    "dark": { "label": "Escuro", "hint": "Tema escuro" }
+    "system": {
+      "label": "Sistema",
+      "hint": "Usar o tema do sistema"
+    },
+    "light": {
+      "label": "Claro",
+      "hint": "Tema claro"
+    },
+    "dark": {
+      "label": "Escuro",
+      "hint": "Tema escuro"
+    }
   },
   "shell": {
     "skipToContent": "Ir para o conteúdo",
@@ -27,7 +36,10 @@
     "notifications": "Notificações",
     "signIn": "Entrar",
     "administration": "Administração",
-    "pageChanged": "Página: {{title}}"
+    "pageChanged": "Página: {{title}}",
+    "accountMenu": "Menu da conta de {{name}}",
+    "account": "Minha conta",
+    "signOut": "Sair"
   },
   "menu": {
     "groups": {
@@ -63,6 +75,7 @@
   },
   "pages": {
     "signUp": "Criar conta",
+    "confirmEmail": "Confirmar e-mail",
     "resetPassword": "Redefinir senha",
     "terms": "Termos de uso",
     "privacy": "Privacidade"
@@ -103,6 +116,29 @@
       "apple": "Apple"
     }
   },
+  "errors": {
+    "network": "Sem conexão com o servidor. Confira a internet e tente de novo.",
+    "generic": "Não foi possível concluir agora. Tente de novo em instantes.",
+    "validation": "Alguns dados não foram aceitos. Confira os campos e tente de novo.",
+    "notAvailable": "Este recurso ainda não está disponível no servidor. Tente de novo mais tarde.",
+    "unavailable": "O serviço está fora do ar no momento. Tente de novo em alguns minutos.",
+    "rateLimited": "Muitas tentativas seguidas. Aguarde um pouco e tente de novo.",
+    "rateLimitedFor": "Muitas tentativas seguidas. Tente de novo em {{time}}.",
+    "termsPending": "Aceite os termos vigentes para continuar.",
+    "unauthenticated": "A sua sessão terminou. Entre de novo para continuar.",
+    "wait": {
+      "seconds_one": "{{count}} segundo",
+      "seconds_other": "{{count}} segundos",
+      "minutes_one": "{{count}} minuto",
+      "minutes_other": "{{count}} minutos"
+    }
+  },
+  "password": {
+    "show": "Mostrar senha",
+    "hide": "Ocultar senha",
+    "hint": "De 8 a 128 caracteres.",
+    "invalid": "A senha precisa ter de 8 a 128 caracteres."
+  },
   "login": {
     "title": "Entrar",
     "description": "Entre com a sua conta para acessar os cursos e a comunidade.",
@@ -115,7 +151,129 @@
     "unavailable": "O login ainda não está disponível nesta versão.",
     "forgot": "Esqueci a senha",
     "noAccount": "Ainda não tem conta?",
-    "signUp": "Criar conta"
+    "signUp": "Criar conta",
+    "submitting": "Entrando…",
+    "errors": {
+      "emailRequired": "Informe o e-mail.",
+      "emailInvalid": "Informe um e-mail válido, como nome@exemplo.com.",
+      "passwordRequired": "Informe a senha.",
+      "invalidCredentials": "E-mail ou senha incorretos.",
+      "accountSuspended": "Esta conta está suspensa. Fale com a escola para saber mais.",
+      "tooManyAttempts": "Muitas tentativas erradas. Por segurança, tente de novo em {{time}}.",
+      "tooManyAttemptsNoTime": "Muitas tentativas erradas. Por segurança, tente de novo em alguns minutos."
+    },
+    "oauth": {
+      "title": "Não foi possível entrar pelo provedor",
+      "codes": {
+        "oauth_state_invalid": "O retorno do provedor venceu ou não confere. Tente de novo.",
+        "oauth_denied": "O acesso foi recusado no provedor. Tente de novo ou use outra forma de entrar.",
+        "oauth_provider_error": "O provedor não respondeu como esperado. Tente de novo ou use outra forma de entrar.",
+        "account_suspended": "Esta conta está suspensa. Fale com a escola para saber mais.",
+        "staff_only": "Esta entrada é só para a equipe da escola.",
+        "identity_in_use": "Esta conta do provedor já está vinculada a outro usuário.",
+        "unknown": "Algo deu errado no retorno do provedor. Tente de novo ou use outra forma de entrar."
+      }
+    },
+    "notices": {
+      "passwordReset": "Senha redefinida. Entre com a nova senha."
+    }
+  },
+  "signUp": {
+    "title": "Criar conta",
+    "description": "Crie a sua conta para comprar cursos e participar da comunidade.",
+    "lead": "Leva menos de um minuto.",
+    "name": "Nome",
+    "nameHint": "Como você quer ser chamado na escola.",
+    "email": "E-mail",
+    "password": "Senha",
+    "passwordHint": "De 8 a 128 caracteres. Não reutilize a senha de outro serviço: crie uma só para esta escola.",
+    "termsLoading": "Carregando os termos…",
+    "termsErrorTitle": "Não foi possível carregar os termos",
+    "submit": "Criar conta",
+    "submitting": "Criando a conta…",
+    "hasAccount": "Já tem conta?",
+    "signIn": "Entrar",
+    "loginAfterFailed": "Recebemos o cadastro, mas não foi possível entrar com esses dados. Se este e-mail já tinha conta, enviamos para ele as instruções para entrar ou redefinir a senha.",
+    "goToLogin": "Ir para Entrar",
+    "errors": {
+      "nameRequired": "Informe o nome.",
+      "nameTooLong": "O nome pode ter até 80 caracteres.",
+      "emailInvalid": "Informe um e-mail válido, como nome@exemplo.com.",
+      "termsRequired": "Para criar a conta, aceite os termos vigentes.",
+      "termsChanged": "Os termos foram atualizados. Leia a versão nova e aceite de novo."
+    }
+  },
+  "terms": {
+    "legend": "Termos",
+    "lead": "Para continuar, leia e aceite:",
+    "versionLink": "{{document}} (versão {{version}})",
+    "accept": "Li e aceito os documentos acima",
+    "documents": {
+      "terms": "Termos de uso",
+      "privacy": "Política de privacidade"
+    }
+  },
+  "termsGate": {
+    "title": "Aceite os termos para continuar",
+    "lead": "A escola publicou uma versão dos documentos abaixo que precisa do seu aceite.",
+    "listLead": "Leia os documentos (abrem em nova aba):",
+    "submit": "Aceitar e continuar",
+    "submitting": "Salvando…",
+    "required": "Marque a caixa para aceitar os documentos.",
+    "outdated": "Os documentos mudaram enquanto você lia. Confira as versões atuais e aceite de novo."
+  },
+  "verifyEmail": {
+    "title": "Confirme o seu e-mail",
+    "text": "Enviamos um link de confirmação para {{email}}. Até confirmar, você navega e assiste ao conteúdo aberto, mas não compra nem publica.",
+    "resend": "Reenviar o link",
+    "resending": "Reenviando…",
+    "resent": "Enviamos um novo link para {{email}}.",
+    "rateLimited": "Você já pediu vários links na última hora. Tente de novo mais tarde.",
+    "rateLimitedFor": "Você já pediu vários links na última hora. Tente de novo em {{time}}."
+  },
+  "confirm": {
+    "title": "Confirmar e-mail",
+    "description": "Confirmação do e-mail da sua conta.",
+    "verifying": "Confirmando o seu e-mail…",
+    "successTitle": "E-mail confirmado",
+    "successText": "Pronto: o seu e-mail está confirmado.",
+    "continue": "Continuar",
+    "signIn": "Entrar",
+    "expiredTitle": "Link vencido ou já usado",
+    "expiredText": "Os links de confirmação valem por 24 horas e uma vez só. Peça um novo link.",
+    "expiredTextSignedOut": "Os links de confirmação valem por 24 horas e uma vez só. Entre na sua conta para pedir um novo link.",
+    "missingTitle": "Link incompleto",
+    "missingText": "O endereço não tem o código de confirmação. Abra de novo o link do e-mail.",
+    "errorTitle": "Não foi possível confirmar o e-mail"
+  },
+  "reset": {
+    "title": "Redefinir senha",
+    "description": "Crie uma senha nova para a sua conta.",
+    "requestLead": "Informe o e-mail da sua conta. Enviamos um link para você criar uma senha nova.",
+    "email": "E-mail",
+    "submit": "Enviar o link",
+    "submitting": "Enviando…",
+    "sentTitle": "Confira o seu e-mail",
+    "sentText": "Se houver uma conta com {{email}}, enviamos para ele um link para redefinir a senha. O link vale por 24 horas.",
+    "newLead": "Crie a nova senha da sua conta.",
+    "newPassword": "Nova senha",
+    "save": "Salvar a nova senha",
+    "saving": "Salvando…",
+    "expiredTitle": "Link vencido ou já usado",
+    "expiredText": "Os links de redefinição valem por 24 horas e uma vez só. Peça um novo link.",
+    "requestAgain": "Pedir um novo link",
+    "backToLogin": "Voltar para Entrar",
+    "errors": {
+      "emailInvalid": "Informe um e-mail válido, como nome@exemplo.com."
+    }
+  },
+  "legal": {
+    "description": "{{document}} desta escola.",
+    "loading": "Carregando o documento…",
+    "errorTitle": "Não foi possível carregar o documento",
+    "versionInfo": "Versão {{version}}, em vigor desde {{date}}.",
+    "missingTitle": "Documento ainda não publicado",
+    "missingText": "A escola ainda não publicou este documento."
   },
   "construction": {
     "title": "Em construção",

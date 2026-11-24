@@ -290,4 +290,10 @@ describe('casca do classroom', () => {
     ).toBeTruthy();
     expect(screen.getByRole('link', { name: ptBR.common.backHome }).getAttribute('href')).toBe('/');
   });
+
+  it('o "Entrar" leva o endereço atual como destino', async () => {
+    renderApp('/planos?x=1');
+    const link = await screen.findByRole('link', { name: ptBR.shell.signIn });
+    expect(link.getAttribute('href')).toBe('/entrar?destino=%2Fplanos%3Fx%3D1');
+  });
 });
