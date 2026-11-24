@@ -8,6 +8,7 @@ Detalhe das decisões em `specs/decisions/`.
 ### Adicionado
 - specs 029 e 004: entrega de imagens com limite próprio de 600/min por IP, fora dos limites de sessão e visitante; `deleteImage` com imagem em uso continua `404` (task 277).
 - worker: `retention.purge` apaga, em lotes, as tarefas da fila `done` (7 dias) e `failed` (30 dias) por `finished_at`; `queued` e `running` nunca (task 279).
+- `@nuva-edu/api-kit`: `setApiCookie` e `readApiCookie` só tratam o cookie de sessão e recusam o de retorno OAuth, que é assinado pelo núcleo; comentários corrigidos (task 280).
 - worker: `retention.purge` com as regras de expurgo das contas e da auditoria (`NUVA_RETENTION_AUDIT_DAYS`) em lotes de 5.000; manipuladores e agenda de `image.cleanup` (diária 03:45) e `suspension.expire` (a cada 15 min) (task 151).
 - `classroom-api`: login social (Google, Facebook, Apple por `form_post`), vínculo por `intent=link` e cadastro pendente (`/auth/social/pending` e `/complete`), com `authProviders` do `/meta` vindo do núcleo (task 153).
 - Compose exige `SESSION_SECRET` (APIs), `ADMIN_EMAIL` e `ADMIN_PASSWORD` (admin-api); `pnpm dev:up` e CI sobem o provedor OAuth simulado (task 157).

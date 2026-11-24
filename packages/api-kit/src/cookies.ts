@@ -7,9 +7,13 @@ export type ApiSite = 'admin' | 'classroom';
  * Os dois tipos de cookie do sistema (spec 007, "Cookies"); são os únicos, ambos estritamente
  * necessários (spec 030, RF-09).
  *
- * - `session`: identificador aleatório da sessão, conferido no banco. Não é assinado.
- * - `oauth`: estado do retorno do provedor (`state`, `nonce`, PKCE...), assinado com
- *   HMAC-SHA256 por `SESSION_SECRET` (`cookieSecret` em `createApiApp`).
+ * - `session`: identificador aleatório da sessão, conferido no banco. Não é assinado. É o único
+ *   que `setApiCookie` e `readApiCookie` gravam e leem.
+ * - `oauth`: estado do retorno do provedor (`state`, `nonce`, PKCE...). Quem o assina (HMAC com
+ *   `SESSION_SECRET`) e confere é o núcleo (`packages/core`, módulo `oauth`); a API o grava com
+ *   `reply.setCookie` usando o nome, o valor e as opções que o núcleo devolve, e entrega o valor
+ *   cru de `request.cookies` ao núcleo. O api-kit não assina nem confere esse cookie: o nome e
+ *   os atributos daqui servem só para apagá-lo (`clearApiCookie`) e para conferência.
  */
 export type ApiCookieKind = 'session' | 'oauth';
 
@@ -41,27 +45,34 @@ export interface SetApiCookieOptions {
 }
 
 /**
- * Grava um cookie com os atributos do tipo. O de retorno (`oauth`) é assinado e exige
- * `cookieSecret` em `createApiApp`.
+ * Recusa o cookie de retorno OAuth nos auxiliares de gravação e leitura: ele já chega assinado
+ * pelo núcleo, e assiná-lo aqui de novo (ou exigir uma segunda assinatura na leitura) quebraria
+ * o fluxo.
  */
+function assertSessionKind(kind: string, helper: string): void {
+  if (kind !== 'session') {
+    throw new TypeError(
+      `${helper} só trata o cookie "session". O de retorno OAuth é assinado e conferido pelo ` +
+        'núcleo: grave-o com reply.setCookie e leia o valor cru de request.cookies.',
+    );
+  }
+}
+
+/** Grava o cookie de sessão com os atributos da spec 007. Sem assinatura. */
 export function setApiCookie(
   reply: FastifyReply,
   site: ApiSite,
-  kind: ApiCookieKind,
+  kind: 'session',
   value: string,
   options: SetApiCookieOptions,
 ): FastifyReply {
+  assertSessionKind(kind, 'setApiCookie');
   if (!Number.isInteger(options.maxAgeSeconds) || options.maxAgeSeconds <= 0) {
     throw new TypeError('maxAgeSeconds deve ser um inteiro positivo.');
-  }
-  const signed = kind === 'oauth';
-  if (signed && typeof reply.signCookie !== 'function') {
-    throw new TypeError('O cookie de retorno é assinado: passe "cookieSecret" a createApiApp.');
   }
   return reply.setCookie(cookieName(site, kind), value, {
     ...COOKIE_ATTRIBUTES[kind],
     maxAge: options.maxAgeSeconds,
-    signed,
   });
 }
 
@@ -74,25 +85,13 @@ export function clearApiCookie(
   return reply.clearCookie(cookieName(site, kind), { ...COOKIE_ATTRIBUTES[kind] });
 }
 
-/**
- * Valor do cookie na requisição, ou `null` quando não veio. O de retorno só volta se a
- * assinatura conferir (comparação em tempo constante); assinatura inválida vale como ausente.
- */
+/** Valor do cookie de sessão na requisição, ou `null` quando não veio. */
 export function readApiCookie(
   request: FastifyRequest,
   site: ApiSite,
-  kind: ApiCookieKind,
+  kind: 'session',
 ): string | null {
+  assertSessionKind(kind, 'readApiCookie');
   const raw = request.cookies?.[cookieName(site, kind)];
-  if (raw === undefined || raw === '') {
-    return null;
-  }
-  if (kind === 'session') {
-    return raw;
-  }
-  if (typeof request.unsignCookie !== 'function') {
-    throw new TypeError('O cookie de retorno é assinado: passe "cookieSecret" a createApiApp.');
-  }
-  const result = request.unsignCookie(raw);
-  return result.valid ? result.value : null;
+  return raw === undefined || raw === '' ? null : raw;
 }

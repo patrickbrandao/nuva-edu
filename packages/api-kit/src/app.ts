@@ -136,8 +136,9 @@ export interface ApiAppOptions {
    */
   eventStreams?: boolean;
   /**
-   * `SESSION_SECRET`: assina o cookie de retorno OAuth (HMAC-SHA256, spec 007). Sem ele, os
-   * cookies continuam sendo lidos e gravados, mas `setApiCookie(..., 'oauth', ...)` lança.
+   * Segredo do `@fastify/cookie` (`reply.signCookie`, `request.unsignCookie`), com pelo menos
+   * 32 caracteres. Nenhum auxiliar do api-kit assina cookie: o de retorno OAuth é assinado pelo
+   * núcleo com `SESSION_SECRET` e o de sessão não é assinado (spec 007).
    */
   cookieSecret?: string;
   /**
