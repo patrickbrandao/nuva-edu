@@ -30,6 +30,7 @@ Detalhe das decisões em `specs/decisions/`.
 - Docker das aplicações: `Dockerfile` em estágios e `docker-compose.yml` das cinco aplicações (raiz somente leitura, limites, sem capacidades, healthcheck), serviço `migrate` antes das APIs, rotas do Traefik por host (`/api/`, `/mcp`, `/healthz` para as APIs; o resto para os sites em Nginx, com `/config.json` gerado na subida), `pnpm compose`, `pnpm dev:up` e `pnpm dev:down`; healthcheck do Traefik corrigido.
 
 ### Alterado
+- `@nuva-edu/admin`: contornos trocados pelos componentes de `@nuva-edu/ui` (link do roteador, casca em página inteira, rodapé, estados de carregando e erro, script de tema pelo plugin); abaixo de 1024 px o menu lateral é uma gaveta.
 - Contratos base: `Page` só com `nextCursor` (cada listagem declara `items`), CSRF como esquema de segurança `csrfToken` em vez de parâmetro, e códigos de erro gerais fixados na spec 003 e no esquema `Problem` (com `retryAfterSeconds`).
 - `@nuva-edu/api-client`: gerado em dia com os contratos da tarefa 019; `ApiError.retryAfter` usa `retryAfterSeconds` quando falta o `Retry-After`; script `test:files` para o `verify:quick` filtrar os testes.
 - `verify`: passo `tipos-banco` (`db:types:check` do core) no completo e, no rápido, quando uma migration muda; contrato alterado também confere o cliente gerado (passo `cliente`); no completo os testes de contrato rodam uma vez só.

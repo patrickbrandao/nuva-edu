@@ -30,6 +30,8 @@ biblioteca, `createBrowserRouter`) e TanStack Query (spec 006).
   traduções. O Tailwind entra sem o preflight e só no que é específico do site (`src/styles.css`).
 - Tela nova: acrescente o item em `src/shell/menu.ts`, os textos em `pt-BR.json` e troque a rota
   de `UnderConstructionPage` pela tela.
-- Links internos desenhados pelos componentes (`<a href="/...">`) passam pelo roteador graças a
-  `useInternalLinks`, sem recarregar a página.
-- O `<script>` de tema do `index.html` é o `THEME_BOOT_SCRIPT` de `@nuva-edu/ui`; um teste confere.
+- Links internos dos componentes (`href="/..."`) passam pelo roteador graças ao `LinkProvider` de
+  `AppProviders.tsx`, sem recarregar a página.
+- Abaixo de 1024 px o menu lateral é uma gaveta (`drawerBelow` do `AdminShell`; spec 006, RNF-01).
+- O script de tema do `<head>` vem do `themeBootPlugin()` de `@nuva-edu/ui/theme-boot`, no
+  `vite.config.ts`.

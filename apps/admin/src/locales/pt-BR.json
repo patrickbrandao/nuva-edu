@@ -5,6 +5,7 @@
   },
   "common": {
     "retry": "Tentar de novo",
+    "newTab": "(abre em nova aba)",
     "backHome": "Voltar ao painel",
     "requestId": "Código da requisição: {{id}}"
   },
@@ -17,6 +18,9 @@
   "shell": {
     "collapseMenu": "Recolher o menu",
     "expandMenu": "Expandir o menu",
+    "menu": "Menu",
+    "openMenu": "Abrir o menu",
+    "closeMenu": "Fechar o menu",
     "breadcrumb": "Trilha de navegação"
   },
   "menu": {

@@ -20,7 +20,7 @@ describe('página de login', () => {
     // Fora da casca: sem menu lateral; com tema e com o link do código-fonte.
     expect(screen.queryByRole('navigation')).toBeNull();
     expect(screen.getByRole('group', { name: 'Tema da página' })).toBeTruthy();
-    expect(screen.getByRole('link', { name: 'Código-fonte' })).toBeTruthy();
+    expect(screen.getByRole('link', { name: /^Código-fonte/ })).toBeTruthy();
 
     // Nenhuma chamada além dos dados públicos da instalação.
     const paths = fetchMock.mock.calls.map(([input]) => new URL((input as Request).url).pathname);
