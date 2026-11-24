@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next';
 import { matchPath, Outlet, ScrollRestoration, useLocation, useMatches } from 'react-router';
 import { useMeta } from '../api/meta';
 import { MENU_STORAGE_KEY } from '../config';
+import { AdminLink } from './AdminLink';
 import { Footer } from './Footer';
 import { HOME_PATH, LOGIN_PATH, NAV_GROUPS, type TextKey } from './navigation';
 import { useDialogFocusTrap } from './useDialogFocusTrap';
@@ -114,6 +115,7 @@ export function Shell() {
               title={t('shell.notifications')}
             />
           </span>
+          <AdminLink />
           <AdminButton href={LOGIN_PATH} variant="primary">
             {t('shell.signIn')}
           </AdminButton>

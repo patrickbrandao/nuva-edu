@@ -2,6 +2,7 @@ import { themeBootPlugin } from '@nuva-edu/ui/theme-boot';
 import tailwindcss from '@tailwindcss/vite';
 import react from '@vitejs/plugin-react';
 import { defineConfig } from 'vitest/config';
+import { devRuntimeConfigPlugin } from './src/config/dev-server';
 
 // Em produção o proxy reverso entrega `/api` e `/healthz` do mesmo host à classroom-api
 // (spec 031). Em desenvolvimento o Vite faz esse papel; a porta padrão é a da classroom-api
@@ -14,7 +15,9 @@ const proxy = {
 
 export default defineConfig({
   // themeBootPlugin: aplica o tema salvo antes da primeira pintura (script no <head>).
-  plugins: [react(), tailwindcss(), themeBootPlugin()],
+  // devRuntimeConfigPlugin: responde `/config.json` no `vite dev` e no `vite preview`; na imagem
+  // quem serve o arquivo é o Nginx (spec 031).
+  plugins: [react(), tailwindcss(), themeBootPlugin(), devRuntimeConfigPlugin()],
   server: { host: '127.0.0.1', port: 5312, strictPort: true, proxy },
   preview: { host: '127.0.0.1', port: 5312, strictPort: true, proxy },
   test: {

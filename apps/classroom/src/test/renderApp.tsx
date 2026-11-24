@@ -3,7 +3,9 @@ import { QueryClient } from '@tanstack/react-query';
 import { render } from '@testing-library/react';
 import { createMemoryRouter, RouterProvider } from 'react-router';
 import { AppProviders } from '../AppProviders';
+import type { RuntimeConfig } from '../config/runtime-config';
 import { routes } from '../routes';
+import type { UserRole } from '../session/role';
 
 type Meta = ClassroomSchemas['Meta'];
 
@@ -40,8 +42,26 @@ export function unavailableResponse(): Response {
 
 type FetchMock = (request: Request) => Promise<Response>;
 
+/** `/config.json` no formato da spec 031. */
+export const RUNTIME_CONFIG: RuntimeConfig = {
+  app: 'classroom',
+  adminUrl: 'https://edu-admin.escola.test',
+  classroomUrl: 'https://classroom.escola.test',
+};
+
+interface RenderOptions {
+  /** Resultado da leitura do `/config.json`; `null` é arquivo ausente ou inválido. */
+  config?: RuntimeConfig | null;
+  /** Papel do usuário da sessão; sem ele, é um visitante. */
+  role?: UserRole | null;
+}
+
 /** Monta o site inteiro em memória, com a API simulada por `fetch`. */
-export function renderApp(path = '/', fetch: FetchMock = async () => jsonResponse(META)) {
+export function renderApp(
+  path = '/',
+  fetch: FetchMock = async () => jsonResponse(META),
+  { config = RUNTIME_CONFIG, role = null }: RenderOptions = {},
+) {
   const requests: string[] = [];
   const api = createClassroomClient({
     baseUrl: 'http://classroom.test',
@@ -53,7 +73,12 @@ export function renderApp(path = '/', fetch: FetchMock = async () => jsonRespons
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   const router = createMemoryRouter(routes, { initialEntries: [path] });
   const view = render(
-    <AppProviders api={api} queryClient={queryClient}>
+    <AppProviders
+      api={api}
+      queryClient={queryClient}
+      loadConfig={async () => config}
+      sessionRole={role}
+    >
       <RouterProvider router={router} />
     </AppProviders>,
   );
