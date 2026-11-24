@@ -40,7 +40,7 @@ export const EXIT = Object.freeze({
   VERIFY: 5,
   /** O fast-forward da `main` continuou impossível depois da nova tentativa. */
   NOT_FF: 6,
-  /** O push falhou: a `main` local já tem a tarefa e a limpeza local foi feita. */
+  /** O push falhou, também na repetição única: a `main` local já avançou e a limpeza foi feita. */
   PUSH: 7,
   /** O `pnpm install` falhou no worktree. */
   INSTALL: 8,
@@ -86,7 +86,9 @@ Códigos de saída:
   5  verificação falhou no worktree
   6  fast-forward da main impossível depois de uma nova tentativa
   7  push falhou: a main local já avançou, worktree, branch e arquivo da tarefa já foram
-     removidos; falta só "git push origin main" no checkout principal
+     removidos; falta só "git push origin main" no checkout principal. Antes de desistir, o
+     finish repete o push uma única vez, e só se, depois de um fetch, origin/main não tiver
+     commit que a main local não tem (corrida entre dois finish)
   8  pnpm install falhou no worktree`;
 
 const GIT_ENV_TO_DROP = ['GIT_DIR', 'GIT_WORK_TREE', 'GIT_INDEX_FILE', 'GIT_PREFIX'];
@@ -674,6 +676,43 @@ function rebaseAndVerify(ctx, id, dir, options, say) {
   }
 }
 
+/**
+ * `git push origin main`, com uma única repetição para a corrida entre dois `task:finish`: o
+ * remoto recusa o push ("cannot lock ref") porque outro chegou no mesmo instante, e a `main`
+ * local, que já contém o commit do outro, passaria em seguida.
+ *
+ * A saída do Git não distingue com segurança corrida de recusa por permissão ou credencial, então
+ * a repetição vale para qualquer falha, desde que, depois de um `git fetch origin main`, o remoto
+ * só tenha commits que a `main` local já contém. Fetch falhando, remoto com commit a mais ou
+ * segunda falha: fica a falha, sem nova tentativa. Nunca `--force`, nunca rebase da `main`.
+ */
+function pushMain(ctx, say) {
+  const env = ctx.isTTY ? {} : { GIT_TERMINAL_PROMPT: '0' };
+  const attempt = () => {
+    say('git push origin main');
+    const result = git(ctx.main, ['push', 'origin', 'main'], env);
+    if (result.output) ctx.log(indent(result.output));
+    return result;
+  };
+  const first = attempt();
+  if (first.ok) return first;
+
+  say('o push falhou: git fetch origin main, para ver se foi corrida com outro task:finish');
+  const fetched = git(ctx.main, ['fetch', 'origin', 'main'], env);
+  if (!fetched.ok) {
+    if (fetched.output) ctx.log(indent(fetched.output));
+    say('o fetch também falhou: não repito o push');
+    return first;
+  }
+  const linear = git(ctx.main, ['merge-base', '--is-ancestor', 'origin/main', 'main']);
+  if (!linear.ok) {
+    say('origin/main tem commit que a main local não tem: não repito o push');
+    return first;
+  }
+  say('a main local contém tudo o que está em origin/main: repito o push uma única vez');
+  return attempt();
+}
+
 function finish(ctx, options) {
   let { id } = options;
   if (!id) {
@@ -746,13 +785,7 @@ function finish(ctx, options) {
   const commits = git(ctx.main, ['rev-parse', '--short', 'HEAD']).stdout.trim();
   say(`main avançou por fast-forward até ${commits}`);
 
-  say('git push origin main');
-  const push = git(
-    ctx.main,
-    ['push', 'origin', 'main'],
-    ctx.isTTY ? {} : { GIT_TERMINAL_PROMPT: '0' },
-  );
-  if (push.output) ctx.log(indent(push.output));
+  const push = pushMain(ctx, say);
 
   // Daqui em diante a main local já tem os commits: worktree e branch não guardam mais nada.
   const calledFromWorktree = inside(ctx.cwd, dir);

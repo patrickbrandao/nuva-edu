@@ -105,6 +105,26 @@ function run(cwd, argv, deps = {}) {
   return { code, out: out.join('\n'), calls };
 }
 
+/**
+ * Gancho `pre-receive` no remoto de mentira: recusa os primeiros `refusals` pushes e aceita os
+ * seguintes. Cada chamada acrescenta uma linha ao arquivo contador, que é devolvido.
+ */
+function refusePushes(env, refusals) {
+  const counter = join(env.remote, 'pushes.log');
+  const hook = join(env.remote, 'hooks', 'pre-receive');
+  mkdirSync(join(env.remote, 'hooks'), { recursive: true });
+  writeFileSync(
+    hook,
+    `#!/bin/sh\necho x >> '${counter}'\ncat > /dev/null\n[ "$(wc -l < '${counter}')" -gt ${refusals} ] && exit 0\necho 'recusado pelo teste' >&2\nexit 1\n`,
+    { mode: 0o755 },
+  );
+  return counter;
+}
+
+function pushesSeen(counter) {
+  return existsSync(counter) ? readFileSync(counter, 'utf8').split('\n').filter(Boolean).length : 0;
+}
+
 function commitIn(dir, file, text, message) {
   appendFileSync(join(dir, file), text);
   git(dir, 'add', file);
@@ -454,6 +474,75 @@ describe('task:finish', () => {
     assert.equal(git(env.repo, 'branch', '--list', 'task/001'), '');
     assert.equal(taskOf(env, '001'), null);
     assert.equal(git(env.repo, 'status', '--porcelain'), '');
+  });
+
+  test('corrida de push: o remoto recusa o primeiro push e aceita o segundo, código 0', () => {
+    const env = started();
+    const dir = env.worktree('001');
+    commitIn(dir, 'app.txt', 'quatro\n', 'feat: quatro (task 001)');
+    const tip = git(dir, 'rev-parse', 'HEAD');
+    const counter = refusePushes(env, 1);
+
+    const result = run(env.repo, ['finish', '001']);
+    assert.equal(result.code, EXIT.OK, result.out);
+    assert.equal(pushesSeen(counter), 2);
+    assert.match(result.out, /repito o push uma única vez/);
+    assert.match(result.out, /concluída e enviada/);
+    assert.doesNotMatch(result.out, /PUSH PENDENTE/);
+    assert.equal(git(env.remote, 'rev-parse', 'main'), tip);
+    assert.equal(git(env.repo, 'rev-parse', 'main'), tip);
+    assert.equal(existsSync(dir), false);
+    assert.equal(git(env.repo, 'branch', '--list', 'task/001'), '');
+    assert.equal(taskOf(env, '001'), null);
+  });
+
+  test('remoto que recusa sempre: uma única repetição do push e código 7', () => {
+    const env = started();
+    const dir = env.worktree('001');
+    commitIn(dir, 'app.txt', 'quatro\n', 'feat: quatro (task 001)');
+    const tip = git(dir, 'rev-parse', 'HEAD');
+    const remoteBefore = git(env.remote, 'rev-parse', 'main');
+    const counter = refusePushes(env, Number.MAX_SAFE_INTEGER);
+
+    const result = run(env.repo, ['finish', '001']);
+    assert.equal(result.code, EXIT.PUSH);
+    assert.equal(pushesSeen(counter), 2);
+    assert.match(result.out, /PUSH PENDENTE/);
+    assert.match(result.out, new RegExp(`git -C ${env.repo} push origin main`));
+    assert.equal(git(env.remote, 'rev-parse', 'main'), remoteBefore);
+    assert.equal(git(env.repo, 'rev-parse', 'main'), tip);
+    assert.equal(existsSync(dir), false);
+    assert.equal(git(env.repo, 'branch', '--list', 'task/001'), '');
+    assert.equal(taskOf(env, '001'), null);
+    assert.equal(git(env.repo, 'status', '--porcelain'), '');
+  });
+
+  test('remoto à frente da main local: código 7 sem repetir o push, sem force nem rebase', () => {
+    const env = started();
+    const dir = env.worktree('001');
+    commitIn(dir, 'app.txt', 'quatro\n', 'feat: quatro (task 001)');
+    const tip = git(dir, 'rev-parse', 'HEAD');
+    // Outro clone envia direto ao remoto um commit que a main local não tem.
+    const other = join(env.repo, '..', 'outro');
+    git(join(env.repo, '..'), 'clone', '--quiet', env.remote, other);
+    commitIn(other, 'outro.txt', 'de fora\n', 'feat: de fora (task 002)');
+    git(other, 'push', '--quiet', 'origin', 'main');
+    const remoteTip = git(env.remote, 'rev-parse', 'main');
+    const counter = refusePushes(env, 0);
+
+    const result = run(env.repo, ['finish', '001']);
+    assert.equal(result.code, EXIT.PUSH);
+    // O Git recusa no cliente ou no servidor antes do gancho: nenhum push chega a ser aceito,
+    // e o script não tenta a segunda vez.
+    assert.equal(pushesSeen(counter), 0);
+    assert.equal(result.out.match(/— git push origin main/g).length, 1);
+    assert.match(result.out, /origin\/main tem commit que a main local não tem/);
+    assert.match(result.out, /PUSH PENDENTE/);
+    assert.equal(git(env.remote, 'rev-parse', 'main'), remoteTip);
+    assert.equal(git(env.repo, 'rev-parse', 'main'), tip);
+    assert.equal(git(env.repo, 'log', '--merges', '--oneline', 'main'), '');
+    assert.equal(existsSync(dir), false);
+    assert.equal(taskOf(env, '001'), null);
   });
 
   test('tarefa sem worktree é recusada', () => {

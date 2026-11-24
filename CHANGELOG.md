@@ -6,6 +6,7 @@ Detalhe das decisões em `specs/decisions/`.
 ## [Não lançado]
 
 ### Adicionado
+- `task:finish` repete o push uma vez na corrida entre dois finish (remoto ancestral da `main` local); senão, código 7.
 - Janela de contrato provada no repositório com o `task.mjs` (`--join`, `pronta`, fechamento único).
 - Marca da escola no `/api/v1/meta` (logotipo, cor de destaque, código-fonte): contrato, duas APIs, cliente e sites.
 - Teste de contrato confere as respostas de erro declaradas; worker lê o fuso de `school.timezone`.

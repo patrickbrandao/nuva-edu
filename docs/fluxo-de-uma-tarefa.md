@@ -34,6 +34,21 @@ repete rebase e verificação uma vez); `git push origin main`; remove worktree,
 da tarefa. Se o rebase trouxer mudança no `pnpm-lock.yaml`, ele reinstala antes de verificar.
 O checkout principal precisa estar na `main` e limpo; senão o comando para sem tocar em nada.
 
+Push que falha é repetido **uma única vez**, e só no caso da corrida entre dois `task:finish`
+(o remoto responde `cannot lock ref 'refs/heads/main'` porque outro push chegou no mesmo
+instante). Depois da falha o script roda `git fetch origin main` e confere
+`git merge-base --is-ancestor origin/main main`:
+
+- `origin/main` é ancestral da `main` local (o remoto só tem commits que a local já contém):
+  repete o `git push origin main`. Passou, termina com código 0; falhou de novo, código 7.
+- `origin/main` tem commit que a local não tem, ou o próprio `fetch` falhou: código 7, sem
+  repetir.
+
+A saída do Git não permite separar com segurança a corrida de uma recusa por permissão ou por
+credencial, então a repetição única também acontece nesses casos (se o `fetch` passar) e falha
+igual: o resultado continua sendo o código 7, sem laço. O script nunca usa `--force` e nunca faz
+rebase da `main`. A regra para o agente não muda: código 7 é relatar e parar.
+
 Outros comandos:
 
 | Comando | O que faz |
@@ -54,7 +69,7 @@ Outros comandos:
 | 4 | Conflito no rebase (fica em andamento no worktree) | Resolver, `git add`, `git rebase --continue` e repetir |
 | 5 | `verify:quick` falhou | Corrigir, commitar e repetir; a `main` não mudou |
 | 6 | Fast-forward impossível depois da nova tentativa | Repetir o `task:finish`; a `main` não recebeu a tarefa |
-| 7 | Push falhou | A `main` local já avançou e a limpeza local foi feita. Não insistir: relatar ao humano, que roda `git push origin main` no checkout principal |
+| 7 | Push falhou, mesmo depois da repetição única da corrida entre dois `task:finish` | A `main` local já avançou e a limpeza local foi feita. Não insistir: relatar ao humano, que roda `git push origin main` no checkout principal |
 | 8 | `pnpm install` falhou no worktree | Ler a saída do pnpm |
 
 O `task:start` usa os códigos 1, 2 e 8 (com 8, desfaz worktree e branch e a tarefa continua
