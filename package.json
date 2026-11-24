@@ -27,7 +27,7 @@
     "task:abort": "node scripts/task.mjs abort",
     "task:path": "node scripts/task.mjs path",
     "task:list": "node scripts/task.mjs list",
-    "deploy:test": "node scripts/pending.mjs deploy:test 016"
+    "deploy:test": "bash scripts/deploy-test.sh"
   },
   "devDependencies": {
     "@biomejs/biome": "2.6.8",
