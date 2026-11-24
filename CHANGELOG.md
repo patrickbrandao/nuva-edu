@@ -22,6 +22,7 @@ Detalhe das decisões em `specs/decisions/`.
 - `apps/classroom` (`@nuva-edu/classroom`): esqueleto do site do aluno com casca responsiva (menu da spec 006, gaveta abaixo de 1024 px), tema, traduções pt-BR, vitrine vazia com os dados de `/api/v1/meta`, login só com a estrutura e link "Código-fonte" no rodapé.
 - `packages/api-kit` (`@nuva-edu/api-kit`): base HTTP das APIs sobre Fastify, com requisição e resposta validadas pelo `openapi.yaml`, conferência rotas x contrato (e `csrfToken` nas escritas), problem+json, `X-Request-Id`, IP real por `TRUSTED_PROXIES`, `/healthz`, `/readyz`, `/metrics` e encerramento limpo.
 - `apps/admin-api` (`@nuva-edu/admin-api`): esqueleto do serviço sobre o api-kit, com `GET /api/v1/meta`, testes de integração e teste de contrato.
+- `apps/worker` (`@nuva-edu/worker`): laço de consumo da fila (`NOTIFY` + varredura, concorrência, batimento, tarefa presa, encerramento em `SIGTERM`), agendador das recorrentes no fuso da escola, tarefas `example.echo` e `retention.purge` (ainda vazia) e HTTP interno com `/healthz`, `/readyz` e `/metrics`.
 
 ### Alterado
 - Contratos base: `Page` só com `nextCursor` (cada listagem declara `items`), CSRF como esquema de segurança `csrfToken` em vez de parâmetro, e códigos de erro gerais fixados na spec 003 e no esquema `Problem` (com `retryAfterSeconds`).
