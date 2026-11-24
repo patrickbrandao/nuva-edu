@@ -35,7 +35,8 @@
 }
 
 .minui-theme button:focus-visible {
-  outline: 2px solid var(--minui-blue);
+  /* o anel dos demais controles (--adm-focus): a cor da escola; sem ela, o azul de sempre */
+  outline: 2px solid var(--minui-accent-text, var(--minui-blue));
   outline-offset: 2px;
 }
 

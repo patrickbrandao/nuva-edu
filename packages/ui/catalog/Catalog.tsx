@@ -3,6 +3,7 @@ import type { CSSProperties, ReactNode } from 'react';
 import { useState } from 'react';
 import {
   ActionButton,
+  AdminAvatar,
   AdminAvatars,
   AdminBadge,
   AdminButton,
@@ -313,7 +314,11 @@ const ACCENT_NAV = [
 
 const ratio = (a: string, b: string): string => `${contrastRatio(a, b).toFixed(1)}:1`;
 
-/** O que muda com `--minui-accent`: botão primário, caixas marcadas, link, foco e item atual. */
+/**
+ * O que muda com `--minui-accent`: botão primário, caixas marcadas, link, foco (inclusive o do
+ * seletor de tema), iniciais da marca e item atual. Os dois últimos avatares não são a marca:
+ * ficam na cor do nome, com a inicial em branco ou preto conforme o fundo.
+ */
 function AccentSample({ color, theme }: { color: string | null; theme: 'light' | 'dark' }) {
   // como nos sites, a cor entra por uma variável CSS; os derivados são refeitos no AdminScope
   const scope = color ? ({ '--minui-accent': color } as CSSProperties) : undefined;
@@ -331,6 +336,13 @@ function AccentSample({ color, theme }: { color: string | null; theme: 'light' |
             Ligado
           </AdminSwitch>
           <TextLink href="/termos">Link de texto</TextLink>
+        </div>
+        <div className="cat__row">
+          {/* o anel de foco do seletor (Tab) e as iniciais da marca seguem a cor */}
+          <ThemeSwitch compact mode={theme} onChange={() => {}} />
+          <AdminAvatar square accent size={24} name="Escola Aurora" />
+          <AdminAvatar square size={24} name="Escola Aurora" />
+          <AdminAvatar square size={24} name="Escola 7" />
         </div>
         <div style={{ maxWidth: 220 }}>
           <AdminNav sections={ACCENT_NAV} active="cursos" />

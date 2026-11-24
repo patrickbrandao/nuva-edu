@@ -1010,7 +1010,8 @@
   overflow: hidden;
   border-radius: 50%;
   background: var(--adm-av-bg, var(--adm-active));
-  color: #ffffff;
+  /* --adm-av-on: branco ou preto, o que der 4,5:1 sobre o fundo (AdminAvatar calcula) */
+  color: var(--adm-av-on, #ffffff);
   font-size: calc(var(--adm-av, 22px) * 0.5);
   font-weight: 500;
   line-height: 1;
@@ -1022,6 +1023,13 @@
   font-size: calc(var(--adm-av, 22px) * 0.42);
   font-weight: 700;
   letter-spacing: -0.04em;
+}
+
+/* marca da escola: com cor de destaque, o fundo cheio e o texto dela; sem, a cor do nome */
+.minui-adm-avatar--accent {
+  background: var(--minui-accent-fill, var(--adm-av-bg, var(--adm-active)));
+  box-shadow: inset 0 0 0 1px var(--minui-accent-edge, transparent);
+  color: var(--minui-accent-on, var(--adm-av-on, #ffffff));
 }
 
 .minui-adm-avatar--soft {

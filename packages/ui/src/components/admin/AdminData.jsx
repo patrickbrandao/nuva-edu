@@ -1,4 +1,5 @@
 import './admin.css';
+import { accentOn, hslToHex, isHexColor } from '../../accent/accent';
 import { cx, hueOf } from '../../lib/util';
 import { Avatar } from '../core/Avatar';
 
@@ -45,10 +46,19 @@ export function AdminStatus({ tone = 'gray', dot = false, className, children })
   );
 }
 
+/** Saturação e luminosidade (HSL) do fundo derivado do nome. */
+const AVATAR_SATURATION = 62;
+const AVATAR_LIGHTNESS = 46;
+
 /**
  * Avatar redondo. `src` é uma imagem; sem ela, a inicial do nome
  * sobre uma cor (`color`, ou uma derivada do nome). `square` é o selo
  * quadrado-arredondado (logotipo de veículo); `soft`, o fundo cinza.
+ *
+ * A inicial sai em branco ou preto, o que der 4,5:1 sobre o fundo (a regra de
+ * `accentOn`); com `color` fora do formato `#RRGGBB` não há como medir, e fica branco.
+ * `accent` é para a marca da escola: havendo cor de destaque (`--minui-accent`), o
+ * fundo e o texto são os dela; sem, vale a cor do nome.
  */
 export function AdminAvatar({
   name = '',
@@ -57,24 +67,35 @@ export function AdminAvatar({
   size = 22,
   square = false,
   soft = false,
+  accent = false,
   initials,
   className,
 }) {
   const photo = src;
+  const painted = !photo && !soft;
   const hue = hueOf(name);
+  const measurable = color
+    ? isHexColor(color)
+      ? color
+      : null
+    : hslToHex(hue, AVATAR_SATURATION, AVATAR_LIGHTNESS);
   return (
     <span
       className={cx(
         'minui-adm-avatar',
         square && 'minui-adm-avatar--square',
         soft && 'minui-adm-avatar--soft',
+        accent && painted && 'minui-adm-avatar--accent',
         className,
       )}
       role="img"
       aria-label={name || undefined}
       style={{
         '--adm-av': `${size}px`,
-        '--adm-av-bg': photo || soft ? undefined : (color ?? `hsl(${hue} 62% 46%)`),
+        '--adm-av-bg': painted
+          ? (color ?? `hsl(${hue} ${AVATAR_SATURATION}% ${AVATAR_LIGHTNESS}%)`)
+          : undefined,
+        '--adm-av-on': painted && measurable ? accentOn(measurable) : undefined,
       }}
     >
       {photo ? (

@@ -53,6 +53,25 @@ function fromLinear(rgb: Rgb): string {
 
 const luminance = ([r, g, b]: Rgb): number => 0.2126 * r + 0.7152 * g + 0.0722 * b;
 
+/**
+ * `hsl(h s% l%)` em `#RRGGBB`, para medir o contraste de uma cor que nasce de um matiz
+ * (o fundo das iniciais do `AdminAvatar`). `h` em graus, `s` e `l` de 0 a 100.
+ */
+export function hslToHex(h: number, s: number, l: number): string {
+  const saturation = Math.min(100, Math.max(0, s)) / 100;
+  const lightness = Math.min(100, Math.max(0, l)) / 100;
+  const hue = ((h % 360) + 360) % 360;
+  const chroma = saturation * Math.min(lightness, 1 - lightness);
+  const channel = (n: number): string => {
+    const k = (n + hue / 30) % 12;
+    const value = lightness - chroma * Math.max(-1, Math.min(k - 3, 9 - k, 1));
+    return Math.round(value * 255)
+      .toString(16)
+      .padStart(2, '0');
+  };
+  return `#${channel(0)}${channel(8)}${channel(4)}`;
+}
+
 /** Luminância relativa da WCAG 2.1 (0 = preto, 1 = branco). */
 export function relativeLuminance(hex: string): number {
   return luminance(toLinear(hex));

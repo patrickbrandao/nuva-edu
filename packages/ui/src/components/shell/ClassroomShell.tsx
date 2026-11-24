@@ -182,7 +182,7 @@ export function ClassroomShell({
         />
         <Link href={brand.href} className="minui-room__brand">
           <span className="minui-room__brand-mark" aria-hidden="true">
-            {brand.mark ?? <AdminAvatar square size={24} name={brand.name} />}
+            {brand.mark ?? <AdminAvatar square accent size={24} name={brand.name} />}
           </span>
           <span className="minui-room__brand-name">{brand.name}</span>
         </Link>

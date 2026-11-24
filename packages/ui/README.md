@@ -41,6 +41,15 @@ Firefox 128, Safari 16.4 em diante); navegador mais antigo ignora o bloco e fica
 neutro. `--minui-accent` também pode ser definida num elemento qualquer que contenha um
 `AdminScope` ou uma casca (é assim que o catálogo mostra três cores na mesma página).
 
+O anel de foco é o mesmo em todo controle que os sites usam: `--adm-focus` dentro de um
+`AdminScope` ou de uma casca, e `var(--minui-accent-text, var(--minui-blue))` no `ThemeSwitch`
+(que também vive fora delas; sem a cor da escola, o azul de sempre).
+
+As iniciais do `AdminAvatar` saem em branco ou preto, o que der 4,5:1 sobre o fundo (a regra de
+`accentOn`, aplicada à cor derivada do nome ou a `color` em `#RRGGBB`). Com a propriedade
+`accent`, usada pela marca do `ClassroomShell` quando a escola não tem logotipo, o quadrado é
+`--minui-accent-fill` com o texto `--minui-accent-on`; sem cor de destaque, vale a cor do nome.
+
 As mesmas contas existem em TypeScript, para teste e para o site que precisar do resultado fora
 do CSS (ex.: prévia da cor nas configurações): `accentOn(cor)`, `accentHover(cor)`,
 `accentText(cor, 'light' | 'dark')`, `contrastRatio(a, b)`, `relativeLuminance(cor)` e
