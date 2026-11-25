@@ -9,6 +9,8 @@ export type Generated<T> = T extends ColumnType<infer S, infer I, infer U>
   ? ColumnType<S, I | undefined, U>
   : ColumnType<T, T | undefined, T>;
 
+export type Int8 = ColumnType<string, bigint | number | string, bigint | number | string>;
+
 export type Json = JsonValue;
 
 export type JsonArray = JsonValue[];
@@ -38,6 +40,76 @@ export interface AuditLog {
   targetId: string | null;
   targetType: string | null;
   userAgent: string | null;
+}
+
+export interface BundleItems {
+  bundleId: string;
+  createdAt: Generated<Timestamp>;
+  position: number;
+  productId: string;
+  productType: string;
+}
+
+export interface Bundles {
+  accessDays: number | null;
+  accessMode: Generated<string>;
+  archivedAt: Timestamp | null;
+  coverImageId: string | null;
+  createdAt: Generated<Timestamp>;
+  description: string | null;
+  id: Generated<string>;
+  priceCents: Int8 | null;
+  publishedAt: Timestamp | null;
+  slug: string;
+  status: Generated<string>;
+  summary: string | null;
+  title: string;
+  updatedAt: Generated<Timestamp>;
+  version: Generated<number>;
+}
+
+export interface Courses {
+  accessDays: number | null;
+  accessMode: Generated<string>;
+  archivedAt: Timestamp | null;
+  certificateEnabled: Generated<boolean>;
+  certificateHours: number | null;
+  coverImageId: string | null;
+  createdAt: Generated<Timestamp>;
+  description: string | null;
+  id: Generated<string>;
+  level: string | null;
+  ownerId: string | null;
+  priceCents: Int8 | null;
+  publishedAt: Timestamp | null;
+  reviewRequestedAt: Timestamp | null;
+  slug: string;
+  status: Generated<string>;
+  summary: string | null;
+  title: string;
+  updatedAt: Generated<Timestamp>;
+  version: Generated<number>;
+}
+
+export interface Ebooks {
+  accessDays: number | null;
+  accessMode: Generated<string>;
+  archivedAt: Timestamp | null;
+  authorName: string | null;
+  coverImageId: string | null;
+  createdAt: Generated<Timestamp>;
+  description: string | null;
+  fileUrl: string | null;
+  id: Generated<string>;
+  pages: number | null;
+  priceCents: Int8 | null;
+  publishedAt: Timestamp | null;
+  slug: string;
+  status: Generated<string>;
+  summary: string | null;
+  title: string;
+  updatedAt: Generated<Timestamp>;
+  version: Generated<number>;
 }
 
 export interface EmailOutbox {
@@ -101,6 +173,35 @@ export interface Jobs {
   uniqueKey: string | null;
 }
 
+export interface LessonLinks {
+  createdAt: Generated<Timestamp>;
+  id: Generated<string>;
+  kind: string;
+  label: string;
+  lessonId: string;
+  position: number;
+  updatedAt: Generated<Timestamp>;
+  url: string;
+}
+
+export interface Lessons {
+  createdAt: Generated<Timestamp>;
+  description: string | null;
+  durationSeconds: Generated<number>;
+  forumTopicId: string | null;
+  id: Generated<string>;
+  isSample: Generated<boolean>;
+  moduleId: string;
+  position: number;
+  status: Generated<string>;
+  title: string;
+  type: Generated<string>;
+  updatedAt: Generated<Timestamp>;
+  version: Generated<number>;
+  videoProvider: string | null;
+  videoUrl: string | null;
+}
+
 export interface LoginAttempts {
   createdAt: Generated<Timestamp>;
   email: string;
@@ -108,6 +209,16 @@ export interface LoginAttempts {
   ip: string;
   site: string;
   success: boolean;
+}
+
+export interface Modules {
+  courseId: string;
+  createdAt: Generated<Timestamp>;
+  id: Generated<string>;
+  position: number;
+  title: string;
+  updatedAt: Generated<Timestamp>;
+  version: Generated<number>;
 }
 
 export interface OauthIdentities {
@@ -118,6 +229,13 @@ export interface OauthIdentities {
   provider: string;
   providerUserId: string;
   userId: string;
+}
+
+export interface ProductEbooks {
+  createdAt: Generated<Timestamp>;
+  ebookId: string;
+  targetId: string;
+  targetType: string;
 }
 
 export interface Profiles {
@@ -212,13 +330,21 @@ export interface UserSuspensions {
 
 export interface DB {
   auditLog: AuditLog;
+  bundleItems: BundleItems;
+  bundles: Bundles;
+  courses: Courses;
+  ebooks: Ebooks;
   emailOutbox: EmailOutbox;
   emailTokens: EmailTokens;
   images: Images;
   imageVariants: ImageVariants;
   jobs: Jobs;
+  lessonLinks: LessonLinks;
+  lessons: Lessons;
   loginAttempts: LoginAttempts;
+  modules: Modules;
   oauthIdentities: OauthIdentities;
+  productEbooks: ProductEbooks;
   profiles: Profiles;
   sessions: Sessions;
   settings: Settings;
