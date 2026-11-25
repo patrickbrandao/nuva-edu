@@ -77,6 +77,62 @@ export interface Bundles {
   version: Generated<number>;
 }
 
+export interface CertificatePreviews {
+  courseId: string | null;
+  createdAt: Generated<Timestamp>;
+  error: string | null;
+  html: string;
+  id: Generated<string>;
+  pdf: Buffer | null;
+  renderedAt: Timestamp | null;
+  requestedBy: string;
+  status: Generated<string>;
+}
+
+export interface Certificates {
+  code: string;
+  completedAt: Timestamp;
+  courseId: string;
+  courseTitle: string;
+  createdAt: Generated<Timestamp>;
+  hours: number;
+  id: Generated<string>;
+  instructorName: string | null;
+  issuedAt: Generated<Timestamp>;
+  issuedBy: string | null;
+  issuedManually: Generated<boolean>;
+  issueReason: string | null;
+  pdf: Buffer | null;
+  pdfRenderedAt: Timestamp | null;
+  revokedAt: Timestamp | null;
+  revokedBy: string | null;
+  revokeReason: string | null;
+  schoolName: string;
+  signerName: string | null;
+  signerRole: string | null;
+  studentName: string | null;
+  templateVersionId: string;
+  updatedAt: Generated<Timestamp>;
+  userId: string;
+}
+
+export interface CertificateTemplates {
+  courseId: string | null;
+  createdAt: Generated<Timestamp>;
+  id: Generated<string>;
+  updatedAt: Generated<Timestamp>;
+  updatedBy: string;
+  versionId: string;
+}
+
+export interface CertificateTemplateVersions {
+  courseId: string | null;
+  createdAt: Generated<Timestamp>;
+  createdBy: string;
+  html: string;
+  id: Generated<string>;
+}
+
 export interface Courses {
   accessDays: number | null;
   accessMode: Generated<string>;
@@ -387,6 +443,10 @@ export interface DB {
   auditLog: AuditLog;
   bundleItems: BundleItems;
   bundles: Bundles;
+  certificatePreviews: CertificatePreviews;
+  certificates: Certificates;
+  certificateTemplates: CertificateTemplates;
+  certificateTemplateVersions: CertificateTemplateVersions;
   courses: Courses;
   ebooks: Ebooks;
   emailOutbox: EmailOutbox;
