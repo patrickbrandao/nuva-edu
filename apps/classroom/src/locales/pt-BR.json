@@ -274,7 +274,8 @@
       "tabs": {
         "label": "Conteúdo da aula",
         "about": "Sobre",
-        "materials": "Materiais"
+        "materials": "Materiais",
+        "notes": "Minhas notas"
       },
       "aboutEmpty": "Esta aula não tem descrição.",
       "materialsEmpty": "Esta aula não tem materiais.",
@@ -439,6 +440,115 @@
       "days_other": "{{count}} dias",
       "less": "Menos",
       "more": "Mais"
+    }
+  },
+  "notes": {
+    "errors": {
+      "empty": "A anotação está vazia. Escreva algo para salvar.",
+      "tooLong": "A anotação passou de 20.000 caracteres. Encurte o texto ou divida em duas.",
+      "limit": "Você chegou ao limite de 5.000 anotações. Exclua alguma para escrever outra.",
+      "lessonLimit": "Você chegou ao limite de 100 anotações nesta aula. Junte ou exclua alguma para escrever outra.",
+      "videoSeconds": "O instante do vídeo não foi aceito. Remova o instante e tente de novo.",
+      "accessDenied": "Você não tem acesso a esta aula no momento, por isso não dá para criar anotações nela.",
+      "gone": "Esta anotação não existe mais."
+    },
+    "editor": {
+      "title": "Título (opcional)",
+      "body": "Texto da anotação",
+      "hint": "Aceita Markdown. O texto é salvo sozinho enquanto você escreve.",
+      "counter": "{{length}} de {{max}}",
+      "saving": "Salvando…",
+      "saved": "Salvo",
+      "unsaved": "Alterações ainda não salvas",
+      "notSaved": "Não salvo",
+      "errorTitle": "Não foi possível salvar a anotação",
+      "retry": "Tentar salvar de novo",
+      "done": "Concluir",
+      "close": "Fechar"
+    },
+    "instant": {
+      "at": "Instante do vídeo: {{time}}",
+      "goTo": "Ir para {{time}} no vídeo",
+      "remove": "Remover instante"
+    },
+    "actions": {
+      "edit": "Editar",
+      "editOf": "Editar anotação: {{name}}",
+      "delete": "Excluir",
+      "deleteOf": "Excluir anotação: {{name}}"
+    },
+    "delete": {
+      "title": "Excluir a anotação?",
+      "text": "A exclusão é definitiva: não há lixeira.",
+      "confirm": "Excluir",
+      "deleting": "Excluindo…",
+      "done": "Anotação excluída.",
+      "errorTitle": "Não foi possível excluir a anotação"
+    },
+    "emptied": {
+      "title": "A anotação ficou vazia. Excluir?",
+      "text": "Anotação vazia não é salva. Você pode excluí-la ou manter o texto que já estava salvo.",
+      "keep": "Manter o texto salvo"
+    },
+    "conflict": {
+      "title": "Esta anotação mudou em outro dispositivo",
+      "text": "O texto salvo no servidor é diferente do que você tinha aberto. Escolha o que fazer com o seu texto.",
+      "local": "O seu texto",
+      "server": "Texto salvo no servidor",
+      "keepLocal": "Manter o meu texto",
+      "useServer": "Usar o do servidor",
+      "copy": "Copiar o meu para uma nota nova",
+      "copying": "Copiando…",
+      "copyErrorTitle": "Não foi possível criar a nota nova"
+    },
+    "lesson": {
+      "title": "Minhas notas desta aula",
+      "list": "Suas anotações desta aula",
+      "loading": "Carregando suas anotações…",
+      "errorTitle": "Não foi possível carregar suas anotações",
+      "empty": "Você ainda não tem anotações nesta aula.",
+      "newLabel": "Nova anotação",
+      "editLabel": "Editar anotação",
+      "finish": "Concluir e escrever outra"
+    },
+    "page": {
+      "description": "Todas as suas anotações, das aulas e avulsas, num lugar só.",
+      "new": "Nova anotação",
+      "editTitle": "Editar anotação",
+      "loading": "Carregando suas anotações…",
+      "loadingNote": "Carregando a anotação…",
+      "errorTitle": "Não foi possível carregar suas anotações",
+      "noteErrorTitle": "Não foi possível abrir a anotação",
+      "list": "Suas anotações",
+      "more": "Carregar mais anotações",
+      "count_one": "{{count}} anotação na lista",
+      "count_other": "{{count}} anotações na lista",
+      "lessonOf": "{{course}} · {{lesson}}",
+      "unavailable": "(aula indisponível)",
+      "standalone": "Anotação avulsa",
+      "emptyTitle": "Você ainda não tem anotações",
+      "steps": {
+        "open": "Abra uma aula de um dos seus cursos.",
+        "tab": "Vá à aba “Minhas notas”.",
+        "write": "Escreva: o texto é salvo sozinho, com o instante do vídeo."
+      },
+      "goToCourses": "Ir para meus cursos",
+      "writeIdea": "Escrever uma ideia avulsa",
+      "noResultsTitle": "Nenhuma anotação encontrada",
+      "noResultsText": "Tente outras palavras ou limpe os filtros.",
+      "filters": {
+        "label": "Filtros das anotações",
+        "kinds": "Tipo de anotação",
+        "all": "Todas",
+        "lesson": "De aulas",
+        "standalone": "Avulsas",
+        "course": "Curso",
+        "allCourses": "Todos os cursos",
+        "otherCourse": "Curso selecionado",
+        "search": "Buscar nas anotações",
+        "searchPlaceholder": "Buscar no título e no texto",
+        "clear": "Limpar filtros"
+      }
     }
   },
   "auth": {

@@ -14,11 +14,12 @@ import {
   TextLink,
   useToast,
   VideoPlayer,
+  type VideoPlayerHandle,
 } from '@nuva-edu/ui';
 import { ChevronLeft, ChevronRight, CircleCheck, Lock, PackageSearch } from 'lucide-react';
-import { type ReactNode, useState } from 'react';
+import { type ReactNode, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Navigate, useNavigate, useParams } from 'react-router';
+import { Navigate, useNavigate, useParams, useSearchParams } from 'react-router';
 import { describeError } from '../api/errors';
 import { formatDuration, productPath } from '../catalog/format';
 import { CourseProgram } from '../learning/CourseProgram';
@@ -32,6 +33,8 @@ import {
   useSavePosition,
 } from '../learning/queries';
 import { usePageMeta } from '../lib/usePageMeta';
+import { LessonNotes } from '../notes/LessonNotes';
+import { readInstant } from '../notes/notes';
 import { RequireSession } from '../session/RequireSession';
 
 /** Lateral: progresso do curso e o programa, com o estado de cada aula. */
@@ -109,8 +112,20 @@ function LessonBody({ lesson }: { lesson: LessonView }) {
   const completion = useLessonCompletion(slug);
   const savePosition = useSavePosition();
   const [videoFailed, setVideoFailed] = useState(false);
-  // a posição gravada vale na abertura; as seguintes saem do próprio player
-  const [startAt] = useState(lesson.userState.positionSeconds);
+  const [params] = useSearchParams();
+  // na abertura vale o instante pedido por uma nota (`?t=`) ou a posição gravada; as seguintes
+  // saem do próprio player
+  const [startAt] = useState(() => readInstant(params) ?? lesson.userState.positionSeconds);
+  const player = useRef<VideoPlayerHandle>(null);
+  const playerBox = useRef<HTMLDivElement>(null);
+  const lastSeconds = useRef<number | null>(startAt);
+  // o instante de uma nota nova: o vídeo nativo diz a posição exata; os demais, a última informada
+  const getVideoSeconds = (): number | null => {
+    const exact = playerBox.current?.querySelector('video')?.currentTime;
+    return typeof exact === 'number' && Number.isFinite(exact) ? exact : lastSeconds.current;
+  };
+  const hasVideo = Boolean(lesson.videoUrl && lesson.videoProvider);
+  const canSeek = hasVideo && lesson.videoProvider !== 'link';
 
   const videoHref = lesson.videoUrl ? safeMarkdownUrl(lesson.videoUrl) : '';
 
@@ -158,14 +173,18 @@ function LessonBody({ lesson }: { lesson: LessonView }) {
       </header>
 
       {lesson.videoUrl && lesson.videoProvider ? (
-        <>
+        <div ref={playerBox} className="flex flex-col gap-5">
           <VideoPlayer
+            ref={player}
             src={lesson.videoUrl}
             provider={lesson.videoProvider}
             startAt={startAt}
             duration={lesson.durationSeconds}
             onEnded={onEnded}
-            onTime={(seconds) => savePosition(lesson.id, seconds)}
+            onTime={(seconds) => {
+              lastSeconds.current = seconds;
+              savePosition(lesson.id, seconds);
+            }}
             onError={() => setVideoFailed(true)}
             locale={i18n.language}
             labels={{
@@ -197,7 +216,7 @@ function LessonBody({ lesson }: { lesson: LessonView }) {
               {t('learning.lesson.videoErrorText')}
             </Alert>
           ) : null}
-        </>
+        </div>
       ) : (
         <p className="m-0 text-sm text-ink-3">{t('learning.lesson.noVideo')}</p>
       )}
@@ -219,6 +238,18 @@ function LessonBody({ lesson }: { lesson: LessonView }) {
             label: t('learning.lesson.tabs.materials'),
             count: lesson.links.length + lesson.ebooks.length || undefined,
             content: <Materials lesson={lesson} />,
+          },
+          {
+            id: 'notes',
+            label: t('learning.lesson.tabs.notes'),
+            content: (
+              <LessonNotes
+                lessonId={lesson.id}
+                canCreate
+                getVideoSeconds={hasVideo ? getVideoSeconds : undefined}
+                onSeek={canSeek ? (seconds) => player.current?.seek(seconds) : undefined}
+              />
+            ),
           },
         ]}
       />
@@ -267,10 +298,12 @@ function LessonBody({ lesson }: { lesson: LessonView }) {
 /** Sem acesso: no lugar do player, o motivo e o caminho até a página do curso (spec 010). */
 function LockedLesson({
   slug,
+  lessonId,
   title,
   reason,
 }: {
   slug: string;
+  lessonId: string;
   title: string | undefined;
   reason: AccessDenialReason | null;
 }) {
@@ -292,6 +325,8 @@ function LockedLesson({
           </span>
         </AdminEmpty>
       </AdminCard>
+      {/* quem perdeu o acesso continua lendo e editando as próprias notas da aula (spec 016) */}
+      <LessonNotes lessonId={lessonId} canCreate={false} hideWhenEmpty />
     </div>
   );
 }
@@ -358,7 +393,9 @@ function LessonContent() {
       </>
     );
   } else if (result.kind === 'denied') {
-    main = <LockedLesson slug={slug} title={listed?.title} reason={result.reason} />;
+    main = (
+      <LockedLesson slug={slug} lessonId={lessonId} title={listed?.title} reason={result.reason} />
+    );
   } else {
     main = <LessonBody key={result.lesson.id} lesson={result.lesson} />;
   }
@@ -380,8 +417,8 @@ function LessonContent() {
 
 /**
  * `/meus-cursos/:slug/aulas/:aula` (`:aula` é o id da aula): player, abas Sobre e Materiais,
- * programa ao lado, navegação e conclusão (spec 014). As abas Minhas notas e Comentários e o
- * "Reportar problema" chegam com as specs 016, 017 e 023.
+ * programa ao lado, navegação e conclusão (spec 014) e a aba Minhas notas (spec 016). A aba
+ * Comentários e o "Reportar problema" chegam com as specs 017 e 023.
  */
 export function LessonPage() {
   return <RequireSession>{() => <LessonContent />}</RequireSession>;

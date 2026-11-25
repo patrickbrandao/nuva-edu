@@ -301,6 +301,7 @@ describe('casca do classroom', () => {
       '/inicio',
       '/meus-cursos',
       '/meus-ebooks',
+      '/anotacoes',
       '/progresso',
       '/conta',
     ]);

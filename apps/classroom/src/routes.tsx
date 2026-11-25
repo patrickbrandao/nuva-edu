@@ -7,6 +7,7 @@ import {
   LOGIN_PATH,
   MY_COURSES_PATH,
   MY_EBOOKS_PATH,
+  NOTES_PATH,
   PENDING_PAGES,
   PROGRESS_PATH,
   START_PATH,
@@ -131,6 +132,11 @@ export const routes: RouteObject[] = [
         path: PROGRESS_PATH,
         handle: handle({ titleKey: 'menu.items.progress' }),
         lazy: async () => ({ Component: (await import('./pages/ProgressPage')).ProgressPage }),
+      },
+      {
+        path: NOTES_PATH,
+        handle: handle({ titleKey: 'menu.items.notes' }),
+        lazy: async () => ({ Component: (await import('./pages/NotesPage')).NotesPage }),
       },
       {
         path: '/meus-cursos/:slug',

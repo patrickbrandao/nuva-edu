@@ -63,9 +63,10 @@ describe('página da aula', () => {
     expect(video().src).toBe('https://cdn.exemplo.test/aulas/boas-vindas.mp4');
     expect(main.getByRole('toolbar', { name: ptBR.learning.player.controls })).toBeTruthy();
 
-    // abas: Sobre (Markdown higienizado) e Materiais; sem Comentários nem "Reportar" (Fase 4)
+    // abas: Sobre (Markdown higienizado), Materiais e Minhas notas; sem Comentários nem
+    // "Reportar" (Fase 4)
     const tabs = main.getAllByRole('tab').map((tab) => tab.textContent);
-    expect(tabs).toEqual([text.tabs.about, `${text.tabs.materials}2`]);
+    expect(tabs).toEqual([text.tabs.about, `${text.tabs.materials}2`, text.tabs.notes]);
     expect(main.getByText('aprender').tagName).toBe('STRONG');
     expect(document.querySelector('main script')).toBeNull();
     await user.click(main.getByRole('tab', { name: new RegExp(text.tabs.materials) }));

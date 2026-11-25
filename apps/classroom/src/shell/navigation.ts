@@ -125,11 +125,12 @@ export const HOME_PATH = '/';
 export const ACCOUNT_PATH = '/conta';
 /** Endereço da tela de login. */
 export const LOGIN_PATH = '/entrar';
-/** Entrada do aluno, estante, ebooks e progresso (têm rota própria). */
+/** Entrada do aluno, estante, ebooks, progresso e anotações (têm rota própria). */
 export const START_PATH = '/inicio';
 export const MY_COURSES_PATH = '/meus-cursos';
 export const MY_EBOOKS_PATH = '/meus-ebooks';
 export const PROGRESS_PATH = '/progresso';
+export const NOTES_PATH = '/anotacoes';
 
 /** Telas do menu que já foram construídas. */
 const BUILT_PAGES: readonly string[] = [
@@ -139,6 +140,7 @@ const BUILT_PAGES: readonly string[] = [
   MY_COURSES_PATH,
   MY_EBOOKS_PATH,
   PROGRESS_PATH,
+  NOTES_PATH,
 ];
 
 /**
