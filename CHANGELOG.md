@@ -182,6 +182,7 @@ Detalhe das decisões em `specs/decisions/`.
 - worker: `email.send` não envia link (`account.verify_email`, `account.password_reset`) para endereço que deixou de ser o da conta; marca `sent` com `skipped: email_changed`, sem token, sob a trava da emissão (task 271).
 - `@nuva-edu/core`: testes sensíveis a carga estáveis em execuções paralelas (prazo de 30 s no teste dos índices da auditoria, `retry: 2` no p95 do login) (task 281).
 - contrato do classroom e spec 016: notas alinhadas ao núcleo (códigos dos 422, com note_video_seconds_invalid; regras de GET /lessons/{id}/notes, de NoteLesson e do PATCH sem mudança), videoSeconds inteiro nas respostas e teto de 100 notas por aula (note_lesson_limit_reached), sem paginação na aba da aula; cliente regenerado (tasks 575, 595).
+- arquiteto: spec 009 decide as divergências entre o contrato do admin e o núcleo no catálogo: edição com `version` obrigatória nos `PATCH` (`409` `version_conflict`), slug gerado do título no núcleo com sufixo, produto nasce `private`, permissão antes da regra de preço (`403`), `durationSeconds: null` grava `0`, mover aula entre módulos pela ordem, `getAdminModule`, ebooks no detalhe do curso e vínculo de um ebook só; contrato alcança numa janela futura (task 620).
 
 ### Decisões
 - Textos de processo alinhados ao `scripts/task.mjs` (`--as`, `task:list`, push negado, conflito de rebase).

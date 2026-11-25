@@ -103,6 +103,12 @@ Link quebrado: o player e a lista de apoio têm o botão "Reportar problema", qu
 
 O ebook vinculado passa a constar como adquirido pelo aluno, por cascata ([010](010-direitos-de-acesso.md)). O mesmo ebook pode ser vendido avulso e estar vinculado a vários alvos.
 
+No admin (decisão da tarefa 585, levada ao contrato pela janela criada na 620):
+
+- O detalhe do curso (`CourseDetail.ebooks`) traz os ebooks vinculados ao curso (alvo `course`), em qualquer estado, por título, como o detalhe da aula já traz os dela. O editor não faz uma leitura por ebook para saber o que está vinculado. `GET /ebooks` não ganha filtro por alvo.
+- Vincular e desvincular um ebook de um alvo só: `PUT` e `DELETE /ebooks/{id}/targets/{targetType}/{targetId}` (`ebook.link`; `targetType` é `course` ou `lesson`). Dispensam ler os vínculos e reenviar a lista, e dois editores não desfazem o vínculo um do outro. São idempotentes: vínculo que já existe (`PUT`) ou que não existe (`DELETE`) responde `204` sem gravar nem auditar. Alvo inexistente: `422` `catalog_item_not_found`; alvo de curso alheio ao instrutor: `404`; o 501º vínculo do ebook: `422` `catalog_limit_exceeded` (`targetsPerEbook`). A mudança avança o `version` do ebook, enfileira o recálculo da cascata e grava a mesma auditoria da troca da lista.
+- `PUT /ebooks/{id}/targets` (a lista inteira) continua, para a tela do ebook.
+
 ### Pacotes
 
 - `bundle_items` lista cursos e ebooks (nunca outro pacote).
@@ -129,30 +135,60 @@ Comprar, assistir e baixar exigem login.
 - Publicar e despublicar aula é `PATCH /lessons/{id}` com `status`, sujeito à mesma regra do curso: o instrutor só o faz em curso `open` de que é dono.
 - Toda alteração de catálogo grava auditoria ([028](028-auditoria.md)).
 
+### Criação e edição
+
+Regras do `packages/core`, que as rotas da `admin-api` só repassam (decisões da tarefa 620, que alinhou o contrato do admin e o núcleo).
+
+**Edição com `version`.** Curso, módulo, aula, ebook e pacote têm cada um o próprio `version` (inteiro, começa em 1), como manda a [003](003-admin-api.md) ("Concorrência"). O catálogo não tem "última gravação vence".
+
+- As leituras de detalhe e toda resposta de escrita que devolve o recurso trazem `version` (`CourseDetail`, `CourseModule`, `LessonDetail`, `EbookDetail`, `BundleDetail`).
+- `PATCH` de curso, módulo, aula, ebook e pacote **exige** `version` no corpo (`400` `validation_failed` sem ela). Diferente da gravada: `409` `version_conflict`, sem campo extra; o site avisa, relê o recurso e a pessoa refaz a edição sobre o estado atual.
+- `PUT /lessons/{id}/links`, `PUT /bundles/{id}/items`, `PUT /ebooks/{id}/targets` e `PATCH /courses/{id}/owner` aceitam `version` **opcional** (a da aula, do pacote, do ebook e do curso): enviada, é conferida. O site admin sempre a envia. É opcional porque cada uma substitui um valor inteiro, sem mesclar com o estado lido.
+- As trocas de ordem (`PUT .../modules/order`, `PUT .../lessons/order`), as ações (`publish`, `unpublish`, `archive`, `unarchive`, `request-review`) e os vínculos de um ebook só não recebem `version`: a lista de ordem já é conferida contra os itens atuais (`order_mismatch`), e as ações são idempotentes.
+- Toda gravação num recurso avança o `version` dele, inclusive as ações e as trocas de lista; quem edita usa o `version` da última resposta. Criar, mover ou excluir um filho (módulo, aula) não avança o `version` do pai.
+
+**Slug.** O slug tem o formato do contrato (minúsculas, números e hífens, até 160). Vale para curso, ebook e pacote, e a unicidade é por tipo de produto.
+
+- Informado: usado como veio; repetido, `409` `slug_taken`.
+- Ausente na criação: o núcleo o gera do título: sem acentos, em minúsculas, cada sequência de caracteres fora de `a-z0-9` vira um hífen, sem hífen nas pontas, até 160. Título que não deixa nenhum caractere gera `curso`, `ebook` ou `pacote`, conforme o tipo.
+- Slug gerado que já existe recebe o menor sufixo livre `-2`, `-3`, … até `-99` (a base é cortada para o total caber em 160); só o gerado ganha sufixo. Sem sufixo livre, ou se outra gravação tomar o slug no mesmo instante: `409` `slug_taken`.
+- O slug não é regerado quando o título muda; só muda quando alguém o edita.
+
+**Modo de acesso inicial.** Curso, ebook e pacote criados sem `accessMode` nascem `private`, sem preço: nada chega à vitrine nem a "qualquer usuário logado" sem um ato de quem tem `product.set_access`. Consequência para o instrutor, que não define o modo de acesso: o curso dele nasce `private`, e ele o envia para publicação; publica direto só depois que gerente ou admin o tornam `open`. O padrão das colunas `access_mode` acompanha a regra.
+
+**Permissão antes da regra.** Em toda escrita de catálogo, a permissão do campo é conferida antes da regra de negócio do valor: quem envia `priceCents` sem `product.set_price`, ou `accessMode`/`accessDays` sem `product.set_access`, recebe `403`, qualquer que seja o valor e o estado do produto. `422` `price_not_allowed` e `price_required` são só para quem tem a permissão. Campo enviado com o valor que o produto já tem não é alteração e não exige a permissão.
+
+**Duração da aula.** `duration_seconds` não é nula no banco; `0` é "não informada". `durationSeconds` ausente na criação, ou `null` na criação e na edição, grava `0`; as respostas trazem sempre o inteiro.
+
+**Mover aula entre módulos.** `PUT /modules/{id}/lessons/order` recebe a ordem nova das aulas do módulo. Aula de outro módulo **do mesmo curso**, na lista, é movida para este, na posição indicada; o módulo de origem fecha a numeração das que ficaram. A lista precisa conter todas as aulas que já estão no módulo. Aula de outro curso, aula inexistente ou aula do módulo que falta na lista: `422` `order_mismatch`. A movimentação é uma transação, não muda o total de aulas do curso (o limite por curso não se aplica), avança o `version` de cada aula movida e grava na auditoria, além da reordenação, o módulo de origem e o de destino de cada uma. O progresso dos alunos é por aula e não muda.
+
+**Leitura de módulo.** O núcleo lê um módulo por id para o admin (`getAdminModule`: o módulo no formato de `CourseModule`, com as aulas e o `version`, e o curso a que pertence), com o mesmo alcance do curso (módulo de curso alheio ao instrutor: `404`). Não há `GET /modules/{id}` no contrato: a função serve às respostas de `PATCH /modules/{id}` e de `PUT /modules/{id}/lessons/order`.
+
 ### Casos de erro
 
 | Situação | Resposta |
 | --- | --- |
 | URL fora das regras | `422` `content_url_invalid` com o campo e o motivo |
 | Instrutor editando curso de outro dono | `404` ([008](008-papeis-e-permissoes.md)) |
-| Instrutor alterando preço ou modo de acesso; gerente alterando preço | `403` |
+| Instrutor alterando preço ou modo de acesso; gerente alterando preço | `403`, antes de qualquer regra do valor ("Criação e edição") |
 | Excluir produto com vínculos, por qualquer papel | `409` `product_has_links` |
 | Arquivar ou desarquivar sem ser admin | `403` |
 | Publicar curso sem aula publicada | `422` `course_has_no_published_lesson` |
-| Slug repetido | `409` `slug_taken` |
+| Slug informado repetido; slug gerado sem sufixo livre | `409` `slug_taken` |
 | Pacote contendo pacote | `422` `bundle_in_bundle` |
 | Publicar pacote sem item; publicar ebook sem `file_url` | `422` `bundle_has_no_items`; `422` `ebook_file_required` |
 | Publicar produto `paid` sem preço; tornar `paid` um produto publicado sem preço | `422` `price_required` |
-| Enviar preço para produto `open` | `422` `price_not_allowed` (mudar para `open` sem enviar preço apaga o preço) |
+| Enviar preço para produto `open`, por quem tem `product.set_price` | `422` `price_not_allowed` (mudar para `open` sem enviar preço apaga o preço) |
 | Publicar, ou pedir publicação de, produto arquivado | `422` `product_archived` |
 | Arquivar o que já está arquivado; desarquivar o que não está | `200`, sem gravar nem auditar |
 | Item de pacote ou alvo de vínculo de ebook que não existe | `422` `catalog_item_not_found`, com o campo |
 | Capa que não é imagem `product_cover` | `422` `cover_image_invalid` |
 | Dono que não é instrutor, ou foi excluído | `422` `owner_invalid` |
-| Ordem de módulos ou de aulas que não lista exatamente os itens atuais | `422` `order_mismatch` |
+| Ordem de módulos que não lista exatamente os módulos do curso; ordem de aulas sem alguma aula do módulo, ou com aula de outro curso | `422` `order_mismatch` |
 | Quantidade acima de um limite | `422` `catalog_limit_exceeded`, com `limit` (o nome do limite) e `max` |
 | Excluir módulo que ainda tem aulas | `409` `module_not_empty` (as aulas saem antes, cada uma com a própria auditoria) |
-| Gravação sobre versão antiga (`version`) | `409` `version_conflict` ([003](003-admin-api.md)) |
+| Gravação sobre versão antiga (`version`) | `409` `version_conflict` ([003](003-admin-api.md)), declarado em toda operação que recebe `version` |
+| `PATCH` de curso, módulo, aula, ebook ou pacote sem `version` | `400` `validation_failed` |
 
 Limites além da RNF-03, validados no `packages/core` (`CATALOG_LIMITS`) e repetidos no contrato: slug, rótulo de link e nome do autor até 160 caracteres; até 200 itens por pacote; até 500 vínculos por ebook; duração da aula até 86.400 s; preço até 1.000.000.000 centavos; validade até 36.500 dias; carga horária do certificado até 10.000 horas; até 100.000 páginas. Campo de texto ou número fora do limite é `400` `validation_failed`; `catalog_limit_exceeded` é só para quantidade (`modulesPerCourse`, `lessonsPerCourse`, `linksPerLesson`, `itemsPerBundle`, `targetsPerEbook`).
 
@@ -166,7 +202,9 @@ Limites além da RNF-03, validados no `packages/core` (`CATALOG_LIMITS`) e repet
 - `GET|POST /ebooks`, `GET|PATCH|DELETE /ebooks/{id}` e ações de publicação (`publish`, `unpublish`, `archive`, `unarchive`, como no curso)
 - `GET|POST /bundles`, `GET|PATCH|DELETE /bundles/{id}`, `PUT /bundles/{id}/items` e as mesmas ações de publicação
 - `POST /images` e `DELETE /images/{imageId}` com a finalidade `product_cover` ([029](029-imagens.md))
-- `PUT /ebooks/{id}/targets` (vínculos em `product_ebooks`)
+- `PUT /ebooks/{id}/targets` (vínculos em `product_ebooks`) e `PUT|DELETE /ebooks/{id}/targets/{targetType}/{targetId}` (um vínculo)
+
+O contrato do admin alcança as regras de "Criação e edição" e de "Ebooks vinculados" numa janela de contrato própria (`version` nos detalhes e nos `PATCH`, `409` declarado, `CourseDetail.ebooks`, as duas operações de um vínculo); até ela fechar, as rotas de edição leem o `version` atual e o repassam ao núcleo.
 
 `apps/classroom-api/openapi.yaml` (leitura), sob `/api/v1`:
 
@@ -222,6 +260,13 @@ A Fase 2 entrega esta spec inteira, exceto o que depende de recurso de fase post
 - [ ] Produto `paid` sem direito mostra preço e bloqueio, sem botão de compra.
 - [ ] Vitrine e página de produto abrem sem login e têm título e descrição próprios.
 - [ ] Limites da RNF-03 validados com teste.
+- [ ] `PATCH` de curso, módulo, aula, ebook e pacote com `version` antiga responde `409` `version_conflict` e não grava; sem `version`, `400`.
+- [ ] Curso, ebook e pacote criados sem `accessMode` nascem `private`.
+- [ ] Criar sem `slug` gera o slug do título; o segundo produto do mesmo tipo com o mesmo título recebe o sufixo `-2`; slug informado repetido responde `409`.
+- [ ] Instrutor que envia `priceCents` para o próprio curso recebe `403`, com o curso `open` ou `paid`.
+- [ ] Aula movida de um módulo a outro do mesmo curso pela ordem de aulas; aula de outro curso na lista responde `422` `order_mismatch`.
+- [ ] `durationSeconds: null` grava `0`.
+- [ ] O detalhe do curso traz os ebooks vinculados; vincular e desvincular um ebook de um curso não altera os outros vínculos do ebook.
 
 ## Fora de escopo
 
