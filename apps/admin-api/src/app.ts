@@ -22,6 +22,7 @@ import { readServiceVersion } from './meta.ts';
 import { registerAuditRoutes } from './routes/audit.ts';
 import { registerAuthRoutes } from './routes/auth.ts';
 import { registerCourseRoutes } from './routes/courses.ts';
+import { registerEntitlementRoutes } from './routes/entitlements.ts';
 import { registerImageRoutes } from './routes/images.ts';
 import { registerOAuthRoutes } from './routes/oauth.ts';
 import { registerProductRoutes } from './routes/products.ts';
@@ -120,5 +121,7 @@ export function buildAdminApp(options: AdminAppOptions): FastifyInstance {
   registerCourseRoutes(app, { db });
   // Ebooks, pacotes, itens do pacote e vínculos do ebook.
   registerProductRoutes(app, { db });
+  // Direitos de acesso (spec 010): árvore do usuário, concessão e revogação manual.
+  registerEntitlementRoutes(app, { db });
   return app;
 }
