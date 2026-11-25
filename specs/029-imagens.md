@@ -61,6 +61,8 @@ Na Fase 1 só existe a finalidade `avatar`, enviada pelo classroom ([007](007-co
 
 Na Fase 2 entra `product_cover`, enviada pela `admin-api` (`POST /api/v1/images` e `DELETE /api/v1/images/{imageId}` passam a existir também lá, só com essa finalidade), com referência em `courses.cover_image_id`, `ebooks.cover_image_id` e `bundles.cover_image_id`; o expurgo passa a considerar as três. `school_logo` e `content_image` continuam fora: a regra das variantes de proporção original (abaixo, "Em aberto") é fixada antes da fase que as introduzir.
 
+O template de certificado ([015](015-certificados.md)) pode citar uma imagem já enviada pelo caminho de entrega (`/api/v1/images/<id>/<largura>.webp`). Isso não cria referência: a imagem citada só no template continua sujeita ao expurgo de imagens sem referência, e o worker a embute no PDF enquanto ela existir. Não há finalidade de envio própria para template na Fase 2.
+
 O processamento acontece na API (não na fila), porque o usuário espera o resultado; a API limita a 2 processamentos simultâneos por instância e devolve 503 com `Retry-After` quando a fila interna passa de 10.
 
 ### Entrega

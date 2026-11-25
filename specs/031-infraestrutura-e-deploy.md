@@ -68,7 +68,7 @@ Consequências da entrega por `env_file`:
 | `migrate` | `nuva-edu-admin-api` (comando de migration) | — | 1 | 256 MB | padrão (execução única) |
 | `admin-api` | `nuva-edu-admin-api` | 3000 | 1 | 384 MB | padrão |
 | `classroom-api` | `nuva-edu-classroom-api` | 3000 | 1 | 512 MB | padrão |
-| `worker` | `nuva-edu-worker` | 3000 (saúde e métricas) | 1 | 384 MB | padrão |
+| `worker` | `nuva-edu-worker` | 3000 (saúde e métricas) | 1 | 640 MB | padrão |
 | `admin` | `nuva-edu-admin` | 8080 | 1 | 64 MB | padrão |
 | `classroom` | `nuva-edu-classroom` | 8080 | 1 | 64 MB | padrão |
 | `traefik` | `traefik:v3` | 8080 / 8443 | 1 | 128 MB | `traefik` |
@@ -102,6 +102,8 @@ Build em stages, na ordem que favorece o cache:
 3. `runtime`: imagem mínima (`node:26-slim` para APIs e worker; Alpine com o lighttpd do pacote da distribuição para os sites), sem pnpm e com usuário sem privilégios. A imagem das APIs e do worker mantém a árvore do workspace (`/app/apps`, `/app/packages`, `/app/database/postgres`), porque o Node só executa `.ts` fora de `node_modules`.
 
 Versão da imagem: o argumento de build `NUVA_VERSION` (SemVer, sem o `v` da tag) é gravado, no estágio `build`, no `package.json` do serviço dentro da imagem das APIs e do worker. É esse `package.json` que o `GET /api/v1/meta` lê para o campo `version` ([003](003-admin-api.md), "Meta"). Sem o argumento, vale a versão que está no repositório. A versão é da imagem, não da instalação: não existe variável de execução que a altere. As imagens dos sites não recebem o argumento; a versão que os sites mostram é a do `/meta`.
+
+Imagem do worker ([0026](decisions/0026-certificado-por-template-html.md)): além do Node, o estágio `runtime` leva o Chromium headless shell na versão do `playwright-core` do lockfile, instalado com as bibliotecas de sistema dele (`playwright install --with-deps --only-shell chromium`, como `root`, antes do `USER node`, com a lista do `apt` apagada no mesmo passo), em `PLAYWRIGHT_BROWSERS_PATH=/ms-playwright`, e a fonte Inter (OFL-1.1, com o arquivo de licença) registrada no `fontconfig`. O navegador roda com `--disable-dev-shm-usage` e o perfil em `/tmp`, por isso o `tmpfs` de `/tmp` do worker tem 128 MB (os demais seguem o padrão). O limite de memória do worker (640 MB) cobre o Node e um navegador renderizando um PDF por vez. O tamanho da imagem e a contagem do Trivy antes e depois do Chromium ficam registrados em `docs/`, junto das licenças do Chromium, que não passam pelo passo `licencas` por não serem pacote npm.
 
 Imagem dos sites ([0023](decisions/0023-lighttpd-nos-sites.md)): o estágio `runtime` parte do Alpine, aplica `apk upgrade` e instala o lighttpd do pacote da distribuição, sem imagem base de terceiros para o servidor; assim a correção de segurança do servidor entra a cada build. O lighttpd só entrega arquivos: roda com usuário sem privilégios, na porta 8080, com a raiz somente leitura. O que ele responde (`index.html` de reserva, `404` nos caminhos de API e de sonda, cache) está em [006](006-sites-e-interface.md), "Interfaces e contratos". O Traefik continua sendo o proxy.
 

@@ -54,8 +54,8 @@ Legenda: ✓ permitido · ◐ só nos próprios cursos · — negado.
 | Criar curso | — | ✓ (vira dono) | ✓ | ✓ |
 | Editar curso, módulos, aulas, links | — | ◐ | ✓ | ✓ |
 | Publicar e despublicar curso | — | ◐ (só curso próprio `open`; `paid` e `private` são publicados por gerente ou admin) | ✓ | ✓ |
-| Excluir curso sem alunos | — | ◐ | ✓ | ✓ |
-| Excluir curso com alunos | — | — | — | ✓ |
+| Excluir curso sem vínculos (pedido, direito ou progresso) | — | ◐ | ✓ | ✓ |
+| Arquivar e desarquivar curso, ebook ou pacote (o caminho para produto com vínculos, que ninguém exclui) | — | — | — | ✓ |
 | Trocar o dono (instrutor) de um curso | — | — | ✓ | ✓ |
 | Criar e editar ebooks e pacotes | — | — | ✓ | ✓ |
 | Vincular ebook a curso ou aula | — | ◐ | ✓ | ✓ |
@@ -81,12 +81,13 @@ Legenda: ✓ permitido · ◐ só nos próprios cursos · — negado.
 | Ver progresso e certificados dos alunos | — | ◐ | ✓ | ✓ |
 | Emitir e reemitir certificado manualmente ([015](015-certificados.md)) | — | — | ✓ | ✓ |
 | Revogar certificado | — | — | — | ✓ |
+| Editar o template de certificado do curso e pedir PDF de exemplo ([015](015-certificados.md)) | — | ◐ | ✓ | ✓ |
 | **Sistema** | | | | |
 | Emitir e revogar as próprias chaves MCP | — | — | ✓ | ✓ |
 | Ver e revogar chaves MCP de outros | — | — | — | ✓ |
 | Consultar auditoria | — | — | — | ✓ |
 | Ver operação (fila, e-mails, webhooks) e reprocessar | — | — | — | ✓ |
-| Configurações da escola, termos, integrações | — | — | — | ✓ |
+| Configurações da escola (inclusive o template padrão de certificado), termos, integrações | — | — | — | ✓ |
 
 ### Matriz — classroom
 
@@ -119,15 +120,17 @@ Cada linha das matrizes é uma ação de `packages/core`, com o identificador ab
 | --- | --- |
 | Acesso | `admin.access`, `dashboard.view` |
 | Pessoas | `users.list`, `users.view_private`, `users.edit`, `users.suspend`, `users.sessions.revoke`, `users.password.view`, `users.password.set`, `staff.manage`, `users.delete` |
-| Conteúdo | `course.create`, `course.edit`, `course.publish`, `course.delete`, `course.delete_with_students`, `course.set_owner`, `ebook_bundle.manage`, `ebook.link`, `product.set_access`, `product.set_price`, `event.manage`, `announcement.publish` |
+| Conteúdo | `course.create`, `course.edit`, `course.publish`, `course.delete`, `product.archive`, `course.set_owner`, `ebook_bundle.manage`, `ebook.link`, `product.set_access`, `product.set_price`, `event.manage`, `announcement.publish` |
 | Acessos e vendas | `entitlement.manage`, `sales.view`, `order.refund`, `subscription.cancel`, `plan.manage`, `coupon.manage` |
-| Comunidade e suporte | `forum.category.manage`, `forum.moderate`, `report.handle`, `case.moderate`, `badge.award`, `gamification.configure`, `ticket.handle`, `progress.view`, `certificate.issue`, `certificate.revoke` |
+| Comunidade e suporte | `forum.category.manage`, `forum.moderate`, `report.handle`, `case.moderate`, `badge.award`, `gamification.configure`, `ticket.handle`, `progress.view`, `certificate.issue`, `certificate.revoke`, `certificate.template.edit` |
 | Sistema | `mcp_key.own`, `mcp_key.manage_all`, `audit.view`, `ops.manage`, `settings.manage` |
 | Classroom | `catalog.view`, `course.view_program`, `lesson.watch_open`, `lesson.watch_sample`, `content.access_paid`, `purchase.create`, `learning.track`, `forum.course.participate`, `forum.free.participate`, `members.view`, `dm.send`, `case.publish`, `ticket.open`, `report.create`, `account.self_service` |
 
 - Nas rotas de usuário da `admin-api`, `users.view` (ver a ficha) é a mesma ação de `users.list`; `users.view_private` decide se e-mail, CPF/CNPJ e compras vão na resposta.
 - `users.list` do `instructor` (alunos dos seus cursos) é servido pelas rotas do curso ([009](009-catalogo-e-conteudo.md), [014](014-aprendizado-e-progresso.md): `GET /courses/{id}/students`, com `progress.view`), na Fase 2. Na Fase 1 não há curso: `GET /users` exige `users.list` com alcance total (`manager` e `admin`), e o `instructor` recebe `403`.
 - `certificate.issue` (emissão manual e reemissão) e `certificate.revoke` (revogar e desfazer a revogação) entraram na Fase 2 (tarefa 400); `certificate.issue` faltava na matriz, embora a [015](015-certificados.md) já desse a emissão manual a gerente e admin.
+- `course.delete_with_students` saiu na tarefa 463 (resposta à P2 da tarefa 400): ninguém exclui produto com pedido, direito ou progresso ([009](009-catalogo-e-conteudo.md)); o caminho é arquivar, ação `product.archive`, só do admin, para curso, ebook e pacote. `course.delete` vale só para curso sem vínculos.
+- `certificate.template.edit` (template do curso e PDF de exemplo) entrou na tarefa 463 ([0026](decisions/0026-certificado-por-template-html.md)); o template padrão da escola é de `settings.manage` (admin).
 - Ação sobre conta de equipe (`instructor`, `manager`, `admin`) exige `staff.manage`, mesmo que a ação sobre aluno exija outra (`users.edit`, `users.suspend`, `users.sessions.revoke`).
 
 ### Regra do instrutor

@@ -71,6 +71,7 @@ Sem identificadores de usuário nos rótulos.
 | `login_attempts_total{outcome}` | contador | APIs |
 | `mcp_tool_calls_total{tool,outcome}` | contador | `admin-api` |
 | `images_bytes_total` | medidor | worker |
+| `certificate_render_seconds{kind}` | histograma | worker |
 
 `db_pool_connections`: conexões do pool do PostgreSQL no processo. `state` tem três valores, os mesmos em todos os serviços (os campos de `databasePoolStats`, de `packages/core`): `active` (em uso), `idle` (abertas e livres) e `waiting` (pedidos na fila à espera de uma conexão). As três séries saem sempre, mesmo em zero. A conexão dedicada do `LISTEN` não passa pelo pool e não entra na conta.
 
@@ -82,6 +83,7 @@ Detalhe das métricas do worker:
 - `jobs_count`: total por `status` (`queued`, `ready`, `running`, `done`, `failed`); `ready` é a parte de `queued` com `run_at` vencido, o tamanho real da fila.
 - `worker_jobs_running` e `worker_concurrency`: ocupação deste processo e o seu limite (`NUVA_WORKER_CONCURRENCY`).
 - `worker_database_up`: 1 quando a leitura da fila para a coleta funcionou. Com o banco fora, vale 0, os medidores `jobs_queue_depth`, `jobs_failed`, `jobs_count` e `jobs_oldest_pending_seconds` saem sem série (só as linhas `# HELP` e `# TYPE`, que o registro de métricas sempre escreve) e o `/metrics` continua respondendo `200`.
+- `certificate_render_seconds`: tempo de cada renderização de PDF pelo navegador ([015](015-certificados.md)), com `kind` `certificate` ou `preview`, faixas de 100 ms a 30 s; renderização que estoura o tempo limite de 20 s também é observada.
 - Os medidores da fila são lidos do banco a cada coleta; com mais de um worker, todos devolvem o mesmo valor, e quem coleta usa `max`, não `sum`.
 
 `sse_connections` conta os fluxos SSE abertos no processo. O medidor é registrado pela base HTTP (`packages/api-kit`) em todo serviço que liga os fluxos SSE, e só neles ([004](004-classroom-api.md), "Base do fluxo"); hoje, a `classroom-api`.
@@ -133,6 +135,8 @@ Expurgo diário às 03:30 (fuso da escola, `settings.timezone`), tarefa `retenti
 | Chaves MCP revogadas ou expiradas | 2 anos | acompanha a auditoria |
 | Exportações de dados (LGPD) | 24 horas | fixo |
 | Imagens sem referência | 24 horas | fixo |
+| Pedidos de PDF de exemplo de certificado (`certificate_previews`) | 24 horas | fixo |
+| Versões de template de certificado sem certificado nem template que as use | 30 dias | fixo |
 | Carrinhos abandonados | 30 dias | `NUVA_RETENTION_CART_DAYS` |
 | Registros de venda | 5 anos, depois anonimizados | `NUVA_RETENTION_FISCAL_YEARS` ([030](030-lgpd.md)) |
 | Logs dos contêineres | 10 MB x 5 arquivos | configuração do Compose |
@@ -160,6 +164,7 @@ Esta tabela é a lista completa e única de prazos; as demais specs usam estes n
 | 4 | Elevação de privilégio entre papéis ou por chave MCP | Autorização central em `packages/core`, usada pelas duas APIs e pelo MCP; papel lido do banco a cada requisição; chave MCP usa o papel atual do emissor; `instructor` restrito aos próprios cursos; último `admin` não pode ser rebaixado | Matriz de permissões testada rota a rota e ferramenta a ferramenta para os quatro papéis |
 | 5 | XSS em conteúdo de aluno (fórum, cases, mensagens, perfil) | Markdown convertido com lista de permissão de marcações e saneado no servidor e no navegador; sem HTML bruto; links com `rel="noopener nofollow"`; Content-Security-Policy sem `unsafe-inline` para scripts; cookie `HttpOnly`, `Secure`, `SameSite=Lax`; imagens regravadas ([029](029-imagens.md)) | Conjunto de cargas de XSS conhecidas publicadas em cada campo e conferidas como inertes no e2e |
 | 6 | Acesso a aula ou ebook sem direito | Links de vídeo, arquivo e ebook só saem da API depois da checagem de direito ([010](010-direitos-de-acesso.md)); o programa do curso não traz os links; reembolso e fim de plano revogam em cascata | Usuário sem direito recebe 403 e nenhuma resposta contém o link; revogação testada após reembolso |
+| 7 | Template de certificado (HTML escrito pela equipe) usado para executar código, buscar recurso externo ou esgotar o worker | Lista de permissões de elementos, atributos, URLs e CSS, com recusa ao salvar e nova validação antes de renderizar; valores das palavras-chave escapados; Chromium com JavaScript desligado e toda requisição abortada; tempo limite de 20 s, um PDF por vez por processo, template até 768 KiB e PDF até 2 MiB ([015](015-certificados.md), [0026](decisions/0026-certificado-por-template-html.md)) | Cargas conhecidas (script, `on*`, `iframe`, `object`, `@import`, `url()` externo, `img` externa, `meta refresh`) recusadas; renderização de template com recurso externo não faz requisição; nome de aluno com marcação sai escapado |
 
 Proteções gerais que valem para todas: cabeçalhos de segurança (HSTS quando em HTTPS, `X-Content-Type-Options`, `Referrer-Policy`), proteção contra CSRF nas rotas com cookie (verificação de `Origin` e `SameSite`), limites de taxa por sessão e por IP, cujos valores são os de cada serviço ([003](003-admin-api.md), RNF-03; [004](004-classroom-api.md), RNF-04; entrega de imagens em [029](029-imagens.md), "Limite de taxa da entrega"), com `429` `rate_limited` e `Retry-After`, e limite de tamanho de corpo (1 MB, exceto envio de imagem).
 

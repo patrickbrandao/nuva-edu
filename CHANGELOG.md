@@ -8,6 +8,7 @@ Detalhe das decisões em `specs/decisions/`.
 ### Adicionado
 - ui: `Markdown` restrito, `SortableList` (arrastar por mouse, toque e teclado, anúncios por props), `Accordion`, `Tabs`, `ProgressBar` e `ProductCard`, com `react-markdown` e `@dnd-kit` (task 404).
 - Planejamento da Fase 2 (catálogo e aprendizado): tarefas 401 a 462, ADR 0025 (bibliotecas do certificado, Markdown, lista reordenável e player) e ajustes nas specs 005, 006, 008, 009, 010, 014, 015, 016, 024, 028, 029 e 031 (task 400).
+- Decisões da Fase 2: certificado por template HTML com palavras-chave, renderizado pelo Chromium no worker (ADR 0026); sem exclusão de produto com vínculos, arquivar só pelo admin, modo de acesso por gerente e admin, HLS só dos hosts da tabela, produto pago sem botão de compra; specs 005, 006, 008, 009, 014, 015, 024, 028, 029, 031, 033 e PLAN (task 463).
 - e2e: fluxos do critério de saída da Fase 1 (senha, Mailpit, Google/Facebook/Apple no simulador, termos, bloqueio, equipe, suspensão, senha vista com auditoria, avatar, varredura da senha) (task 166).
 - e2e: fumaça do admin entra com o admin inicial (projeto `setup`) e confere a tela de entrada sem sessão (task 190).
 - infra: `pnpm deploy:test` sobe o Mailpit no servidor de testes e confere, sem ler os valores, `SESSION_SECRET`, `ADMIN_EMAIL` e `ADMIN_PASSWORD` no `.env.local` remoto; recusa `NUVA_OAUTH_MOCK_*` lá; passo a passo em `docs/ambiente-de-teste.md` (task 159).

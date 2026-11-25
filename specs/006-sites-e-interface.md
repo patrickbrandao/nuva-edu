@@ -105,7 +105,7 @@ Conteúdo sem direito de acesso mostra o programa, um aviso de bloqueio e o bot�
 | Pessoas | Alunos (lista, filtros) e ficha do aluno (dados, acessos, compras, progresso, sessões, senha) — base `ClientOverview` | `/alunos`, `/alunos/:id` | `users.view_private` | manager | [007](007-contas-e-autenticacao.md), [010](010-direitos-de-acesso.md) |
 | Pessoas | Equipe | `/equipe` | `staff.manage` | admin | [008](008-papeis-e-permissoes.md) |
 | Pessoas | Certificados (lista com filtros, emissão manual, reemissão, revogação) | `/certificados` | `progress.view` | instructor (◐ alunos dos seus cursos; emitir: manager; revogar: admin) | [015](015-certificados.md) |
-| Conteúdo | Cursos (filtro "aguardando publicação"), editor de curso (dados, capa, módulos e aulas com arrastar, links, ebooks vinculados, certificado), alunos e progresso do curso | `/cursos`, `/cursos/:id` | `course.edit` | instructor (◐ os seus cursos) | [009](009-catalogo-e-conteudo.md), [014](014-aprendizado-e-progresso.md), [015](015-certificados.md) |
+| Conteúdo | Cursos (filtro "aguardando publicação"), editor de curso (dados, capa, módulos e aulas com arrastar, links, ebooks vinculados, certificado: habilitar, carga horária e aba "Template do certificado" com editor de código, lista de palavras-chave, "Começar do modelo", erros de validação por linha e "Gerar PDF de exemplo"), alunos e progresso do curso | `/cursos`, `/cursos/:id` | `course.edit` | instructor (◐ os seus cursos) | [009](009-catalogo-e-conteudo.md), [014](014-aprendizado-e-progresso.md), [015](015-certificados.md) |
 | Conteúdo | Ebooks, pacotes | `/ebooks`, `/pacotes` | `ebook_bundle.manage` | manager | [009](009-catalogo-e-conteudo.md) |
 | Conteúdo | Calendário de eventos | `/eventos` | `event.manage` | instructor (◐ eventos dos seus cursos) | [018](018-calendario-e-eventos.md) |
 | Conteúdo | Novidades | `/novidades` | `announcement.publish` | instructor (◐ ligadas aos seus cursos) | [025](025-novidades.md) |
@@ -121,7 +121,7 @@ Conteúdo sem direito de acesso mostra o programa, um aviso de bloqueio e o bot�
 | Sistema | Chaves MCP (as próprias) | `/chaves-mcp` | `mcp_key.own` | manager | [027](027-mcp.md) |
 | Sistema | Auditoria | `/auditoria` | `audit.view` | admin | [028](028-auditoria.md) |
 | Sistema | Operação (fila, e-mails, webhooks) | `/operacao` | `ops.manage` | admin | [005](005-worker-e-fila.md) |
-| Sistema | Configurações (escola e marca, certificado, termos, pagamento, login social, e-mail) | `/configuracoes` | `settings.manage` | admin | [015](015-certificados.md), [030](030-lgpd.md), [031](031-infraestrutura-e-deploy.md) |
+| Sistema | Configurações (escola e marca, certificado: signatário, cargo e template padrão da escola, no mesmo editor do curso; termos, pagamento, login social, e-mail) | `/configuracoes` | `settings.manage` | admin | [015](015-certificados.md), [030](030-lgpd.md), [031](031-infraestrutura-e-deploy.md) |
 
 O menu mostra o item quando a "Ação do menu" vem na lista `permissions` de `/session` ([008](008-papeis-e-permissoes.md), "Identificadores das ações"). O "Papel mínimo" é consequência da matriz da 008: o menor papel que tem a ação, mesmo em parte (◐); onde as duas divergirem, vale a 008. Para o instrutor, a ação ◐ abre a tela, e a API limita o que ela lista e altera ao alcance da 008. Alunos usa `users.view_private`, e não `users.list` (que o instrutor tem em parte), para a tela só aparecer a quem vê os dados privados.
 

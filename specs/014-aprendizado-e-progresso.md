@@ -89,6 +89,7 @@ Os vídeos são externos ([009](009-catalogo-e-conteudo.md)), então o sistema n
 - Bloco "Comece por aqui" quando o aluno tem cursos e nenhum iniciado: destaca o de aquisição mais recente.
 - Seção "Aulas liberadas": aulas amostra de cursos que o aluno não possui.
 - Abas adicionais: "Meus ebooks" (ebooks com direito ativo, com botão de download) e "Certificados" ([015](015-certificados.md)).
+- Cada curso da estante com certificado habilitado traz o estado do certificado (`in_progress`, `awaiting_template`, `preparing`, `issued`, `revoked`, [015](015-certificados.md), "Estado do certificado para o aluno"); o curso concluído sem template efetivo mostra "certificado ainda não liberado pelo instrutor".
 
 ### Meu progresso e mapa de atividade
 
@@ -111,7 +112,7 @@ Os vídeos são externos ([009](009-catalogo-e-conteudo.md)), então o sistema n
 
 `apps/classroom-api/openapi.yaml`, sob `/api/v1`:
 
-- `GET /me/courses` (estante, com filtros, busca, ordenação e contadores)
+- `GET /me/courses` (estante, com filtros, busca, ordenação e contadores; cada curso com o estado do certificado da [015](015-certificados.md))
 - `GET /me/continue` (até 3 cursos em andamento)
 - `GET /courses/{slug}/progress` (por módulo e aula)
 - `GET /lessons/{id}` (conteúdo, vizinhas e estado do usuário)

@@ -1,6 +1,6 @@
 # 0025 — Bibliotecas da Fase 2: certificado, Markdown, lista reordenável e player
 
-Status: aceita
+Status: aceita (item "PDF do certificado" substituído por [0026](0026-certificado-por-template-html.md))
 Data: 2026-11-25
 
 ## Contexto
@@ -11,7 +11,7 @@ Toda dependência nova passa pela conferência de licenças do `verify:quick` ([
 
 ## Decisão
 
-- **PDF do certificado:** `pdfkit` no worker, com a fonte Inter em TTF (OFL-1.1) guardada em `apps/worker/src/` junto do arquivo de licença dela; o `pdfkit` embute só os glifos usados, o que mantém o PDF abaixo de 300 KB. Código QR com `qrcode`, desenhado como vetor no PDF (não como imagem). Logotipo: o `pdfkit` não lê WebP, então o worker converte a variante de 256 px do `school_logo` para PNG com o `sharp` do módulo `images` de `packages/core`. Nenhum serviço externo nem navegador.
+- **PDF do certificado** (substituído pela [0026](0026-certificado-por-template-html.md): template HTML renderizado pelo Chromium headless no worker; o texto abaixo fica só como registro): `pdfkit` no worker, com a fonte Inter em TTF (OFL-1.1) guardada em `apps/worker/src/` junto do arquivo de licença dela; o `pdfkit` embute só os glifos usados, o que mantém o PDF abaixo de 300 KB. Código QR com `qrcode`, desenhado como vetor no PDF (não como imagem). Logotipo: o `pdfkit` não lê WebP, então o worker converte a variante de 256 px do `school_logo` para PNG com o `sharp` do módulo `images` de `packages/core`. Nenhum serviço externo nem navegador.
 - **Markdown:** `react-markdown`, sem `rehype-raw` (HTML bruto nunca é interpretado), com `allowedElements` restrito ao que a [006](../006-sites-e-interface.md) lista (parágrafo, negrito, itálico, listas, links, código, citação, quebra de linha), links só `https`, `http` e `mailto`, sempre com `rel="noopener noreferrer"` e `target="_blank"`. Um único componente `Markdown` em `packages/ui`, usado pelos dois sites e, na Fase 4, pelo fórum.
 - **Lista reordenável:** `@dnd-kit/core` e `@dnd-kit/sortable`, com o sensor de teclado ligado e os anúncios de leitor de tela em pt-BR; componente `SortableList` em `packages/ui`. Cada reordenação grava a ordem inteira (`PUT .../order`).
 - **Player:** componente `VideoPlayer` em `packages/ui`, um adaptador por provedor, todos com a mesma interface (`onEnded`, `onTime(seconds)`, `seek(seconds)`, posição inicial):

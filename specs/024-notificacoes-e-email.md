@@ -82,7 +82,7 @@ Até a central de notificações (Fase 4), os dois avisos da Fase 2 saem só por
 | Tipo | Grupo | Quando | `data` | Link |
 | --- | --- | --- | --- | --- |
 | `access.granted` | `purchase` | Concessão manual de acesso ([010](010-direitos-de-acesso.md)); na Fase 3 também pedido pago e assinatura | `productType`, `productTitle`, `expiresAt` (ou nulo) | `<classroomUrl>/meus-cursos` (curso e pacote) ou `<classroomUrl>/meus-ebooks` (ebook) |
-| `certificate.issued` | `courses` | Certificado emitido, automático ou manual ([015](015-certificados.md)); não sai na reemissão | `courseTitle`, `code` | `<classroomUrl>/progresso` e `<classroomUrl>/certificados/<code>` |
+| `certificate.issued` | `courses` | Certificado emitido, automático, manual ou retroativo ao cadastrar o template ([015](015-certificados.md)); não sai na reemissão | `courseTitle`, `code` | `<classroomUrl>/progresso` e `<classroomUrl>/certificados/<code>` |
 
 - Só para o titular; conta excluída não recebe, e conta suspensa (`full`) também não, porque não pode usar o que o e-mail anuncia.
 - `certificate.issued` é de grupo desligável, mas até a Fase 4 não há preferência a respeitar: sai sempre, sem `List-Unsubscribe`. O cabeçalho entra com as preferências.

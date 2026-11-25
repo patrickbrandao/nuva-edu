@@ -74,10 +74,11 @@ Este é o catálogo único de tipos de tarefa; as demais specs usam exatamente e
 | `order.fulfill` | `payment.webhook`, reconciliação | Marca o pedido pago e cria os direitos em cascata ([010](010-direitos-de-acesso.md)) | 10 |
 | `refund.execute` | `admin-api` | Estorna no Mercado Pago e revoga direitos em cascata ([011](011-vendas-e-checkout.md)) | 10 |
 | `entitlement.recompute` | Mudança de vínculo ebook ↔ produto, de itens de pacote ou de plano | Recalcula direitos derivados dos usuários afetados | 5 |
-| `course.completed` | `classroom-api`, quando o curso passa a 100% para o aluno; `course.completion_check` | Cria o certificado (registro e código) e enfileira `certificate.render`; dispara `gamification.award` e `notify` ([014](014-aprendizado-e-progresso.md), [015](015-certificados.md)) | 5 |
+| `course.completed` | `classroom-api`, quando o curso passa a 100% para o aluno; `course.completion_check` | Cria o certificado (registro e código) e enfileira `certificate.render`, se o curso tem template efetivo (sem ele, termina sem efeito); dispara `gamification.award` e `notify` ([014](014-aprendizado-e-progresso.md), [015](015-certificados.md)) | 5 |
 | `course.completion_check` | `admin-api`, ao despublicar ou excluir aula de curso publicado | Enfileira `course.completed` para cada aluno que, sem a aula, passou a ter 100% do curso ([014](014-aprendizado-e-progresso.md)); lotes de 500 | 5 |
-| `certificate.render` | `course.completed`, emissão manual, reemissão | Gera o PDF e o código de validação ([015](015-certificados.md)) | 5 |
-| `certificate.backfill` | Admin liga o certificado num curso já concluído por alunos | Emite os certificados pendentes ([015](015-certificados.md)) | 3 |
+| `certificate.render` | `course.completed`, emissão manual, reemissão | Gera o PDF a partir da versão do template guardada no certificado, com o Chromium headless ([015](015-certificados.md), [0026](decisions/0026-certificado-por-template-html.md)) | 5 |
+| `certificate.backfill` | Admin liga o certificado num curso já concluído por alunos; o curso passa a ter template efetivo (template do curso ou padrão da escola cadastrado) | Emite os certificados pendentes ([015](015-certificados.md)) | 3 |
+| `certificate.preview` | `admin-api`, pedido de PDF de exemplo de um template | Renderiza o template com dados de exemplo e grava o PDF em `certificate_previews` ([015](015-certificados.md)) | 1 |
 | `gamification.award` | Aula concluída, publicação, case, curso concluído | Lança pontos, recalcula nível e medalhas automáticas ([020](020-gamificacao.md)) | 5 |
 | `event.reminder` | Criação ou mudança de horário de evento (agendada para 30 min antes) | Notifica o público do evento ([018](018-calendario-e-eventos.md)) | 3 |
 | `announcement.publish` | Novidade com publicação agendada | Publica no horário marcado ([025](025-novidades.md)) | 3 |
@@ -88,6 +89,8 @@ Este é o catálogo único de tipos de tarefa; as demais specs usam exatamente e
 Direito vencido não tem tarefa: deixa de valer no instante de `expires_at`, pela própria verificação de acesso, e nada é gravado ([010](010-direitos-de-acesso.md), RF-09). A antiga `entitlement.expire` saiu do catálogo por isso (tarefa 400).
 
 Na Fase 2, sem a central de notificações ([024](024-notificacoes-e-email.md)) e sem a gamificação ([020](020-gamificacao.md)), `course.completed` só emite o certificado e envia o e-mail `certificate.issued` por `enqueueEmail`; `gamification.award` e `notify` entram nas fases desses recursos.
+
+As tarefas `certificate.render` e `certificate.preview` usam o navegador do worker, um PDF por vez em cada processo (uma trava dentro do processo): a segunda tarefa de renderização espera a vez, e as tarefas de outros tipos seguem dentro de `NUVA_WORKER_CONCURRENCY` ([015](015-certificados.md), "PDF").
 
 `example.echo` nasceu como exemplo da Fase 0 e fica no catálogo como tarefa de diagnóstico: serve aos testes da fila, ao e2e de fumaça e para conferir numa instalação que o worker está consumindo.
 
@@ -183,7 +186,7 @@ Aviso (`NOTIFY nuva_jobs`, sem conteúdo), por gatilho:
 
 Tarefa agendada para depois não gera aviso; a varredura de 5 s a pega. O aviso só é entregue no `COMMIT`, então tarefa de transação desfeita não acorda ninguém.
 
-O `worker` também é o único que escreve em: `payments`, estado de `orders` após a criação, `subscriptions`, `entitlements` com `source` `order` e `subscription` (e os `cascade` dessas raízes), `points_ledger`, `user_badges` automáticas, `certificates` (emissão, código e PDF; revogação, emissão manual e reemissão são da `admin-api`, [015](015-certificados.md)), `notifications` (criação) e estado de processamento em `webhook_events`.
+O `worker` também é o único que escreve em: `payments`, estado de `orders` após a criação, `subscriptions`, `entitlements` com `source` `order` e `subscription` (e os `cascade` dessas raízes), `points_ledger`, `user_badges` automáticas, `certificates` (emissão, código e PDF; revogação, emissão manual e reemissão são da `admin-api`, [015](015-certificados.md)), o resultado de `certificate_previews` (o pedido é criado pela `admin-api`), `notifications` (criação) e estado de processamento em `webhook_events`.
 
 Retenção: `done` por 7 dias, `failed` por 30 dias ([033](033-observabilidade-retencao-backup.md)).
 

@@ -22,7 +22,7 @@ Esta spec define as entidades, os campos, os estados de publicação, os modos d
 - RF-09: Aula aceita um vídeo principal (link/embed) e uma lista de links de apoio (arquivos e páginas).
 - RF-10: Vitrine pública lista produtos publicados não privados, com preço e programa, sem exigir login.
 - RF-11: Instrutor cria cursos e edita apenas aqueles de que é dono; ebooks e pacotes são criados e editados só por gerente e admin, e o instrutor apenas vincula ebooks existentes aos próprios cursos e aulas ([008](008-papeis-e-permissoes.md)).
-- RF-12: Preço e modo de acesso só podem ser alterados pelo admin.
+- RF-12: Preço só pode ser alterado pelo admin; modo de acesso, por gerente e admin ([008](008-papeis-e-permissoes.md): `product.set_price`, `product.set_access`).
 - RNF-01: Listagem da vitrine (até 200 produtos) responde em p95 < 300 ms.
 - RNF-02: Página de curso com 300 aulas (programa completo) responde em p95 < 300 ms com no máximo 3 consultas ao banco.
 - RNF-03: Limites: título até 160 caracteres; resumo até 300; descrição até 20.000 (Markdown); até 100 módulos por curso; até 500 aulas por curso; até 20 links de apoio por aula; URL até 2.000 caracteres.
@@ -38,7 +38,7 @@ Esta spec define as entidades, os campos, os estados de publicação, os modos d
 
 - Curso `published` com aula `draft`: a aula não aparece no programa nem conta no total de aulas e de duração.
 - Despublicar um produto não revoga direitos de acesso; o item some da vitrine e da estante até voltar a ser publicado. O admin vê um aviso com o número de alunos afetados antes de confirmar.
-- Excluir produto com pedido, direito ou progresso associado é proibido (retorna `409`); usa-se `archived_at` (arquivar), que equivale a despublicar em definitivo e só o admin desfaz (`unarchive`). Excluir sem nenhum vínculo é permitido ao admin.
+- Ninguém exclui produto com pedido, direito ou progresso associado, nem o admin (retorna `409` `product_has_links`); o caminho é arquivar (`archived_at`), que equivale a despublicar em definitivo. Arquivar e desarquivar (`unarchive`) são só do admin, para curso, ebook e pacote (`product.archive`). Excluir sem nenhum vínculo: curso, pelo instrutor dono, gerente e admin (`course.delete`); ebook e pacote, por gerente e admin (`ebook_bundle.manage`). Excluir o curso exclui módulos, aulas, links e o template de certificado dele ([015](015-certificados.md)). Decisão da resposta à P2 da tarefa 400.
 - Publicar um curso exige ao menos um módulo com uma aula publicada; publicar pacote exige ao menos um item; publicar ebook exige `file_url` válida.
 
 ### Modos de acesso
@@ -72,8 +72,10 @@ O autor informa `video_url`. O sistema classifica o provedor na gravação e gua
 | `vimeo` | `vimeo.com/<id>`, `player.vimeo.com/video/<id>` | iframe (API do player) | sim |
 | `bunny` | `iframe.mediadelivery.net/embed/...`, `*.b-cdn.net/...m3u8` | iframe ou HLS | sim |
 | `panda` | `player-vz-*.tv.pandavideo.com.br/embed/...` | iframe | sim |
-| `file` | URL direta terminando em `.mp4`, `.webm`, `.m3u8` | elemento de vídeo nativo (HLS por biblioteca) | sim |
-| `link` | qualquer outra URL `https` | botão "Abrir vídeo" em nova aba | não |
+| `file` | URL direta terminando em `.mp4` ou `.webm`, em qualquer host `https` | elemento de vídeo nativo | sim |
+| `link` | qualquer outra URL `https`, inclusive `.m3u8` de host fora da tabela | botão "Abrir vídeo" em nova aba | não |
+
+HLS (`.m3u8`) só é tocado a partir dos hosts da tabela (hoje, `*.b-cdn.net`, classificado como `bunny` e tocado pelo `<video>` nativo ou pelo `hls.js`, [0025](decisions/0025-bibliotecas-da-fase-2.md)); `.m3u8` de outro host vira `link`. Assim a política de segurança de conteúdo do classroom abre `connect-src` só para esses hosts; `.mp4` e `.webm` de qualquer host `https` tocam no `<video>` nativo, com `media-src https:`. Decisão da resposta à P5 da tarefa 400.
 
 Regras de validação de qualquer URL de conteúdo (vídeo, apoio, ebook, capa externa):
 
@@ -133,9 +135,10 @@ Comprar, assistir e baixar exigem login.
 | --- | --- |
 | URL fora das regras | `422` com o campo e o motivo |
 | Instrutor editando curso de outro dono | `404` ([008](008-papeis-e-permissoes.md)) |
-| Gerente ou instrutor alterando preço ou modo de acesso | `403` |
+| Instrutor alterando preço ou modo de acesso; gerente alterando preço | `403` |
+| Excluir produto com vínculos, por qualquer papel | `409` `product_has_links` |
+| Arquivar ou desarquivar sem ser admin | `403` |
 | Publicar curso sem aula publicada | `422` |
-| Excluir produto com vínculos | `409` |
 | Slug repetido | `409` |
 | Pacote contendo pacote | `422` |
 
@@ -178,6 +181,7 @@ Dono (escrita): `admin-api`. Leitura: `classroom-api` e `worker`.
 - `lessons.type` existe para extensão futura (questionário); o MVP só usa `video`.
 - `lessons.forum_topic_id` nasce nulo e sem chave estrangeira; a chave e a criação do tópico entram com o fórum ([017](017-forum.md), Fase 4).
 - Capas são imagens enviadas ([029](029-imagens.md)).
+- O template de certificado de cada curso fica em `certificate_templates` ([015](015-certificados.md)), não em `courses`; é editado pela rota própria (`/courses/{id}/certificate-template`), não pelo `PATCH /courses/{id}`.
 - Retenção: dados de catálogo são permanentes; arquivados nunca são apagados automaticamente.
 
 ### O que fica para outras fases
@@ -186,7 +190,7 @@ A Fase 2 entrega esta spec inteira, exceto o que depende de recurso de fase post
 
 - "Reportar problema" (player, materiais) abre chamado: entra com os chamados ([023](023-chamados-de-suporte.md), Fase 4); até lá o botão não aparece.
 - Lista de planos na vitrine: com as assinaturas ([012](012-assinaturas.md), Fase 3).
-- Botão de compra e cesta: com as vendas ([011](011-vendas-e-checkout.md), Fase 3). Na Fase 2 o acesso a produto `paid` vem só por concessão manual ([010](010-direitos-de-acesso.md)).
+- Botão de compra e cesta: com as vendas ([011](011-vendas-e-checkout.md), Fase 3). Na Fase 2 o produto `paid` aparece na vitrine e na página do produto com o preço e o estado bloqueado, sem botão de compra nem cesta, com o texto "Acesso liberado pela escola"; o acesso vem só por concessão manual ([010](010-direitos-de-acesso.md)). Decisão da resposta à P6 da tarefa 400.
 - Tópico da aula no fórum: Fase 4.
 
 ## Critérios de aceite
@@ -198,7 +202,10 @@ A Fase 2 entrega esta spec inteira, exceto o que depende de recurso de fase post
 - [ ] URL `http://`, com credenciais ou acima de 2.000 caracteres é recusada com `422`.
 - [ ] Cada provedor da tabela é reconhecido a partir dos padrões listados; URL desconhecida vira `link`.
 - [ ] Instrutor recebe `404` ao editar curso alheio e `403` ao alterar preço ou modo de acesso do próprio curso.
-- [ ] Excluir curso com pedido associado responde `409`; arquivar funciona.
+- [ ] Excluir curso com pedido, direito ou progresso responde `409` também para o admin; arquivar funciona só para o admin.
+- [ ] Gerente altera o modo de acesso e recebe `403` ao alterar o preço.
+- [ ] `.m3u8` de host fora da tabela é classificado como `link`.
+- [ ] Produto `paid` sem direito mostra preço e bloqueio, sem botão de compra.
 - [ ] Vitrine e página de produto abrem sem login e têm título e descrição próprios.
 - [ ] Limites da RNF-03 validados com teste.
 

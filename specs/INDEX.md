@@ -19,7 +19,7 @@ As specs são a fonte da verdade. Carregue apenas a que a tarefa pedir. Decisõe
 | [012-assinaturas.md](012-assinaturas.md) | Assinaturas | Planos e ciclo de vida da assinatura | 010, 011 | aprovada |
 | [013-pagamentos-mercado-pago.md](013-pagamentos-mercado-pago.md) | Pagamentos e Mercado Pago | Interface de provedor, webhook, reconciliação | 011, 012 | aprovada |
 | [014-aprendizado-e-progresso.md](014-aprendizado-e-progresso.md) | Aprendizado e progresso | Player, conclusão, progresso, estante | 010 | aprovada |
-| [015-certificados.md](015-certificados.md) | Certificados | PDF e validação pública | 014 | aprovada |
+| [015-certificados.md](015-certificados.md) | Certificados | Template HTML com palavras-chave, PDF pelo Chromium no worker, validação pública | 014 | aprovada |
 | [016-anotacoes.md](016-anotacoes.md) | Anotações | Notas por aula e avulsas | 014 | aprovada |
 | [017-forum.md](017-forum.md) | Fórum | Categorias, tópicos, respostas | 010 | aprovada |
 | [018-calendario-e-eventos.md](018-calendario-e-eventos.md) | Calendário e eventos | Lives, público, gravações | 010 | aprovada |

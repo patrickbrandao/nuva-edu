@@ -29,7 +29,7 @@ A equipe tem poderes amplos (inclusive ver senhas, no caso do admin) e agentes d
 | Contas | `user.create`, `user.update`, `user.suspend`, `user.unsuspend`, `user.sessions_revoke`, `user.set_role`, `user.delete`, `user.password_view`, `user.password_set`, `user.export` |
 | Sessão e login | `auth.login`, `auth.logout`, `auth.lockout`, `auth.password_reset`, `auth.provider_link`, `auth.provider_unlink` |
 | Catálogo | `course.*`, `module.*`, `lesson.*`, `ebook.*`, `bundle.*` (`create`, `update`, `delete`, `publish`, `unpublish`, `archive`, `unarchive`, `reorder`), `course.request_review`, `course.set_owner`, `bundle.set_items`, `ebook.set_targets`, `lesson.set_links`, `product.set_price`, `product.set_access` |
-| Certificados | `certificate.issue` (emissão manual), `certificate.reissue`, `certificate.revoke`, `certificate.restore`, `certificate.backfill` |
+| Certificados | `certificate.issue` (emissão manual), `certificate.reissue`, `certificate.revoke`, `certificate.restore`, `certificate.backfill`, `certificate_template.update` e `certificate_template.delete` (alvo: o curso, ou a escola para o padrão; `data` com o id da versão e o tamanho do HTML, nunca o HTML) |
 | Vendas | `plan.*`, `coupon.*`, `order.refund`, `sales.export` |
 | Acessos | `entitlement.grant`, `entitlement.revoke` |
 | Comunidade | `forum.post_hide`, `forum.post_edit`, `forum.topic_close`, `forum.topic_pin`, `forum.category.*`, `case.hide`, `report.resolve`, `badge.award`, `points.adjust` |
