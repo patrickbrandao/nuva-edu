@@ -1,7 +1,16 @@
 import type { RouteObject } from 'react-router';
 import { ErrorPage } from './pages/ErrorPage';
 import { HomePage } from './pages/HomePage';
-import { ACCOUNT_PATH, HOME_PATH, LOGIN_PATH, PENDING_PAGES } from './shell/navigation';
+import {
+  ACCOUNT_PATH,
+  HOME_PATH,
+  LOGIN_PATH,
+  MY_COURSES_PATH,
+  MY_EBOOKS_PATH,
+  PENDING_PAGES,
+  PROGRESS_PATH,
+  START_PATH,
+} from './shell/navigation';
 import { type RouteHandle, Shell } from './shell/Shell';
 
 const handle = (value: RouteHandle): RouteHandle => value;
@@ -102,6 +111,26 @@ export const routes: RouteObject[] = [
           const { ProductPage } = await import('./pages/ProductPage');
           return { element: <ProductPage type="ebook" /> };
         },
+      },
+      {
+        path: START_PATH,
+        handle: handle({ titleKey: 'menu.items.start' }),
+        lazy: async () => ({ Component: (await import('./pages/StartPage')).StartPage }),
+      },
+      {
+        path: MY_COURSES_PATH,
+        handle: handle({ titleKey: 'menu.items.myCourses' }),
+        lazy: async () => ({ Component: (await import('./pages/MyCoursesPage')).MyCoursesPage }),
+      },
+      {
+        path: MY_EBOOKS_PATH,
+        handle: handle({ titleKey: 'menu.items.myEbooks' }),
+        lazy: async () => ({ Component: (await import('./pages/MyEbooksPage')).MyEbooksPage }),
+      },
+      {
+        path: PROGRESS_PATH,
+        handle: handle({ titleKey: 'menu.items.progress' }),
+        lazy: async () => ({ Component: (await import('./pages/ProgressPage')).ProgressPage }),
       },
       {
         path: '/meus-cursos/:slug',

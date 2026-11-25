@@ -308,6 +308,139 @@
       "save": "Não foi possível gravar a conclusão da aula. Tente de novo."
     }
   },
+  "study": {
+    "start": {
+      "description": "Continue de onde parou e veja as aulas liberadas.",
+      "greeting": "Olá, {{name}}",
+      "lead": "Continue de onde parou.",
+      "continueTitle": "Continue assistindo",
+      "continueList": "Cursos em andamento",
+      "continueLoading": "Carregando os seus cursos…",
+      "continueErrorTitle": "Não foi possível carregar os seus cursos",
+      "continueEmptyTitle": "Nenhum curso em andamento",
+      "continueEmptyText": "Quando você abrir uma aula, o curso aparece aqui para continuar de onde parou.",
+      "nextLesson": "Aula atual: {{lesson}}",
+      "continueCourse": "Continuar: {{title}}",
+      "allCourses": "Ver meus cursos",
+      "showcase": "Ir à vitrine"
+    },
+    "samples": {
+      "title": "Aulas liberadas",
+      "list": "Aulas liberadas",
+      "loading": "Carregando as aulas liberadas…",
+      "errorTitle": "Não foi possível carregar as aulas liberadas",
+      "empty": "Não há aulas liberadas no momento.",
+      "course": "Curso: {{title}}",
+      "more": "Carregar mais",
+      "loadingMore": "Carregando…"
+    },
+    "shelf": {
+      "description": "Os seus cursos, com o progresso de cada um.",
+      "loading": "Carregando os seus cursos…",
+      "errorTitle": "Não foi possível carregar os seus cursos",
+      "counts": {
+        "label": "Resumo dos seus cursos",
+        "all": "Cursos",
+        "inProgress": "Em andamento",
+        "notStarted": "Não iniciados",
+        "completed": "Concluídos",
+        "hours": "De aulas concluídas"
+      },
+      "filters": {
+        "label": "Filtrar os cursos",
+        "tabs": "Estado do curso",
+        "all": "Todos",
+        "inProgress": "Em andamento",
+        "notStarted": "Não iniciados",
+        "completed": "Concluídos",
+        "search": "Buscar nos meus cursos",
+        "searchPlaceholder": "Buscar por título",
+        "sortLabel": "Ordenar",
+        "sort": {
+          "recent": "Acesso mais recente",
+          "catalog": "Mais recentes no catálogo",
+          "title": "Título (A–Z)",
+          "progress": "Maior progresso"
+        },
+        "clear": "Limpar filtros"
+      },
+      "view": {
+        "label": "Modo de exibição",
+        "grid": "Grade",
+        "list": "Lista"
+      },
+      "list": "Meus cursos",
+      "count_one": "{{count}} curso na lista.",
+      "count_other": "{{count}} cursos na lista.",
+      "emptyTitle": "Você ainda não tem cursos",
+      "emptyText": "Os cursos a que você tiver acesso aparecem aqui, com o seu progresso.",
+      "noResultsTitle": "Nenhum curso com esses filtros",
+      "noResultsText": "Tente outro filtro ou outra busca.",
+      "startHere": {
+        "title": "Comece por aqui",
+        "text": "Você ainda não começou nenhum curso. Que tal este, o mais recente da sua estante?",
+        "action": "Começar: {{title}}"
+      },
+      "progressOf": "Progresso em {{title}}",
+      "expired": "Acesso vencido",
+      "accessUntil": "Acesso até {{date}}",
+      "expiredOn": "Acesso vencido em {{date}}",
+      "actions": {
+        "start": "Começar",
+        "continue": "Continuar",
+        "review": "Rever",
+        "renew": "Renovar acesso"
+      },
+      "actionOf": "{{action}}: {{title}}"
+    },
+    "ebooks": {
+      "description": "Os ebooks a que você tem acesso, para baixar.",
+      "loading": "Carregando os seus ebooks…",
+      "errorTitle": "Não foi possível carregar os seus ebooks",
+      "list": "Meus ebooks",
+      "emptyTitle": "Você ainda não tem ebooks",
+      "emptyText": "Os ebooks a que você tiver acesso aparecem aqui, com o botão de download.",
+      "author": "Por {{name}}",
+      "lifetime": "Acesso vitalício",
+      "accessUntil": "Acesso até {{date}}",
+      "download": "Baixar",
+      "downloadOf": "Baixar: {{title}}",
+      "downloading": "Abrindo…",
+      "downloadErrorTitle": "Não foi possível baixar “{{title}}”",
+      "accessDenied": "Você não tem mais acesso a este ebook.",
+      "badLink": "O endereço do arquivo não é válido. Avise a escola."
+    },
+    "progress": {
+      "description": "O seu progresso em cada curso e a sua atividade nos últimos 12 meses.",
+      "lead": "Um quadrado por aula de cada curso, e a sua atividade nos últimos 12 meses.",
+      "loading": "Carregando o seu progresso…",
+      "errorTitle": "Não foi possível carregar o seu progresso",
+      "coursesTitle": "Progresso por curso",
+      "emptyTitle": "Nenhum curso iniciado",
+      "emptyText": "Abra uma aula para o curso aparecer aqui, com um quadrado por aula.",
+      "lessonsOf": "Aulas de {{module}}",
+      "lessonDone": "{{lesson}}: concluída",
+      "lessonPending": "{{lesson}}: não concluída",
+      "legendDone": "Concluída",
+      "legendPending": "Não concluída"
+    },
+    "activity": {
+      "title": "Atividade",
+      "tableTitle": "Atividade nos últimos 12 meses",
+      "loading": "Carregando a sua atividade…",
+      "errorTitle": "Não foi possível carregar a sua atividade",
+      "dayNone": "Nenhuma atividade em {{date}}",
+      "day_one": "{{count}} atividade em {{date}}",
+      "day_other": "{{count}} atividades em {{date}}",
+      "summaryNone": "Nenhuma atividade no período.",
+      "summary_one": "{{count}} atividade no período, em {{days}}.",
+      "summary_other": "{{count}} atividades no período, em {{days}}.",
+      "days_one": "{{count}} dia",
+      "days_other": "{{count}} dias",
+      "less": "Menos",
+      "more": "Mais"
+    }
+  },
   "auth": {
     "providers": {
       "google": "Google",

@@ -5,7 +5,7 @@ import { MENU_STORAGE_KEY } from '../config';
 import ptBR from '../locales/pt-BR.json';
 import { apiRoutes, jsonResponse, META, renderApp, unavailableResponse } from '../test/renderApp';
 import { ACCENT_VARIABLE, DEFAULT_SOURCE_CODE_URL } from './brand';
-import { NAV_GROUPS } from './navigation';
+import { NAV_GROUPS, PENDING_PAGES } from './navigation';
 
 /** API simulada com `/api/v1/meta` alterado; o resto responde o padrão (vitrine vazia). */
 const withMeta = (overrides: Partial<typeof META>) =>
@@ -279,14 +279,28 @@ describe('casca do classroom', () => {
   });
 
   it('abre todas as rotas do menu por endereço direto', async () => {
-    // "Configurações" (/conta) já tem tela própria, que exige login: tem teste em AccountPage
-    const pending = NAV_GROUPS.flatMap((group) => group.items).filter(
-      (item) => item.path !== '/' && item.path !== '/conta',
-    );
-    for (const item of pending) {
+    // as telas ainda por construir mostram "em construção"
+    for (const item of PENDING_PAGES) {
       const view = renderApp(item.path);
       expect(await screen.findByRole('heading', { level: 1 })).toBeTruthy();
       expect(screen.getByText(ptBR.construction.title)).toBeTruthy();
+      view.unmount();
+    }
+    // as já construídas (fora a vitrine) exigem login: cada uma tem o próprio teste
+    const built = NAV_GROUPS.flatMap((group) => group.items).filter(
+      (item) => item.path !== '/' && !PENDING_PAGES.some((page) => page.path === item.path),
+    );
+    expect(built.map((item) => item.path)).toEqual([
+      '/inicio',
+      '/meus-cursos',
+      '/meus-ebooks',
+      '/progresso',
+      '/conta',
+    ]);
+    for (const item of built) {
+      const view = renderApp(item.path);
+      await waitFor(() => expect(view.router.state.location.pathname).toBe('/entrar'));
+      expect(screen.queryByText(ptBR.construction.title)).toBeNull();
       view.unmount();
     }
   });

@@ -125,6 +125,21 @@ export const HOME_PATH = '/';
 export const ACCOUNT_PATH = '/conta';
 /** Endereço da tela de login. */
 export const LOGIN_PATH = '/entrar';
+/** Entrada do aluno, estante, ebooks e progresso (têm rota própria). */
+export const START_PATH = '/inicio';
+export const MY_COURSES_PATH = '/meus-cursos';
+export const MY_EBOOKS_PATH = '/meus-ebooks';
+export const PROGRESS_PATH = '/progresso';
+
+/** Telas do menu que já foram construídas. */
+const BUILT_PAGES: readonly string[] = [
+  HOME_PATH,
+  ACCOUNT_PATH,
+  START_PATH,
+  MY_COURSES_PATH,
+  MY_EBOOKS_PATH,
+  PROGRESS_PATH,
+];
 
 /**
  * Telas do mapa que ainda não foram construídas: abrem a página "em construção" com o nome
@@ -132,6 +147,6 @@ export const LOGIN_PATH = '/entrar';
  */
 export const PENDING_PAGES: readonly { path: string; titleKey: TextKey }[] = [
   ...NAV_GROUPS.flatMap((group) => group.items)
-    .filter((item) => item.path !== HOME_PATH && item.path !== ACCOUNT_PATH)
+    .filter((item) => !BUILT_PAGES.includes(item.path))
     .map((item) => ({ path: item.path, titleKey: item.labelKey })),
 ];
