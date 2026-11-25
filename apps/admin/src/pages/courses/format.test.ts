@@ -2,12 +2,12 @@ import { describe, expect, it } from 'vitest';
 import {
   formatDuration,
   formatPrice,
+  isContentUrl,
   parseDuration,
   parsePrice,
   parseWhole,
   priceInput,
 } from './format';
-import { isContentUrl } from './LessonDialog';
 
 describe('duração da aula', () => {
   it('mostra minutos e segundos, e horas quando passa de uma', () => {

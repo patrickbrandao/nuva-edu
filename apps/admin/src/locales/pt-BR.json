@@ -17,7 +17,8 @@
     "save": "Salvar",
     "saving": "Salvando…",
     "loadMore": "Carregar mais",
-    "loadingMore": "Carregando…"
+    "loadingMore": "Carregando…",
+    "loadingPage": "Carregando a tela…"
   },
   "theme": {
     "group": "Tema da página",
@@ -672,6 +673,7 @@
       "tabs": {
         "dados": "Dados",
         "conteudo": "Módulos e aulas",
+        "ebooks": "Ebooks",
         "certificado": "Certificado"
       }
     },
@@ -834,6 +836,218 @@
         "unnamed": "Link {{position}}",
         "saveError": "A aula foi salva, mas os links não"
       }
+    }
+  },
+  "products": {
+    "ebook": {
+      "loading": "Carregando os ebooks…",
+      "errorTitle": "Não foi possível carregar os ebooks",
+      "empty": "Nenhum ebook ainda",
+      "emptyFiltered": "Nenhum ebook encontrado",
+      "columnTitle": "Ebook",
+      "coverLabel": "Capa do ebook",
+      "slugHint": "Parte final do endereço do ebook no site do aluno. Minúsculas, números e hífens.",
+      "create": {
+        "open": "Novo ebook",
+        "title": "Novo ebook",
+        "submit": "Criar ebook",
+        "description": "O ebook nasce como rascunho e privado. O link do arquivo, a capa e os demais dados ficam no editor."
+      },
+      "editor": {
+        "loading": "Carregando o ebook…",
+        "errorTitle": "Não foi possível carregar o ebook",
+        "notFound": "Ebook não encontrado",
+        "notFoundText": "O ebook não existe ou foi excluído.",
+        "backToList": "Voltar aos ebooks",
+        "tabsLabel": "Seções do ebook"
+      },
+      "data": {
+        "title": "Dados do ebook",
+        "saved": "Dados do ebook salvos."
+      },
+      "publish": {
+        "title": "Publicar o ebook?",
+        "done": "Ebook publicado."
+      },
+      "unpublish": {
+        "title": "Despublicar o ebook?",
+        "done": "Ebook despublicado."
+      },
+      "archive": {
+        "title": "Arquivar o ebook?",
+        "done": "Ebook arquivado.",
+        "noticeTitle": "Ebook arquivado"
+      },
+      "unarchive": {
+        "title": "Desarquivar o ebook?",
+        "done": "Ebook desarquivado; voltou como rascunho."
+      },
+      "delete": {
+        "title": "Excluir o ebook?",
+        "done": "Ebook “{{title}}” excluído.",
+        "text": "é excluído com os vínculos a cursos e aulas. Não há como desfazer."
+      },
+      "subtitle": "Ebooks do catálogo: vendidos avulsos, em pacotes ou vinculados a cursos e aulas.",
+      "emptyText": "Crie o primeiro ebook e informe o link do arquivo.",
+      "columnDetail": "Autor e páginas"
+    },
+    "bundle": {
+      "loading": "Carregando os pacotes…",
+      "errorTitle": "Não foi possível carregar os pacotes",
+      "empty": "Nenhum pacote ainda",
+      "emptyFiltered": "Nenhum pacote encontrado",
+      "columnTitle": "Pacote",
+      "coverLabel": "Capa do pacote",
+      "slugHint": "Parte final do endereço do pacote no site do aluno. Minúsculas, números e hífens.",
+      "create": {
+        "open": "Novo pacote",
+        "title": "Novo pacote",
+        "submit": "Criar pacote",
+        "description": "O pacote nasce como rascunho, privado e sem itens. Os itens, a capa e os demais dados ficam no editor."
+      },
+      "editor": {
+        "loading": "Carregando o pacote…",
+        "errorTitle": "Não foi possível carregar o pacote",
+        "notFound": "Pacote não encontrado",
+        "notFoundText": "O pacote não existe ou foi excluído.",
+        "backToList": "Voltar aos pacotes",
+        "tabsLabel": "Seções do pacote"
+      },
+      "data": {
+        "title": "Dados do pacote",
+        "saved": "Dados do pacote salvos."
+      },
+      "publish": {
+        "title": "Publicar o pacote?",
+        "done": "Pacote publicado."
+      },
+      "unpublish": {
+        "title": "Despublicar o pacote?",
+        "done": "Pacote despublicado."
+      },
+      "archive": {
+        "title": "Arquivar o pacote?",
+        "done": "Pacote arquivado.",
+        "noticeTitle": "Pacote arquivado"
+      },
+      "unarchive": {
+        "title": "Desarquivar o pacote?",
+        "done": "Pacote desarquivado; voltou como rascunho."
+      },
+      "delete": {
+        "title": "Excluir o pacote?",
+        "done": "Pacote “{{title}}” excluído.",
+        "text": "é excluído com a lista de itens; os cursos e os ebooks dele continuam no catálogo. Não há como desfazer."
+      },
+      "subtitle": "Pacotes que combinam cursos e ebooks.",
+      "emptyText": "Crie o primeiro pacote e escolha os cursos e os ebooks dele.",
+      "columnDetail": "Itens"
+    },
+    "emptyFilteredText": "Nada corresponde à busca e aos filtros.",
+    "loadMoreError": "Não foi possível carregar mais itens. Tente de novo.",
+    "itemCount_one": "{{count}} item",
+    "itemCount_other": "{{count}} itens",
+    "pageCount_one": "{{count}} página",
+    "pageCount_other": "{{count}} páginas",
+    "noDetail": "—",
+    "tabs": {
+      "dados": "Dados",
+      "vinculos": "Vínculos",
+      "itens": "Itens"
+    },
+    "fields": {
+      "authorName": "Autor",
+      "authorNameHint": "Nome que aparece na página do ebook.",
+      "fileUrl": "Endereço do arquivo",
+      "fileUrlHint": "Link externo do arquivo (https). Só quem tem acesso ao ebook o recebe. Obrigatório para publicar.",
+      "pages": "Páginas",
+      "pagesInvalid": "Informe um número inteiro de 1 a 100.000, ou deixe em branco."
+    },
+    "errors": {
+      "slug_taken": "Este endereço já é usado por outro produto do mesmo tipo.",
+      "price_required": "Produto pago precisa de preço. O preço é definido pelo administrador.",
+      "price_not_allowed": "Só produto pago tem preço. Mude o modo de acesso para pago ou apague o preço.",
+      "product_archived": "O produto está arquivado. Desarquive para continuar.",
+      "product_has_links": "Há pedido ou acesso de aluno ligado a este produto, e ele não pode ser excluído. Use arquivar.",
+      "ebook_file_required": "Para publicar, o ebook precisa do endereço do arquivo.",
+      "bundle_has_no_items": "Para publicar, o pacote precisa de ao menos um item.",
+      "bundle_in_bundle": "Um pacote não pode conter outro pacote.",
+      "catalog_item_not_found": "Um dos itens não existe mais no catálogo. Recarregue a página e tente de novo.",
+      "catalog_limit_exceeded": "O limite de itens ou de vínculos foi atingido.",
+      "catalog_limit_exceededMax": "O limite foi atingido: no máximo {{max}}.",
+      "version_conflict": "Outra pessoa alterou este registro. Recarregue a página e tente de novo.",
+      "not_found": "Não encontrado. O item pode ter sido excluído ou não é seu."
+    },
+    "links": {
+      "types": {
+        "course": "Curso",
+        "lesson": "Aula",
+        "bundle": "Pacote",
+        "ebook": "Ebook"
+      },
+      "targetsTitle": "Onde o ebook está vinculado",
+      "targetsHint": "Quem tem acesso ao curso (ou ao curso da aula) recebe o ebook. Para vincular, abra a aba “Ebooks” do curso ou edite a aula.",
+      "noTargets": "Este ebook não está vinculado a nenhum curso, aula ou pacote.",
+      "inCourse": "no curso {{title}}",
+      "viaBundle": "Item do pacote: mude nos itens do pacote.",
+      "search": "Buscar ebook por título ou resumo",
+      "noEbooks": "Nenhum ebook no catálogo ainda. Ebooks são criados por gerente ou administrador.",
+      "link": "Vincular",
+      "linkOf": "Vincular o ebook {{title}}",
+      "unlink": "Desvincular",
+      "unlinkOf": "Desvincular {{title}}",
+      "linkedTag": "Vinculado",
+      "linked": "Ebook “{{title}}” vinculado.",
+      "unlinked": "Ebook “{{title}}” desvinculado.",
+      "unlinkedFrom": "Ebook desvinculado de “{{title}}”.",
+      "error": "Não foi possível alterar o vínculo",
+      "courseTitle": "Ebooks do curso",
+      "courseHint": "Quem tem acesso ao curso recebe os ebooks vinculados. Cada mudança é gravada na hora.",
+      "courseList": "Ebooks para o curso {{title}}",
+      "lessonTitle": "Ebooks da aula",
+      "lessonHint": "Aparecem nos materiais da aula, para quem tem acesso ao curso. Cada mudança é gravada na hora, sem depender do “Salvar”.",
+      "lessonList": "Ebooks para a aula {{title}}"
+    },
+    "items": {
+      "title": "Itens do pacote",
+      "list": "Itens do pacote, na ordem",
+      "empty": "O pacote ainda não tem itens. Adicione cursos e ebooks para poder publicar.",
+      "count": "Itens",
+      "itemsPrice": "Soma dos preços avulsos",
+      "bundlePrice": "Preço do pacote",
+      "students": "Alunos com o pacote",
+      "studentCount_zero": "Nenhum",
+      "studentCount_one": "{{count}} aluno",
+      "studentCount_other": "{{count}} alunos",
+      "full": "O pacote chegou ao limite de {{max}} itens.",
+      "reorderError": "Não foi possível gravar a ordem dos itens",
+      "add": "Adicionar itens",
+      "addTitle": "Adicionar itens ao pacote",
+      "addDescription": "Escolha cursos e ebooks do catálogo. Cada item entra ao fim da lista, na hora.",
+      "addDone": "Concluir",
+      "addOne": "Adicionar",
+      "addOf": "Adicionar {{title}} ao pacote",
+      "added": "“{{title}}” adicionado ao pacote.",
+      "addError": "Não foi possível adicionar o item",
+      "included": "Já no pacote",
+      "types": {
+        "course": "Cursos",
+        "ebook": "Ebooks"
+      },
+      "typeLabel": "Tipo de item: {{value}}",
+      "searching": "Buscando no catálogo…",
+      "searchError": "Não foi possível buscar no catálogo",
+      "noCandidates": "Nada encontrado no catálogo.",
+      "candidates": "Resultados do catálogo",
+      "remove": "Remover",
+      "removeOf": "Remover {{title}} do pacote",
+      "removeTitle": "Remover o item do pacote?",
+      "removeText_zero": "sai do pacote. Nenhum aluno tem o pacote hoje.",
+      "removeText_one": "sai do pacote. {{count}} aluno tem o pacote e perde o acesso a este item, se não o tiver por outro caminho.",
+      "removeText_other": "sai do pacote. {{count}} alunos têm o pacote e perdem o acesso a este item, se não o tiverem por outro caminho.",
+      "removeConfirm": "Remover do pacote",
+      "removing": "Removendo…",
+      "removed": "“{{title}}” removido do pacote."
     }
   }
 }

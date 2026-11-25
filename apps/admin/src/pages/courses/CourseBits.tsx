@@ -55,6 +55,8 @@ interface ConfirmActionProps<R> {
   action: () => Promise<R>;
   onClose: () => void;
   onDone: (result: R) => void;
+  /** Texto da recusa; por padrão, o do editor de curso. */
+  describeError?: ((error: unknown) => string) | undefined;
 }
 
 /** Confirmação de uma ação do catálogo sem formulário. A recusa da API vira aviso. */
@@ -63,11 +65,13 @@ export function ConfirmAction<R>({
   onClose,
   onDone,
   destructive = false,
+  describeError,
   ...text
 }: ConfirmActionProps<R>) {
   const { t } = useTranslation();
   const toast = useToast();
-  const message = useCourseError();
+  const courseMessage = useCourseError();
+  const message = describeError ?? courseMessage;
   const run = useAction(action);
 
   const onConfirm = async () => {

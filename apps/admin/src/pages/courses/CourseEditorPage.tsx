@@ -30,9 +30,10 @@ import { ConfirmAction, CourseStatusCell } from './CourseBits';
 import { CourseCertificateTab } from './CourseCertificateTab';
 import { CourseContentTab, LESSON_PARAM } from './CourseContentTab';
 import { CourseDataTab } from './CourseDataTab';
+import { CourseEbooksTab } from './CourseEbooksTab';
 import { useCourseError } from './errors';
 
-const TABS = ['dados', 'conteudo', 'certificado'] as const;
+const TABS = ['dados', 'conteudo', 'ebooks', 'certificado'] as const;
 type TabId = (typeof TABS)[number];
 const TAB_PARAM = 'aba';
 
@@ -97,10 +98,12 @@ function CourseEditor({ course }: { course: CourseDetail }) {
   // "Excluir" só sem vínculos (spec 009): com alunos, o caminho é arquivar; a API confere o resto
   const canDelete = can('course.delete') && course.studentCount === 0;
 
+  // vincular ebooks é de quem tem `ebook.link`; sem a ação, a aba nem aparece
+  const tabs = TABS.filter((item) => item !== 'ebooks' || can('ebook.link'));
   const requested = params.get(TAB_PARAM);
   // endereço com a aula aberta cai na aba do conteúdo
   const tab: TabId =
-    TABS.find((item) => item === requested) ?? (params.has(LESSON_PARAM) ? 'conteudo' : 'dados');
+    tabs.find((item) => item === requested) ?? (params.has(LESSON_PARAM) ? 'conteudo' : 'dados');
   const selectTab = (next: TabId) =>
     setParams(next === 'dados' ? {} : { [TAB_PARAM]: next }, { replace: true });
 
@@ -200,7 +203,7 @@ function CourseEditor({ course }: { course: CourseDetail }) {
       <AdminTabs
         className="mb-4"
         label={t('courses.editor.tabsLabel')}
-        tabs={TABS.map((item) => ({ id: item, label: t(`courses.editor.tabs.${item}`) }))}
+        tabs={tabs.map((item) => ({ id: item, label: t(`courses.editor.tabs.${item}`) }))}
         value={tab}
         onChange={selectTab}
       />
@@ -212,6 +215,8 @@ function CourseEditor({ course }: { course: CourseDetail }) {
         />
       ) : tab === 'conteudo' ? (
         <CourseContentTab course={course} canPublish={canPublish} />
+      ) : tab === 'ebooks' ? (
+        <CourseEbooksTab course={course} />
       ) : (
         <CourseCertificateTab course={course} />
       )}

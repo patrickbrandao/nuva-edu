@@ -1,3 +1,4 @@
+import { URL_MAX } from '../../api/courses';
 import i18n from '../../i18n/i18n';
 
 /*
@@ -59,4 +60,24 @@ export function parseWhole(text: string, min: number, max: number): number | nul
   if (!/^\d{1,9}$/.test(value)) return undefined;
   const parsed = Number(value);
   return parsed >= min && parsed <= max ? parsed : undefined;
+}
+
+/**
+ * Regras de URL de conteúdo da spec 009, conferidas antes de enviar: `https` (`http` só em
+ * `*.localhost`), sem credenciais, sem espaços, até 2.000 caracteres. A API confere de novo.
+ */
+export function isContentUrl(value: string): boolean {
+  if (value.length > URL_MAX || /\s/.test(value)) return false;
+  let url: URL;
+  try {
+    url = new URL(value);
+  } catch {
+    return false;
+  }
+  if (url.username !== '' || url.password !== '') return false;
+  if (url.protocol === 'https:') return true;
+  return (
+    url.protocol === 'http:' &&
+    (url.hostname === 'localhost' || url.hostname.endsWith('.localhost'))
+  );
 }

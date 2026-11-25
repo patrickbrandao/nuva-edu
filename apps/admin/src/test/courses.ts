@@ -7,8 +7,14 @@ type CourseSummary = AdminSchemas['CourseSummary'];
 type CourseModule = AdminSchemas['CourseModule'];
 type LessonDetail = AdminSchemas['LessonDetail'];
 type LessonSummary = AdminSchemas['LessonSummary'];
+type EbookDetail = AdminSchemas['EbookDetail'];
+type BundleDetail = AdminSchemas['BundleDetail'];
+type BundleItem = AdminSchemas['BundleItem'];
+type EbookTarget = AdminSchemas['EbookTarget'];
 
 export const COURSE_ID = '0193a5b2-0000-7000-8000-0000000000c1';
+export const EBOOK_ID = '0193a5b2-0000-7000-8000-0000000000b1';
+export const BUNDLE_ID = '0193a5b2-0000-7000-8000-0000000000a9';
 export const INSTRUCTOR = { id: '0193a5b2-0000-7000-8000-0000000000d1', name: 'Ivo Instrutor' };
 const NOW = '2026-11-20T12:00:00Z';
 
@@ -78,6 +84,57 @@ export function courseModule(overrides: Partial<CourseModule> = {}): CourseModul
   };
 }
 
+/** Ebook `EbookDetail` em rascunho, privado, sem arquivo e sem vínculos. */
+export function ebookDetail(overrides: Partial<EbookDetail> = {}): EbookDetail {
+  return {
+    id: EBOOK_ID,
+    slug: 'guia-de-python',
+    title: 'Guia de Python',
+    summary: 'Referência rápida da linguagem.',
+    cover: null,
+    accessMode: 'private',
+    priceCents: null,
+    accessDays: null,
+    status: 'draft',
+    authorName: null,
+    pages: null,
+    publishedAt: null,
+    archivedAt: null,
+    createdAt: NOW,
+    updatedAt: NOW,
+    description: null,
+    fileUrl: null,
+    targets: [],
+    studentCount: 0,
+    ...overrides,
+  };
+}
+
+/** Pacote `BundleDetail` em rascunho, privado e sem itens. */
+export function bundleDetail(overrides: Partial<BundleDetail> = {}): BundleDetail {
+  return {
+    id: BUNDLE_ID,
+    slug: 'trilha-python',
+    title: 'Trilha Python',
+    summary: 'Curso e guia juntos.',
+    cover: null,
+    accessMode: 'private',
+    priceCents: null,
+    accessDays: null,
+    status: 'draft',
+    itemCount: 0,
+    publishedAt: null,
+    archivedAt: null,
+    createdAt: NOW,
+    updatedAt: NOW,
+    description: null,
+    items: [],
+    itemsPriceCents: 0,
+    studentCount: 0,
+    ...overrides,
+  };
+}
+
 export interface Recorded {
   method: string;
   path: string;
@@ -90,6 +147,8 @@ interface Options {
   courses?: CourseDetail[];
   /** Aulas completas (vídeo, links) das aulas que já existem nos cursos. */
   lessons?: LessonDetail[];
+  ebooks?: EbookDetail[];
+  bundles?: BundleDetail[];
   /** Respostas no lugar das do catálogo simulado, por `MÉTODO /caminho` (ex.: uma recusa). */
   overrides?: Routes;
 }
@@ -98,7 +157,8 @@ const created = (body: object) => jsonResponse(body, 201);
 const noContent = () => new Response(null, { status: 204 });
 
 /**
- * Catálogo simulado, com estado: responde as operações de curso, módulo, aula e capa do contrato
+ * Catálogo simulado, com estado: responde as operações de curso, módulo, aula, ebook, pacote e
+ * capa do contrato
  * da admin-api como a API responderia, e guarda cada requisição. Serve para os testes que criam
  * e reordenam, em que a tela lê de volta o que gravou.
  */
@@ -106,8 +166,12 @@ export function fakeCatalog({
   role = 'admin',
   courses = [],
   lessons = [],
+  ebooks = [],
+  bundles = [],
   overrides = {},
 }: Options = {}) {
+  const ebookStore = new Map(ebooks.map((ebook) => [ebook.id, structuredClone(ebook)]));
+  const bundleStore = new Map(bundles.map((bundle) => [bundle.id, structuredClone(bundle)]));
   const store = new Map(courses.map((course) => [course.id, structuredClone(course)]));
   const details = new Map(lessons.map((lesson) => [lesson.id, structuredClone(lesson)]));
   const requests: Recorded[] = [];
@@ -154,6 +218,149 @@ export function fakeCatalog({
     return detail;
   };
 
+  const cover = (coverImageId: unknown) =>
+    coverImageId === null
+      ? null
+      : {
+          imageId: String(coverImageId),
+          url: `/api/v1/images/${String(coverImageId)}/480.webp`,
+          largeUrl: `/api/v1/images/${String(coverImageId)}/1280.webp`,
+        };
+  const matches = (product: { title: string; summary: string | null }, q: string | null) =>
+    !q || `${product.title} ${product.summary ?? ''}`.toLowerCase().includes(q.toLowerCase());
+  let lastQuery = new URLSearchParams();
+
+  /** Vínculo `EbookTarget` de um curso ou de uma aula do catálogo; `undefined` se não existe. */
+  const targetOf = (targetType: string, targetId: string): EbookTarget | undefined => {
+    if (targetType === 'course') {
+      const course = store.get(targetId);
+      return course && { targetType: 'course', targetId, title: course.title, course: null };
+    }
+    const owner = moduleOfLesson(targetId);
+    const lesson = owner?.lessons.find((item) => item.id === targetId);
+    const course = owner ? store.get(owner.courseId) : undefined;
+    if (!lesson || !course) return undefined;
+    return {
+      targetType: 'lesson',
+      targetId,
+      title: lesson.title,
+      course: { type: 'course', id: course.id, title: course.title },
+    };
+  };
+
+  /** Ebooks e pacotes: lista, criação, edição, publicação, vínculos e itens. */
+  const handleProducts = (
+    method: string,
+    path: string,
+    input: Record<string, unknown>,
+  ): Response | undefined => {
+    const match = path.match(/^\/api\/v1\/(ebooks|bundles)(?:\/([^/]+))?(?:\/([a-z]+))?$/);
+    if (!match) return undefined;
+    const isEbook = match[1] === 'ebooks';
+    const all: Map<string, EbookDetail | BundleDetail> = isEbook ? ebookStore : bundleStore;
+    const [, , id, action] = match;
+
+    if (!id) {
+      if (method === 'GET') {
+        const items = [...all.values()]
+          .filter((product) => matches(product, lastQuery.get('q')))
+          .map((product) => {
+            const { description, studentCount, ...summary } = product;
+            void [description, studentCount];
+            const rest = summary as Record<string, unknown>;
+            delete rest.fileUrl;
+            delete rest.targets;
+            delete rest.items;
+            delete rest.itemsPriceCents;
+            return rest;
+          });
+        return jsonResponse({ items, nextCursor: null });
+      }
+      if (method === 'POST') {
+        const fields = { id: newId(isEbook ? 'b' : 'd'), summary: null, ...input };
+        const product = isEbook
+          ? ebookDetail({ slug: 'ebook-novo', ...(fields as Partial<EbookDetail>) })
+          : bundleDetail({ slug: 'pacote-novo', ...(fields as Partial<BundleDetail>) });
+        all.set(product.id, product);
+        return created(product);
+      }
+      return undefined;
+    }
+
+    const product = all.get(id);
+    if (!product) return problem(404, 'not_found');
+    if (!action) {
+      if (method === 'GET') return jsonResponse(product);
+      if (method === 'DELETE') {
+        if (product.studentCount > 0) return problem(409, 'product_has_links');
+        all.delete(id);
+        return noContent();
+      }
+      if (method === 'PATCH') {
+        const { coverImageId, ...fields } = input;
+        Object.assign(product, fields);
+        if (coverImageId !== undefined) product.cover = cover(coverImageId);
+        return jsonResponse(product);
+      }
+      return undefined;
+    }
+
+    if (action === 'targets' && method === 'PUT' && 'targets' in product) {
+      const wanted = input.targets as { targetType: string; targetId: string }[];
+      const next = wanted.map((item) => targetOf(item.targetType, item.targetId));
+      if (next.some((item) => item === undefined)) {
+        return problem(422, 'catalog_item_not_found');
+      }
+      product.targets = [
+        ...(next as EbookTarget[]),
+        ...product.targets.filter((item) => item.targetType === 'bundle'),
+      ];
+      return jsonResponse(product);
+    }
+    if (action === 'items' && method === 'PUT' && 'items' in product) {
+      const wanted = input.items as { productType: 'course' | 'ebook'; productId: string }[];
+      const next: BundleItem[] = [];
+      for (const [position, item] of wanted.entries()) {
+        const source =
+          item.productType === 'course'
+            ? store.get(item.productId)
+            : ebookStore.get(item.productId);
+        if (!source) return problem(422, 'catalog_item_not_found');
+        next.push({
+          productType: item.productType,
+          productId: item.productId,
+          title: source.title,
+          accessMode: source.accessMode,
+          priceCents: source.priceCents,
+          status: source.status,
+          archived: source.archivedAt !== null,
+          position,
+        });
+      }
+      product.items = next;
+      product.itemCount = next.length;
+      product.itemsPriceCents = next.reduce(
+        (sum, item) => sum + (item.accessMode === 'paid' ? (item.priceCents ?? 0) : 0),
+        0,
+      );
+      return jsonResponse(product);
+    }
+    if (method === 'POST') {
+      if (action === 'publish') {
+        if ('targets' in product && !product.fileUrl) return problem(422, 'ebook_file_required');
+        if ('items' in product && product.items.length === 0) {
+          return problem(422, 'bundle_has_no_items');
+        }
+        Object.assign(product, { status: 'published', publishedAt: NOW });
+      }
+      if (action === 'unpublish') product.status = 'draft';
+      if (action === 'archive') Object.assign(product, { status: 'draft', archivedAt: NOW });
+      if (action === 'unarchive') product.archivedAt = null;
+      return jsonResponse(product);
+    }
+    return undefined;
+  };
+
   const handle = (method: string, path: string, body: unknown): Response | undefined => {
     const input = (body ?? {}) as Record<string, unknown>;
     let match: RegExpMatchArray | null;
@@ -185,6 +392,9 @@ export function fakeCatalog({
         variants: [{ width: 480, height: 270, url: '/api/v1/images/capa/480.webp' }],
       });
     }
+
+    const products = handleProducts(method, path, input);
+    if (products) return products;
 
     match = path.match(/^\/api\/v1\/courses\/([^/]+)$/);
     if (match) {
@@ -350,6 +560,7 @@ export function fakeCatalog({
     // o corpo multipart vai como texto: o `formData()` do Node não lê o `File` do jsdom
     else if (type.includes('multipart/form-data')) body = await request.clone().text();
     requests.push({ method: request.method, path: url.pathname, query: url.searchParams, body });
+    lastQuery = url.searchParams;
     if (overrides[`${request.method} ${url.pathname}`] !== undefined) return base(request);
     return handle(request.method, url.pathname, body) ?? base(request);
   };
@@ -359,6 +570,9 @@ export function fakeCatalog({
     requests,
     /** O curso como está gravado no catálogo simulado. */
     course: (id: string) => store.get(id),
+    /** O ebook e o pacote como estão gravados. */
+    ebook: (id: string) => ebookStore.get(id),
+    bundle: (id: string) => bundleStore.get(id),
     /** O primeiro curso, para os testes que criam um. */
     first: () => [...store.values()][0],
     /** Corpos enviados a uma rota (`MÉTODO /caminho`), na ordem. */

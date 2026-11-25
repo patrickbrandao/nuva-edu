@@ -28,29 +28,11 @@ import {
   URL_MAX,
   useLesson,
 } from '../../api/courses';
+import { useCan } from '../../session/session';
+import { EbookLinker } from '../products/EbookLinker';
 import { useSortableLabels } from './CourseBits';
 import { useCourseError, useFieldRefusal } from './errors';
-import { formatDuration, parseDuration } from './format';
-
-/**
- * Regras de URL de conteúdo da spec 009, conferidas antes de enviar: `https` (`http` só em
- * `*.localhost`), sem credenciais, sem espaços, até 2.000 caracteres. A API confere de novo.
- */
-export function isContentUrl(value: string): boolean {
-  if (value.length > URL_MAX || /\s/.test(value)) return false;
-  let url: URL;
-  try {
-    url = new URL(value);
-  } catch {
-    return false;
-  }
-  if (url.username !== '' || url.password !== '') return false;
-  if (url.protocol === 'https:') return true;
-  return (
-    url.protocol === 'http:' &&
-    (url.hostname === 'localhost' || url.hostname.endsWith('.localhost'))
-  );
-}
+import { formatDuration, isContentUrl, parseDuration } from './format';
 
 interface LinkRow {
   key: string;
@@ -149,6 +131,7 @@ function LessonForm({ courseId, moduleId, moduleTitle, initial, onClose }: FormP
   const formId = useId();
   const message = useCourseError();
   const labels = useSortableLabels();
+  const can = useCan();
   // depois de criada, a aula passa a ser editada: se só os links falharem, salvar de novo não a duplica
   const [saved, setSaved] = useState<LessonDetail | null>(initial);
   const [title, setTitle] = useState(initial?.title ?? '');
@@ -436,6 +419,19 @@ function LessonForm({ courseId, moduleId, moduleTitle, initial, onClose }: FormP
           </div>
         </fieldset>
       </form>
+      {initial && can('ebook.link') ? (
+        // fora do formulário: cada vínculo é gravado na hora, sem esperar o "Salvar" da aula
+        <section className="mt-6 flex flex-col gap-2" aria-labelledby={`${formId}-ebooks`}>
+          <h3 id={`${formId}-ebooks`} className="m-0 text-sm font-medium text-ink">
+            {t('products.links.lessonTitle')}
+          </h3>
+          <span className="text-sm text-ink-3">{t('products.links.lessonHint')}</span>
+          <EbookLinker
+            target={{ targetType: 'lesson', targetId: initial.id }}
+            label={t('products.links.lessonList', { title: initial.title })}
+          />
+        </section>
+      ) : null}
     </Dialog>
   );
 }

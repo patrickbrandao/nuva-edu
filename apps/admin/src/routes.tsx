@@ -1,10 +1,12 @@
-import type { ReactNode } from 'react';
+import { LoadingState } from '@nuva-edu/ui';
+import { lazy, type ReactNode, Suspense } from 'react';
+import { useTranslation } from 'react-i18next';
 import type { RouteObject } from 'react-router';
 import { COURSES_PATH } from './api/courses';
+import { BUNDLES_PATH, EBOOKS_PATH } from './api/products';
 import { TERMS_PATH } from './api/terms';
 import { AuditEntryPage } from './pages/audit/AuditEntryPage';
 import { AUDIT_PATH, AuditPage } from './pages/audit/AuditPage';
-import { CourseEditorPage } from './pages/courses/CourseEditorPage';
 import { CoursesPage } from './pages/courses/CoursesPage';
 import { HomePage } from './pages/HomePage';
 import { LoginPage } from './pages/LoginPage';
@@ -20,6 +22,33 @@ import { RequirePermission } from './session/RequirePermission';
 import { SessionGate } from './session/SessionGate';
 import { HOME_PATH, LOGIN_PATH, MENU_ITEMS, type MenuItemId } from './shell/menu';
 import { Shell } from './shell/Shell';
+
+/*
+ * Telas carregadas sob demanda (spec 006, RNF-03): o editor de curso e as telas de ebook e de
+ * pacote ficam fora do JavaScript inicial.
+ */
+const CourseEditorPage = lazy(() =>
+  import('./pages/courses/CourseEditorPage').then((module) => ({
+    default: module.CourseEditorPage,
+  })),
+);
+const ProductsPage = lazy(() =>
+  import('./pages/products/ProductsPage').then((module) => ({ default: module.ProductsPage })),
+);
+const ProductEditorPage = lazy(() =>
+  import('./pages/products/ProductEditorPage').then((module) => ({
+    default: module.ProductEditorPage,
+  })),
+);
+
+function PageFallback() {
+  const { t } = useTranslation();
+  return <LoadingState label={t('common.loadingPage')} />;
+}
+
+const onDemand = (element: ReactNode): ReactNode => (
+  <Suspense fallback={<PageFallback />}>{element}</Suspense>
+);
 
 const itemOf = (id: MenuItemId) => MENU_ITEMS.find((item) => item.id === id);
 
@@ -42,7 +71,15 @@ const PAGES: Partial<Record<MenuItemId, RouteObject[]>> = {
   team: [{ path: '/equipe', element: <TeamPage /> }],
   courses: [
     { path: COURSES_PATH, element: <CoursesPage /> },
-    { path: `${COURSES_PATH}/:id`, element: <CourseEditorPage /> },
+    { path: `${COURSES_PATH}/:id`, element: onDemand(<CourseEditorPage />) },
+  ],
+  ebooks: [
+    { path: EBOOKS_PATH, element: onDemand(<ProductsPage kind="ebook" />) },
+    { path: `${EBOOKS_PATH}/:id`, element: onDemand(<ProductEditorPage kind="ebook" />) },
+  ],
+  bundles: [
+    { path: BUNDLES_PATH, element: onDemand(<ProductsPage kind="bundle" />) },
+    { path: `${BUNDLES_PATH}/:id`, element: onDemand(<ProductEditorPage kind="bundle" />) },
   ],
   audit: [
     { path: AUDIT_PATH, element: <AuditPage /> },
