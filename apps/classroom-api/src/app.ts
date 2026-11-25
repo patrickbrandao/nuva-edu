@@ -33,6 +33,7 @@ import { readServiceVersion } from './meta.ts';
 import { CLASSROOM_RATE_LIMITS } from './rate-limits.ts';
 import { registerAccountRoutes } from './routes/account.ts';
 import { registerAuthRoutes } from './routes/auth.ts';
+import { registerCatalogRoutes } from './routes/catalog.ts';
 import type { RouteContext } from './routes/context.ts';
 import { registerImageRoutes } from './routes/images.ts';
 import { registerLegalRoutes } from './routes/legal.ts';
@@ -304,6 +305,7 @@ export function buildClassroomApp(options: ClassroomAppOptions): FastifyInstance
   });
   registerAccountRoutes(app, routes);
   registerLegalRoutes(app, routes);
+  registerCatalogRoutes(app, routes);
   registerImageRoutes(app, routes, options.imageLimiter ? { limiter: options.imageLimiter } : {});
   return app;
 }
