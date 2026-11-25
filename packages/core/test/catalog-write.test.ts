@@ -604,6 +604,31 @@ describe('módulos e aulas', () => {
     );
   });
 
+  it('excluir módulo: com aula recusa com 409 module_not_empty; vazio é apagado', async () => {
+    const course = await createCourse(db, instructor, { slug: slug(), title: 'Excluir módulo' });
+    const module = await createModule(db, instructor, course.id, { title: 'Com aula' });
+    const lesson = await createLesson(db, instructor, module.id, { title: 'Rascunho' });
+    const auditBefore = (await auditOf(module.id)).length;
+    await expectError(deleteModule(db, instructor, module.id), 409, 'module_not_empty');
+    // Nada gravado: módulo, aula e auditoria continuam como estavam.
+    const kept = await db
+      .selectFrom('lessons')
+      .select('id')
+      .where('moduleId', '=', module.id)
+      .execute();
+    expect(kept.map((row) => row.id)).toEqual([lesson.id]);
+    expect((await auditOf(module.id)).length).toBe(auditBefore);
+    // Aula publicada também impede.
+    await updateLesson(db, instructor, lesson.id, { status: 'published', version: 1 });
+    await expectError(deleteModule(db, instructor, module.id), 409, 'module_not_empty');
+    // As aulas saem antes; o módulo vazio é apagado, com `module.delete`.
+    await deleteLesson(db, instructor, lesson.id);
+    await deleteModule(db, instructor, module.id);
+    const gone = await db.selectFrom('modules').select('id').where('id', '=', module.id).execute();
+    expect(gone).toEqual([]);
+    expect((await auditOf(module.id)).map((row) => row.action)).toContain('module.delete');
+  });
+
   it('limites de 100 módulos e 500 aulas por curso', async () => {
     const course = await createCourse(db, manager, { slug: slug(), title: 'Limites' });
     const modules = await sql<{ id: string }>`
@@ -700,8 +725,13 @@ describe('módulos e aulas', () => {
     // Aula draft excluída: nada a conferir.
     await deleteLesson(db, manager, third.id);
     expect(await jobsFor('course.completion_check', 'courseId', course.id)).toBe(before + 2);
+    // Módulo com aula não é apagado em cascata: a aula sai antes, com o próprio efeito.
     const other = await createModule(db, manager, course.id, { title: 'M2' });
-    await createLesson(db, manager, other.id, { title: 'D', status: 'published' });
+    const inOther = await createLesson(db, manager, other.id, { title: 'D', status: 'published' });
+    await expectError(deleteModule(db, manager, other.id), 409, 'module_not_empty');
+    expect(await jobsFor('course.completion_check', 'courseId', course.id)).toBe(before + 2);
+    await deleteLesson(db, manager, inOther.id);
+    expect(await jobsFor('course.completion_check', 'courseId', course.id)).toBe(before + 3);
     await deleteModule(db, manager, other.id);
     expect(await jobsFor('course.completion_check', 'courseId', course.id)).toBe(before + 3);
     const actions = (await auditOf(second.id)).map((row) => row.action);

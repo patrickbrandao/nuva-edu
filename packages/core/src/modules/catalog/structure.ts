@@ -4,7 +4,7 @@
 
 import { sql } from 'kysely';
 import type { Database } from '../../db/database.ts';
-import { notFound } from '../../errors/domain-error.ts';
+import { conflict, notFound } from '../../errors/domain-error.ts';
 import {
   assertCatalogId,
   assertVersion,
@@ -292,8 +292,9 @@ async function afterLessonsRemoved(
 }
 
 /**
- * `DELETE /modules/{id}` (`course.edit`): apaga o módulo e as aulas (cascata), com os efeitos de
- * `afterLessonsRemoved`. Grava `module.delete`.
+ * `DELETE /modules/{id}` (`course.edit`): só módulo sem aulas. Com qualquer aula (publicada ou
+ * rascunho): `409` `module_not_empty`, sem gravar nada; as aulas saem antes, uma a uma, cada
+ * exclusão com a própria auditoria (spec 009, "Casos de erro"). Grava `module.delete`.
  */
 export async function deleteModule(
   db: Database,
@@ -302,18 +303,21 @@ export async function deleteModule(
 ): Promise<void> {
   await catalogWrite(db, request, async (trx) => {
     const { course, module } = await loadModuleForWrite(trx, request, moduleId, 'module.delete');
-    const lessons = await trx
+    const lesson = await trx
       .selectFrom('lessons')
-      .select(['id', 'status'])
+      .select('id')
       .where('moduleId', '=', module.id)
-      .execute();
-    await afterLessonsRemoved(trx, course, lessons);
+      .limit(1)
+      .executeTakeFirst();
+    if (lesson !== undefined) {
+      throw conflict('module_not_empty', 'O módulo ainda tem aulas. Exclua as aulas antes.');
+    }
     await trx.deleteFrom('modules').where('id', '=', module.id).execute();
     await catalogAudit(trx, request, {
       action: 'module.delete',
       targetType: 'module',
       targetId: module.id,
-      details: { courseId: course.id, title: module.title, lessons: lessons.length },
+      details: { courseId: course.id, title: module.title },
     });
   });
 }

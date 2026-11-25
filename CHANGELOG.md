@@ -6,6 +6,7 @@ Detalhe das decisões em `specs/decisions/`.
 ## [Não lançado]
 
 ### Adicionado
+- core: `deleteModule` recusa módulo com aulas (`409` `module_not_empty`, sem gravar nada); só módulo vazio é apagado, e as aulas saem antes, uma a uma (task 557).
 - core: a exclusão de curso passa a conferir também o progresso de aula (`lesson_progress`): curso com progresso e sem direito responde `409` `product_has_links` para todos os papéis; a conferência virou `productHasLinks` e o erro, `productHasLinksError` (task 510).
 - core: teto de 100 notas por aula (`NOTE_MAX_PER_LESSON`): `createNote` recusa a 101ª com `422 note_lesson_limit_reached`, sob a mesma trava do limite de 5.000; nota avulsa e nota de aula excluída não contam (task 596).
 - core: anotações (016): `createNote` (nota de aula exige `canAccess` e congela os títulos; avulsa), `updateNote` com `updatedAt` conhecido (`409 version_conflict` com a versão atual), `deleteNote`, `getNote`, `listLessonNotes` e `listNotes` por cursor com filtros e busca textual; tudo filtrado pelo dono, limites de 20.000 caracteres, 160 no título e 5.000 notas (task 414).
