@@ -13,6 +13,8 @@ export type AdminClient = Client<paths>;
 export type AdminSession = components['schemas']['Session'];
 export type AdminAuthProvider = components['schemas']['AuthProvider'];
 export type AdminOAuthStartQuery = NonNullable<operations['startOAuth']['parameters']['query']>;
+/** Finalidade de imagem do admin (`product_cover`); difere da `ImagePurpose` da classroom-api. */
+export type AdminImagePurpose = components['schemas']['ImagePurpose'];
 
 /** Cliente da admin-api (`apps/admin-api/openapi.yaml`), para o site admin. */
 export function createAdminClient(options?: ApiClientOptions): AdminClient {
@@ -29,6 +31,29 @@ export function adminOAuthStartUrl(
   baseUrl?: string,
 ): string {
   return buildOAuthStartUrl(provider, query, baseUrl);
+}
+
+/**
+ * Envia uma imagem do admin (`uploadImage`, `POST /api/v1/images`) em `multipart/form-data`,
+ * como a capa de um produto. Mesmo formato do `uploadImage` do classroom: recebe o `File`/`Blob`
+ * e monta o `FormData`; o `Content-Type`, com o `boundary`, fica por conta do `fetch`.
+ */
+export function uploadAdminImage(
+  client: AdminClient,
+  file: Blob,
+  purpose: AdminImagePurpose,
+  init: { signal?: AbortSignal } = {},
+) {
+  return client.POST('/api/v1/images', {
+    ...init,
+    body: { purpose, file: '' },
+    bodySerializer: () => {
+      const form = new FormData();
+      form.append('purpose', purpose);
+      form.append('file', file, file instanceof File ? file.name : 'imagem');
+      return form;
+    },
+  });
 }
 
 export type { ApiClientOptions } from './client';

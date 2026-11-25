@@ -2,6 +2,7 @@ export {
   type AdminAuthProvider,
   type AdminClient,
   type AdminComponents,
+  type AdminImagePurpose,
   type AdminOAuthStartQuery,
   type AdminOperations,
   type AdminPaths,
@@ -9,6 +10,7 @@ export {
   type AdminSession,
   adminOAuthStartUrl,
   createAdminClient,
+  uploadAdminImage,
 } from './admin';
 export {
   type ClassroomAuthProvider,

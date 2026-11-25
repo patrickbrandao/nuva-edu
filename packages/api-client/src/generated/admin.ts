@@ -531,6 +531,1190 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/courses": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Listar cursos
+         * @description Cursos do catálogo, com filtros e paginação por cursor. O `instructor` vê só os cursos de que é
+         *     dono (`specs/008-papeis-e-permissoes.md`, "Regra do instrutor").
+         */
+        get: operations["listCourses"];
+        put?: never;
+        /**
+         * Criar curso
+         * @description Cria o curso em `draft`. O `instructor` vira o dono; `manager` e `admin` informam `ownerId`
+         *     (ou nenhum). Sem `accessMode`, o curso nasce `private` e sem preço. `accessMode` exige
+         *     `product.set_access` e `priceCents`, `product.set_price`: o `instructor` que os envia recebe
+         *     `403`, e o `manager` que envia preço também.
+         *
+         *     - `slug` ausente: gerado do título. Repetido: `409` `slug_taken`.
+         *     - `ownerId` que não é `instructor`: `422` `owner_not_instructor`.
+         */
+        post: operations["createCourse"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/courses/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Curso com módulos e aulas
+         * @description O curso para o editor: dados, módulos e aulas na ordem. Curso alheio ao `instructor`: `404`.
+         */
+        get: operations["getCourse"];
+        put?: never;
+        post?: never;
+        /**
+         * Excluir curso sem vínculos
+         * @description Exclui o curso com módulos, aulas, links e o template de certificado dele. Curso com pedido,
+         *     direito ou progresso: `409` `product_has_links`, para qualquer papel; o caminho é arquivar.
+         */
+        delete: operations["deleteCourse"];
+        options?: never;
+        head?: never;
+        /**
+         * Editar curso
+         * @description Altera só os campos enviados. `accessMode` exige `product.set_access` (`manager` e `admin`) e
+         *     `priceCents`, `product.set_price` (`admin`): sem a ação, `403`. `certificateEnabled` e
+         *     `certificateHours` (`specs/015-certificados.md`) seguem `course.edit`. O template de
+         *     certificado não é editado aqui (`/courses/{id}/certificate-template`); o dono, em
+         *     `PATCH /courses/{id}/owner`.
+         *
+         *     - Curso alheio ao `instructor`: `404`. Slug repetido: `409` `slug_taken`.
+         *     - `paid` sem preço: `422` `price_required`. Capa que não é `product_cover` do próprio envio:
+         *       `422` `image_purpose_mismatch`.
+         */
+        patch: operations["updateCourse"];
+        trace?: never;
+    };
+    "/api/v1/courses/{id}/publish": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Publicar
+         * @description Publica o curso. Exige ao menos um módulo com uma aula publicada (`422`
+         *     `course_without_published_lesson`). O `instructor` só publica curso `open` de que é dono; curso
+         *     `paid` ou `private` dele responde `403` (o caminho é `request-review`). Limpa
+         *     `reviewRequestedAt`. Produto arquivado: `409` `product_archived`.
+         */
+        post: operations["publishCourse"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/courses/{id}/unpublish": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Despublicar
+         * @description Volta a `draft`. Não revoga direitos: o item some da vitrine e da estante até voltar a ser
+         *     publicado. O site mostra antes o número de alunos afetados (`studentCount` do detalhe).
+         */
+        post: operations["unpublishCourse"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/courses/{id}/archive": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Arquivar
+         * @description Só `admin` (`product.archive`). Equivale a despublicar em definitivo: grava `archivedAt` e
+         *     some do classroom. É o caminho para produto com pedido, direito ou progresso, que ninguém
+         *     exclui.
+         *     Já arquivado: `409` `product_archived`.
+         */
+        post: operations["archiveCourse"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/courses/{id}/unarchive": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Desarquivar
+         * @description Só `admin` (`product.archive`). Volta como `draft`. Não arquivado: `409` `product_not_archived`.
+         */
+        post: operations["unarchiveCourse"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/courses/{id}/request-review": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Enviar para publicação
+         * @description Grava `reviewRequestedAt` (auditoria `course.request_review`) para o curso e as aulas `draft`
+         *     dele; gerente ou admin publicam. Repetir não muda a data.
+         */
+        post: operations["requestCourseReview"];
+        /**
+         * Cancelar o pedido de publicação
+         * @description Limpa `reviewRequestedAt`. Sem pedido, responde o curso como está.
+         */
+        delete: operations["cancelCourseReview"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/courses/{id}/owner": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Trocar o dono do curso
+         * @description `manager` e `admin` (`specs/008-papeis-e-permissoes.md`). `ownerId: null` deixa o curso sem
+         *     dono, gerido só por gerente e admin. Usuário que não é `instructor`: `422`
+         *     `owner_not_instructor`.
+         */
+        patch: operations["setCourseOwner"];
+        trace?: never;
+    };
+    "/api/v1/courses/{id}/modules": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Criar módulo
+         * @description Acrescenta um módulo ao fim do curso. Acima de 100 módulos: `422` `course_module_limit`.
+         */
+        post: operations["createModule"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/courses/{id}/modules/order": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Reordenar módulos
+         * @description Recebe todos os módulos do curso na ordem nova. Lista que não tem exatamente os módulos do
+         *     curso:
+         *     `422` `order_mismatch`.
+         */
+        put: operations["reorderModules"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/modules/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Excluir módulo vazio
+         * @description Só módulo sem aulas; com aulas: `409` `module_not_empty` (as aulas saem antes).
+         */
+        delete: operations["deleteModule"];
+        options?: never;
+        head?: never;
+        /**
+         * Renomear módulo
+         * @description Módulo de curso alheio ao `instructor`: `404`.
+         */
+        patch: operations["updateModule"];
+        trace?: never;
+    };
+    "/api/v1/modules/{id}/lessons": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Criar aula
+         * @description Acrescenta uma aula `draft` ao fim do módulo. Acima de 500 aulas no curso: `422`
+         *     `course_lesson_limit`. URL de vídeo fora das regras: `422` `content_url_invalid`.
+         */
+        post: operations["createLesson"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/modules/{id}/lessons/order": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Reordenar aulas do módulo
+         * @description Recebe as aulas do módulo na ordem nova; uma aula de outro módulo do mesmo curso, na lista, é
+         *     movida para este. Aula de outro curso ou aula do módulo que falta na lista: `422`
+         *     `order_mismatch`.
+         */
+        put: operations["reorderLessons"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/lessons/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Aula para edição
+         * @description A aula com vídeo, links de apoio e ebooks vinculados. Curso alheio ao `instructor`: `404`.
+         */
+        get: operations["getLesson"];
+        put?: never;
+        post?: never;
+        /**
+         * Excluir aula
+         * @description Exclui a aula e os links dela. Progresso e notas dos alunos ficam (a nota guarda o título,
+         *     `specs/016-anotacoes.md`). Aula de curso publicado enfileira `course.completion_check`.
+         */
+        delete: operations["deleteLesson"];
+        options?: never;
+        head?: never;
+        /**
+         * Editar, publicar ou despublicar aula
+         * @description Altera só os campos enviados. `status` publica ou despublica a aula, com a regra do curso: o
+         *     `instructor` só o faz em curso `open` de que é dono (`403` nos demais). Despublicar aula de
+         *     curso publicado enfileira `course.completion_check`. Publicar a última aula `draft` limpa o
+         *     pedido de publicação do curso.
+         */
+        patch: operations["updateLesson"];
+        trace?: never;
+    };
+    "/api/v1/lessons/{id}/links": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Definir os links de apoio
+         * @description Substitui a lista inteira, na ordem enviada (até 20). URL fora das regras: `422`
+         *     `content_url_invalid`, com o índice do link.
+         */
+        put: operations["setLessonLinks"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/ebooks": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Listar ebooks
+         * @description Ebooks do catálogo. O `instructor` lê a lista para vincular ebooks existentes aos próprios
+         *     cursos e aulas; criar e editar é de `manager` e `admin`.
+         */
+        get: operations["listEbooks"];
+        put?: never;
+        /**
+         * Criar ebook
+         * @description Cria o ebook em `draft`. Sem `accessMode`, nasce `private`. `priceCents` exige
+         *     `product.set_price`. Slug repetido: `409` `slug_taken`; URL fora das regras: `422`
+         *     `content_url_invalid`.
+         */
+        post: operations["createEbook"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/ebooks/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Um ebook
+         * @description Com os vínculos; o `instructor` vê só os vínculos com os próprios cursos e aulas.
+         */
+        get: operations["getEbook"];
+        put?: never;
+        post?: never;
+        /**
+         * Excluir ebook sem vínculos
+         * @description Ebook com pedido ou direito: `409` `product_has_links`; o caminho é arquivar.
+         */
+        delete: operations["deleteEbook"];
+        options?: never;
+        head?: never;
+        /**
+         * Editar ebook
+         * @description Altera só os campos enviados. `accessMode` exige `product.set_access`; `priceCents`,
+         *     `product.set_price`. Slug repetido: `409` `slug_taken`.
+         */
+        patch: operations["updateEbook"];
+        trace?: never;
+    };
+    "/api/v1/ebooks/{id}/publish": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Publicar
+         * @description Publica o ebook. Exige `fileUrl` válida (`422` `ebook_without_file`). Arquivado: `409`
+         *     `product_archived`.
+         */
+        post: operations["publishEbook"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/ebooks/{id}/unpublish": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Despublicar
+         * @description Volta a `draft`. Não revoga direitos: o item some da vitrine e da estante até voltar a ser
+         *     publicado. O site mostra antes o número de alunos afetados (`studentCount` do detalhe).
+         */
+        post: operations["unpublishEbook"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/ebooks/{id}/archive": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Arquivar
+         * @description Só `admin` (`product.archive`). Equivale a despublicar em definitivo: grava `archivedAt` e
+         *     some do classroom. É o caminho para produto com pedido, direito ou progresso, que ninguém
+         *     exclui.
+         *     Já arquivado: `409` `product_archived`.
+         */
+        post: operations["archiveEbook"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/ebooks/{id}/unarchive": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Desarquivar
+         * @description Só `admin` (`product.archive`). Volta como `draft`. Não arquivado: `409` `product_not_archived`.
+         */
+        post: operations["unarchiveEbook"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/ebooks/{id}/targets": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Vincular o ebook a cursos e aulas
+         * @description Substitui os vínculos de `product_ebooks` com alvo `course` ou `lesson` (o vínculo a pacote é
+         *     feito pelos itens do pacote). Para o `instructor`, a lista substitui só os vínculos com os
+         *     próprios cursos e aulas; os demais ficam como estão, e alvo alheio responde `404`. A mudança
+         *     enfileira o recálculo da cascata (`entitlement.recompute`, `specs/010-direitos-de-acesso.md`).
+         */
+        put: operations["setEbookTargets"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/bundles": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Listar pacotes
+         * @description Pacotes do catálogo, com filtros e paginação por cursor.
+         */
+        get: operations["listBundles"];
+        put?: never;
+        /**
+         * Criar pacote
+         * @description Cria o pacote em `draft`, sem itens. Sem `accessMode`, nasce `private`. `priceCents` exige
+         *     `product.set_price`. Slug repetido: `409` `slug_taken`.
+         */
+        post: operations["createBundle"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/bundles/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Um pacote, com os itens
+         * @description O pacote, os itens na ordem e a soma dos preços avulsos dos itens `paid`.
+         */
+        get: operations["getBundle"];
+        put?: never;
+        post?: never;
+        /**
+         * Excluir pacote sem vínculos
+         * @description Pacote com pedido ou direito: `409` `product_has_links`; o caminho é arquivar.
+         */
+        delete: operations["deleteBundle"];
+        options?: never;
+        head?: never;
+        /**
+         * Editar pacote
+         * @description Altera só os campos enviados. `accessMode` exige `product.set_access`; `priceCents`,
+         *     `product.set_price`. Slug repetido: `409` `slug_taken`.
+         */
+        patch: operations["updateBundle"];
+        trace?: never;
+    };
+    "/api/v1/bundles/{id}/publish": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Publicar
+         * @description Publica o pacote. Exige ao menos um item (`422` `bundle_without_items`). Arquivado: `409`
+         *     `product_archived`.
+         */
+        post: operations["publishBundle"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/bundles/{id}/unpublish": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Despublicar
+         * @description Volta a `draft`. Não revoga direitos: o item some da vitrine e da estante até voltar a ser
+         *     publicado. O site mostra antes o número de alunos afetados (`studentCount` do detalhe).
+         */
+        post: operations["unpublishBundle"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/bundles/{id}/archive": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Arquivar
+         * @description Só `admin` (`product.archive`). Equivale a despublicar em definitivo: grava `archivedAt` e
+         *     some do classroom. É o caminho para produto com pedido, direito ou progresso, que ninguém
+         *     exclui.
+         *     Já arquivado: `409` `product_archived`.
+         */
+        post: operations["archiveBundle"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/bundles/{id}/unarchive": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Desarquivar
+         * @description Só `admin` (`product.archive`). Volta como `draft`. Não arquivado: `409` `product_not_archived`.
+         */
+        post: operations["unarchiveBundle"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/bundles/{id}/items": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Definir os itens do pacote
+         * @description Substitui a lista inteira, na ordem enviada: cursos e ebooks, nunca outro pacote. Produto
+         *     inexistente: `422` `bundle_item_invalid`. Em pacote já vendido, a mudança enfileira o recálculo
+         *     da cascata de quem o tem (`specs/010-direitos-de-acesso.md`); o site confirma antes a remoção
+         *     com
+         *     o `studentCount`.
+         */
+        put: operations["setBundleItems"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/images": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Envio de imagem
+         * @description Recebe uma imagem em `multipart/form-data` (`specs/029-imagens.md`, "Fluxo de envio"):
+         *     `purpose` primeiro, depois `file` (um arquivo só). No admin a única finalidade é
+         *     `product_cover` (16:9, variantes 480 e 1280), de `instructor`, `manager` e `admin`. A imagem
+         *     passa a ter referência quando vira capa (`coverImageId` de curso, ebook ou pacote); sem
+         *     referência, o expurgo a apaga em 24 h.
+         *
+         *     - Campo a mais, segundo arquivo ou `purpose` ausente: `400` `validation_failed`.
+         *     - Corpo acima de 5 MB: `413` `payload_too_large`. Tipo que não é JPEG, PNG nem WebP: `415`
+         *       `image_type_unsupported`.
+         *     - Acima de 8000 px ou de 40 megapixels: `422` `image_dimensions_exceeded`; variante acima de
+         *       400 KB: `422` `image_too_heavy`.
+         *     - Processamento sobrecarregado: `503` `image_processing_busy`, com `Retry-After`.
+         */
+        post: operations["uploadImage"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/images/{imageId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Apagar uma imagem ainda sem uso
+         * @description Apaga uma capa enviada pelo próprio usuário e ainda sem referência. Imagem inexistente, de outro
+         *     usuário ou já em uso: `404`.
+         */
+        delete: operations["deleteImage"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/users/{id}/entitlements": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Árvore de direitos de um usuário
+         * @description As raízes (`order`, `subscription`, `grant`) com os derivados de cascata em `children`, com
+         *     fonte, validade e estado (`specs/010-direitos-de-acesso.md`). Inclui vencidos e revogados.
+         */
+        get: operations["listUserEntitlements"];
+        put?: never;
+        /**
+         * Conceder acesso manual
+         * @description Cria a raiz `grant` com a cascata do produto, numa transação, grava a auditoria e envia o e-mail
+         *     `access.granted`. Idempotente: a mesma concessão (usuário, quem concede, produto) ainda ativa
+         *     responde `200` com o direito existente. Produto inexistente: `404`. `expiresAt` no passado:
+         *     `422` `expires_at_in_past`.
+         */
+        post: operations["grantEntitlement"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/entitlements/{id}/revoke": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Revogar concessão manual
+         * @description Revoga a raiz `grant` e toda a sua cascata, com `revokeReason = manual`, e grava a auditoria.
+         *     Raiz de pedido ou de assinatura, ou direito derivado: `409` `entitlement_not_revocable`. Já
+         *     revogado: `409` `entitlement_already_revoked`.
+         */
+        post: operations["revokeEntitlement"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/products/{type}/{id}/entitlements": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Quem tem acesso a um produto
+         * @description Um item por direito ao produto, raiz ou derivado, mais recente primeiro. Sem `state`, só os
+         *     ativos.
+         */
+        get: operations["listProductEntitlements"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/users/{id}/progress": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Progresso de um usuário
+         * @description Um item por curso que o usuário iniciou ou a que tem acesso. O `instructor` vê só os próprios
+         *     cursos; usuário sem nenhum deles: `404`.
+         */
+        get: operations["getUserProgress"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/courses/{id}/progress-summary": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Resumo de progresso do curso
+         * @description Alunos com acesso por faixa de progresso e taxa de conclusão. Curso alheio ao `instructor`:
+         *     `404`.
+         */
+        get: operations["getCourseProgressSummary"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/courses/{id}/students": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Alunos do curso
+         * @description Alunos com acesso ao curso, com nome, avatar, progresso e última atividade, sem e-mail nem
+         *     compras
+         *     (`specs/008-papeis-e-permissoes.md`). É a lista de alunos do `instructor`, só nos próprios
+         *     cursos (`404` nos demais).
+         */
+        get: operations["listCourseStudents"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/certificates": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Listar certificados
+         * @description Mais recentes primeiro. O `instructor` vê só os dos próprios cursos.
+         */
+        get: operations["listCertificates"];
+        put?: never;
+        /**
+         * Emitir certificado manualmente
+         * @description `manager` e `admin`, para aluno que não concluiu pelo sistema, com motivo; marca
+         *     `issuedManually` e enfileira `certificate.render`. Curso sem template efetivo: `422`
+         *     `certificate_template_missing`. O aluno já tem certificado do curso: `409`
+         *     `certificate_exists`. Usuário ou curso inexistente: `404`.
+         */
+        post: operations["issueCertificate"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/certificates/{id}/revoke": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Revogar certificado
+         * @description Só `admin`, com motivo. A validação pública passa a mostrar "certificado revogado". Já revogado:
+         *     `409` `certificate_already_revoked`.
+         */
+        post: operations["revokeCertificate"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/certificates/{id}/restore": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Desfazer a revogação
+         * @description Só `admin`. Não revogado: `409` `certificate_not_revoked`.
+         */
+        post: operations["restoreCertificate"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/certificates/{id}/reissue": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Reemitir certificado
+         * @description Congela de novo o nome atual do aluno e a versão do template efetivo atual, mantém o código e
+         *     enfileira `certificate.render` (o certificado volta a `preparing` até o PDF novo). Curso sem
+         *     template efetivo: `422` `certificate_template_missing`. Revogado: `409`
+         *     `certificate_already_revoked`.
+         */
+        post: operations["reissueCertificate"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/courses/{id}/certificates/backfill": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Emitir para quem já concluiu
+         * @description Enfileira `certificate.backfill` para o curso: emite para quem tem, na hora do lote, 100% das
+         *     aulas publicadas e acesso ao curso. Curso com certificado desabilitado: `422`
+         *     `certificate_disabled`; sem template efetivo: `422` `certificate_template_missing`.
+         */
+        post: operations["backfillCourseCertificates"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/courses/{id}/certificate-template": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Template de certificado do curso
+         * @description O template próprio do curso (`html` nulo quando não tem), a origem do template efetivo
+         *     (`course`, `school` ou `none`, `specs/015-certificados.md`) e a versão atual, com quem e
+         *     quando gravou. Curso alheio ao `instructor`: `404`.
+         */
+        get: operations["getCourseCertificateTemplate"];
+        /**
+         * Gravar o template do curso
+         * @description Valida (palavras-chave e lista de permissões, `specs/015-certificados.md`, "Template") e grava
+         *     uma versão nova e imutável. Recusa o template inteiro com a lista de problemas, sem corrigir
+         *     nada:
+         *     `422` `certificate_template_invalid` com `details.problems`. `expectedVersionId` é a versão que
+         *     o editor abriu (`null` quando não havia template); se mudou: `409` `version_conflict`.
+         *
+         *     Quando o curso passa de "sem template efetivo" a "com template efetivo", enfileira
+         *     `certificate.backfill`, e `backfillQueued` é verdadeiro. Editar um
+         *     template que já existia não emite nada. Grava a auditoria.
+         */
+        put: operations["saveCourseCertificateTemplate"];
+        post?: never;
+        /**
+         * Excluir o template do curso
+         * @description O curso volta ao padrão da escola; sem padrão, as próximas conclusões ficam aguardando template.
+         *     Certificados emitidos não mudam. Responde o estado novo; sem template próprio, nada muda.
+         */
+        delete: operations["deleteCourseCertificateTemplate"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/settings/certificate-template": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Template padrão da escola
+         * @description O template padrão da escola (`html` nulo quando não há), no mesmo formato do template do curso;
+         *     `source` é `school` ou `none`. Só `admin` (`settings.manage`).
+         */
+        get: operations["getSchoolCertificateTemplate"];
+        /**
+         * Gravar o template padrão
+         * @description Valida (palavras-chave e lista de permissões, `specs/015-certificados.md`, "Template") e grava
+         *     uma versão nova e imutável. Recusa o template inteiro com a lista de problemas, sem corrigir
+         *     nada:
+         *     `422` `certificate_template_invalid` com `details.problems`. `expectedVersionId` é a versão que
+         *     o editor abriu (`null` quando não havia template); se mudou: `409` `version_conflict`.
+         *
+         *     Quando um curso passa de "sem template efetivo" a "com template efetivo", enfileira
+         *     `certificate.backfill` para cada curso com certificado habilitado e sem template próprio, e
+         *     `backfillQueued` é verdadeiro. Editar um
+         *     template que já existia não emite nada. Grava a auditoria.
+         */
+        put: operations["saveSchoolCertificateTemplate"];
+        post?: never;
+        /**
+         * Excluir o template padrão
+         * @description Os cursos sem template próprio passam a não ter template efetivo. Certificados emitidos não
+         *     mudam.
+         *     Responde o estado novo.
+         */
+        delete: operations["deleteSchoolCertificateTemplate"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/certificate-templates/reference": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Palavras-chave e modelo inicial
+         * @description A lista fechada de palavras-chave (nome, descrição, valor de exemplo, se é obrigatória, se só
+         *     vale
+         *     em posição de texto) e o HTML do modelo inicial ("Começar do modelo").
+         */
+        get: operations["getCertificateTemplateReference"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/certificate-templates/previews": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Pedir PDF de exemplo
+         * @description Valida o HTML ainda não salvo (mesmas regras e mesmo `422` `certificate_template_invalid` da
+         *     gravação), grava o pedido e enfileira `certificate.preview`. O PDF sai com dados de exemplo
+         *     (`specs/015-certificados.md`, "Pré-visualização"). `courseId` dá o título e o instrutor do
+         *     exemplo; curso alheio ao `instructor`: `404`. Acima de 20 pedidos na hora por usuário: `429`
+         *     `rate_limited`. Só quem pediu vê o pedido; ele some em 24 horas.
+         */
+        post: operations["createCertificatePreview"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/certificate-templates/previews/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Estado do PDF de exemplo
+         * @description `pending`, `ready` ou `failed` com o motivo. Pedido de outro usuário ou já expirado: `404`.
+         */
+        get: operations["getCertificatePreview"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/certificate-templates/previews/{id}/pdf": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * PDF de exemplo
+         * @description O PDF do exemplo, para abrir numa aba nova. Pedido de outro usuário ou expirado: `404`. Ainda em
+         *     `pending` ou em `failed`: `409` `certificate_preview_not_ready`.
+         */
+        get: operations["getCertificatePreviewPdf"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/settings/certificates": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Signatário do certificado
+         * @description `certificate.signer_name` e `certificate.signer_role` (`specs/031-infraestrutura-e-deploy.md`,
+         *     "Configurações da escola") e, só para leitura, `school.name`.
+         */
+        get: operations["getCertificateSettings"];
+        /**
+         * Gravar o signatário do certificado
+         * @description Grava os dois campos (`null` omite a assinatura no certificado). O nome da escola não é gravado
+         *     aqui. Vale para os certificados emitidos depois; os emitidos têm os dados congelados.
+         */
+        put: operations["saveCertificateSettings"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -996,6 +2180,769 @@ export interface components {
             /** @description Mais nova primeiro. */
             items: components["schemas"]["TermsVersionEntry"][];
         };
+        /**
+         * @description Tipo de produto do catálogo (`specs/009-catalogo-e-conteudo.md`).
+         * @enum {string}
+         */
+        ProductType: "course" | "bundle" | "ebook";
+        /**
+         * @description Modo de acesso do produto (`specs/009-catalogo-e-conteudo.md`, "Modos de acesso"): `open` para
+         *     qualquer usuário logado, `paid` para quem tem direito ativo, `private` só por concessão, pacote
+         *     ou
+         *     plano, e nunca na vitrine.
+         * @enum {string}
+         */
+        AccessMode: "open" | "paid" | "private";
+        /**
+         * @description Estado de publicação de produto e de aula; só `published` aparece no classroom.
+         * @enum {string}
+         */
+        PublicationStatus: "draft" | "published";
+        /**
+         * @description Nível do curso.
+         * @enum {string}
+         */
+        CourseLevel: "beginner" | "intermediate" | "advanced";
+        /**
+         * @description Provedor do vídeo, classificado pela API a partir da URL na gravação
+         *     (`specs/009-catalogo-e-conteudo.md`,
+         *     "Vídeo e links externos"). URL fora dos padrões da tabela, inclusive `.m3u8` de outro host, vira
+         *     `link` (botão "Abrir vídeo", sem conclusão automática).
+         * @enum {string}
+         */
+        VideoProvider: "youtube" | "vimeo" | "bunny" | "panda" | "file" | "link";
+        /**
+         * @description Tipo de link de apoio: arquivo ou página.
+         * @enum {string}
+         */
+        LessonLinkKind: "file" | "page";
+        /** @description Link de apoio de uma aula, na ordem de `position`. */
+        LessonLink: {
+            id: components["schemas"]["Uuid"];
+            label: string;
+            /** @description URL externa do material; só vai a quem tem acesso à aula. */
+            url: string;
+            kind: components["schemas"]["LessonLinkKind"];
+            position: number;
+        };
+        /** @description Capa de um produto, imagem de finalidade `product_cover` em 16:9 (`specs/029-imagens.md`). */
+        ProductCover: {
+            imageId: components["schemas"]["Uuid"];
+            /**
+             * Format: uri-reference
+             * @description Variante de 480 px (`/api/v1/images/{imageId}/480.webp`).
+             */
+            url: string;
+            /**
+             * Format: uri-reference
+             * @description Variante de 1280 px (`/api/v1/images/{imageId}/1280.webp`).
+             */
+            largeUrl: string;
+        };
+        /**
+         * @description Estado de um certificado existente: `preparing` (registro criado, PDF ainda não gerado),
+         *     `issued` (com PDF) ou `revoked` (`specs/015-certificados.md`).
+         * @enum {string}
+         */
+        CertificateState: "preparing" | "issued" | "revoked";
+        /**
+         * @description Identificador legível na URL: minúsculas, dígitos e hífens.
+         * @example introducao-ao-python
+         */
+        Slug: string;
+        /**
+         * @description Finalidade da imagem enviada pelo admin (`specs/029-imagens.md`). Na Fase 2 só existe
+         *     `product_cover`.
+         * @enum {string}
+         */
+        ImagePurpose: "product_cover";
+        ImageVariantInfo: {
+            width: components["schemas"]["ImageVariantWidth"];
+            height: number;
+            /**
+             * Format: uri-reference
+             * @description Caminho de entrega (`/api/v1/images/{imageId}/{variant}.webp`).
+             * @example /api/v1/images/0193a5b2-7c1e-7d3a-9f4b-2a6c8e1d5f70/480.webp
+             */
+            url: string;
+        };
+        /** @description Imagem enviada, com as variantes geradas. */
+        Image: {
+            id: components["schemas"]["Uuid"];
+            purpose: components["schemas"]["ImagePurpose"];
+            /** @description Largura do arquivo enviado, em pixels. */
+            width: number;
+            /** @description Altura do arquivo enviado, em pixels. */
+            height: number;
+            variants: components["schemas"]["ImageVariantInfo"][];
+        };
+        /** @description Um curso na lista do admin. */
+        CourseSummary: {
+            id: components["schemas"]["Uuid"];
+            slug: components["schemas"]["Slug"];
+            title: string;
+            summary: string | null;
+            cover: components["schemas"]["ProductCover"] | null;
+            accessMode: components["schemas"]["AccessMode"];
+            /** @description Preço em centavos; `null` fora do modo `paid`. */
+            priceCents: number | null;
+            /** @description Dias de acesso a partir da compra; `null` é vitalício. */
+            accessDays: number | null;
+            status: components["schemas"]["PublicationStatus"];
+            level: components["schemas"]["CourseLevel"] | null;
+            /** @description Instrutor dono; `null` sem dono. */
+            owner: components["schemas"]["UserRef"] | null;
+            /** @description Pedido de publicação pendente (`request-review`). */
+            reviewRequestedAt: components["schemas"]["DateTime"] | null;
+            moduleCount: number;
+            /** @description Aulas publicadas. */
+            lessonCount: number;
+            /** @description Soma das durações das aulas publicadas. */
+            durationSeconds: number;
+            publishedAt: components["schemas"]["DateTime"] | null;
+            /** @description Preenchido quando arquivado: fora do classroom em definitivo. */
+            archivedAt: components["schemas"]["DateTime"] | null;
+            createdAt: components["schemas"]["DateTime"];
+            updatedAt: components["schemas"]["DateTime"];
+        };
+        CourseSummaryPage: components["schemas"]["Page"] & {
+            items: components["schemas"]["CourseSummary"][];
+        };
+        /** @description O curso para o editor, com módulos e aulas na ordem. */
+        CourseDetail: {
+            id: components["schemas"]["Uuid"];
+            slug: components["schemas"]["Slug"];
+            title: string;
+            summary: string | null;
+            cover: components["schemas"]["ProductCover"] | null;
+            accessMode: components["schemas"]["AccessMode"];
+            /** @description Preço em centavos; `null` fora do modo `paid`. */
+            priceCents: number | null;
+            /** @description Dias de acesso a partir da compra; `null` é vitalício. */
+            accessDays: number | null;
+            status: components["schemas"]["PublicationStatus"];
+            level: components["schemas"]["CourseLevel"] | null;
+            owner: components["schemas"]["UserRef"] | null;
+            reviewRequestedAt: components["schemas"]["DateTime"] | null;
+            moduleCount: number;
+            /** @description Aulas publicadas. */
+            lessonCount: number;
+            durationSeconds: number;
+            publishedAt: components["schemas"]["DateTime"] | null;
+            /** @description Preenchido quando arquivado: fora do classroom em definitivo. */
+            archivedAt: components["schemas"]["DateTime"] | null;
+            createdAt: components["schemas"]["DateTime"];
+            updatedAt: components["schemas"]["DateTime"];
+            /** @description Markdown. */
+            description: string | null;
+            certificateEnabled: boolean;
+            /** @description Carga horária fixada; `null` é calculada pelas aulas publicadas. */
+            certificateHours: number | null;
+            /** @description Alunos com direito ativo ao produto, para os avisos de despublicar e de remover item. */
+            studentCount: number;
+            modules: components["schemas"]["CourseModule"][];
+        };
+        CourseCreate: {
+            slug?: components["schemas"]["Slug"];
+            title: string;
+            summary?: string | null;
+            /** @description Markdown, exibido sanitizado. */
+            description?: string | null;
+            /** @description Imagem `product_cover` enviada antes por `POST /api/v1/images`; `null` remove. */
+            coverImageId?: components["schemas"]["Uuid"] | null;
+            level?: components["schemas"]["CourseLevel"] | null;
+            accessMode?: components["schemas"]["AccessMode"];
+            /**
+             * @description Preço em centavos; exige `product.set_price` (só `admin`; outro papel: `403`). Obrigatório
+             *     (≥ 0) quando o modo é `paid`; `null` nos demais.
+             */
+            priceCents?: number | null;
+            /** @description Dias de acesso a partir da compra; `null` é vitalício. */
+            accessDays?: number | null;
+            /** @description Só `manager` e `admin`. */
+            ownerId?: components["schemas"]["Uuid"] | null;
+        };
+        CourseUpdate: {
+            slug?: components["schemas"]["Slug"];
+            title?: string;
+            summary?: string | null;
+            /** @description Markdown, exibido sanitizado. */
+            description?: string | null;
+            /** @description Imagem `product_cover` enviada antes por `POST /api/v1/images`; `null` remove. */
+            coverImageId?: components["schemas"]["Uuid"] | null;
+            level?: components["schemas"]["CourseLevel"] | null;
+            accessMode?: components["schemas"]["AccessMode"];
+            /**
+             * @description Preço em centavos; exige `product.set_price` (só `admin`; outro papel: `403`). Obrigatório
+             *     (≥ 0) quando o modo é `paid`; `null` nos demais.
+             */
+            priceCents?: number | null;
+            /** @description Dias de acesso a partir da compra; `null` é vitalício. */
+            accessDays?: number | null;
+            certificateEnabled?: boolean;
+            certificateHours?: number | null;
+        };
+        /** @description Um módulo, com as aulas na ordem (rascunhos inclusive). */
+        CourseModule: {
+            id: components["schemas"]["Uuid"];
+            courseId: components["schemas"]["Uuid"];
+            title: string;
+            position: number;
+            lessons: components["schemas"]["LessonSummary"][];
+            createdAt: components["schemas"]["DateTime"];
+            updatedAt: components["schemas"]["DateTime"];
+        };
+        CourseModuleList: {
+            items: components["schemas"]["CourseModule"][];
+        };
+        LessonSummary: {
+            id: components["schemas"]["Uuid"];
+            moduleId: components["schemas"]["Uuid"];
+            title: string;
+            status: components["schemas"]["PublicationStatus"];
+            isSample: boolean;
+            durationSeconds: number | null;
+            videoProvider: components["schemas"]["VideoProvider"] | null;
+            position: number;
+        };
+        /** @description A aula para o editor. */
+        LessonDetail: {
+            id: components["schemas"]["Uuid"];
+            courseId: components["schemas"]["Uuid"];
+            moduleId: components["schemas"]["Uuid"];
+            title: string;
+            /** @description Markdown. */
+            description: string | null;
+            /**
+             * @description No MVP, só `video`.
+             * @constant
+             */
+            type: "video";
+            status: components["schemas"]["PublicationStatus"];
+            isSample: boolean;
+            videoUrl: string | null;
+            videoProvider: components["schemas"]["VideoProvider"] | null;
+            durationSeconds: number | null;
+            position: number;
+            links: components["schemas"]["LessonLink"][];
+            /** @description Ebooks vinculados à aula (`product_ebooks` com alvo `lesson`). */
+            ebooks: components["schemas"]["EbookRef"][];
+            createdAt: components["schemas"]["DateTime"];
+            updatedAt: components["schemas"]["DateTime"];
+        };
+        LessonCreate: {
+            title: string;
+            /** @description Markdown, exibido sanitizado. */
+            description?: string | null;
+            /**
+             * @description Vídeo principal. Regras de URL de conteúdo (`specs/009-catalogo-e-conteudo.md`): `https` (`http`
+             *     só em
+             *     `*.localhost`), sem credenciais, sem espaços, até 2.000 caracteres; fora delas, `422`
+             *     `content_url_invalid` com o campo e o motivo. A URL nunca é buscada pelo servidor.
+             */
+            videoUrl?: string | null;
+            /** @description Informada pelo autor; o sistema não mede vídeo externo. */
+            durationSeconds?: number | null;
+            /** @default false */
+            isSample: boolean;
+        };
+        LessonUpdate: {
+            title?: string;
+            /** @description Markdown, exibido sanitizado. */
+            description?: string | null;
+            /**
+             * @description Vídeo principal. Regras de URL de conteúdo (`specs/009-catalogo-e-conteudo.md`): `https` (`http`
+             *     só em
+             *     `*.localhost`), sem credenciais, sem espaços, até 2.000 caracteres; fora delas, `422`
+             *     `content_url_invalid` com o campo e o motivo. A URL nunca é buscada pelo servidor.
+             */
+            videoUrl?: string | null;
+            durationSeconds?: number | null;
+            isSample?: boolean;
+            status?: components["schemas"]["PublicationStatus"];
+        };
+        EbookRef: {
+            id: components["schemas"]["Uuid"];
+            slug: components["schemas"]["Slug"];
+            title: string;
+            status: components["schemas"]["PublicationStatus"];
+        };
+        /** @description Um ebook na lista do admin. */
+        EbookSummary: {
+            id: components["schemas"]["Uuid"];
+            slug: components["schemas"]["Slug"];
+            title: string;
+            summary: string | null;
+            cover: components["schemas"]["ProductCover"] | null;
+            accessMode: components["schemas"]["AccessMode"];
+            /** @description Preço em centavos; `null` fora do modo `paid`. */
+            priceCents: number | null;
+            /** @description Dias de acesso a partir da compra; `null` é vitalício. */
+            accessDays: number | null;
+            status: components["schemas"]["PublicationStatus"];
+            authorName: string | null;
+            pages: number | null;
+            publishedAt: components["schemas"]["DateTime"] | null;
+            /** @description Preenchido quando arquivado: fora do classroom em definitivo. */
+            archivedAt: components["schemas"]["DateTime"] | null;
+            createdAt: components["schemas"]["DateTime"];
+            updatedAt: components["schemas"]["DateTime"];
+        };
+        EbookSummaryPage: components["schemas"]["Page"] & {
+            items: components["schemas"]["EbookSummary"][];
+        };
+        /**
+         * @description Alvo de um vínculo de ebook (`product_ebooks`). `bundle` existe na tabela, mas o vínculo a
+         *     pacote é feito pelos itens do pacote e não é oferecido na interface.
+         * @enum {string}
+         */
+        EbookTargetType: "course" | "bundle" | "lesson";
+        EbookTarget: {
+            targetType: components["schemas"]["EbookTargetType"];
+            targetId: components["schemas"]["Uuid"];
+            /** @description Título do curso, do pacote ou da aula. */
+            title: string;
+            /** @description O curso da aula, em vínculo `lesson`; `null` nos demais. */
+            course: components["schemas"]["ProductRef"] | null;
+        };
+        EbookDetail: {
+            id: components["schemas"]["Uuid"];
+            slug: components["schemas"]["Slug"];
+            title: string;
+            summary: string | null;
+            cover: components["schemas"]["ProductCover"] | null;
+            accessMode: components["schemas"]["AccessMode"];
+            /** @description Preço em centavos; `null` fora do modo `paid`. */
+            priceCents: number | null;
+            /** @description Dias de acesso a partir da compra; `null` é vitalício. */
+            accessDays: number | null;
+            status: components["schemas"]["PublicationStatus"];
+            authorName: string | null;
+            pages: number | null;
+            publishedAt: components["schemas"]["DateTime"] | null;
+            /** @description Preenchido quando arquivado: fora do classroom em definitivo. */
+            archivedAt: components["schemas"]["DateTime"] | null;
+            createdAt: components["schemas"]["DateTime"];
+            updatedAt: components["schemas"]["DateTime"];
+            /** @description Markdown. */
+            description: string | null;
+            /** @description Link externo do arquivo. */
+            fileUrl: string | null;
+            targets: components["schemas"]["EbookTarget"][];
+            /** @description Alunos com direito ativo ao produto, para os avisos de despublicar e de remover item. */
+            studentCount: number;
+        };
+        EbookCreate: {
+            slug?: components["schemas"]["Slug"];
+            title: string;
+            summary?: string | null;
+            /** @description Markdown, exibido sanitizado. */
+            description?: string | null;
+            /** @description Imagem `product_cover` enviada antes por `POST /api/v1/images`; `null` remove. */
+            coverImageId?: components["schemas"]["Uuid"] | null;
+            authorName?: string | null;
+            /**
+             * @description Arquivo do ebook. Regras de URL de conteúdo (`specs/009-catalogo-e-conteudo.md`): `https`
+             *     (`http` só em
+             *     `*.localhost`), sem credenciais, sem espaços, até 2.000 caracteres; fora delas, `422`
+             *     `content_url_invalid` com o campo e o motivo. A URL nunca é buscada pelo servidor.
+             */
+            fileUrl?: string | null;
+            pages?: number | null;
+            accessMode?: components["schemas"]["AccessMode"];
+            /**
+             * @description Preço em centavos; exige `product.set_price` (só `admin`; outro papel: `403`). Obrigatório
+             *     (≥ 0) quando o modo é `paid`; `null` nos demais.
+             */
+            priceCents?: number | null;
+            /** @description Dias de acesso a partir da compra; `null` é vitalício. */
+            accessDays?: number | null;
+        };
+        EbookUpdate: {
+            slug?: components["schemas"]["Slug"];
+            title?: string;
+            summary?: string | null;
+            /** @description Markdown, exibido sanitizado. */
+            description?: string | null;
+            /** @description Imagem `product_cover` enviada antes por `POST /api/v1/images`; `null` remove. */
+            coverImageId?: components["schemas"]["Uuid"] | null;
+            authorName?: string | null;
+            /**
+             * @description Arquivo do ebook. Regras de URL de conteúdo (`specs/009-catalogo-e-conteudo.md`): `https`
+             *     (`http` só em
+             *     `*.localhost`), sem credenciais, sem espaços, até 2.000 caracteres; fora delas, `422`
+             *     `content_url_invalid` com o campo e o motivo. A URL nunca é buscada pelo servidor.
+             */
+            fileUrl?: string | null;
+            pages?: number | null;
+            accessMode?: components["schemas"]["AccessMode"];
+            /**
+             * @description Preço em centavos; exige `product.set_price` (só `admin`; outro papel: `403`). Obrigatório
+             *     (≥ 0) quando o modo é `paid`; `null` nos demais.
+             */
+            priceCents?: number | null;
+            /** @description Dias de acesso a partir da compra; `null` é vitalício. */
+            accessDays?: number | null;
+        };
+        /** @description Um produto citado por outro registro. */
+        ProductRef: {
+            type: components["schemas"]["ProductType"];
+            id: components["schemas"]["Uuid"];
+            title: string;
+        };
+        /** @description Um pacote na lista do admin. */
+        BundleSummary: {
+            id: components["schemas"]["Uuid"];
+            slug: components["schemas"]["Slug"];
+            title: string;
+            summary: string | null;
+            cover: components["schemas"]["ProductCover"] | null;
+            accessMode: components["schemas"]["AccessMode"];
+            /** @description Preço em centavos; `null` fora do modo `paid`. */
+            priceCents: number | null;
+            /** @description Dias de acesso a partir da compra; `null` é vitalício. */
+            accessDays: number | null;
+            status: components["schemas"]["PublicationStatus"];
+            itemCount: number;
+            publishedAt: components["schemas"]["DateTime"] | null;
+            /** @description Preenchido quando arquivado: fora do classroom em definitivo. */
+            archivedAt: components["schemas"]["DateTime"] | null;
+            createdAt: components["schemas"]["DateTime"];
+            updatedAt: components["schemas"]["DateTime"];
+        };
+        BundleSummaryPage: components["schemas"]["Page"] & {
+            items: components["schemas"]["BundleSummary"][];
+        };
+        BundleItem: {
+            /** @enum {string} */
+            productType: "course" | "ebook";
+            productId: components["schemas"]["Uuid"];
+            title: string;
+            accessMode: components["schemas"]["AccessMode"];
+            priceCents: number | null;
+            status: components["schemas"]["PublicationStatus"];
+            archived: boolean;
+            position: number;
+        };
+        BundleDetail: {
+            id: components["schemas"]["Uuid"];
+            slug: components["schemas"]["Slug"];
+            title: string;
+            summary: string | null;
+            cover: components["schemas"]["ProductCover"] | null;
+            accessMode: components["schemas"]["AccessMode"];
+            /** @description Preço em centavos; `null` fora do modo `paid`. */
+            priceCents: number | null;
+            /** @description Dias de acesso a partir da compra; `null` é vitalício. */
+            accessDays: number | null;
+            status: components["schemas"]["PublicationStatus"];
+            itemCount: number;
+            publishedAt: components["schemas"]["DateTime"] | null;
+            /** @description Preenchido quando arquivado: fora do classroom em definitivo. */
+            archivedAt: components["schemas"]["DateTime"] | null;
+            createdAt: components["schemas"]["DateTime"];
+            updatedAt: components["schemas"]["DateTime"];
+            /** @description Markdown. */
+            description: string | null;
+            items: components["schemas"]["BundleItem"][];
+            /** @description Soma dos preços avulsos dos itens `paid`, para mostrar a economia. */
+            itemsPriceCents: number;
+            /** @description Alunos com direito ativo ao produto, para os avisos de despublicar e de remover item. */
+            studentCount: number;
+        };
+        BundleCreate: {
+            slug?: components["schemas"]["Slug"];
+            title: string;
+            summary?: string | null;
+            /** @description Markdown, exibido sanitizado. */
+            description?: string | null;
+            /** @description Imagem `product_cover` enviada antes por `POST /api/v1/images`; `null` remove. */
+            coverImageId?: components["schemas"]["Uuid"] | null;
+            accessMode?: components["schemas"]["AccessMode"];
+            /**
+             * @description Preço em centavos; exige `product.set_price` (só `admin`; outro papel: `403`). Obrigatório
+             *     (≥ 0) quando o modo é `paid`; `null` nos demais.
+             */
+            priceCents?: number | null;
+            /** @description Dias de acesso a partir da compra; `null` é vitalício. */
+            accessDays?: number | null;
+        };
+        BundleUpdate: {
+            slug?: components["schemas"]["Slug"];
+            title?: string;
+            summary?: string | null;
+            /** @description Markdown, exibido sanitizado. */
+            description?: string | null;
+            /** @description Imagem `product_cover` enviada antes por `POST /api/v1/images`; `null` remove. */
+            coverImageId?: components["schemas"]["Uuid"] | null;
+            accessMode?: components["schemas"]["AccessMode"];
+            /**
+             * @description Preço em centavos; exige `product.set_price` (só `admin`; outro papel: `403`). Obrigatório
+             *     (≥ 0) quando o modo é `paid`; `null` nos demais.
+             */
+            priceCents?: number | null;
+            /** @description Dias de acesso a partir da compra; `null` é vitalício. */
+            accessDays?: number | null;
+        };
+        /**
+         * @description Fonte do direito (`specs/010-direitos-de-acesso.md`, "Fontes").
+         * @enum {string}
+         */
+        EntitlementSource: "order" | "subscription" | "grant" | "cascade";
+        /**
+         * @description `active` (vigente), `scheduled` (`startsAt` no futuro), `expired` (passou de `expiresAt`) ou
+         *     `revoked`.
+         * @enum {string}
+         */
+        EntitlementState: "active" | "scheduled" | "expired" | "revoked";
+        /** @enum {string} */
+        RevokeReason: "refund" | "chargeback" | "subscription_ended" | "manual" | "recalculation" | "account_deleted";
+        /** @description Um direito com os derivados dele. */
+        EntitlementNode: {
+            id: components["schemas"]["Uuid"];
+            product: components["schemas"]["ProductRef"];
+            source: components["schemas"]["EntitlementSource"];
+            sourceId: components["schemas"]["Uuid"];
+            parentEntitlementId: components["schemas"]["Uuid"] | null;
+            state: components["schemas"]["EntitlementState"];
+            startsAt: components["schemas"]["DateTime"];
+            /** @description `null` é vitalício. */
+            expiresAt: components["schemas"]["DateTime"] | null;
+            revokedAt: components["schemas"]["DateTime"] | null;
+            revokeReason: components["schemas"]["RevokeReason"] | null;
+            /** @description Motivo, só em `grant`. */
+            grantedReason: string | null;
+            /** @description Quem concedeu, só em `grant`. */
+            grantedBy: components["schemas"]["UserRef"] | null;
+            createdAt: components["schemas"]["DateTime"];
+            /** @description Direitos derivados (cascata), até a profundidade 2. */
+            children: components["schemas"]["EntitlementNode"][];
+        };
+        EntitlementTree: {
+            /** @description As raízes, mais recentes primeiro. */
+            items: components["schemas"]["EntitlementNode"][];
+        };
+        /** @description Aluno citado em listas de curso: nome e avatar, sem e-mail. */
+        StudentRef: {
+            id: components["schemas"]["Uuid"];
+            name: string;
+            /**
+             * Format: uri-reference
+             * @description Variante de 256 px do avatar; `null` sem avatar.
+             */
+            avatarUrl: string | null;
+        };
+        ProductEntitlement: {
+            id: components["schemas"]["Uuid"];
+            user: components["schemas"]["StudentRef"];
+            source: components["schemas"]["EntitlementSource"];
+            /** @description Produto da raiz, quando o direito é derivado (pacote ou curso). */
+            via: components["schemas"]["ProductRef"] | null;
+            state: components["schemas"]["EntitlementState"];
+            startsAt: components["schemas"]["DateTime"];
+            expiresAt: components["schemas"]["DateTime"] | null;
+            revokedAt: components["schemas"]["DateTime"] | null;
+        };
+        ProductEntitlementPage: components["schemas"]["Page"] & {
+            items: components["schemas"]["ProductEntitlement"][];
+        };
+        /**
+         * @description Estado do curso para o aluno (`specs/014-aprendizado-e-progresso.md`, "Progresso").
+         * @enum {string}
+         */
+        CourseProgressState: "not_started" | "in_progress" | "completed";
+        /** @description Progresso de um aluno num curso, sobre as aulas publicadas. */
+        ProgressCounts: {
+            completedLessons: number;
+            /** @description Aulas publicadas. */
+            totalLessons: number;
+            percent: number;
+            state: components["schemas"]["CourseProgressState"];
+        };
+        UserCourseProgress: {
+            course: components["schemas"]["ProductRef"];
+            progress: components["schemas"]["ProgressCounts"];
+            lastActivityAt: components["schemas"]["DateTime"] | null;
+            /** @description O certificado do curso, quando existe. */
+            certificate: components["schemas"]["CertificateRef"] | null;
+        };
+        UserProgressList: {
+            items: components["schemas"]["UserCourseProgress"][];
+        };
+        /** @description Resumo de progresso de um curso. */
+        CourseProgressSummary: {
+            courseId: components["schemas"]["Uuid"];
+            totalLessons: number;
+            /** @description Alunos com acesso ao curso. */
+            studentCount: number;
+            /** @description Alunos por faixa de progresso. */
+            buckets: {
+                notStarted: number;
+                /** @description De 1% a 25%. */
+                upTo25: number;
+                /** @description De 26% a 50%. */
+                upTo50: number;
+                /** @description De 51% a 75%. */
+                upTo75: number;
+                /** @description De 76% a 99%. */
+                upTo99: number;
+                completed: number;
+            };
+            /** @description Concluídos ÷ alunos com acesso; 0 sem alunos. */
+            completionRate: number;
+        };
+        CourseStudent: {
+            user: components["schemas"]["StudentRef"];
+            progress: components["schemas"]["ProgressCounts"];
+            lastActivityAt: components["schemas"]["DateTime"] | null;
+            /** @description Fim do acesso mais longo; `null` vitalício ou curso `open`. */
+            accessExpiresAt: components["schemas"]["DateTime"] | null;
+        };
+        CourseStudentPage: components["schemas"]["Page"] & {
+            items: components["schemas"]["CourseStudent"][];
+        };
+        CertificateRef: {
+            id: components["schemas"]["Uuid"];
+            /** @description Código com hífens (`XXXX-XXXX-XXXX`). */
+            code: string;
+            state: components["schemas"]["CertificateState"];
+        };
+        /** @description Um certificado, com os dados congelados na emissão. */
+        Certificate: {
+            id: components["schemas"]["Uuid"];
+            /**
+             * @description Código com hífens, sem `0`, `O`, `1`, `I` nem `L`.
+             * @example ABCD-EFGH-JKMN
+             */
+            code: string;
+            state: components["schemas"]["CertificateState"];
+            user: components["schemas"]["UserRef"];
+            course: components["schemas"]["ProductRef"];
+            /** @description Congelado; `null` se a conta foi excluída. */
+            studentName: string | null;
+            /** @description Congelado na emissão. */
+            courseTitle: string;
+            instructorName: string | null;
+            hours: number;
+            completedAt: components["schemas"]["DateTime"];
+            issuedAt: components["schemas"]["DateTime"];
+            issuedManually: boolean;
+            issuedBy: components["schemas"]["UserRef"] | null;
+            issueReason: string | null;
+            revokedAt: components["schemas"]["DateTime"] | null;
+            revokedBy: components["schemas"]["UserRef"] | null;
+            revokeReason: string | null;
+            pdfRenderedAt: components["schemas"]["DateTime"] | null;
+            templateVersionId: components["schemas"]["Uuid"];
+        };
+        CertificatePage: components["schemas"]["Page"] & {
+            items: components["schemas"]["Certificate"][];
+        };
+        CertificateBackfillQueued: {
+            courseId: components["schemas"]["Uuid"];
+            /** @constant */
+            queued: true;
+        };
+        /**
+         * @description Origem do template efetivo: o do curso, o padrão da escola ou nenhum (o curso não emite
+         *     certificado).
+         * @enum {string}
+         */
+        CertificateTemplateSource: "course" | "school" | "none";
+        /** @description Um template de certificado e a origem do efetivo. */
+        CertificateTemplate: {
+            source: components["schemas"]["CertificateTemplateSource"];
+            /** @description O template deste recurso (do curso ou o padrão); `null` quando não tem. */
+            html: string | null;
+            /** @description Versão atual, enviada de volta em `expectedVersionId`. */
+            versionId: components["schemas"]["Uuid"] | null;
+            updatedAt: components["schemas"]["DateTime"] | null;
+            updatedBy: components["schemas"]["UserRef"] | null;
+        };
+        /** @description O template gravado. */
+        CertificateTemplateSaved: {
+            source: components["schemas"]["CertificateTemplateSource"];
+            html: string;
+            versionId: components["schemas"]["Uuid"];
+            updatedAt: components["schemas"]["DateTime"];
+            updatedBy: components["schemas"]["UserRef"] | null;
+            /** @description Verdadeiro quando a gravação enfileirou a emissão retroativa. */
+            backfillQueued: boolean;
+        };
+        CertificateTemplateSave: {
+            /**
+             * @description Documento HTML completo ou fragmento, até 768 KiB em UTF-8, com as imagens embutidas (acima:
+             *     problema `too_large`).
+             */
+            html: string;
+            /** @description A versão que o editor abriu; `null` quando não havia template. */
+            expectedVersionId: components["schemas"]["Uuid"] | null;
+        };
+        /**
+         * @description Regra violada (`specs/015-certificados.md`, "Template").
+         * @enum {string}
+         */
+        CertificateTemplateProblemRule: "parse_error" | "too_large" | "element_not_allowed" | "attribute_not_allowed" | "url_not_allowed" | "css_not_allowed" | "image_not_found" | "unknown_key" | "unclosed_key" | "key_in_attribute" | "missing_required_key";
+        CertificateTemplateProblem: {
+            rule: components["schemas"]["CertificateTemplateProblemRule"];
+            message: string;
+            /** @description `null` em problema do documento inteiro. */
+            line: number | null;
+            column: number | null;
+        };
+        /**
+         * @description `Problem` de `422` `certificate_template_invalid`, com a lista de problemas em
+         *     `details.problems`. Outro `422` da operação não traz `details`.
+         */
+        CertificateTemplateInvalidProblem: components["schemas"]["Problem"] & {
+            details?: {
+                problems: components["schemas"]["CertificateTemplateProblem"][];
+            };
+        };
+        CertificateTemplateKey: {
+            /** @example aluno.nome */
+            key: string;
+            description: string;
+            /** @description Valor usado no PDF de exemplo. */
+            example: string;
+            required: boolean;
+            /** @description Só vale em posição de texto (`certificado.qrcode`). */
+            textOnly: boolean;
+        };
+        CertificateTemplateReference: {
+            keys: components["schemas"]["CertificateTemplateKey"][];
+            /**
+             * @description Grupo de que ao menos uma é obrigatória.
+             * @example [
+             *       "certificado.url_validacao",
+             *       "certificado.qrcode"
+             *     ]
+             */
+            requiredOneOf: string[];
+            /** @description O modelo inicial. */
+            starterHtml: string;
+        };
+        /** @enum {string} */
+        CertificatePreviewStatus: "pending" | "ready" | "failed";
+        CertificatePreview: {
+            id: components["schemas"]["Uuid"];
+            courseId: components["schemas"]["Uuid"] | null;
+            status: components["schemas"]["CertificatePreviewStatus"];
+            /** @description Motivo, em `failed`. */
+            error: string | null;
+            createdAt: components["schemas"]["DateTime"];
+            renderedAt: components["schemas"]["DateTime"] | null;
+            /** @description Quando o pedido é apagado (24 h). */
+            expiresAt: components["schemas"]["DateTime"];
+        };
+        CertificateSettings: {
+            /** @description `certificate.signer_name`. */
+            signerName: string | null;
+            /** @description `certificate.signer_role`. */
+            signerRole: string | null;
+            /** @description `school.name`, só leitura aqui. */
+            schoolName: string;
+        };
     };
     responses: {
         /**
@@ -1173,6 +3120,35 @@ export interface components {
             };
             content?: never;
         };
+        /**
+         * @description O arquivo PDF. `Content-Disposition` sugere o nome do arquivo; a resposta não é guardada em
+         *     cache.
+         */
+        Pdf: {
+            headers: {
+                "X-Request-Id": components["headers"]["XRequestId"];
+                "Cache-Control": components["headers"]["NoStore"];
+                "Content-Disposition": components["headers"]["ContentDisposition"];
+                "X-Content-Type-Options": components["headers"]["ContentTypeOptions"];
+                [name: string]: unknown;
+            };
+            content: {
+                "application/pdf": string;
+            };
+        };
+        /**
+         * @description Template fora das regras (`certificate_template_invalid`, com `details.problems`) ou outra regra
+         *     de negócio com `code` próprio.
+         */
+        CertificateTemplateInvalid: {
+            headers: {
+                "X-Request-Id": components["headers"]["XRequestId"];
+                [name: string]: unknown;
+            };
+            content: {
+                "application/problem+json": components["schemas"]["CertificateTemplateInvalidProblem"];
+            };
+        };
     };
     parameters: {
         /** @description Quantidade de itens por página. */
@@ -1202,6 +3178,8 @@ export interface components {
         ImageVariantPath: components["schemas"]["ImageVariantWidth"];
         /** @description `ETag` de uma entrega anterior. Igual ao atual, a resposta é `304`, sem corpo. */
         IfNoneMatch: string;
+        /** @description Identificador legível do produto na URL (único por tipo de produto). */
+        SlugPath: components["schemas"]["Slug"];
     };
     requestBodies: never;
     headers: {
@@ -1225,6 +3203,8 @@ export interface components {
         ImageCacheControl: "public, max-age=31536000, immutable";
         /** @description Sempre `nosniff`. */
         ContentTypeOptions: "nosniff";
+        /** @description Sempre `attachment`, com o nome sugerido do arquivo (`filename`). */
+        ContentDisposition: string;
     };
     pathItems: never;
 }
@@ -2120,6 +4100,2411 @@ export interface operations {
             304: components["responses"]["ImageNotModified"];
             400: components["responses"]["BadRequest"];
             404: components["responses"]["NotFound"];
+            429: components["responses"]["TooManyRequests"];
+            500: components["responses"]["InternalError"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    listCourses: {
+        parameters: {
+            query?: {
+                /** @description Trecho do título ou do resumo. */
+                q?: string;
+                /** @description `archived` lista só os arquivados; os outros dois, só os não arquivados. */
+                status?: "draft" | "published" | "archived";
+                accessMode?: components["schemas"]["AccessMode"];
+                /** @description Só os cursos deste dono. */
+                ownerId?: components["schemas"]["Uuid"];
+                /** @description `true`: só os cursos com pedido de publicação (`reviewRequestedAt`). */
+                awaitingReview?: boolean;
+                sort?: "title" | "-createdAt" | "-updatedAt";
+                /** @description Quantidade de itens por página. */
+                limit?: components["parameters"]["Limit"];
+                /** @description Valor de `nextCursor` da página anterior. Ausente na primeira página. */
+                cursor?: components["parameters"]["Cursor"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Uma página de cursos. */
+            200: {
+                headers: {
+                    "X-Request-Id": components["headers"]["XRequestId"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CourseSummaryPage"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            429: components["responses"]["TooManyRequests"];
+            500: components["responses"]["InternalError"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    createCourse: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CourseCreate"];
+            };
+        };
+        responses: {
+            /** @description Curso criado. */
+            201: {
+                headers: {
+                    "X-Request-Id": components["headers"]["XRequestId"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CourseDetail"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            409: components["responses"]["Conflict"];
+            413: components["responses"]["PayloadTooLarge"];
+            415: components["responses"]["UnsupportedMediaType"];
+            422: components["responses"]["UnprocessableEntity"];
+            429: components["responses"]["TooManyRequests"];
+            500: components["responses"]["InternalError"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    getCourse: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Identificador do recurso. */
+                id: components["parameters"]["IdPath"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description O curso. */
+            200: {
+                headers: {
+                    "X-Request-Id": components["headers"]["XRequestId"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CourseDetail"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            429: components["responses"]["TooManyRequests"];
+            500: components["responses"]["InternalError"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    deleteCourse: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Identificador do recurso. */
+                id: components["parameters"]["IdPath"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Curso excluído. */
+            204: {
+                headers: {
+                    "X-Request-Id": components["headers"]["XRequestId"];
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            429: components["responses"]["TooManyRequests"];
+            500: components["responses"]["InternalError"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    updateCourse: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Identificador do recurso. */
+                id: components["parameters"]["IdPath"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CourseUpdate"];
+            };
+        };
+        responses: {
+            /** @description Curso atualizado. */
+            200: {
+                headers: {
+                    "X-Request-Id": components["headers"]["XRequestId"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CourseDetail"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            413: components["responses"]["PayloadTooLarge"];
+            415: components["responses"]["UnsupportedMediaType"];
+            422: components["responses"]["UnprocessableEntity"];
+            429: components["responses"]["TooManyRequests"];
+            500: components["responses"]["InternalError"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    publishCourse: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Identificador do recurso. */
+                id: components["parameters"]["IdPath"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Curso atualizado. */
+            200: {
+                headers: {
+                    "X-Request-Id": components["headers"]["XRequestId"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CourseDetail"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            422: components["responses"]["UnprocessableEntity"];
+            429: components["responses"]["TooManyRequests"];
+            500: components["responses"]["InternalError"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    unpublishCourse: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Identificador do recurso. */
+                id: components["parameters"]["IdPath"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Curso atualizado. */
+            200: {
+                headers: {
+                    "X-Request-Id": components["headers"]["XRequestId"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CourseDetail"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            429: components["responses"]["TooManyRequests"];
+            500: components["responses"]["InternalError"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    archiveCourse: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Identificador do recurso. */
+                id: components["parameters"]["IdPath"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Curso atualizado. */
+            200: {
+                headers: {
+                    "X-Request-Id": components["headers"]["XRequestId"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CourseDetail"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            429: components["responses"]["TooManyRequests"];
+            500: components["responses"]["InternalError"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    unarchiveCourse: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Identificador do recurso. */
+                id: components["parameters"]["IdPath"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Curso atualizado. */
+            200: {
+                headers: {
+                    "X-Request-Id": components["headers"]["XRequestId"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CourseDetail"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            429: components["responses"]["TooManyRequests"];
+            500: components["responses"]["InternalError"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    requestCourseReview: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Identificador do recurso. */
+                id: components["parameters"]["IdPath"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Pedido registrado. */
+            200: {
+                headers: {
+                    "X-Request-Id": components["headers"]["XRequestId"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CourseDetail"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            429: components["responses"]["TooManyRequests"];
+            500: components["responses"]["InternalError"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    cancelCourseReview: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Identificador do recurso. */
+                id: components["parameters"]["IdPath"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Pedido cancelado. */
+            200: {
+                headers: {
+                    "X-Request-Id": components["headers"]["XRequestId"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CourseDetail"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            429: components["responses"]["TooManyRequests"];
+            500: components["responses"]["InternalError"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    setCourseOwner: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Identificador do recurso. */
+                id: components["parameters"]["IdPath"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    ownerId: components["schemas"]["Uuid"] | null;
+                };
+            };
+        };
+        responses: {
+            /** @description Dono alterado. */
+            200: {
+                headers: {
+                    "X-Request-Id": components["headers"]["XRequestId"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CourseDetail"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            413: components["responses"]["PayloadTooLarge"];
+            415: components["responses"]["UnsupportedMediaType"];
+            422: components["responses"]["UnprocessableEntity"];
+            429: components["responses"]["TooManyRequests"];
+            500: components["responses"]["InternalError"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    createModule: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Identificador do recurso. */
+                id: components["parameters"]["IdPath"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    title: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Módulo criado. */
+            201: {
+                headers: {
+                    "X-Request-Id": components["headers"]["XRequestId"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CourseModule"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            413: components["responses"]["PayloadTooLarge"];
+            415: components["responses"]["UnsupportedMediaType"];
+            422: components["responses"]["UnprocessableEntity"];
+            429: components["responses"]["TooManyRequests"];
+            500: components["responses"]["InternalError"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    reorderModules: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Identificador do recurso. */
+                id: components["parameters"]["IdPath"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    moduleIds: components["schemas"]["Uuid"][];
+                };
+            };
+        };
+        responses: {
+            /** @description Módulos na ordem nova. */
+            200: {
+                headers: {
+                    "X-Request-Id": components["headers"]["XRequestId"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CourseModuleList"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            413: components["responses"]["PayloadTooLarge"];
+            415: components["responses"]["UnsupportedMediaType"];
+            422: components["responses"]["UnprocessableEntity"];
+            429: components["responses"]["TooManyRequests"];
+            500: components["responses"]["InternalError"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    deleteModule: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Identificador do recurso. */
+                id: components["parameters"]["IdPath"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Módulo excluído. */
+            204: {
+                headers: {
+                    "X-Request-Id": components["headers"]["XRequestId"];
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            429: components["responses"]["TooManyRequests"];
+            500: components["responses"]["InternalError"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    updateModule: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Identificador do recurso. */
+                id: components["parameters"]["IdPath"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    title: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Módulo atualizado. */
+            200: {
+                headers: {
+                    "X-Request-Id": components["headers"]["XRequestId"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CourseModule"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            413: components["responses"]["PayloadTooLarge"];
+            415: components["responses"]["UnsupportedMediaType"];
+            429: components["responses"]["TooManyRequests"];
+            500: components["responses"]["InternalError"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    createLesson: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Identificador do recurso. */
+                id: components["parameters"]["IdPath"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LessonCreate"];
+            };
+        };
+        responses: {
+            /** @description Aula criada. */
+            201: {
+                headers: {
+                    "X-Request-Id": components["headers"]["XRequestId"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LessonDetail"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            413: components["responses"]["PayloadTooLarge"];
+            415: components["responses"]["UnsupportedMediaType"];
+            422: components["responses"]["UnprocessableEntity"];
+            429: components["responses"]["TooManyRequests"];
+            500: components["responses"]["InternalError"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    reorderLessons: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Identificador do recurso. */
+                id: components["parameters"]["IdPath"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    lessonIds: components["schemas"]["Uuid"][];
+                };
+            };
+        };
+        responses: {
+            /** @description O módulo, com as aulas na ordem nova. */
+            200: {
+                headers: {
+                    "X-Request-Id": components["headers"]["XRequestId"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CourseModule"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            413: components["responses"]["PayloadTooLarge"];
+            415: components["responses"]["UnsupportedMediaType"];
+            422: components["responses"]["UnprocessableEntity"];
+            429: components["responses"]["TooManyRequests"];
+            500: components["responses"]["InternalError"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    getLesson: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Identificador do recurso. */
+                id: components["parameters"]["IdPath"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description A aula. */
+            200: {
+                headers: {
+                    "X-Request-Id": components["headers"]["XRequestId"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LessonDetail"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            429: components["responses"]["TooManyRequests"];
+            500: components["responses"]["InternalError"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    deleteLesson: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Identificador do recurso. */
+                id: components["parameters"]["IdPath"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Aula excluída. */
+            204: {
+                headers: {
+                    "X-Request-Id": components["headers"]["XRequestId"];
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            429: components["responses"]["TooManyRequests"];
+            500: components["responses"]["InternalError"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    updateLesson: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Identificador do recurso. */
+                id: components["parameters"]["IdPath"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LessonUpdate"];
+            };
+        };
+        responses: {
+            /** @description Aula atualizada. */
+            200: {
+                headers: {
+                    "X-Request-Id": components["headers"]["XRequestId"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LessonDetail"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            413: components["responses"]["PayloadTooLarge"];
+            415: components["responses"]["UnsupportedMediaType"];
+            422: components["responses"]["UnprocessableEntity"];
+            429: components["responses"]["TooManyRequests"];
+            500: components["responses"]["InternalError"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    setLessonLinks: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Identificador do recurso. */
+                id: components["parameters"]["IdPath"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    links: {
+                        label: string;
+                        /**
+                         * @description URL do material. Regras de URL de conteúdo (`specs/009-catalogo-e-conteudo.md`): `https` (`http`
+                         *     só em
+                         *     `*.localhost`), sem credenciais, sem espaços, até 2.000 caracteres; fora delas, `422`
+                         *     `content_url_invalid` com o campo e o motivo. A URL nunca é buscada pelo servidor.
+                         */
+                        url: string | null;
+                        kind: components["schemas"]["LessonLinkKind"];
+                    }[];
+                };
+            };
+        };
+        responses: {
+            /** @description A aula com os links novos. */
+            200: {
+                headers: {
+                    "X-Request-Id": components["headers"]["XRequestId"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LessonDetail"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            413: components["responses"]["PayloadTooLarge"];
+            415: components["responses"]["UnsupportedMediaType"];
+            422: components["responses"]["UnprocessableEntity"];
+            429: components["responses"]["TooManyRequests"];
+            500: components["responses"]["InternalError"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    listEbooks: {
+        parameters: {
+            query?: {
+                /** @description Trecho do título ou do resumo. */
+                q?: string;
+                /** @description `archived` lista só os arquivados; os outros dois, só os não arquivados. */
+                status?: "draft" | "published" | "archived";
+                accessMode?: components["schemas"]["AccessMode"];
+                sort?: "title" | "-createdAt" | "-updatedAt";
+                /** @description Quantidade de itens por página. */
+                limit?: components["parameters"]["Limit"];
+                /** @description Valor de `nextCursor` da página anterior. Ausente na primeira página. */
+                cursor?: components["parameters"]["Cursor"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Uma página de ebooks. */
+            200: {
+                headers: {
+                    "X-Request-Id": components["headers"]["XRequestId"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EbookSummaryPage"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            429: components["responses"]["TooManyRequests"];
+            500: components["responses"]["InternalError"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    createEbook: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["EbookCreate"];
+            };
+        };
+        responses: {
+            /** @description Ebook criado. */
+            201: {
+                headers: {
+                    "X-Request-Id": components["headers"]["XRequestId"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EbookDetail"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            409: components["responses"]["Conflict"];
+            413: components["responses"]["PayloadTooLarge"];
+            415: components["responses"]["UnsupportedMediaType"];
+            422: components["responses"]["UnprocessableEntity"];
+            429: components["responses"]["TooManyRequests"];
+            500: components["responses"]["InternalError"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    getEbook: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Identificador do recurso. */
+                id: components["parameters"]["IdPath"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description O ebook. */
+            200: {
+                headers: {
+                    "X-Request-Id": components["headers"]["XRequestId"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EbookDetail"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            429: components["responses"]["TooManyRequests"];
+            500: components["responses"]["InternalError"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    deleteEbook: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Identificador do recurso. */
+                id: components["parameters"]["IdPath"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Ebook excluído. */
+            204: {
+                headers: {
+                    "X-Request-Id": components["headers"]["XRequestId"];
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            429: components["responses"]["TooManyRequests"];
+            500: components["responses"]["InternalError"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    updateEbook: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Identificador do recurso. */
+                id: components["parameters"]["IdPath"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["EbookUpdate"];
+            };
+        };
+        responses: {
+            /** @description Ebook atualizado. */
+            200: {
+                headers: {
+                    "X-Request-Id": components["headers"]["XRequestId"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EbookDetail"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            413: components["responses"]["PayloadTooLarge"];
+            415: components["responses"]["UnsupportedMediaType"];
+            422: components["responses"]["UnprocessableEntity"];
+            429: components["responses"]["TooManyRequests"];
+            500: components["responses"]["InternalError"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    publishEbook: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Identificador do recurso. */
+                id: components["parameters"]["IdPath"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Ebook atualizado. */
+            200: {
+                headers: {
+                    "X-Request-Id": components["headers"]["XRequestId"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EbookDetail"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            422: components["responses"]["UnprocessableEntity"];
+            429: components["responses"]["TooManyRequests"];
+            500: components["responses"]["InternalError"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    unpublishEbook: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Identificador do recurso. */
+                id: components["parameters"]["IdPath"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Ebook atualizado. */
+            200: {
+                headers: {
+                    "X-Request-Id": components["headers"]["XRequestId"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EbookDetail"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            429: components["responses"]["TooManyRequests"];
+            500: components["responses"]["InternalError"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    archiveEbook: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Identificador do recurso. */
+                id: components["parameters"]["IdPath"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Ebook atualizado. */
+            200: {
+                headers: {
+                    "X-Request-Id": components["headers"]["XRequestId"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EbookDetail"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            429: components["responses"]["TooManyRequests"];
+            500: components["responses"]["InternalError"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    unarchiveEbook: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Identificador do recurso. */
+                id: components["parameters"]["IdPath"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Ebook atualizado. */
+            200: {
+                headers: {
+                    "X-Request-Id": components["headers"]["XRequestId"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EbookDetail"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            429: components["responses"]["TooManyRequests"];
+            500: components["responses"]["InternalError"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    setEbookTargets: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Identificador do recurso. */
+                id: components["parameters"]["IdPath"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    targets: {
+                        /** @enum {string} */
+                        targetType: "course" | "lesson";
+                        targetId: components["schemas"]["Uuid"];
+                    }[];
+                };
+            };
+        };
+        responses: {
+            /** @description O ebook com os vínculos novos. */
+            200: {
+                headers: {
+                    "X-Request-Id": components["headers"]["XRequestId"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EbookDetail"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            413: components["responses"]["PayloadTooLarge"];
+            415: components["responses"]["UnsupportedMediaType"];
+            429: components["responses"]["TooManyRequests"];
+            500: components["responses"]["InternalError"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    listBundles: {
+        parameters: {
+            query?: {
+                /** @description Trecho do título ou do resumo. */
+                q?: string;
+                /** @description `archived` lista só os arquivados; os outros dois, só os não arquivados. */
+                status?: "draft" | "published" | "archived";
+                accessMode?: components["schemas"]["AccessMode"];
+                sort?: "title" | "-createdAt" | "-updatedAt";
+                /** @description Quantidade de itens por página. */
+                limit?: components["parameters"]["Limit"];
+                /** @description Valor de `nextCursor` da página anterior. Ausente na primeira página. */
+                cursor?: components["parameters"]["Cursor"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Uma página de pacotes. */
+            200: {
+                headers: {
+                    "X-Request-Id": components["headers"]["XRequestId"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BundleSummaryPage"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            429: components["responses"]["TooManyRequests"];
+            500: components["responses"]["InternalError"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    createBundle: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BundleCreate"];
+            };
+        };
+        responses: {
+            /** @description Pacote criado. */
+            201: {
+                headers: {
+                    "X-Request-Id": components["headers"]["XRequestId"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BundleDetail"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            409: components["responses"]["Conflict"];
+            413: components["responses"]["PayloadTooLarge"];
+            415: components["responses"]["UnsupportedMediaType"];
+            422: components["responses"]["UnprocessableEntity"];
+            429: components["responses"]["TooManyRequests"];
+            500: components["responses"]["InternalError"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    getBundle: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Identificador do recurso. */
+                id: components["parameters"]["IdPath"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description O pacote. */
+            200: {
+                headers: {
+                    "X-Request-Id": components["headers"]["XRequestId"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BundleDetail"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            429: components["responses"]["TooManyRequests"];
+            500: components["responses"]["InternalError"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    deleteBundle: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Identificador do recurso. */
+                id: components["parameters"]["IdPath"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Pacote excluído. */
+            204: {
+                headers: {
+                    "X-Request-Id": components["headers"]["XRequestId"];
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            429: components["responses"]["TooManyRequests"];
+            500: components["responses"]["InternalError"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    updateBundle: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Identificador do recurso. */
+                id: components["parameters"]["IdPath"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BundleUpdate"];
+            };
+        };
+        responses: {
+            /** @description Pacote atualizado. */
+            200: {
+                headers: {
+                    "X-Request-Id": components["headers"]["XRequestId"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BundleDetail"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            413: components["responses"]["PayloadTooLarge"];
+            415: components["responses"]["UnsupportedMediaType"];
+            422: components["responses"]["UnprocessableEntity"];
+            429: components["responses"]["TooManyRequests"];
+            500: components["responses"]["InternalError"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    publishBundle: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Identificador do recurso. */
+                id: components["parameters"]["IdPath"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Pacote atualizado. */
+            200: {
+                headers: {
+                    "X-Request-Id": components["headers"]["XRequestId"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BundleDetail"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            422: components["responses"]["UnprocessableEntity"];
+            429: components["responses"]["TooManyRequests"];
+            500: components["responses"]["InternalError"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    unpublishBundle: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Identificador do recurso. */
+                id: components["parameters"]["IdPath"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Pacote atualizado. */
+            200: {
+                headers: {
+                    "X-Request-Id": components["headers"]["XRequestId"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BundleDetail"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            429: components["responses"]["TooManyRequests"];
+            500: components["responses"]["InternalError"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    archiveBundle: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Identificador do recurso. */
+                id: components["parameters"]["IdPath"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Pacote atualizado. */
+            200: {
+                headers: {
+                    "X-Request-Id": components["headers"]["XRequestId"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BundleDetail"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            429: components["responses"]["TooManyRequests"];
+            500: components["responses"]["InternalError"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    unarchiveBundle: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Identificador do recurso. */
+                id: components["parameters"]["IdPath"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Pacote atualizado. */
+            200: {
+                headers: {
+                    "X-Request-Id": components["headers"]["XRequestId"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BundleDetail"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            429: components["responses"]["TooManyRequests"];
+            500: components["responses"]["InternalError"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    setBundleItems: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Identificador do recurso. */
+                id: components["parameters"]["IdPath"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    items: {
+                        /** @enum {string} */
+                        productType: "course" | "ebook";
+                        productId: components["schemas"]["Uuid"];
+                    }[];
+                };
+            };
+        };
+        responses: {
+            /** @description O pacote com os itens novos. */
+            200: {
+                headers: {
+                    "X-Request-Id": components["headers"]["XRequestId"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BundleDetail"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            413: components["responses"]["PayloadTooLarge"];
+            415: components["responses"]["UnsupportedMediaType"];
+            422: components["responses"]["UnprocessableEntity"];
+            429: components["responses"]["TooManyRequests"];
+            500: components["responses"]["InternalError"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    uploadImage: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": {
+                    purpose: components["schemas"]["ImagePurpose"];
+                    /** @description O arquivo da imagem (JPEG, PNG ou WebP), até 5 MB. */
+                    file: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Imagem gravada. */
+            201: {
+                headers: {
+                    "X-Request-Id": components["headers"]["XRequestId"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Image"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            413: components["responses"]["PayloadTooLarge"];
+            415: components["responses"]["UnsupportedMediaType"];
+            422: components["responses"]["UnprocessableEntity"];
+            429: components["responses"]["TooManyRequests"];
+            500: components["responses"]["InternalError"];
+            /**
+             * @description Processamento de imagens sobrecarregado (`image_processing_busy`, com `Retry-After`) ou banco
+             *     indisponível (`database_unavailable`).
+             */
+            503: {
+                headers: {
+                    "X-Request-Id": components["headers"]["XRequestId"];
+                    "Retry-After": components["headers"]["RetryAfter"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    deleteImage: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Identificador da imagem. */
+                imageId: components["parameters"]["ImageIdPath"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Imagem apagada. */
+            204: {
+                headers: {
+                    "X-Request-Id": components["headers"]["XRequestId"];
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            429: components["responses"]["TooManyRequests"];
+            500: components["responses"]["InternalError"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    listUserEntitlements: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Identificador do recurso. */
+                id: components["parameters"]["IdPath"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Os direitos do usuário. */
+            200: {
+                headers: {
+                    "X-Request-Id": components["headers"]["XRequestId"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EntitlementTree"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            429: components["responses"]["TooManyRequests"];
+            500: components["responses"]["InternalError"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    grantEntitlement: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Identificador do recurso. */
+                id: components["parameters"]["IdPath"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    productType: components["schemas"]["ProductType"];
+                    productId: components["schemas"]["Uuid"];
+                    /** @description Fim do acesso; `null` ou ausente é vitalício. */
+                    expiresAt?: components["schemas"]["DateTime"] | null;
+                    /** @description Motivo, obrigatório; vai para a auditoria. */
+                    reason: string;
+                };
+            };
+        };
+        responses: {
+            /** @description A mesma concessão já existia; nada foi criado. */
+            200: {
+                headers: {
+                    "X-Request-Id": components["headers"]["XRequestId"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EntitlementNode"];
+                };
+            };
+            /** @description Acesso concedido. */
+            201: {
+                headers: {
+                    "X-Request-Id": components["headers"]["XRequestId"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EntitlementNode"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            413: components["responses"]["PayloadTooLarge"];
+            415: components["responses"]["UnsupportedMediaType"];
+            422: components["responses"]["UnprocessableEntity"];
+            429: components["responses"]["TooManyRequests"];
+            500: components["responses"]["InternalError"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    revokeEntitlement: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Identificador do recurso. */
+                id: components["parameters"]["IdPath"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** @description Motivo, para a auditoria. */
+                    reason: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Direito revogado, com a cascata. */
+            200: {
+                headers: {
+                    "X-Request-Id": components["headers"]["XRequestId"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EntitlementNode"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            413: components["responses"]["PayloadTooLarge"];
+            415: components["responses"]["UnsupportedMediaType"];
+            429: components["responses"]["TooManyRequests"];
+            500: components["responses"]["InternalError"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    listProductEntitlements: {
+        parameters: {
+            query?: {
+                state?: components["schemas"]["EntitlementState"];
+                /** @description Quantidade de itens por página. */
+                limit?: components["parameters"]["Limit"];
+                /** @description Valor de `nextCursor` da página anterior. Ausente na primeira página. */
+                cursor?: components["parameters"]["Cursor"];
+            };
+            header?: never;
+            path: {
+                type: components["schemas"]["ProductType"];
+                /** @description Identificador do recurso. */
+                id: components["parameters"]["IdPath"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Uma página de direitos. */
+            200: {
+                headers: {
+                    "X-Request-Id": components["headers"]["XRequestId"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProductEntitlementPage"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            429: components["responses"]["TooManyRequests"];
+            500: components["responses"]["InternalError"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    getUserProgress: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Identificador do recurso. */
+                id: components["parameters"]["IdPath"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description O progresso por curso. */
+            200: {
+                headers: {
+                    "X-Request-Id": components["headers"]["XRequestId"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UserProgressList"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            429: components["responses"]["TooManyRequests"];
+            500: components["responses"]["InternalError"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    getCourseProgressSummary: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Identificador do recurso. */
+                id: components["parameters"]["IdPath"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description O resumo. */
+            200: {
+                headers: {
+                    "X-Request-Id": components["headers"]["XRequestId"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CourseProgressSummary"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            429: components["responses"]["TooManyRequests"];
+            500: components["responses"]["InternalError"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    listCourseStudents: {
+        parameters: {
+            query?: {
+                /** @description Trecho do nome. */
+                q?: string;
+                state?: components["schemas"]["CourseProgressState"];
+                sort?: "name" | "-lastActivityAt" | "-percent";
+                /** @description Quantidade de itens por página. */
+                limit?: components["parameters"]["Limit"];
+                /** @description Valor de `nextCursor` da página anterior. Ausente na primeira página. */
+                cursor?: components["parameters"]["Cursor"];
+            };
+            header?: never;
+            path: {
+                /** @description Identificador do recurso. */
+                id: components["parameters"]["IdPath"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Uma página de alunos. */
+            200: {
+                headers: {
+                    "X-Request-Id": components["headers"]["XRequestId"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CourseStudentPage"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            429: components["responses"]["TooManyRequests"];
+            500: components["responses"]["InternalError"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    listCertificates: {
+        parameters: {
+            query?: {
+                courseId?: components["schemas"]["Uuid"];
+                userId?: components["schemas"]["Uuid"];
+                state?: components["schemas"]["CertificateState"];
+                /** @description Código, com ou sem hífens, sem diferenciar maiúsculas. */
+                code?: string;
+                /** @description Quantidade de itens por página. */
+                limit?: components["parameters"]["Limit"];
+                /** @description Valor de `nextCursor` da página anterior. Ausente na primeira página. */
+                cursor?: components["parameters"]["Cursor"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Uma página de certificados. */
+            200: {
+                headers: {
+                    "X-Request-Id": components["headers"]["XRequestId"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CertificatePage"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            429: components["responses"]["TooManyRequests"];
+            500: components["responses"]["InternalError"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    issueCertificate: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    userId: components["schemas"]["Uuid"];
+                    courseId: components["schemas"]["Uuid"];
+                    reason: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Certificado criado, em preparação. */
+            201: {
+                headers: {
+                    "X-Request-Id": components["headers"]["XRequestId"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Certificate"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            413: components["responses"]["PayloadTooLarge"];
+            415: components["responses"]["UnsupportedMediaType"];
+            422: components["responses"]["UnprocessableEntity"];
+            429: components["responses"]["TooManyRequests"];
+            500: components["responses"]["InternalError"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    revokeCertificate: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Identificador do recurso. */
+                id: components["parameters"]["IdPath"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    reason: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Certificado revogado. */
+            200: {
+                headers: {
+                    "X-Request-Id": components["headers"]["XRequestId"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Certificate"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            413: components["responses"]["PayloadTooLarge"];
+            415: components["responses"]["UnsupportedMediaType"];
+            429: components["responses"]["TooManyRequests"];
+            500: components["responses"]["InternalError"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    restoreCertificate: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Identificador do recurso. */
+                id: components["parameters"]["IdPath"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Revogação desfeita. */
+            200: {
+                headers: {
+                    "X-Request-Id": components["headers"]["XRequestId"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Certificate"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            429: components["responses"]["TooManyRequests"];
+            500: components["responses"]["InternalError"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    reissueCertificate: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Identificador do recurso. */
+                id: components["parameters"]["IdPath"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Reemissão enfileirada. */
+            200: {
+                headers: {
+                    "X-Request-Id": components["headers"]["XRequestId"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Certificate"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            422: components["responses"]["UnprocessableEntity"];
+            429: components["responses"]["TooManyRequests"];
+            500: components["responses"]["InternalError"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    backfillCourseCertificates: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Identificador do recurso. */
+                id: components["parameters"]["IdPath"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Lote enfileirado. */
+            202: {
+                headers: {
+                    "X-Request-Id": components["headers"]["XRequestId"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CertificateBackfillQueued"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            422: components["responses"]["UnprocessableEntity"];
+            429: components["responses"]["TooManyRequests"];
+            500: components["responses"]["InternalError"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    getCourseCertificateTemplate: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Identificador do recurso. */
+                id: components["parameters"]["IdPath"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description O template. */
+            200: {
+                headers: {
+                    "X-Request-Id": components["headers"]["XRequestId"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CertificateTemplate"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            429: components["responses"]["TooManyRequests"];
+            500: components["responses"]["InternalError"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    saveCourseCertificateTemplate: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Identificador do recurso. */
+                id: components["parameters"]["IdPath"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CertificateTemplateSave"];
+            };
+        };
+        responses: {
+            /** @description Template gravado. */
+            200: {
+                headers: {
+                    "X-Request-Id": components["headers"]["XRequestId"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CertificateTemplateSaved"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            413: components["responses"]["PayloadTooLarge"];
+            415: components["responses"]["UnsupportedMediaType"];
+            422: components["responses"]["CertificateTemplateInvalid"];
+            429: components["responses"]["TooManyRequests"];
+            500: components["responses"]["InternalError"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    deleteCourseCertificateTemplate: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Identificador do recurso. */
+                id: components["parameters"]["IdPath"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description O estado depois da exclusão. */
+            200: {
+                headers: {
+                    "X-Request-Id": components["headers"]["XRequestId"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CertificateTemplate"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            429: components["responses"]["TooManyRequests"];
+            500: components["responses"]["InternalError"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    getSchoolCertificateTemplate: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description O template. */
+            200: {
+                headers: {
+                    "X-Request-Id": components["headers"]["XRequestId"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CertificateTemplate"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            429: components["responses"]["TooManyRequests"];
+            500: components["responses"]["InternalError"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    saveSchoolCertificateTemplate: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CertificateTemplateSave"];
+            };
+        };
+        responses: {
+            /** @description Template gravado. */
+            200: {
+                headers: {
+                    "X-Request-Id": components["headers"]["XRequestId"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CertificateTemplateSaved"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            409: components["responses"]["Conflict"];
+            413: components["responses"]["PayloadTooLarge"];
+            415: components["responses"]["UnsupportedMediaType"];
+            422: components["responses"]["CertificateTemplateInvalid"];
+            429: components["responses"]["TooManyRequests"];
+            500: components["responses"]["InternalError"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    deleteSchoolCertificateTemplate: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description O estado depois da exclusão. */
+            200: {
+                headers: {
+                    "X-Request-Id": components["headers"]["XRequestId"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CertificateTemplate"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            429: components["responses"]["TooManyRequests"];
+            500: components["responses"]["InternalError"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    getCertificateTemplateReference: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description A referência. */
+            200: {
+                headers: {
+                    "X-Request-Id": components["headers"]["XRequestId"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CertificateTemplateReference"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            429: components["responses"]["TooManyRequests"];
+            500: components["responses"]["InternalError"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    createCertificatePreview: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** @description O template, até 768 KiB em UTF-8 (acima: problema `too_large`). */
+                    html: string;
+                    courseId?: components["schemas"]["Uuid"] | null;
+                };
+            };
+        };
+        responses: {
+            /** @description Pedido aceito, em `pending`. */
+            202: {
+                headers: {
+                    "X-Request-Id": components["headers"]["XRequestId"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CertificatePreview"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            413: components["responses"]["PayloadTooLarge"];
+            415: components["responses"]["UnsupportedMediaType"];
+            422: components["responses"]["CertificateTemplateInvalid"];
+            429: components["responses"]["TooManyRequests"];
+            500: components["responses"]["InternalError"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    getCertificatePreview: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Identificador do recurso. */
+                id: components["parameters"]["IdPath"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description O pedido. */
+            200: {
+                headers: {
+                    "X-Request-Id": components["headers"]["XRequestId"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CertificatePreview"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            429: components["responses"]["TooManyRequests"];
+            500: components["responses"]["InternalError"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    getCertificatePreviewPdf: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Identificador do recurso. */
+                id: components["parameters"]["IdPath"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: components["responses"]["Pdf"];
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            429: components["responses"]["TooManyRequests"];
+            500: components["responses"]["InternalError"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    getCertificateSettings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description As configurações. */
+            200: {
+                headers: {
+                    "X-Request-Id": components["headers"]["XRequestId"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CertificateSettings"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            429: components["responses"]["TooManyRequests"];
+            500: components["responses"]["InternalError"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    saveCertificateSettings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    signerName: string | null;
+                    signerRole: string | null;
+                };
+            };
+        };
+        responses: {
+            /** @description Configurações gravadas. */
+            200: {
+                headers: {
+                    "X-Request-Id": components["headers"]["XRequestId"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CertificateSettings"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            413: components["responses"]["PayloadTooLarge"];
+            415: components["responses"]["UnsupportedMediaType"];
             429: components["responses"]["TooManyRequests"];
             500: components["responses"]["InternalError"];
             503: components["responses"]["ServiceUnavailable"];
