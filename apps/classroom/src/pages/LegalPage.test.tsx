@@ -3,7 +3,14 @@ import userEvent from '@testing-library/user-event';
 import { describe, expect, it } from 'vitest';
 import ptBR from '../locales/pt-BR.json';
 import { expectNoAxeViolations } from '../test/axe';
-import { apiRoutes, jsonResponse, problemResponse, renderApp } from '../test/renderApp';
+import {
+  apiRoutes,
+  findAlert,
+  jsonResponse,
+  problemResponse,
+  queryAlert,
+  renderApp,
+} from '../test/renderApp';
 
 const DOC = {
   id: '0193a5b2-0000-7000-8000-000000000001',
@@ -35,7 +42,7 @@ describe('termos e privacidade', () => {
     renderApp('/privacidade', apiRoutes({}));
     expect(await screen.findByText(ptBR.legal.missingTitle)).toBeTruthy();
     expect(screen.getByText(ptBR.legal.missingText)).toBeTruthy();
-    expect(screen.queryByRole('alert')).toBeNull();
+    expect(queryAlert()).toBeNull();
   });
 
   it('falha do servidor mostra o erro e tenta de novo', async () => {
@@ -48,7 +55,7 @@ describe('termos e privacidade', () => {
           fail ? problemResponse(503, 'database_unavailable') : jsonResponse(DOC),
       }),
     );
-    const alert = await screen.findByRole('alert');
+    const alert = await findAlert();
     expect(alert.textContent).toContain(ptBR.legal.errorTitle);
     expect(alert.textContent).toContain('Código da requisição: req-teste-1');
     fail = false;

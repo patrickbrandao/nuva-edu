@@ -5,6 +5,7 @@ import ptBR from '../locales/pt-BR.json';
 import { expectNoAxeViolations } from '../test/axe';
 import {
   apiRoutes,
+  findAlert,
   jsonResponse,
   makeSession,
   noContent,
@@ -210,7 +211,7 @@ describe('cadastro', () => {
     );
     const { submit } = await fill();
     await submit();
-    const alert = await screen.findByRole('alert');
+    const alert = await findAlert();
     expect(alert.textContent).toContain(ptBR.signUp.loginAfterFailed);
     expect(
       within(alert).getByRole('link', { name: ptBR.signUp.goToLogin }).getAttribute('href'),
@@ -222,7 +223,7 @@ describe('cadastro', () => {
     renderApp('/cadastro', apiRoutes({}));
     const { submit } = await fill();
     await submit();
-    expect((await screen.findByRole('alert')).textContent).toContain(ptBR.errors.notAvailable);
+    expect((await findAlert()).textContent).toContain(ptBR.errors.notAvailable);
   });
 
   it('termos fora do ar: mostra o erro com "tentar de novo" e não deixa enviar', async () => {
@@ -236,7 +237,7 @@ describe('cadastro', () => {
           fail ? problemResponse(503, 'database_unavailable') : jsonResponse(TERMS),
       }),
     );
-    const alert = await screen.findByRole('alert');
+    const alert = await findAlert();
     expect(alert.textContent).toContain(ptBR.signUp.termsErrorTitle);
     const submit = within(screen.getByRole('main')).getByRole('button', {
       name: ptBR.signUp.submit,

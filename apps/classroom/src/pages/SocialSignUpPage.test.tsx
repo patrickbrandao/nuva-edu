@@ -5,6 +5,7 @@ import ptBR from '../locales/pt-BR.json';
 import { expectNoAxeViolations } from '../test/axe';
 import {
   apiRoutes,
+  findAlert,
   jsonResponse,
   makeSession,
   problemResponse,
@@ -152,7 +153,7 @@ describe('cadastro social', () => {
 
   it('com a rota ainda inexistente (404 sem código) mostra um erro tratado', async () => {
     renderApp('/cadastro/social', apiRoutes({}));
-    const alert = await screen.findByRole('alert');
+    const alert = await findAlert();
     expect(alert.textContent).toContain(ptBR.socialSignUp.errorTitle);
     expect(alert.textContent).toContain(ptBR.errors.notAvailable);
   });

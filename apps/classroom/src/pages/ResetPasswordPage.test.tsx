@@ -3,7 +3,7 @@ import userEvent from '@testing-library/user-event';
 import { describe, expect, it } from 'vitest';
 import ptBR from '../locales/pt-BR.json';
 import { expectNoAxeViolations } from '../test/axe';
-import { apiRoutes, noContent, problemResponse, renderApp } from '../test/renderApp';
+import { apiRoutes, findAlert, noContent, problemResponse, renderApp } from '../test/renderApp';
 
 const mainButton = (name: string) => within(screen.getByRole('main')).getByRole('button', { name });
 
@@ -40,7 +40,7 @@ describe('redefinir senha: pedir o link', () => {
     renderApp('/redefinir', apiRoutes({}));
     await user.type(await screen.findByLabelText(ptBR.reset.email), 'ana@exemplo.test');
     await user.click(mainButton(ptBR.reset.submit));
-    expect((await screen.findByRole('alert')).textContent).toContain(ptBR.errors.notAvailable);
+    expect((await findAlert()).textContent).toContain(ptBR.errors.notAvailable);
   });
 
   it('limite de taxa (429) mostra o tempo de espera', async () => {
@@ -54,7 +54,7 @@ describe('redefinir senha: pedir o link', () => {
     );
     await user.type(await screen.findByLabelText(ptBR.reset.email), 'ana@exemplo.test');
     await user.click(mainButton(ptBR.reset.submit));
-    expect((await screen.findByRole('alert')).textContent).toContain(
+    expect((await findAlert()).textContent).toContain(
       'Muitas tentativas seguidas. Tente de novo em 30 segundos.',
     );
   });
@@ -114,7 +114,7 @@ describe('redefinir senha: nova senha pelo link', () => {
     );
     await user.type(await screen.findByLabelText(ptBR.reset.newPassword), 'nova-senha-1');
     await user.click(mainButton(ptBR.reset.save));
-    expect((await screen.findByRole('alert')).textContent).toContain(ptBR.reset.expiredTitle);
+    expect((await findAlert()).textContent).toContain(ptBR.reset.expiredTitle);
     expect(
       within(screen.getByRole('main'))
         .getByRole('link', { name: ptBR.reset.requestAgain })
@@ -127,6 +127,6 @@ describe('redefinir senha: nova senha pelo link', () => {
     renderApp('/redefinir?token=tok', apiRoutes({}));
     await user.type(await screen.findByLabelText(ptBR.reset.newPassword), 'nova-senha-1');
     await user.click(mainButton(ptBR.reset.save));
-    expect((await screen.findByRole('alert')).textContent).toContain(ptBR.errors.notAvailable);
+    expect((await findAlert()).textContent).toContain(ptBR.errors.notAvailable);
   });
 });

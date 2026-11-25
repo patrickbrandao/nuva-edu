@@ -8,9 +8,12 @@ import { BUNDLE_ITEM, COURSE_ITEM, EBOOK_ITEM } from '../test/catalog';
 import {
   apiRoutes,
   EMPTY_CATALOG,
+  findAlert,
+  inMain,
   jsonResponse,
   META,
   makeSession,
+  queryAlert,
   renderApp,
   unavailableResponse,
 } from '../test/renderApp';
@@ -31,7 +34,7 @@ describe('vitrine', () => {
   it('mostra o estado de carregando enquanto a vitrine não responde', async () => {
     const { requests } = renderApp('/', () => new Promise<Response>(() => {}));
 
-    expect(screen.getByRole('status').textContent).toBe(ptBR.home.catalog.loading);
+    expect(inMain().getByRole('status').textContent).toBe(ptBR.home.catalog.loading);
     expect(screen.getByRole('heading', { level: 1, name: ptBR.home.welcome })).toBeTruthy();
     await waitFor(() => expect(requests).toContain(CATALOG));
     expect(document.title).toBe(`${ptBR.home.title} · ${ptBR.app.name}`);
@@ -258,7 +261,7 @@ describe('vitrine', () => {
       }),
     );
 
-    const alert = await screen.findByRole('alert');
+    const alert = await findAlert();
     expect(within(alert).getByText(ptBR.home.catalog.errorTitle)).toBeTruthy();
     expect(within(alert).getByText(ptBR.errors.unavailable)).toBeTruthy();
     expect(within(alert).getByText('Código da requisição: req-teste-1')).toBeTruthy();
@@ -266,6 +269,6 @@ describe('vitrine', () => {
     fail = false;
     await user.click(within(alert).getByRole('button', { name: ptBR.common.retry }));
     await card(COURSE_ITEM.title);
-    expect(screen.queryByRole('alert')).toBeNull();
+    expect(queryAlert()).toBeNull();
   });
 });

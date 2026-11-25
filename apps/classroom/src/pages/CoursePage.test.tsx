@@ -14,9 +14,12 @@ import {
 } from '../test/learning';
 import {
   apiRoutes,
+  findAlert,
+  inMain,
   jsonResponse,
   makeSession,
   problemResponse,
+  queryAlert,
   renderApp,
   unavailableResponse,
 } from '../test/renderApp';
@@ -120,7 +123,7 @@ describe('página do curso do aluno', () => {
     renderApp(COURSE_PATH, apiRoutes({ [COURSE_URL]: () => jsonResponse(course) }), { session });
     await title('React do zero');
 
-    const notice = within(screen.getByRole('status'));
+    const notice = within(inMain().getByRole('status'));
     expect(notice.getByText(ptBR.learning.course.lockedTitle)).toBeTruthy();
     expect(notice.getByText(new RegExp(ptBR.learning.reasons.expired))).toBeTruthy();
     expect(
@@ -144,7 +147,7 @@ describe('página do curso do aluno', () => {
       { session },
     );
     expect(await title(ptBR.learning.course.notFoundTitle)).toBeTruthy();
-    expect(screen.queryByRole('alert')).toBeNull();
+    expect(queryAlert()).toBeNull();
   });
 
   it('falha do servidor mostra o erro e tenta de novo', async () => {
@@ -157,7 +160,7 @@ describe('página do curso do aluno', () => {
       }),
       { session },
     );
-    const alert = await screen.findByRole('alert');
+    const alert = await findAlert();
     expect(within(alert).getByText(ptBR.learning.course.errorTitle)).toBeTruthy();
     fail = false;
     await user.click(within(alert).getByRole('button', { name: ptBR.common.retry }));

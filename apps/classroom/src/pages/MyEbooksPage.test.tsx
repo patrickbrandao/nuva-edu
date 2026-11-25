@@ -6,9 +6,11 @@ import ptBR from '../locales/pt-BR.json';
 import { expectNoAxeViolations } from '../test/axe';
 import {
   apiRoutes,
+  findAlert,
   jsonResponse,
   makeSession,
   problemResponse,
+  queryAlert,
   renderApp,
   unavailableResponse,
 } from '../test/renderApp';
@@ -58,7 +60,7 @@ describe('/meus-ebooks', () => {
     const sql = within(await card('SQL de bolso'));
     expect(sql.getByText('Acesso até 12 de março de 2027')).toBeTruthy();
     expect(sql.queryByText(/^Por /)).toBeNull();
-    expect(screen.queryByRole('alert')).toBeNull();
+    expect(queryAlert()).toBeNull();
     await expectNoAxeViolations();
   });
 
@@ -81,7 +83,7 @@ describe('/meus-ebooks', () => {
     expect(open).toHaveBeenCalledTimes(1);
     expect(tab.cancel).not.toHaveBeenCalled();
     expect(calls.some((call) => call.path === `/api/v1/ebooks/${GIT.id}/download`)).toBe(true);
-    expect(screen.queryByRole('alert')).toBeNull();
+    expect(queryAlert()).toBeNull();
   });
 
   it('sem acesso (403) fecha a aba e avisa; outra falha traz o código da requisição', async () => {
@@ -102,7 +104,7 @@ describe('/meus-ebooks', () => {
 
     const button = await screen.findByRole('button', { name: 'Baixar: Guia de Git' });
     await user.click(button);
-    const alert = await screen.findByRole('alert');
+    const alert = await findAlert();
     expect(within(alert).getByText('Não foi possível baixar “Guia de Git”')).toBeTruthy();
     expect(within(alert).getByText(t.accessDenied)).toBeTruthy();
     expect(tab.cancel).toHaveBeenCalledTimes(1);
@@ -140,7 +142,7 @@ describe('/meus-ebooks', () => {
       apiRoutes({ [EBOOKS]: () => (fail ? unavailableResponse() : jsonResponse({ items: [] })) }),
       { session },
     );
-    const alert = await screen.findByRole('alert');
+    const alert = await findAlert();
     expect(within(alert).getByText(t.errorTitle)).toBeTruthy();
     fail = false;
     await user.click(within(alert).getByRole('button', { name: ptBR.common.retry }));

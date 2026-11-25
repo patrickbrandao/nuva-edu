@@ -5,6 +5,7 @@ import ptBR from '../locales/pt-BR.json';
 import { expectNoAxeViolations } from '../test/axe';
 import {
   apiRoutes,
+  findAlert,
   jsonResponse,
   makeSession,
   problemResponse,
@@ -108,7 +109,7 @@ describe('login', () => {
     );
     await fillAndSubmit();
 
-    const alert = await screen.findByRole('alert');
+    const alert = await findAlert();
     expect(alert.textContent).toContain(message);
     expect(alert.textContent).toContain('Código da requisição: req-teste-1');
     expect(router.state.location.pathname).toBe('/entrar');
@@ -125,7 +126,7 @@ describe('login', () => {
       }),
     );
     await fillAndSubmit();
-    expect((await screen.findByRole('alert')).textContent).toContain(
+    expect((await findAlert()).textContent).toContain(
       'Por segurança, tente de novo em 14 minutos.',
     );
     view.unmount();
@@ -135,15 +136,13 @@ describe('login', () => {
       apiRoutes({ 'POST /api/v1/auth/login': () => problemResponse(429, 'too_many_attempts') }),
     );
     await fillAndSubmit();
-    expect((await screen.findByRole('alert')).textContent).toContain(
-      ptBR.login.errors.tooManyAttemptsNoTime,
-    );
+    expect((await findAlert()).textContent).toContain(ptBR.login.errors.tooManyAttemptsNoTime);
   });
 
   it('com a rota ainda inexistente na API (404) mostra um erro tratado', async () => {
     renderApp('/entrar', apiRoutes({}));
     await fillAndSubmit();
-    expect((await screen.findByRole('alert')).textContent).toContain(ptBR.errors.notAvailable);
+    expect((await findAlert()).textContent).toContain(ptBR.errors.notAvailable);
     expect(screen.getByRole('heading', { level: 1, name: ptBR.login.title })).toBeTruthy();
   });
 
@@ -157,14 +156,14 @@ describe('login', () => {
       }),
     );
     await fillAndSubmit();
-    expect((await screen.findByRole('alert')).textContent).toContain(ptBR.errors.network);
+    expect((await findAlert()).textContent).toContain(ptBR.errors.network);
   });
 
   it.each(Object.entries(ptBR.login.oauth.codes))(
     'mostra o código ?erro=%s da volta do login social',
     async (code, message) => {
       renderApp(`/entrar?erro=${code === 'unknown' ? 'outro_codigo' : code}`);
-      const alert = await screen.findByRole('alert');
+      const alert = await findAlert();
       expect(alert.textContent).toContain(ptBR.login.oauth.title);
       expect(alert.textContent).toContain(message);
     },

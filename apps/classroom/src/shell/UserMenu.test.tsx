@@ -9,6 +9,7 @@ import {
   makeSession,
   noContent,
   problemResponse,
+  queryAlert,
   RUNTIME_CONFIG,
   renderApp,
 } from '../test/renderApp';
@@ -66,7 +67,7 @@ describe('menu do usuário', () => {
     const view = renderApp('/', undefined, { role: 'admin', config: null });
     let { menu } = await openMenu();
     expect(within(menu).queryByRole('menuitem', { name: ptBR.shell.administration })).toBeNull();
-    expect(screen.queryByRole('alert')).toBeNull();
+    expect(queryAlert()).toBeNull();
     view.unmount();
 
     const { adminUrl: _dropped, ...config } = RUNTIME_CONFIG;
@@ -100,7 +101,7 @@ describe('menu do usuário', () => {
   it('com GET /session ainda inexistente (404) o site abre como visitante, sem erro', async () => {
     renderApp('/', apiRoutes({}), { session: 'fetch' });
     expect(await screen.findByRole('link', { name: ptBR.shell.signIn })).toBeTruthy();
-    expect(screen.queryByRole('alert')).toBeNull();
+    expect(queryAlert()).toBeNull();
   });
 
   it('"Sair" com a rota ainda inexistente (404) não quebra o site', async () => {

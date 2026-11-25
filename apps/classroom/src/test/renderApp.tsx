@@ -3,7 +3,7 @@ import {
   type ClassroomSession,
   createClassroomClient,
 } from '@nuva-edu/api-client/classroom';
-import { render } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import { createMemoryRouter, RouterProvider } from 'react-router';
 import { AppProviders } from '../AppProviders';
 import { getCsrfToken, setCsrfToken } from '../api/csrf';
@@ -206,4 +206,36 @@ export function apiRoutes(
     if (pathname === '/api/v1/catalog') return jsonResponse(EMPTY_CATALOG);
     return missingRouteResponse();
   };
+}
+
+/*
+ * Os avisos passageiros (toast) ficam fora do `main`, numa região do `<body>` que mantém um
+ * `role="alert"` e um `role="status"` vazios sempre montados (as regiões vivas do provedor).
+ * Por isso os testes não perguntam por "um alerta" à página inteira: um alerta é o que tem
+ * conteúdo, esteja na tela ou num aviso; e o `status` de uma tela é procurado no `main`.
+ */
+
+/** O conteúdo da página (o `main` da casca), já montado. */
+export function inMain() {
+  return within(screen.getByRole('main'));
+}
+
+function shownAlerts(): HTMLElement[] {
+  return screen.queryAllByRole('alert').filter((alert) => alert.textContent !== '');
+}
+
+/** Espera o alerta aparecer: um só, na página ou num aviso. */
+export function findAlert(): Promise<HTMLElement> {
+  return waitFor(() => {
+    const [alert, ...others] = shownAlerts();
+    if (!alert || others.length > 0) {
+      throw new Error(`esperava um alerta na tela; há ${shownAlerts().length}`);
+    }
+    return alert;
+  });
+}
+
+/** O alerta à mostra (na página ou num aviso), ou `null` quando não há nenhum. */
+export function queryAlert(): HTMLElement | null {
+  return shownAlerts()[0] ?? null;
 }

@@ -5,6 +5,7 @@ import ptBR from '../locales/pt-BR.json';
 import { expectNoAxeViolations } from '../test/axe';
 import {
   apiRoutes,
+  findAlert,
   jsonResponse,
   makeSession,
   noContent,
@@ -99,7 +100,7 @@ describe('aceite de termos pendentes', () => {
     const main = within(screen.getByRole('main'));
     await user.click(await main.findByRole('checkbox', { name: ptBR.terms.accept }));
     await user.click(main.getByRole('button', { name: ptBR.termsGate.submit }));
-    expect((await screen.findByRole('alert')).textContent).toContain(ptBR.errors.notAvailable);
+    expect((await findAlert()).textContent).toContain(ptBR.errors.notAvailable);
     expect(screen.getByRole('heading', { level: 1, name: ptBR.termsGate.title })).toBeTruthy();
   });
 

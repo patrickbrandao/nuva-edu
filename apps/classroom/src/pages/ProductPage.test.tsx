@@ -6,9 +6,11 @@ import { expectNoAxeViolations } from '../test/axe';
 import { BUNDLE, COURSE, EBOOK } from '../test/catalog';
 import {
   apiRoutes,
+  findAlert,
   jsonResponse,
   makeSession,
   problemResponse,
+  queryAlert,
   renderApp,
   unavailableResponse,
 } from '../test/renderApp';
@@ -155,7 +157,7 @@ describe('página do produto', () => {
     });
     await title(COURSE.title);
     expect(accessPanel().getByText(ptBR.product.locked)).toBeTruthy();
-    expect(screen.queryByRole('alert')).toBeNull();
+    expect(queryAlert()).toBeNull();
   });
 
   it('pacote lista os itens, sem link para o item privado, e mostra a economia', async () => {
@@ -223,7 +225,7 @@ describe('página do produto', () => {
     expect(await title(ptBR.product.notFoundTitle)).toBeTruthy();
     expect(screen.getByText(ptBR.product.notFoundText)).toBeTruthy();
     expect(screen.getByRole('link', { name: ptBR.common.backHome }).getAttribute('href')).toBe('/');
-    expect(screen.queryByRole('alert')).toBeNull();
+    expect(queryAlert()).toBeNull();
     await waitFor(() =>
       expect(document.title).toBe(`${ptBR.product.notFoundTitle} · Escola Aurora`),
     );
@@ -236,7 +238,7 @@ describe('página do produto', () => {
       '/cursos/react-do-zero',
       apiRoutes({ [COURSE_URL]: () => (fail ? unavailableResponse() : jsonResponse(COURSE)) }),
     );
-    const alert = await screen.findByRole('alert');
+    const alert = await findAlert();
     expect(within(alert).getByText(ptBR.product.errorTitle)).toBeTruthy();
     expect(within(alert).getByText('Código da requisição: req-teste-1')).toBeTruthy();
     fail = false;

@@ -5,8 +5,10 @@ import ptBR from '../locales/pt-BR.json';
 import { expectNoAxeViolations } from '../test/axe';
 import {
   apiRoutes,
+  findAlert,
   jsonResponse,
   makeSession,
+  queryAlert,
   renderApp,
   unavailableResponse,
 } from '../test/renderApp';
@@ -111,13 +113,13 @@ describe('/progresso', () => {
       }),
       { session },
     );
-    const alert = await screen.findByRole('alert');
+    const alert = await findAlert();
     expect(within(alert).getByText(t.activity.errorTitle)).toBeTruthy();
     expect(await screen.findByRole('article', { name: 'React do zero' })).toBeTruthy();
 
     fail = false;
     await user.click(within(alert).getByRole('button', { name: ptBR.common.retry }));
     expect(await screen.findByRole('table', { name: t.activity.tableTitle })).toBeTruthy();
-    expect(screen.queryByRole('alert')).toBeNull();
+    expect(queryAlert()).toBeNull();
   });
 });

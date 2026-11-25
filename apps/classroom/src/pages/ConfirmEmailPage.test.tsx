@@ -5,6 +5,7 @@ import ptBR from '../locales/pt-BR.json';
 import { expectNoAxeViolations } from '../test/axe';
 import {
   apiRoutes,
+  findAlert,
   jsonResponse,
   makeSession,
   noContent,
@@ -58,7 +59,7 @@ describe('confirmação de e-mail', () => {
       '/confirmar?token=velho',
       apiRoutes({ 'POST /api/v1/auth/email/verify': () => problemResponse(410, 'token_expired') }),
     );
-    const alert = await screen.findByRole('alert');
+    const alert = await findAlert();
     expect(alert.textContent).toContain(ptBR.confirm.expiredTitle);
     expect(alert.textContent).toContain(ptBR.confirm.expiredTextSignedOut);
   });
@@ -73,7 +74,7 @@ describe('confirmação de e-mail', () => {
       }),
       { session: makeSession({ user: { emailVerified: false } }) },
     );
-    expect((await screen.findByRole('alert')).textContent).toContain(ptBR.confirm.expiredText);
+    expect((await findAlert()).textContent).toContain(ptBR.confirm.expiredText);
     const main = within(screen.getByRole('main'));
     // o botão da faixa e o da tela fazem o mesmo; aqui, o da tela
     const buttons = main.getAllByRole('button', { name: ptBR.verifyEmail.resend });
@@ -86,7 +87,7 @@ describe('confirmação de e-mail', () => {
 
   it('sem token mostra "link incompleto" e não chama a API', async () => {
     const { calls } = renderApp('/confirmar', apiRoutes({}));
-    expect((await screen.findByRole('alert')).textContent).toContain(ptBR.confirm.missingTitle);
+    expect((await findAlert()).textContent).toContain(ptBR.confirm.missingTitle);
     expect(verifyCalls(calls)).toHaveLength(0);
   });
 
@@ -100,7 +101,7 @@ describe('confirmação de e-mail', () => {
           ready ? noContent() : new Response('{}', { status: 404 }),
       }),
     );
-    const alert = await screen.findByRole('alert');
+    const alert = await findAlert();
     expect(alert.textContent).toContain(ptBR.confirm.errorTitle);
     expect(alert.textContent).toContain(ptBR.errors.notAvailable);
     ready = true;

@@ -7,8 +7,10 @@ import { expectNoAxeViolations } from '../test/axe';
 import { LESSON_2, lessonUrl } from '../test/learning';
 import {
   apiRoutes,
+  findAlert,
   jsonResponse,
   makeSession,
+  queryAlert,
   renderApp,
   unavailableResponse,
 } from '../test/renderApp';
@@ -317,13 +319,13 @@ describe('estante "Meus cursos"', () => {
       { session },
     );
 
-    const alert = await screen.findByRole('alert');
+    const alert = await findAlert();
     expect(within(alert).getByText(t.errorTitle)).toBeTruthy();
     expect(within(alert).getByText('Código da requisição: req-teste-1')).toBeTruthy();
 
     fail = false;
     await user.click(within(alert).getByRole('button', { name: ptBR.common.retry }));
     expect(await titles()).toHaveLength(4);
-    expect(screen.queryByRole('alert')).toBeNull();
+    expect(queryAlert()).toBeNull();
   });
 });

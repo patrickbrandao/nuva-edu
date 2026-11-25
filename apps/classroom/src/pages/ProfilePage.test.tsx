@@ -5,6 +5,7 @@ import ptBR from '../locales/pt-BR.json';
 import { expectNoAxeViolations } from '../test/axe';
 import {
   apiRoutes,
+  findAlert,
   jsonResponse,
   makeSession,
   problemResponse,
@@ -99,9 +100,9 @@ describe('/conta/perfil', () => {
     const { calls } = renderApp('/conta/perfil', profileApi(), { session: 'fetch' });
     await screen.findByRole('group', { name: ptBR.profile.avatar.label });
     choose(photo('image/gif'));
-    expect((await screen.findByRole('alert')).textContent).toBe(ptBR.profile.errors.wrongType);
+    expect((await findAlert()).textContent).toBe(ptBR.profile.errors.wrongType);
     choose(photo('image/png', 6 * 1024 * 1024));
-    expect((await screen.findByRole('alert')).textContent).toBe(ptBR.profile.errors.tooLarge);
+    expect((await findAlert()).textContent).toBe(ptBR.profile.errors.tooLarge);
     expect(calls.some((call) => call.path === '/api/v1/images')).toBe(false);
   });
 
@@ -124,7 +125,7 @@ describe('/conta/perfil', () => {
     );
     await screen.findByRole('group', { name: ptBR.profile.avatar.label });
     choose(photo());
-    const alert = await screen.findByRole('alert');
+    const alert = await findAlert();
     expect(alert.textContent).toContain(message);
     // a prévia da imagem recusada some
     expect(screen.queryByAltText(ptBR.profile.avatar.previewAlt)).toBeNull();
@@ -140,7 +141,7 @@ describe('/conta/perfil', () => {
     );
     await screen.findByRole('group', { name: ptBR.profile.avatar.label });
     choose(photo());
-    expect((await screen.findByRole('alert')).textContent).toContain(ptBR.profile.errors.generic);
+    expect((await findAlert()).textContent).toContain(ptBR.profile.errors.generic);
   });
 
   it('com as rotas ainda inexistentes (404) mostra um erro tratado', async () => {
@@ -149,6 +150,6 @@ describe('/conta/perfil', () => {
     choose(photo());
     // o seletor é remontado depois da falha (some a prévia): procura de novo na página
     expect(group).toBeTruthy();
-    expect((await screen.findByRole('alert')).textContent).toContain(ptBR.errors.notAvailable);
+    expect((await findAlert()).textContent).toContain(ptBR.errors.notAvailable);
   });
 });

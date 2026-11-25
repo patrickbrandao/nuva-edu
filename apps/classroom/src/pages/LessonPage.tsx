@@ -12,7 +12,6 @@ import {
   safeMarkdownUrl,
   Tabs,
   TextLink,
-  ToastProvider,
   useToast,
   VideoPlayer,
 } from '@nuva-edu/ui';
@@ -385,16 +384,5 @@ function LessonContent() {
  * "Reportar problema" chegam com as specs 016, 017 e 023.
  */
 export function LessonPage() {
-  const { t } = useTranslation();
-  return (
-    <RequireSession>
-      {() => (
-        // Os avisos (toast) ficam só nesta página: a região viva deles traz um `role="alert"`
-        // sempre montado, e as outras telas ainda contam com não haver alerta sem erro.
-        <ToastProvider dismissLabel={t('common.dismiss')} regionLabel={t('common.notices')}>
-          <LessonContent />
-        </ToastProvider>
-      )}
-    </RequireSession>
-  );
+  return <RequireSession>{() => <LessonContent />}</RequireSession>;
 }

@@ -3,7 +3,14 @@ import userEvent from '@testing-library/user-event';
 import { describe, expect, it } from 'vitest';
 import { MENU_STORAGE_KEY } from '../config';
 import ptBR from '../locales/pt-BR.json';
-import { apiRoutes, jsonResponse, META, renderApp, unavailableResponse } from '../test/renderApp';
+import {
+  apiRoutes,
+  findAlert,
+  jsonResponse,
+  META,
+  renderApp,
+  unavailableResponse,
+} from '../test/renderApp';
 import { ACCENT_VARIABLE, DEFAULT_SOURCE_CODE_URL } from './brand';
 import { NAV_GROUPS, PENDING_PAGES } from './navigation';
 
@@ -62,7 +69,7 @@ describe('casca do classroom', () => {
 
   it('mantém o repositório padrão se o /meta falhar ou trouxer endereço que não é http(s)', async () => {
     const failed = renderApp('/', async () => unavailableResponse());
-    await screen.findByRole('alert');
+    await findAlert();
     expect(sourceLink().getAttribute('href')).toBe(DEFAULT_SOURCE_CODE_URL);
     failed.unmount();
 
