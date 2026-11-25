@@ -98,7 +98,7 @@ Link quebrado: o player e a lista de apoio têm o botão "Reportar problema", qu
 | `target_type` | Efeito |
 | --- | --- |
 | `course` | quem tem direito ao curso recebe o ebook |
-| `bundle` | equivale a incluir o ebook no pacote; o admin usa `bundle_items` para isso, então este tipo não é oferecido na interface |
+| `bundle` | equivale a incluir o ebook no pacote, e a cascata o honra ([010](010-direitos-de-acesso.md)); o admin usa `bundle_items` para isso, então este tipo não é criado nem removido pelo admin (só leitura, abaixo) |
 | `lesson` | quem tem direito ao curso da aula recebe o ebook; o ebook aparece na aba de materiais daquela aula |
 
 O ebook vinculado passa a constar como adquirido pelo aluno, por cascata ([010](010-direitos-de-acesso.md)). O mesmo ebook pode ser vendido avulso e estar vinculado a vários alvos.
@@ -109,9 +109,17 @@ No admin (decisão da tarefa 585, levada ao contrato pela janela criada na 620):
 - Vincular e desvincular um ebook de um alvo só: `PUT` e `DELETE /ebooks/{id}/targets/{targetType}/{targetId}` (`ebook.link`; `targetType` é `course` ou `lesson`). Dispensam ler os vínculos e reenviar a lista, e dois editores não desfazem o vínculo um do outro. São idempotentes: vínculo que já existe (`PUT`) ou que não existe (`DELETE`) responde `204` sem gravar nem auditar. Alvo inexistente: `422` `catalog_item_not_found`; alvo de curso alheio ao instrutor: `404`; o 501º vínculo do ebook: `422` `catalog_limit_exceeded` (`targetsPerEbook`). A mudança avança o `version` do ebook, enfileira o recálculo da cascata e grava a mesma auditoria da troca da lista.
 - `PUT /ebooks/{id}/targets` (a lista inteira) continua, para a tela do ebook.
 
+Vínculo `bundle` no admin (decisão da tarefa 660). A regra é do `packages/core`; a rota só repassa:
+
+- **A escrita só alcança `course` e `lesson`.** `PUT /ebooks/{id}/targets` substitui os vínculos `course` e `lesson` do ebook (para o instrutor, só os dos próprios cursos e aulas) e nunca cria, remove nem recalcula vínculo `bundle`, para nenhum papel. `targetType: bundle` na lista, ou no vínculo de um ebook só, é `400` `validation_failed`, também para quem chama o núcleo sem passar pelo contrato. A rota não lê os vínculos atuais para repeti-los.
+- **A leitura mostra o que existe.** `EbookDetail.targets` traz todos os vínculos que quem pede alcança, inclusive os `bundle` (gerente e admin; o instrutor não os vê): o vínculo vale na cascata, e escondê-lo esconderia a origem de um direito. Na resposta, `targetType` é `course`, `bundle` ou `lesson`; no corpo do `PUT`, só `course` ou `lesson`. O site mostra o vínculo `bundle` sem ação de editar e, ao gravar a lista, envia só os vínculos `course` e `lesson`.
+- O vínculo `bundle` nasce só de carga direta no banco e some quando o pacote é excluído. Pôr um ebook num pacote pelo admin é `PUT /bundles/{id}/items`.
+- **Limite.** Os 500 vínculos por ebook (`targetsPerEbook`) contam todos os vínculos do ebook depois da gravação, de qualquer tipo, inclusive os que a troca não alcança (os `bundle` e, para o instrutor, os de cursos alheios).
+- **Respostas de `PUT /ebooks/{id}/targets`:** `422` `catalog_item_not_found` (alvo inexistente, com o campo) e `422` `catalog_limit_exceeded`; `409` `version_conflict` quando a `version` enviada é antiga. O contrato declara as duas.
+
 ### Pacotes
 
-- `bundle_items` lista cursos e ebooks (nunca outro pacote).
+- `bundle_items` lista cursos e ebooks (nunca outro pacote). O corpo de `PUT /bundles/{id}/items` só aceita `productType` `course` ou `ebook`: outro valor, `bundle` inclusive, é `400` `validation_failed`, e o id de um pacote enviado como `course` ou `ebook` é `422` `catalog_item_not_found`. Não há código de erro próprio para pacote em pacote: o `bundle_in_bundle` foi retirado (tarefa 660), porque o contrato já recusa o valor antes do núcleo e um valor de enum que só existe para ser recusado não se justifica.
 - Incluir ou remover item de um pacote já vendido recalcula a cascata de quem tem o pacote ([010](010-direitos-de-acesso.md)); a remoção pede confirmação com o número de alunos afetados.
 - A vitrine mostra o preço do pacote e a soma dos preços avulsos dos itens `paid`, para evidenciar a economia.
 
@@ -175,13 +183,13 @@ Regras do `packages/core`, que as rotas da `admin-api` só repassam (decisões d
 | Arquivar ou desarquivar sem ser admin | `403` |
 | Publicar curso sem aula publicada | `422` `course_has_no_published_lesson` |
 | Slug informado repetido; slug gerado sem sufixo livre | `409` `slug_taken` |
-| Pacote contendo pacote | `422` `bundle_in_bundle` |
+| Pacote na lista de itens de um pacote (`productType: bundle`); `targetType: bundle` na escrita de vínculos de ebook | `400` `validation_failed` |
 | Publicar pacote sem item; publicar ebook sem `file_url` | `422` `bundle_has_no_items`; `422` `ebook_file_required` |
 | Publicar produto `paid` sem preço; tornar `paid` um produto publicado sem preço | `422` `price_required` |
 | Enviar preço para produto `open`, por quem tem `product.set_price` | `422` `price_not_allowed` (mudar para `open` sem enviar preço apaga o preço) |
 | Publicar, ou pedir publicação de, produto arquivado | `422` `product_archived` |
 | Arquivar o que já está arquivado; desarquivar o que não está | `200`, sem gravar nem auditar |
-| Item de pacote ou alvo de vínculo de ebook que não existe | `422` `catalog_item_not_found`, com o campo |
+| Item de pacote ou alvo de vínculo de ebook que não existe (inclusive id de pacote enviado como `course` ou `ebook`) | `422` `catalog_item_not_found`, com o campo |
 | Capa que não é imagem `product_cover` | `422` `cover_image_invalid` |
 | Dono que não é instrutor, ou foi excluído | `422` `owner_invalid` |
 | Ordem de módulos que não lista exatamente os módulos do curso; ordem de aulas sem alguma aula do módulo, ou com aula de outro curso | `422` `order_mismatch` |
@@ -204,7 +212,7 @@ Limites além da RNF-03, validados no `packages/core` (`CATALOG_LIMITS`) e repet
 - `POST /images` e `DELETE /images/{imageId}` com a finalidade `product_cover` ([029](029-imagens.md))
 - `PUT /ebooks/{id}/targets` (vínculos em `product_ebooks`) e `PUT|DELETE /ebooks/{id}/targets/{targetType}/{targetId}` (um vínculo)
 
-O contrato do admin alcança as regras de "Criação e edição" e de "Ebooks vinculados" numa janela de contrato própria (`version` nos detalhes e nos `PATCH`, `409` declarado, `CourseDetail.ebooks`, as duas operações de um vínculo); até ela fechar, as rotas de edição leem o `version` atual e o repassam ao núcleo.
+O contrato do admin alcança as regras de "Criação e edição" e de "Ebooks vinculados" numa janela de contrato própria (`version` nos detalhes e nos `PATCH`, `409` declarado, `CourseDetail.ebooks`, as duas operações de um vínculo, `422` e `409` em `PUT /ebooks/{id}/targets`, `409` em `PUT /bundles/{id}/items` e os textos de vínculo `bundle` e de pacote em pacote); até ela fechar, as rotas de edição leem o `version` atual e o repassam ao núcleo, e a rota de `PUT /ebooks/{id}/targets` repete os vínculos `bundle` atuais na lista que entrega ao núcleo.
 
 `apps/classroom-api/openapi.yaml` (leitura), sob `/api/v1`:
 
@@ -267,6 +275,8 @@ A Fase 2 entrega esta spec inteira, exceto o que depende de recurso de fase post
 - [ ] Aula movida de um módulo a outro do mesmo curso pela ordem de aulas; aula de outro curso na lista responde `422` `order_mismatch`.
 - [ ] `durationSeconds: null` grava `0`.
 - [ ] O detalhe do curso traz os ebooks vinculados; vincular e desvincular um ebook de um curso não altera os outros vínculos do ebook.
+- [ ] `PUT /ebooks/{id}/targets` com lista vazia, por gerente, mantém o vínculo `bundle` do ebook e não enfileira recálculo do pacote; o vínculo aparece em `EbookDetail.targets`; `targetType: bundle` no corpo responde `400`.
+- [ ] `PUT /bundles/{id}/items` com `productType: bundle` responde `400`; com o id de um pacote como `course`, `422` `catalog_item_not_found`.
 
 ## Fora de escopo
 
