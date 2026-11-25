@@ -6,6 +6,7 @@ Detalhe das decisões em `specs/decisions/`.
 ## [Não lançado]
 
 ### Adicionado
+- ui: `ProductCard` ganha `coverPriority` (capa com `loading="eager"` e `fetchpriority="high"` para os cartões acima da dobra; padrão segue `lazy`) e declara `width`/`height` 16:9 na capa (task 545).
 - banco: migration 0012 dos certificados (`certificates` com código do alfabeto da RNF-04 e único por aluno e curso, `certificate_template_versions` imutáveis e presas pelos certificados e templates, `certificate_templates` com um só padrão da escola, `certificate_previews` com índice para o expurgo de 24 h); tipos do Kysely regenerados (task 408).
 - Contrato da admin-api: `GET /certificates/{id}/pdf` (equipe baixa o PDF de um certificado), pendente até a tarefa 423; cliente regenerado (tasks 525 e 550).
 - classroom: vitrine em `/` (filtros de tipo, nível e preço, busca, ordenação e "Carregar mais", com os filtros no endereço) e páginas `/cursos/:slug`, `/pacotes/:slug` e `/ebooks/:slug` sem login, com programa, itens do pacote, título, descrição e Open Graph próprios; produto pago mostra preço e "Acesso liberado pela escola", sem compra (task 450).

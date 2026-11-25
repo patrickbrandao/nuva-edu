@@ -445,4 +445,32 @@ describe('ProductCard', () => {
     expect(screen.getByRole('heading', { level: 2 })).toBeTruthy();
     await expectNoAxeViolations(container);
   });
+
+  it('capa com `loading="lazy"` por padrão e prioritária com `coverPriority`', () => {
+    const { container } = render(
+      <>
+        <ProductCard title="Padrão" href="/cursos/a" coverUrl="https://example.com/a.webp" />
+        <ProductCard
+          title="Prioritária"
+          href="/cursos/b"
+          coverUrl="https://example.com/b.webp"
+          coverPriority
+        />
+        <ProductCard title="Sem capa" href="/cursos/c" coverPriority />
+      </>,
+    );
+    const covers = container.querySelectorAll('img');
+    expect(covers).toHaveLength(2);
+    const [lazy, eager] = covers;
+    expect(lazy?.getAttribute('loading')).toBe('lazy');
+    expect(lazy?.hasAttribute('fetchpriority')).toBe(false);
+    expect(eager?.getAttribute('loading')).toBe('eager');
+    expect(eager?.getAttribute('fetchpriority')).toBe('high');
+    for (const cover of covers) {
+      // 16:9 declarado na imagem reserva o espaço antes de ela chegar
+      expect(
+        Number(cover.getAttribute('width')) / Number(cover.getAttribute('height')),
+      ).toBeCloseTo(16 / 9);
+    }
+  });
 });

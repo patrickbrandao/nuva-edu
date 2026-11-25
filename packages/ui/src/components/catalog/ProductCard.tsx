@@ -16,6 +16,10 @@ import { ProgressBar } from './ProgressBar';
 
 export type ProductCardLayout = 'grid' | 'list';
 
+/** Proporção 16:9 declarada na `<img>` da capa, para reservar o espaço antes do carregamento. */
+const COVER_WIDTH = 640;
+const COVER_HEIGHT = 360;
+
 export interface ProductCardProgress {
   /** Porcentagem de 0 a 100. */
   value: number;
@@ -35,6 +39,11 @@ export interface ProductCardProps {
   coverUrl?: string | null | undefined;
   /** Texto alternativo da capa; vazio (padrão) quando a capa só decora. */
   coverAlt?: string | undefined;
+  /**
+   * Capa acima da dobra (candidata a LCP): pede a imagem já, com prioridade alta, em vez de
+   * `loading="lazy"`. Use só nos primeiros cartões da página.
+   */
+  coverPriority?: boolean | undefined;
   summary?: ReactNode;
   /** Nível já traduzido (ex.: "Iniciante"). */
   level?: ReactNode;
@@ -67,6 +76,7 @@ export function ProductCard({
   href,
   coverUrl,
   coverAlt = '',
+  coverPriority = false,
   summary,
   level,
   totals,
@@ -96,7 +106,16 @@ export function ProductCard({
     >
       <div className="minui-product-card__cover">
         {coverUrl ? (
-          <img src={coverUrl} alt={coverAlt} loading="lazy" decoding="async" />
+          // largura e altura só dão a proporção 16:9 ao navegador; o tamanho vem do CSS
+          <img
+            src={coverUrl}
+            alt={coverAlt}
+            width={COVER_WIDTH}
+            height={COVER_HEIGHT}
+            loading={coverPriority ? 'eager' : 'lazy'}
+            fetchPriority={coverPriority ? 'high' : undefined}
+            decoding="async"
+          />
         ) : (
           <span className="minui-product-card__placeholder">
             <ImageOff size={22} aria-hidden="true" />
