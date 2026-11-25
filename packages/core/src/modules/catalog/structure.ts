@@ -27,6 +27,7 @@ import {
   catalogLimitExceeded,
   catalogRule,
   FieldErrors,
+  isCatalogId,
   LESSON_LINK_KINDS,
   type LessonLinkKind,
   PUBLICATION_STATUSES,
@@ -167,19 +168,27 @@ async function writeOrder(
     WHERE t.id = o.id`.execute(trx);
 }
 
-/** A lista pedida precisa ser exatamente a atual, em outra ordem. */
-function readPermutation(value: unknown, current: readonly string[], path: string): string[] {
+function orderMismatch(detail: string) {
+  return catalogRule('order_mismatch', detail);
+}
+
+/** A lista de ids de uma troca de ordem, em minúsculas (o que não é texto vira vazio). */
+function readOrderIds(value: unknown, path: string): string[] {
   const errors = new FieldErrors();
   const list = readArray(errors, value, path);
   errors.throwIfAny();
-  const ids = list.map((item) => (typeof item === 'string' ? item.toLowerCase() : ''));
+  return list.map((item) => (typeof item === 'string' ? item.toLowerCase() : ''));
+}
+
+/** A lista pedida precisa ser exatamente a atual, em outra ordem. */
+function readPermutation(value: unknown, current: readonly string[], path: string): string[] {
+  const ids = readOrderIds(value, path);
   const same =
     ids.length === current.length &&
     new Set(ids).size === ids.length &&
     ids.every((id) => current.includes(id));
   if (!same) {
-    throw catalogRule(
-      'order_mismatch',
+    throw orderMismatch(
       'A ordem precisa listar exatamente os itens atuais, cada um uma vez. Recarregue.',
     );
   }
@@ -385,6 +394,7 @@ export interface LessonFieldsInput {
   description?: unknown;
   /** `null` tira o vídeo. O provedor é classificado aqui, na gravação. */
   videoUrl?: unknown;
+  /** Ausente na criação, ou `null`: grava `0` ("não informada"). */
   durationSeconds?: unknown;
   /** Amostra grátis: `product.set_access` sobre o curso (o instrutor no próprio). */
   isSample?: unknown;
@@ -405,13 +415,17 @@ function readLessonFields(errors: FieldErrors, input: LessonFieldsInput): Lesson
     );
   }
   if (input.durationSeconds !== undefined) {
-    fields.durationSeconds = readInteger(
-      errors,
-      input.durationSeconds,
-      'body.durationSeconds',
-      0,
-      CATALOG_LIMITS.lessonDurationMaxSeconds,
-    );
+    // `0` é "não informada" (spec 009, "Duração da aula"): `null` grava `0`.
+    fields.durationSeconds =
+      input.durationSeconds === null
+        ? 0
+        : readInteger(
+            errors,
+            input.durationSeconds,
+            'body.durationSeconds',
+            0,
+            CATALOG_LIMITS.lessonDurationMaxSeconds,
+          );
   }
   if (input.isSample !== undefined) {
     fields.isSample = readBoolean(errors, input.isSample, 'body.isSample');
@@ -605,9 +619,14 @@ export async function deleteLesson(
 }
 
 /**
- * `PUT /modules/{id}/lessons/order` (`course.edit`): a lista inteira das aulas do módulo na
- * ordem nova, numa transação. Lista diferente da atual: `422` `order_mismatch`. Grava
- * `lesson.reorder` (alvo: o módulo).
+ * `PUT /modules/{id}/lessons/order` (`course.edit`): a ordem nova das aulas do módulo, numa
+ * transação (spec 009, "Mover aula entre módulos"). A lista precisa conter todas as aulas que já
+ * estão no módulo, cada uma uma vez. Aula de outro módulo **do mesmo curso**, na lista, é movida
+ * para este, na posição indicada, e o módulo de origem fecha a numeração das que ficaram. Aula
+ * de outro curso, inexistente, repetida, ou aula do módulo faltando: `422` `order_mismatch`. A
+ * movimentação não muda o total de aulas do curso (o limite por curso não se aplica) e avança o
+ * `version` de cada aula movida. Grava `lesson.reorder` (alvo: o módulo), com a origem e o
+ * destino de cada aula movida em `moved`. Devolve as aulas do módulo, na ordem.
  */
 export async function reorderLessons(
   db: Database,
@@ -616,32 +635,81 @@ export async function reorderLessons(
   input: { lessonIds: unknown },
 ): Promise<CatalogLesson[]> {
   return catalogWrite(db, request, async (trx) => {
-    const { module } = await loadModuleForWrite(trx, request, moduleId, 'lesson.reorder');
+    // O curso fica travado até o fim: nenhuma outra escrita na estrutura dele corre junto.
+    const { course, module } = await loadModuleForWrite(trx, request, moduleId, 'lesson.reorder');
+    const ids = readOrderIds(input.lessonIds, 'body.lessonIds');
     const current = await trx
       .selectFrom('lessons')
       .select('id')
       .where('moduleId', '=', module.id)
-      .orderBy('position')
       .execute();
-    const ids = readPermutation(
-      input.lessonIds,
-      current.map((row) => row.id),
-      'body.lessonIds',
-    );
+    const currentIds = new Set(current.map((row) => row.id));
+    const wanted = new Set(ids);
+    if (wanted.size !== ids.length || current.some((row) => !wanted.has(row.id))) {
+      throw orderMismatch(
+        'A ordem precisa listar todas as aulas do módulo, cada uma uma vez. Recarregue.',
+      );
+    }
+    const incoming = ids.filter((id) => !currentIds.has(id));
+    const moved: { lessonId: string; fromModuleId: string; toModuleId: string }[] = [];
+    if (incoming.length > 0) {
+      // Id fora do formato não chega ao banco como uuid: é aula inexistente.
+      const rows = incoming.every(isCatalogId)
+        ? await trx
+            .selectFrom('lessons')
+            .innerJoin('modules', 'modules.id', 'lessons.moduleId')
+            .select(['lessons.id', 'lessons.moduleId'])
+            .where('lessons.id', 'in', incoming)
+            .where('modules.courseId', '=', course.id)
+            .forUpdate('lessons')
+            .execute()
+        : [];
+      if (rows.length !== incoming.length) {
+        throw orderMismatch('A ordem só aceita aulas deste curso. Recarregue.');
+      }
+      const from = new Map(rows.map((row) => [row.id, row.moduleId]));
+      for (const lessonId of incoming) {
+        moved.push({ lessonId, fromModuleId: from.get(lessonId) as string, toModuleId: module.id });
+      }
+      await trx
+        .updateTable('lessons')
+        .set({ moduleId: module.id, version: sql<number>`version + 1` })
+        .where('id', 'in', incoming)
+        .execute();
+    }
     await writeOrder(trx, 'lessons', ids);
+    // Cada módulo de origem fecha a numeração das aulas que ficaram.
+    for (const sourceId of new Set(moved.map((item) => item.fromModuleId))) {
+      const rest = await trx
+        .selectFrom('lessons')
+        .select('id')
+        .where('moduleId', '=', sourceId)
+        .orderBy('position')
+        .execute();
+      await writeOrder(
+        trx,
+        'lessons',
+        rest.map((row) => row.id),
+      );
+    }
     await catalogAudit(trx, request, {
       action: 'lesson.reorder',
       targetType: 'module',
       targetId: module.id,
-      details: { lessonIds: ids },
+      details: { lessonIds: ids, ...(moved.length > 0 ? { moved } : {}) },
     });
     const rows = await trx
       .selectFrom('lessons')
-      .select('id')
+      .selectAll()
       .where('moduleId', '=', module.id)
       .orderBy('position')
       .execute();
-    return Promise.all(rows.map(async (row) => (await findLesson(trx, row.id)) as CatalogLesson));
+    return rows.map((row) => ({
+      ...row,
+      type: 'video' as const,
+      videoProvider: row.videoProvider as VideoProvider | null,
+      status: row.status as PublicationStatus,
+    }));
   });
 }
 

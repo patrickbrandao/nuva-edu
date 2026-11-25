@@ -25,12 +25,15 @@ import {
   countActiveEntitlementHolders,
   diffFields,
   enqueueRecomputes,
+  freeGeneratedSlug,
+  INITIAL_COMMERCIAL,
   priceFromDb,
   productHasLinks,
   productHasLinksError,
   readCommercialInput,
   recomputeParentOfTarget,
   requireCatalogAction,
+  requireCommercialPermissions,
   withSlugCheck,
 } from './common.ts';
 import {
@@ -241,12 +244,6 @@ function readFileUrl(kind: ProductKind, fields: ProductFields, input: EbookField
   fields.fileUrl = input.fileUrl;
 }
 
-const DEFAULT_COMMERCIAL: CommercialState = {
-  accessMode: 'open',
-  priceCents: null,
-  accessDays: null,
-};
-
 async function createProduct(
   db: Database,
   request: CatalogRequest,
@@ -256,17 +253,19 @@ async function createProduct(
   return catalogWrite(db, request, async (trx) => {
     const target = { type: kind, id: null };
     requireCatalogAction(request, 'ebook_bundle.manage', { action: `${kind}.create`, target });
+    requireCommercialPermissions(request, INITIAL_COMMERCIAL, input, target);
     const errors = new FieldErrors();
     const fields = readProductFields(errors, kind, {
       ...input,
-      slug: input.slug ?? null,
+      slug: input.slug ?? undefined,
       title: input.title ?? null,
     });
     const commercial = readCommercialInput(errors, input);
     errors.throwIfAny();
     readFileUrl(kind, fields, input);
-    const change = applyCommercialChange(request, DEFAULT_COMMERCIAL, commercial, target);
+    const change = applyCommercialChange(INITIAL_COMMERCIAL, commercial);
     await assertProductCover(trx, (fields.coverImageId as string | null | undefined) ?? null);
+    fields.slug ??= await freeGeneratedSlug(trx, kind, fields.title as string);
     const row = await withSlugCheck(SLUG_CONSTRAINT[kind], () =>
       trx
         .insertInto(table(kind))
@@ -285,7 +284,7 @@ async function createProduct(
       targetId: row.id,
       details: { slug: fields.slug, accessMode: change.next.accessMode },
     });
-    await auditCommercialChange(trx, request, DEFAULT_COMMERCIAL, change, {
+    await auditCommercialChange(trx, request, INITIAL_COMMERCIAL, change, {
       type: kind,
       id: row.id,
     });
@@ -302,6 +301,8 @@ async function updateProduct(
 ): Promise<CatalogEbook> {
   return catalogWrite(db, request, async (trx) => {
     const product = await loadProductForWrite(trx, request, kind, productId, `${kind}.update`);
+    const target = { type: kind, id: product.id };
+    requireCommercialPermissions(request, commercialOf(product), input, target);
     const version = readVersion(input.version);
     const errors = new FieldErrors();
     const fields = readProductFields(errors, kind, input);
@@ -309,8 +310,7 @@ async function updateProduct(
     errors.throwIfAny();
     readFileUrl(kind, fields, input);
     assertVersion(product.version, version);
-    const target = { type: kind, id: product.id };
-    const change = applyCommercialChange(request, commercialOf(product), commercial, target);
+    const change = applyCommercialChange(commercialOf(product), commercial);
     if (product.status === 'published') {
       assertPublishablePrice(change.next);
       if (kind === 'ebook' && fields.fileUrl === null) {
@@ -511,14 +511,16 @@ export async function findCatalogEbook(
 }
 
 /**
- * `POST /ebooks` (`ebook_bundle.manage`). Nasce `draft`; `fileUrl` fora das regras: `422`
- * `content_url_invalid`. Modo e validade: `product.set_access`; preço: `product.set_price`.
- * Slug repetido: `409` `slug_taken`. Grava `ebook.create`.
+ * `POST /ebooks` (`ebook_bundle.manage`). Nasce `draft` e `private`, sem preço; `fileUrl` fora
+ * das regras: `422` `content_url_invalid`. Modo e validade: `product.set_access`; preço:
+ * `product.set_price` (`403` antes das regras do valor). Sem `slug`, ele é gerado do título
+ * (sufixo `-2` a `-99` se repetido); informado repetido: `409` `slug_taken`. Grava
+ * `ebook.create`.
  */
 export async function createEbook(
   db: Database,
   request: CatalogRequest,
-  input: EbookFieldsInput & { slug: unknown; title: unknown },
+  input: EbookFieldsInput & { title: unknown },
 ): Promise<CatalogEbook> {
   return shapeEbook(await createProduct(db, request, 'ebook', input));
 }
@@ -603,7 +605,7 @@ export async function findCatalogBundle(
 export async function createBundle(
   db: Database,
   request: CatalogRequest,
-  input: ProductFieldsInput & { slug: unknown; title: unknown },
+  input: ProductFieldsInput & { title: unknown },
 ): Promise<CatalogBundle> {
   return shapeBundle(await createProduct(db, request, 'bundle', input));
 }

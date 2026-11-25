@@ -25,6 +25,7 @@ export {
   getAdminCourse,
   getAdminEbook,
   getAdminLesson,
+  getAdminModule,
   listAdminBundles,
   listAdminCourses,
   listAdminEbooks,
@@ -54,6 +55,7 @@ export {
   type CatalogProductType,
   type CatalogRequest,
   type CatalogTargetType,
+  catalogSlugFromTitle,
 } from './common.ts';
 export {
   archiveCourse,

@@ -128,9 +128,19 @@ async function grant(userId: string, productType: string, productId: string): Pr
   );
 }
 
-/** Curso com um módulo e uma aula publicada (pronto para publicar). */
+/**
+ * Torna o curso `open` direto na tabela: o curso nasce `private` (spec 009, "Modo de acesso
+ * inicial") e o instrutor não muda o modo; assim o `version` dos testes não avança.
+ */
+async function openCourse(courseId: string): Promise<void> {
+  await sql`UPDATE courses SET access_mode = 'open' WHERE id = ${courseId}`.execute(db);
+}
+
+/** Curso `open` com um módulo e uma aula publicada (pronto para publicar). */
 async function courseWithLesson(request: CatalogRequest, extra: Record<string, unknown> = {}) {
-  const course = await createCourse(db, request, { slug: slug(), title: 'Curso', ...extra });
+  const created = await createCourse(db, request, { slug: slug(), title: 'Curso', ...extra });
+  if (extra.accessMode === undefined) await openCourse(created.id);
+  const course = (await findCatalogCourse(db, created.id)) as typeof created;
   const module = await createModule(db, request, course.id, { title: 'Módulo 1' });
   const lesson = await createLesson(db, admin, module.id, {
     title: 'Aula 1',
@@ -153,7 +163,7 @@ describe('cursos', () => {
       title: 'Meu curso',
       summary: null,
       status: 'draft',
-      accessMode: 'open',
+      accessMode: 'private',
       priceCents: null,
       version: 1,
     });
@@ -236,7 +246,9 @@ describe('cursos', () => {
     expect(await deniedFor(instructor.actor.id, 'product.set_access')).toBeGreaterThanOrEqual(2);
     // Reenviar o mesmo modo não é mudança.
     const same = await updateCourse(db, instructor, mine.id, {
-      accessMode: 'open',
+      accessMode: 'private',
+      priceCents: null,
+      accessDays: null,
       title: 'Meu, novo',
       version: 1,
     });
@@ -606,6 +618,7 @@ describe('módulos e aulas', () => {
 
   it('excluir módulo: com aula recusa com 409 module_not_empty; vazio é apagado', async () => {
     const course = await createCourse(db, instructor, { slug: slug(), title: 'Excluir módulo' });
+    await openCourse(course.id);
     const module = await createModule(db, instructor, course.id, { title: 'Com aula' });
     const lesson = await createLesson(db, instructor, module.id, { title: 'Rascunho' });
     const auditBefore = (await auditOf(module.id)).length;

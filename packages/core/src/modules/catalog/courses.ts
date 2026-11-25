@@ -24,11 +24,14 @@ import {
   countActiveEntitlementHolders,
   diffFields,
   enqueueRecomputes,
+  freeGeneratedSlug,
+  INITIAL_COMMERCIAL,
   priceFromDb,
   productHasLinks,
   productHasLinksError,
   readCommercialInput,
   requireCatalogAction,
+  requireCommercialPermissions,
   withSlugCheck,
 } from './common.ts';
 import {
@@ -231,7 +234,8 @@ function readCourseFields(errors: FieldErrors, input: CourseFieldsInput): Course
 }
 
 export interface CreateCourseInput extends CourseFieldsInput {
-  slug: unknown;
+  /** Ausente (ou `null`): gerado do título, com sufixo `-2` a `-99` se repetido. */
+  slug?: unknown;
   title: unknown;
   /** Só gerente e admin (`course.set_owner`); o instrutor que cria vira o dono. */
   ownerId?: unknown;
@@ -239,9 +243,11 @@ export interface CreateCourseInput extends CourseFieldsInput {
 
 /**
  * `POST /courses` (`course.create`). O instrutor vira o dono; gerente e admin podem indicar o
- * dono (um instrutor ativo) ou deixar sem dono. Nasce `draft`. Modo diferente de `open` e
- * validade exigem `product.set_access`; preço, `product.set_price`. Slug repetido: `409`
- * `slug_taken`. Grava `course.create` (e `product.set_access`/`product.set_price` se definidos).
+ * dono (um instrutor ativo) ou deixar sem dono. Nasce `draft` e `private`, sem preço (spec 009,
+ * "Modo de acesso inicial"). Outro modo e validade exigem `product.set_access`; preço,
+ * `product.set_price`, conferidos antes das regras do valor. Sem `slug`, ele é gerado do título;
+ * slug informado repetido, ou gerado sem sufixo livre: `409` `slug_taken`. Grava `course.create`
+ * (e `product.set_access`/`product.set_price` se definidos).
  */
 export async function createCourse(
   db: Database,
@@ -252,9 +258,10 @@ export async function createCourse(
     const target = { type: 'course' as const, id: null };
     requireCatalogAction(request, 'course.create', { action: 'course.create', target });
     const errors = new FieldErrors();
+    requireCommercialPermissions(request, INITIAL_COMMERCIAL, input, target);
     const fields = readCourseFields(errors, {
       ...input,
-      slug: input.slug ?? null,
+      slug: input.slug ?? undefined,
       title: input.title ?? null,
     });
     const commercial = readCommercialInput(errors, input);
@@ -267,19 +274,15 @@ export async function createCourse(
       }
     }
     errors.throwIfAny();
-    const change = applyCommercialChange(
-      request,
-      { accessMode: 'open', priceCents: null, accessDays: null },
-      commercial,
-      target,
-    );
+    const change = applyCommercialChange(INITIAL_COMMERCIAL, commercial);
     await assertInstructorOwner(trx, ownerId);
     await assertProductCover(trx, fields.coverImageId ?? null);
+    const slug = fields.slug ?? (await freeGeneratedSlug(trx, 'course', fields.title as string));
     const row = await withSlugCheck('courses_slug_unique', () =>
       trx
         .insertInto('courses')
         .values({
-          slug: fields.slug as string,
+          slug,
           title: fields.title as string,
           summary: fields.summary ?? null,
           description: fields.description ?? null,
@@ -301,15 +304,12 @@ export async function createCourse(
       action: 'course.create',
       targetType: 'course',
       targetId: row.id,
-      details: { slug: fields.slug, ownerId, accessMode: change.next.accessMode },
+      details: { slug, ownerId, accessMode: change.next.accessMode },
     });
-    await auditCommercialChange(
-      trx,
-      request,
-      { accessMode: 'open', priceCents: null, accessDays: null },
-      change,
-      { type: 'course', id: row.id },
-    );
+    await auditCommercialChange(trx, request, INITIAL_COMMERCIAL, change, {
+      type: 'course',
+      id: row.id,
+    });
     return (await findCatalogCourse(trx, row.id)) as CatalogCourse;
   });
 }
@@ -322,7 +322,8 @@ export interface UpdateCourseInput extends CourseFieldsInput {
 /**
  * `PATCH /courses/{id}` (`course.edit`; instrutor só no próprio, alheio é `404`). Campo omitido
  * não muda. Modo de acesso e validade: `product.set_access` com alcance total; preço:
- * `product.set_price`. Curso publicado `paid` precisa continuar com preço (`422`
+ * `product.set_price`; sem a permissão é `403` antes de qualquer regra do valor, e campo
+ * reenviado com o valor atual não é alteração. Curso publicado `paid` precisa continuar com preço (`422`
  * `price_required`). `version` diferente: `409` `version_conflict`. Grava `course.update` com
  * o antes e o depois, e `product.set_access`/`product.set_price` à parte; sem mudança, só
  * devolve o curso.
@@ -335,14 +336,15 @@ export async function updateCourse(
 ): Promise<CatalogCourse> {
   return catalogWrite(db, request, async (trx) => {
     const course = await loadCourseForWrite(trx, request, courseId, 'course.edit', 'course.update');
+    const target = { type: 'course' as const, id: course.id };
+    requireCommercialPermissions(request, commercialOf(course), input, target);
     const version = readVersion(input.version);
     const errors = new FieldErrors();
     const fields = readCourseFields(errors, input);
     const commercial = readCommercialInput(errors, input);
     errors.throwIfAny();
     assertVersion(course.version, version);
-    const target = { type: 'course' as const, id: course.id };
-    const change = applyCommercialChange(request, commercialOf(course), commercial, target);
+    const change = applyCommercialChange(commercialOf(course), commercial);
     if (course.status === 'published') assertPublishablePrice(change.next);
     if (fields.coverImageId !== undefined && fields.coverImageId !== course.coverImageId) {
       await assertProductCover(trx, fields.coverImageId);

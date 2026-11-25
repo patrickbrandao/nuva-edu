@@ -442,6 +442,51 @@ export async function listAdminCourses(
   return toCatalogPage(rows, params, 'admin-course', toCourseSummary);
 }
 
+/**
+ * Os módulos de um curso, ou um módulo só, na ordem, com todas as aulas (publicadas ou não): duas
+ * consultas, qualquer que seja o número de módulos.
+ */
+async function loadAdminModules(
+  db: Database,
+  where: { courseId: string } | { moduleId: string },
+): Promise<AdminCourseModule[]> {
+  const column = 'courseId' in where ? 'modules.courseId' : 'modules.id';
+  const value = 'courseId' in where ? where.courseId : where.moduleId;
+  const modules = await db
+    .selectFrom('modules')
+    .select(['id', 'courseId', 'title', 'position', 'version', 'createdAt', 'updatedAt'])
+    .where(column, '=', value)
+    .orderBy('position')
+    .execute();
+  const lessons = await db
+    .selectFrom('lessons')
+    .innerJoin('modules', 'modules.id', 'lessons.moduleId')
+    .select([
+      'lessons.id',
+      'lessons.moduleId',
+      'lessons.title',
+      'lessons.status',
+      'lessons.isSample',
+      'lessons.durationSeconds',
+      'lessons.videoProvider',
+      'lessons.position',
+    ])
+    .where(column, '=', value)
+    .orderBy('lessons.position')
+    .execute();
+  const byModule = new Map<string, AdminLessonSummary[]>();
+  for (const lesson of lessons) {
+    const list = byModule.get(lesson.moduleId) ?? [];
+    list.push({
+      ...lesson,
+      status: lesson.status as PublicationStatus,
+      videoProvider: lesson.videoProvider as VideoProvider | null,
+    });
+    byModule.set(lesson.moduleId, list);
+  }
+  return modules.map((module) => ({ ...module, lessons: byModule.get(module.id) ?? [] }));
+}
+
 /** O curso que quem pede alcança com `course.edit`; fora do alcance ou inexistente: `404`. */
 async function readCourseRow(
   db: Database,
@@ -468,38 +513,7 @@ export async function getAdminCourse(
 ): Promise<AdminCourseDetail> {
   if (!isCatalogId(courseId)) throw notFound('Curso não encontrado.');
   const row = await readCourseRow(db, request, courseId.toLowerCase());
-  const modules = await db
-    .selectFrom('modules')
-    .select(['id', 'courseId', 'title', 'position', 'version', 'createdAt', 'updatedAt'])
-    .where('courseId', '=', row.id)
-    .orderBy('position')
-    .execute();
-  const lessons = await db
-    .selectFrom('lessons')
-    .innerJoin('modules', 'modules.id', 'lessons.moduleId')
-    .select([
-      'lessons.id',
-      'lessons.moduleId',
-      'lessons.title',
-      'lessons.status',
-      'lessons.isSample',
-      'lessons.durationSeconds',
-      'lessons.videoProvider',
-      'lessons.position',
-    ])
-    .where('modules.courseId', '=', row.id)
-    .orderBy('lessons.position')
-    .execute();
-  const byModule = new Map<string, AdminLessonSummary[]>();
-  for (const lesson of lessons) {
-    const list = byModule.get(lesson.moduleId) ?? [];
-    list.push({
-      ...lesson,
-      status: lesson.status as PublicationStatus,
-      videoProvider: lesson.videoProvider as VideoProvider | null,
-    });
-    byModule.set(lesson.moduleId, list);
-  }
+  const modules = await loadAdminModules(db, { courseId: row.id });
   return {
     ...toCourseSummary(row),
     description: row.description,
@@ -507,8 +521,36 @@ export async function getAdminCourse(
     certificateHours: row.certificateHours,
     version: row.version,
     studentCount: await countActiveEntitlementHolders(db, 'course', row.id),
-    modules: modules.map((module) => ({ ...module, lessons: byModule.get(module.id) ?? [] })),
+    modules,
   };
+}
+
+/**
+ * Um módulo para o admin (`course.edit`; spec 009, "Leitura de módulo"): o módulo no formato de
+ * `CourseModule`, com todas as aulas na ordem, o `version` e o curso a que pertence
+ * (`courseId`). Serve às respostas de `PATCH /modules/{id}` e de `PUT
+ * /modules/{id}/lessons/order`. Módulo de curso alheio ao instrutor, ou inexistente: `404`.
+ */
+export async function getAdminModule(
+  db: Database,
+  request: CatalogRequest,
+  moduleId: unknown,
+): Promise<AdminCourseModule> {
+  const scope = await requireCatalogRead(db, request, 'course.edit');
+  if (!isCatalogId(moduleId)) throw notFound('Módulo não encontrado.');
+  const id = moduleId.toLowerCase();
+  const ref = await db
+    .selectFrom('modules')
+    .innerJoin('courses', 'courses.id', 'modules.courseId')
+    .select('courses.ownerId')
+    .where('modules.id', '=', id)
+    .executeTakeFirst();
+  if (!ref || (scope === 'own' && ref.ownerId !== request.actor.id)) {
+    throw notFound('Módulo não encontrado.');
+  }
+  const [module] = await loadAdminModules(db, { moduleId: id });
+  if (!module) throw notFound('Módulo não encontrado.');
+  return module;
 }
 
 /**

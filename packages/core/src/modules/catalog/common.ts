@@ -181,6 +181,63 @@ export async function withSlugCheck<T>(constraint: string, work: () => Promise<T
   }
 }
 
+const SLUG_FALLBACK = { course: 'curso', ebook: 'ebook', bundle: 'pacote' } as const;
+const SLUG_TABLE = { course: 'courses', ebook: 'ebooks', bundle: 'bundles' } as const;
+
+/** Corta o slug em `max` caracteres, sem deixar hífen na ponta. */
+function cutSlug(slug: string, max: number): string {
+  return slug.slice(0, max).replace(/-+$/, '');
+}
+
+/**
+ * Slug gerado do título (spec 009, "Slug"): sem acentos, em minúsculas, cada sequência de
+ * caracteres fora de `a-z0-9` vira um hífen, sem hífen nas pontas, até 160. Título que não deixa
+ * nenhum caractere gera `curso`, `ebook` ou `pacote`, conforme o tipo.
+ */
+export function catalogSlugFromTitle(title: string, productType: CatalogProductType): string {
+  const slug = cutSlug(
+    title
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, ''),
+    CATALOG_LIMITS.slugMaxLength,
+  );
+  return slug === '' ? SLUG_FALLBACK[productType] : slug;
+}
+
+/** Maior sufixo do slug gerado repetido (`-2` a `-99`). */
+export const CATALOG_SLUG_MAX_SUFFIX = 99;
+
+/**
+ * Slug livre para o produto criado sem slug: o gerado do título ou, se já existe, com o menor
+ * sufixo livre `-2` a `-99` (a base é cortada para o total caber em 160). Sem sufixo livre:
+ * `409` `slug_taken`. Outra gravação que tome o slug no mesmo instante cai no único da tabela
+ * (`withSlugCheck`), também `409`.
+ */
+export async function freeGeneratedSlug(
+  trx: Database,
+  productType: CatalogProductType,
+  title: string,
+): Promise<string> {
+  const base = catalogSlugFromTitle(title, productType);
+  const candidates = [base];
+  for (let suffix = 2; suffix <= CATALOG_SLUG_MAX_SUFFIX; suffix += 1) {
+    const tail = `-${suffix}`;
+    candidates.push(`${cutSlug(base, CATALOG_LIMITS.slugMaxLength - tail.length)}${tail}`);
+  }
+  const rows = await trx
+    .selectFrom(SLUG_TABLE[productType] as 'courses')
+    .select('slug')
+    .where('slug', 'in', candidates)
+    .execute();
+  const taken = new Set(rows.map((row) => row.slug));
+  const free = candidates.find((candidate) => !taken.has(candidate));
+  if (free === undefined) throw slugTaken();
+  return free;
+}
+
 /** `422` com os campos (alvo inexistente de item, vínculo, capa, dono). */
 export function catalogUnprocessable(
   code: string,
@@ -254,43 +311,62 @@ export function readCommercialInput(
   return out;
 }
 
+/** O estado comercial de todo produto criado sem `accessMode` (spec 009, "Modo de acesso inicial"). */
+export const INITIAL_COMMERCIAL: CommercialState = {
+  accessMode: 'private',
+  priceCents: null,
+  accessDays: null,
+};
+
 /**
- * Aplica a mudança comercial com as permissões da 008 (P3 da tarefa 400):
- *
- * - modo de acesso e validade (`access_days`): `product.set_access` com alcance total (gerente e
- *   admin; o instrutor só tem a parte da amostra grátis);
- * - preço: `product.set_price` (admin).
- *
- * Só conta como mudança o valor diferente do atual (o formulário pode reenviar tudo). Produto
- * `open` não tem preço: preço informado em produto aberto é `422` `price_not_allowed`, e passar
- * a `open` limpa o preço como consequência do modo. Na criação, o atual é o padrão do banco
- * (`open`, sem preço, vitalício).
+ * Permissão antes da regra (spec 009, "Criação e edição"; 008, P3 da tarefa 400): quem envia
+ * `accessMode` ou `accessDays` sem `product.set_access` com alcance total (gerente e admin; o
+ * instrutor só tem a parte da amostra grátis), ou `priceCents` sem `product.set_price` (admin),
+ * recebe `403`, qualquer que seja o valor e o estado do produto. Por isso a conferência é feita
+ * sobre o valor como veio, antes da validação de formato e das regras do valor. Campo enviado
+ * com o valor que o produto já tem não é alteração e não exige a permissão. Na criação, o atual
+ * é `INITIAL_COMMERCIAL`.
  */
-export function applyCommercialChange(
+export function requireCommercialPermissions(
   request: CatalogRequest,
   current: CommercialState,
-  wanted: { accessMode?: AccessMode; priceCents?: number | null; accessDays?: number | null },
+  input: CommercialInput,
   target: { type: CatalogProductType; id: string | null },
+): void {
+  const sent = (value: unknown, now: unknown) => value !== undefined && value !== now;
+  if (sent(input.accessMode, current.accessMode) || sent(input.accessDays, current.accessDays)) {
+    requireFullScope(request, 'product.set_access', { action: 'product.set_access', target });
+  }
+  if (sent(input.priceCents, current.priceCents) && !can(request.actor, 'product.set_price')) {
+    throw new CatalogDenied('product.set_price', 'product.set_price', target);
+  }
+}
+
+/**
+ * Aplica a mudança comercial, já com as permissões conferidas (`requireCommercialPermissions`).
+ * Só conta como mudança o valor diferente do atual (o formulário pode reenviar tudo), e o preço
+ * reenviado igual ao atual vale como não enviado. Produto `open` não tem preço: preço novo em
+ * produto aberto é `422` `price_not_allowed`, e passar a `open` limpa o preço como consequência
+ * do modo.
+ */
+export function applyCommercialChange(
+  current: CommercialState,
+  wanted: { accessMode?: AccessMode; priceCents?: number | null; accessDays?: number | null },
 ): CommercialChange {
   const accessMode = wanted.accessMode ?? current.accessMode;
   const accessDays = wanted.accessDays === undefined ? current.accessDays : wanted.accessDays;
   const accessChanged = accessMode !== current.accessMode || accessDays !== current.accessDays;
-  if (accessChanged) {
-    requireFullScope(request, 'product.set_access', { action: 'product.set_access', target });
-  }
-  let priceCents = wanted.priceCents === undefined ? current.priceCents : wanted.priceCents;
+  const wantedPrice = wanted.priceCents === current.priceCents ? undefined : wanted.priceCents;
+  let priceCents = wantedPrice === undefined ? current.priceCents : wantedPrice;
   let priceClearedByMode = false;
   if (accessMode === 'open' && priceCents !== null) {
-    if (wanted.priceCents !== undefined && wanted.priceCents !== null) {
+    if (wantedPrice !== undefined) {
       throw catalogRule('price_not_allowed', 'Produto aberto não tem preço.');
     }
     priceCents = null;
-    priceClearedByMode = current.priceCents !== null;
+    priceClearedByMode = true;
   }
   const priceChanged = !priceClearedByMode && priceCents !== current.priceCents;
-  if (priceChanged && !can(request.actor, 'product.set_price')) {
-    throw new CatalogDenied('product.set_price', 'product.set_price', target);
-  }
   return {
     next: { accessMode, priceCents, accessDays },
     accessChanged,
