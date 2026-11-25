@@ -158,6 +158,29 @@ dessa mudança continua valendo (os dados já pertencem a esse usuário).
 pnpm compose exec admin-api node -e "fetch('http://127.0.0.1:3000/readyz').then(async (r) => console.log(r.status, await r.text()))"
 ```
 
+## Navegador dos testes do worker
+
+O worker gera o PDF do certificado com o Chromium headless shell, controlado pelo
+`playwright-core` na mesma versão do `@playwright/test` do e2e (ADR 0026). Os testes de
+renderização do worker, que o `pnpm verify:quick` roda, precisam desse navegador na máquina.
+Instale uma vez, e de novo sempre que a versão do Playwright mudar no `e2e/package.json`:
+
+```bash
+pnpm browsers:worker
+```
+
+O script roda `playwright install --only-shell chromium` com o Playwright do e2e: baixa só o
+headless shell (sem o Chromium completo) para o cache do Playwright do usuário
+(`~/Library/Caches/ms-playwright` no macOS, `~/.cache/ms-playwright` no Linux), que todos os
+worktrees aproveitam. Não usa `--with-deps`: no Linux, se faltar biblioteca do sistema, rode uma
+vez `pnpm --filter @nuva-edu/e2e exec playwright install-deps chromium` (pede `sudo`).
+
+Navegador ausente ou de outra versão aparece no teste como
+`browserType.launch: Executable doesn't exist at .../chromium_headless_shell-NNNN/...`,
+seguido de "Looks like Playwright ... was just installed or updated". O número da pasta é a
+revisão do Chromium da versão do Playwright em uso; a correção é rodar `pnpm browsers:worker`.
+A imagem do worker traz o próprio navegador e não depende deste passo.
+
 ## Imagens
 
 Cada `apps/<app>/Dockerfile` usa a raiz do repositório como contexto e tem três estágios: `deps`

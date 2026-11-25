@@ -18,6 +18,7 @@
     "verify:quick": "node scripts/verify.mjs quick",
     "verify:full": "node scripts/verify.mjs full",
     "licenses:check": "node scripts/check-licenses.mjs",
+    "browsers:worker": "pnpm --filter @nuva-edu/e2e exec playwright install --only-shell chromium",
     "db:migrate": "pnpm --filter @nuva-edu/database run migrate",
     "compose": "node scripts/dev.mjs compose",
     "dev:up": "node scripts/dev.mjs up",

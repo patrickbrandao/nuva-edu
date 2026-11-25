@@ -137,6 +137,31 @@ test('verify: Node 26, pnpm do packageManager, Chromium, .env.local e verify:ful
   assert.ok(verify.jobs.verify['timeout-minutes'] <= 30);
 });
 
+test('browsers:worker instala só o headless shell, na versão do @playwright/test do e2e', () => {
+  const script = load('package.json').scripts['browsers:worker'];
+  assert.equal(script, 'pnpm --filter @nuva-edu/e2e exec playwright install --only-shell chromium');
+  // Na máquina do desenvolvedor não instala pacotes do sistema (pediria sudo).
+  assert.doesNotMatch(script, /--with-deps/);
+});
+
+test('verify: headless shell do worker com cache por versão, antes do verify:full', () => {
+  const steps = verify.jobs.verify.steps;
+  const run = steps.map((step) => step.run ?? '');
+  const index = (pattern) => run.findIndex((text) => pattern.test(text));
+  const install = index(/pnpm install --frozen-lockfile/);
+  const version = steps.findIndex((step) => step.id === 'playwright');
+  const cache = steps.findIndex((step) => step.uses?.startsWith('actions/cache@'));
+  const shell = index(/^pnpm browsers:worker --with-deps$/);
+  const full = index(/^pnpm verify:full --e2e$/);
+
+  assert.match(run[version], /e2e\/package\.json.*@playwright\/test.*GITHUB_OUTPUT/);
+  assert.equal(steps[cache].with.path, '~/.cache/ms-playwright');
+  assert.match(steps[cache].with.key, /steps\.playwright\.outputs\.version/);
+  assert.match(steps[cache].with.key, /runner\.os/);
+  assert.ok(install >= 0 && version > install, 'versão lida depois das dependências');
+  assert.ok(cache > version && shell > cache && full > shell, 'cache → headless shell → verify');
+});
+
 test('verify: relatórios de tmp/ anexados por 14 dias', () => {
   const upload = verify.jobs.verify.steps.find((step) =>
     step.uses?.startsWith('actions/upload-artifact@'),

@@ -6,6 +6,7 @@ Detalhe das decisões em `specs/decisions/`.
 ## [Não lançado]
 
 ### Adicionado
+- infra: `pnpm browsers:worker` instala o Chromium headless shell na versão do Playwright do e2e; o CI o instala com cache por versão antes dos testes (task 464).
 - ui: `Markdown` restrito, `SortableList` (arrastar por mouse, toque e teclado, anúncios por props), `Accordion`, `Tabs`, `ProgressBar` e `ProductCard`, com `react-markdown` e `@dnd-kit` (task 404).
 - Planejamento da Fase 2 (catálogo e aprendizado): tarefas 401 a 462, ADR 0025 (bibliotecas do certificado, Markdown, lista reordenável e player) e ajustes nas specs 005, 006, 008, 009, 010, 014, 015, 016, 024, 028, 029 e 031 (task 400).
 - Decisões da Fase 2: certificado por template HTML com palavras-chave, renderizado pelo Chromium no worker (ADR 0026); sem exclusão de produto com vínculos, arquivar só pelo admin, modo de acesso por gerente e admin, HLS só dos hosts da tabela, produto pago sem botão de compra; specs 005, 006, 008, 009, 014, 015, 024, 028, 029, 031, 033 e PLAN (task 463).

@@ -28,6 +28,13 @@ sobe o ambiente com `pnpm dev:up`, que inclui o provedor OAuth simulado (perfil 
 em `oauth-mock.localhost`). Não usa segredo do GitHub: PR de fork roda igual e não publica nada.
 Quem precisa das credenciais do admin inicial no e2e as lê desse `.env.local`.
 
+Antes da verificação, o job instala o Chromium headless shell dos testes do worker
+(`pnpm browsers:worker --with-deps`, com as bibliotecas do sistema) e o Chromium do e2e. A pasta
+`~/.cache/ms-playwright` fica em cache com a chave `playwright-<SO>-<versão>`, onde a versão é a
+do `@playwright/test` no `e2e/package.json`: enquanto ela não muda, os navegadores vêm do cache e
+só os pacotes do sistema são instalados. Na máquina local, o mesmo navegador sai do
+`pnpm browsers:worker` ([ambiente local](ambiente-local.md#navegador-dos-testes-do-worker)).
+
 Em falha, o log traz o `pnpm compose ps` e o fim dos logs dos contêineres. Os relatórios de
 cobertura e do Playwright (`tmp/coverage`, `tmp/playwright`) ficam anexados à execução por 14
 dias.
