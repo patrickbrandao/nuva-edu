@@ -143,6 +143,13 @@
   border-radius: 50%;
 }
 
+/* capa de produto (spec 029): moldura 16:9, mais larga para a prévia ser legível */
+.minui-image-picker__frame[data-shape="wide"] {
+  width: 160px;
+  max-width: 100%;
+  aspect-ratio: 16 / 9;
+}
+
 .minui-image-picker__img {
   display: block;
   width: 100%;

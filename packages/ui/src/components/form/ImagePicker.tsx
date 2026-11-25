@@ -12,7 +12,8 @@ import { cx } from '../feedback/layer';
  * recusa no navegador o arquivo acima do limite (5 MB) ou de outro tipo, e mostra a prévia
  * por endereço `blob:` com corte quadrado central (object-fit no CSS, sem `style`). O envio
  * é de quem usa: o componente só entrega o `File` escolhido. A CSP do site precisa aceitar
- * `blob:` em `img-src`.
+ * `blob:` em `img-src`. Com `shape="wide"` a moldura é 16:9, para a capa de produto
+ * (`product_cover`, spec 029); o padrão continua redondo e quadrado.
  */
 
 const AdminButton = RawAdminButton as Loose<typeof RawAdminButton>;
@@ -34,6 +35,8 @@ export function checkImageFile(
   if (file.size > maxBytes) return 'too_large';
   return null;
 }
+
+export type ImagePickerShape = 'round' | 'square' | 'wide';
 
 export interface ImagePickerProps {
   /** Rótulo do grupo (ex.: "Foto de perfil"). */
@@ -64,14 +67,18 @@ export interface ImagePickerProps {
   error?: ReactNode;
   maxBytes?: number;
   types?: readonly string[];
-  shape?: 'round' | 'square';
+  /**
+   * Forma da prévia: `round` (padrão) e `square` cortam em quadrado, para o avatar; `wide`
+   * corta em 16:9, para a capa de curso, ebook e pacote.
+   */
+  shape?: ImagePickerShape;
   disabled?: boolean;
   /** Envio em andamento: botões desabilitados e `aria-busy`. */
   busy?: boolean;
   className?: string | undefined;
 }
 
-/** Escolhe uma imagem, confere tipo e tamanho e mostra a prévia quadrada. */
+/** Escolhe uma imagem, confere tipo e tamanho e mostra a prévia (quadrada ou 16:9). */
 export function ImagePicker({
   label,
   chooseLabel,

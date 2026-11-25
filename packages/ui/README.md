@@ -39,7 +39,8 @@ Em TypeScript, com tipos de propriedade e sem texto fixo (tudo por propriedade; 
   só na vertical e contador opcional por função (`counter`, recebe `length`, `max`, `remaining` e
   `valid`; fica vermelho fora do limite). Usos: motivo da suspensão (500) e termos (100.000).
 - `ImagePicker`: JPEG, PNG ou WebP até 5 MB (`IMAGE_MAX_BYTES`, `checkImageFile`), recusa no
-  navegador com a mensagem recebida, prévia `blob:` com corte quadrado central em CSS. A CSP
+  navegador com a mensagem recebida, prévia `blob:` com corte quadrado central em CSS
+  (`shape="round"`, o padrão, ou `"square"`) ou em 16:9 (`shape="wide"`, capa de produto). A CSP
   do site precisa de `blob:` em `img-src`.
 
 Os testes rodam o axe-core (`src/test/axe.ts`) sobre cada componente.

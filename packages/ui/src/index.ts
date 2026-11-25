@@ -238,7 +238,11 @@ export { ErrorState, LoadingState, PageTitle, TextLink } from './components/flow
 // formulário: campo de senha, texto de várias linhas e seletor de imagem (TypeScript)
 export type { AdminTextAreaProps, TextAreaCounterInfo } from './components/form/AdminTextArea';
 export { AdminTextArea } from './components/form/AdminTextArea';
-export type { ImagePickerProps, ImageRejection } from './components/form/ImagePicker';
+export type {
+  ImagePickerProps,
+  ImagePickerShape,
+  ImageRejection,
+} from './components/form/ImagePicker';
 export {
   checkImageFile,
   IMAGE_MAX_BYTES,

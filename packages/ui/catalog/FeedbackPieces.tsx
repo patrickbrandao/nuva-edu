@@ -165,6 +165,19 @@ export function FeedbackPieces() {
               onChange={() => {}}
               onRemove={() => {}}
             />
+            <ImagePicker
+              shape="wide"
+              label="Capa do curso"
+              chooseLabel="Escolher capa"
+              changeLabel="Trocar capa"
+              limitHint="JPEG, PNG ou WebP, até 5 MB. Proporção 16:9."
+              errors={{
+                tooLarge: 'A imagem passa de 5 MB. Escolha uma menor.',
+                wrongType: 'Use uma imagem JPEG, PNG ou WebP.',
+              }}
+              previewAlt="Prévia da capa do curso"
+              onChange={() => {}}
+            />
           </AdminCard>
         </AdminScope>
 

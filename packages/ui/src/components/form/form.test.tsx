@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import { fireEvent, render, screen } from '@testing-library/react';
 import { useState } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -105,6 +107,9 @@ function choose(file: File) {
   fireEvent.change(screen.getByTestId('image-picker-input'), { target: { files: [file] } });
 }
 
+// numa constante, para o Vite não tratar o endereço como um recurso estático
+const FORM_CSS_FILE = './form.css';
+
 describe('ImagePicker', () => {
   let created = 0;
   const revoked: string[] = [];
@@ -183,6 +188,50 @@ describe('ImagePicker', () => {
     expect(screen.getByRole('img').getAttribute('src')).toBe('/imagens/a.webp');
     fireEvent.click(screen.getByRole('button', { name: 'Remover' }));
     expect(onRemove).toHaveBeenCalledTimes(1);
+  });
+
+  it('a forma padrão segue redonda; `wide` marca a moldura 16:9 sem `style`, com axe limpo', async () => {
+    const { unmount } = render(<ImagePicker {...PICKER} currentUrl="/imagens/a.webp" />);
+    const round = screen.getByRole('img').parentElement as HTMLElement;
+    expect(round.className).toBe('minui-image-picker__frame');
+    expect(round.getAttribute('data-shape')).toBe('round');
+    unmount();
+
+    render(
+      <AdminScope>
+        <ImagePicker
+          {...PICKER}
+          shape="wide"
+          label="Capa do curso"
+          previewAlt="Prévia da capa do curso"
+        />
+      </AdminScope>,
+    );
+    // sem imagem a moldura larga já existe, com o espaço vazio dentro
+    const group = screen.getByRole('group', { name: 'Capa do curso' });
+    const empty = group.querySelector('.minui-image-picker__frame') as HTMLElement;
+    expect(empty.getAttribute('data-shape')).toBe('wide');
+    choose(fileOf('image/webp', 1000, 'capa'));
+    const img = screen.getByRole('img', { name: 'Prévia da capa do curso' });
+    const frame = img.parentElement as HTMLElement;
+    expect(frame.getAttribute('data-shape')).toBe('wide');
+    // CSP `style-src 'self'`: a proporção vem do CSS, nunca de `style` em linha
+    expect(group.querySelectorAll('[style]')).toHaveLength(0);
+    await expectNoAxeViolations();
+  });
+
+  it('o CSS dá 16:9 só à forma `wide`; a moldura padrão continua quadrada', () => {
+    const css = readFileSync(fileURLToPath(new URL(FORM_CSS_FILE, import.meta.url)), 'utf8');
+    const rule = (selector: string) => {
+      const start = css.indexOf(`\n${selector} {`);
+      expect(start).toBeGreaterThanOrEqual(0);
+      return css.slice(start, css.indexOf('}', start));
+    };
+    expect(rule('.minui-image-picker__frame')).toContain('aspect-ratio: 1;');
+    expect(rule('.minui-image-picker__frame[data-shape="wide"]')).toContain(
+      'aspect-ratio: 16 / 9;',
+    );
+    expect(rule('.minui-image-picker__img')).toContain('object-fit: cover;');
   });
 
   it('erro de fora tem prioridade e ocupado desabilita os botões', () => {
