@@ -1,5 +1,52 @@
 // Catálogo (spec 009): cursos, módulos, aulas, ebooks, pacotes e vitrine. Escrita (tarefa 410)
-// para a admin-api; a leitura (vitrine, programa, aula) entra na tarefa 411.
+// para a admin-api; leitura (tarefa 411): vitrine pública (`showcase.ts`), usuário logado do
+// classroom (`classroom.ts`) e listas e detalhes do admin (`admin-views.ts`).
+
+export {
+  ADMIN_CATALOG_SORTS,
+  ADMIN_CATALOG_STATUSES,
+  type AdminBundleDetail,
+  type AdminBundleItem,
+  type AdminBundleSummary,
+  type AdminCatalogQuery,
+  type AdminCatalogSort,
+  type AdminCatalogStatus,
+  type AdminCourseDetail,
+  type AdminCourseModule,
+  type AdminCourseSummary,
+  type AdminCoursesQuery,
+  type AdminEbookDetail,
+  type AdminEbookRef,
+  type AdminEbookSummary,
+  type AdminEbookTarget,
+  type AdminLessonDetail,
+  type AdminLessonSummary,
+  getAdminBundle,
+  getAdminCourse,
+  getAdminEbook,
+  getAdminLesson,
+  listAdminBundles,
+  listAdminCourses,
+  listAdminEbooks,
+} from './admin-views.ts';
+export {
+  type CatalogAccessState,
+  type CatalogCourseView,
+  type CatalogCourseViewLesson,
+  type CatalogCourseViewModule,
+  type CatalogEbookRef,
+  type CatalogEbookView,
+  type CatalogLessonContent,
+  type CatalogLessonContentLink,
+  type CatalogSampleLesson,
+  type CatalogViewer,
+  getCourseView,
+  getEbookDownload,
+  getEbookView,
+  getLessonContent,
+  listSampleLessons,
+  type SampleLessonsQuery,
+} from './classroom.ts';
 
 export {
   CATALOG_PRODUCT_TYPES,
@@ -70,6 +117,36 @@ export {
   updateBundle,
   updateEbook,
 } from './products.ts';
+export {
+  CATALOG_PAGE_DEFAULT_LIMIT,
+  CATALOG_PAGE_MAX_LIMIT,
+  CATALOG_QUERY_MAX_LENGTH,
+  type CatalogCover,
+  type CatalogPage,
+  type CatalogProgram,
+  type CatalogProgramLesson,
+  type CatalogProgramModule,
+  catalogCover,
+  contentAccessDenied,
+  loadCatalogProgram,
+} from './read-common.ts';
+export {
+  getShowcaseProduct,
+  listShowcase,
+  loadShowcaseBundleItems,
+  SHOWCASE_PRICE_FILTERS,
+  SHOWCASE_SORTS,
+  type ShowcaseAccessMode,
+  type ShowcaseBundle,
+  type ShowcaseBundleItem,
+  type ShowcaseCourse,
+  type ShowcaseEbook,
+  type ShowcaseItem,
+  type ShowcasePriceFilter,
+  type ShowcaseProduct,
+  type ShowcaseQuery,
+  type ShowcaseSort,
+} from './showcase.ts';
 export {
   type CatalogLesson,
   type CatalogLessonLink,
