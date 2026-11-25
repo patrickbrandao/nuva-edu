@@ -66,6 +66,14 @@ tags:
     description: Termos de Uso, Política de Privacidade e aceite (`specs/030-lgpd.md`).
   - name: images
     description: Envio e entrega de imagens (`specs/029-imagens.md`).
+  - name: catalog
+    description: Vitrine, produtos e programa (`specs/009-catalogo-e-conteudo.md`).
+  - name: learning
+    description: Aula, progresso, estante e direitos do aluno (`specs/014-aprendizado-e-progresso.md`).
+  - name: notes
+    description: Anotações privadas (`specs/016-anotacoes.md`).
+  - name: certificates
+    description: Certificados e validação pública (`specs/015-certificados.md`).
 security:
   - sessionCookie: []
 paths:
@@ -1321,6 +1329,1064 @@ paths:
           $ref: "#/components/responses/InternalError"
         "503":
           $ref: "#/components/responses/ServiceUnavailable"
+  /api/v1/catalog:
+    get:
+      operationId: listCatalog
+      tags: [catalog]
+      summary: Vitrine
+      x-nuva-pending: true
+      description: |
+        Cursos, pacotes e ebooks `published` com modo `open` ou `paid`, sem exigir login
+        (`specs/009-catalogo-e-conteudo.md`, "Vitrine pública"). Produto `private` nunca aparece, nem na
+        busca. Nenhum item traz URL de vídeo, de arquivo ou de apoio. Segue o limite de visitante
+        (`specs/004-classroom-api.md`).
+      security: []
+      parameters:
+        - name: type
+          in: query
+          schema:
+            $ref: "#/components/schemas/ProductType"
+        - name: level
+          in: query
+          schema:
+            $ref: "#/components/schemas/CourseLevel"
+        - name: price
+          in: query
+          description: "`free`: modo `open` ou preço 0; `paid`: preço acima de 0."
+          schema:
+            type: string
+            enum: [free, paid]
+        - name: q
+          in: query
+          description: Busca no título e no resumo.
+          schema:
+            type: string
+            minLength: 1
+            maxLength: 200
+        - name: sort
+          in: query
+          schema:
+            type: string
+            enum: [-publishedAt, title, priceCents, -priceCents]
+            default: -publishedAt
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Cursor"
+      responses:
+        "200":
+          description: Uma página da vitrine.
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/XRequestId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CatalogItemPage"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+  /api/v1/catalog/{type}/{slug}:
+    get:
+      operationId: getCatalogProduct
+      tags: [catalog]
+      summary: Página do produto
+      x-nuva-pending: true
+      description: |
+        Descrição completa, programa (curso: módulos, títulos e durações das aulas publicadas), itens
+        (pacote) ou dados do ebook, sem login e sem nenhuma URL de conteúdo. Produto `private`, em
+        rascunho ou arquivado: `404`. Na Fase 2 não há botão de compra: o produto `paid` mostra o preço
+        e "Acesso liberado pela escola".
+      security: []
+      parameters:
+        - name: type
+          in: path
+          required: true
+          schema:
+            $ref: "#/components/schemas/ProductType"
+        - $ref: "#/components/parameters/SlugPath"
+      responses:
+        "200":
+          description: O produto.
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/XRequestId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CatalogProduct"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+  /api/v1/courses/{slug}:
+    get:
+      operationId: getCourse
+      tags: [catalog]
+      summary: Curso com o estado do usuário
+      x-permission: course.view_program
+      x-nuva-pending: true
+      description: |
+        O programa com o estado de acesso do usuário (`specs/010-direitos-de-acesso.md`, "Verificação de
+        acesso"), o progresso, a aula para "Continuar" e o estado do certificado. Sem acesso, o programa
+        continua visível, sem URL de conteúdo. Curso `private` sem direito, rascunho ou inexistente:
+        `404`.
+      parameters:
+        - $ref: "#/components/parameters/SlugPath"
+      responses:
+        "200":
+          description: O curso.
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/XRequestId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CourseView"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+  /api/v1/lessons/{id}:
+    get:
+      operationId: getLesson
+      tags: [learning]
+      summary: Aula
+      x-permission: lesson.watch_open
+      x-nuva-pending: true
+      description: |
+        O conteúdo da aula (vídeo, descrição, links de apoio, ebooks vinculados), as vizinhas e o estado
+        do usuário. Grava a abertura (`lastOpenedAt`, `specs/014-aprendizado-e-progresso.md`, "Continuar
+        de onde parou"). Sem acesso: `403` `access_denied` com `reason`, sem nenhuma URL. Aula ou curso
+        despublicado, ou inexistente: `404`. Em aula amostra de curso que o aluno não tem, `ebooks` vem
+        vazio.
+      parameters:
+        - $ref: "#/components/parameters/IdPath"
+      responses:
+        "200":
+          description: A aula.
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/XRequestId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LessonView"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/AccessDenied"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+  /api/v1/samples:
+    get:
+      operationId: listSampleLessons
+      tags: [catalog]
+      summary: Aulas liberadas
+      x-permission: lesson.watch_sample
+      x-nuva-pending: true
+      description: |
+        Aulas amostra (`isSample`) de cursos publicados e não privados, para "Aulas liberadas". Por
+        padrão, só as de cursos que o usuário não tem.
+      parameters:
+        - name: excludeOwned
+          in: query
+          description: "`false` inclui as de cursos a que o usuário já tem acesso."
+          schema:
+            type: boolean
+            default: true
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Cursor"
+      responses:
+        "200":
+          description: Uma página de aulas amostra.
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/XRequestId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SampleLessonPage"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+  /api/v1/ebooks/{slug}:
+    get:
+      operationId: getEbook
+      tags: [catalog]
+      summary: Ebook com o estado do usuário
+      x-permission: course.view_program
+      x-nuva-pending: true
+      description: |
+        O ebook com o estado de acesso do usuário, sem a URL do arquivo (ela sai só em
+        `GET /api/v1/ebooks/{id}/download`). `private` sem direito, rascunho ou inexistente: `404`.
+      parameters:
+        - $ref: "#/components/parameters/SlugPath"
+      responses:
+        "200":
+          description: O ebook.
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/XRequestId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EbookView"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+  /api/v1/ebooks/{id}/download:
+    get:
+      operationId: getEbookDownload
+      tags: [learning]
+      summary: Link do arquivo do ebook
+      x-permission: content.access_paid
+      x-nuva-pending: true
+      description: |
+        Devolve a URL externa do arquivo a quem tem acesso ao ebook (`specs/010-direitos-de-acesso.md`).
+        Sem acesso: `403` `access_denied` com `reason`. O site abre a URL numa aba nova.
+      parameters:
+        - $ref: "#/components/parameters/IdPath"
+      responses:
+        "200":
+          description: A URL do arquivo.
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/XRequestId"
+            Cache-Control:
+              $ref: "#/components/headers/NoStore"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EbookDownload"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/AccessDenied"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+  /api/v1/me/entitlements:
+    get:
+      operationId: listMyEntitlements
+      tags: [learning]
+      summary: O que o aluno tem
+      x-permission: account.self_service
+      x-nuva-pending: true
+      description: |
+        Os direitos do usuário, com validade e origem, para "Minha assinatura" e a estante. Inclui os
+        vencidos; não inclui os revogados.
+      responses:
+        "200":
+          description: Os direitos.
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/XRequestId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MyEntitlementList"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+  /api/v1/me/courses:
+    get:
+      operationId: listMyCourses
+      tags: [learning]
+      summary: Estante "Meus cursos"
+      x-permission: learning.track
+      x-nuva-pending: true
+      description: |
+        Todo curso a que o aluno tem direito ativo ou já teve (`access.state = expired`), mais os cursos
+        `open` que ele abriu, com progresso, ação e estado do certificado
+        (`specs/014-aprendizado-e-progresso.md`, "Estante"). Os contadores valem para o conjunto todo,
+        antes do filtro e da busca. Sem paginação (até 200 cursos).
+      parameters:
+        - name: filter
+          in: query
+          schema:
+            type: string
+            enum: [all, in_progress, not_started, completed]
+            default: all
+        - name: q
+          in: query
+          description: Trecho do título.
+          schema:
+            type: string
+            minLength: 1
+            maxLength: 200
+        - name: sort
+          in: query
+          schema:
+            type: string
+            enum: [-lastAccessedAt, -publishedAt, title, -percent]
+            default: -lastAccessedAt
+      responses:
+        "200":
+          description: A estante.
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/XRequestId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Shelf"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+  /api/v1/me/continue:
+    get:
+      operationId: listContinueWatching
+      tags: [learning]
+      summary: '"Continue assistindo"'
+      x-permission: learning.track
+      x-nuva-pending: true
+      description: |
+        Até 3 cursos em andamento, do mais recente ao mais antigo, com a aula de "Continuar".
+      responses:
+        "200":
+          description: Os cursos em andamento.
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/XRequestId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ContinueList"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+  /api/v1/courses/{slug}/progress:
+    get:
+      operationId: getCourseProgress
+      tags: [learning]
+      summary: Progresso no curso
+      x-permission: learning.track
+      x-nuva-pending: true
+      description: |
+        Progresso por módulo e aula, sobre as aulas publicadas. `private` sem direito: `404`.
+      parameters:
+        - $ref: "#/components/parameters/SlugPath"
+      responses:
+        "200":
+          description: O progresso.
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/XRequestId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CourseProgress"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+  /api/v1/lessons/{id}/progress:
+    put:
+      operationId: saveLessonProgress
+      tags: [learning]
+      summary: Marcar conclusão e gravar a posição do vídeo
+      x-permission: learning.track
+      x-nuva-pending: true
+      description: |
+        Grava só os campos enviados (`specs/014-aprendizado-e-progresso.md`). `completed: true` conclui
+        (idempotente; `completedVia` diz se foi pelo botão ou pelo fim do vídeo); `false` desmarca.
+        `positionSeconds` é enviado no máximo a cada 15 s e ao sair da página, por `fetch` com
+        `keepalive` e `X-CSRF-Token`. A passagem de menos de 100% a 100% enfileira `course.completed`
+        na mesma transação.
+
+        - Sem acesso à aula: `403` `access_denied` com `reason`. Aula despublicada ou inexistente:
+          `404`.
+        - `positionSeconds` negativo ou acima da duração + 60 s: `422` `position_out_of_range`.
+      security:
+        - sessionCookie: []
+          csrfToken: []
+      parameters:
+        - $ref: "#/components/parameters/IdPath"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: []
+              properties:
+                completed:
+                  type: boolean
+                completedVia:
+                  $ref: "#/components/schemas/CompletionVia"
+                  description: "Obrigatório com `completed: true`; ignorado nos demais."
+                positionSeconds:
+                  type: [number, "null"]
+                  description: Posição do vídeo, em segundos.
+              additionalProperties: false
+              minProperties: 1
+      responses:
+        "200":
+          description: Progresso gravado.
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/XRequestId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LessonProgressResult"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/AccessDenied"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "413":
+          $ref: "#/components/responses/PayloadTooLarge"
+        "415":
+          $ref: "#/components/responses/UnsupportedMediaType"
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+  /api/v1/me/progress:
+    get:
+      operationId: getMyProgress
+      tags: [learning]
+      summary: '"Meu progresso"'
+      x-permission: learning.track
+      x-nuva-pending: true
+      description: |
+        Para cada curso iniciado, um quadrado por aula, agrupado por módulo, e o percentual.
+      responses:
+        "200":
+          description: O progresso por curso.
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/XRequestId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MyProgress"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+  /api/v1/me/activity:
+    get:
+      operationId: getMyActivity
+      tags: [learning]
+      summary: Mapa de atividade
+      x-permission: learning.track
+      x-nuva-pending: true
+      description: |
+        Últimas 53 semanas, dia a dia, no fuso do usuário (`school.timezone` até a Fase 6). Só os dias
+        com atividade vêm em `days`; os demais contam zero. Na Fase 2 conta só aulas concluídas.
+      responses:
+        "200":
+          description: O mapa.
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/XRequestId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ActivityMap"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+  /api/v1/me/ebooks:
+    get:
+      operationId: listMyEbooks
+      tags: [learning]
+      summary: '"Meus ebooks"'
+      x-permission: learning.track
+      x-nuva-pending: true
+      description: |
+        Ebooks com direito ativo, com a validade; o download é `GET /api/v1/ebooks/{id}/download`.
+      responses:
+        "200":
+          description: Os ebooks.
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/XRequestId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MyEbookList"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+  /api/v1/notes:
+    get:
+      operationId: listNotes
+      tags: [notes]
+      summary: Página "Anotações"
+      x-permission: learning.track
+      x-nuva-pending: true
+      description: |
+        Todas as notas do próprio usuário, da alteração mais recente à mais antiga
+        (`specs/016-anotacoes.md`). Busca textual no título e no corpo. Ninguém lê nota alheia, nem a
+        equipe.
+      parameters:
+        - name: q
+          in: query
+          schema:
+            type: string
+            minLength: 1
+            maxLength: 200
+        - name: kind
+          in: query
+          description: "`lesson`: só as de aula; `standalone`: só as avulsas."
+          schema:
+            type: string
+            enum: [lesson, standalone]
+        - name: courseId
+          in: query
+          schema:
+            $ref: "#/components/schemas/Uuid"
+        - name: limit
+          in: query
+          description: Quantidade de notas por página.
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 30
+        - $ref: "#/components/parameters/Cursor"
+      responses:
+        "200":
+          description: Uma página de notas.
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/XRequestId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NoteSummaryPage"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+    post:
+      operationId: createNote
+      tags: [notes]
+      summary: Criar nota
+      x-permission: learning.track
+      x-nuva-pending: true
+      description: |
+        Nota de aula (com `lessonId`) ou avulsa (sem). Nota de aula exige acesso à aula no momento:
+        `403` `access_denied` com `reason`; aula inexistente: `404`. Corpo só com espaços: `422`
+        `note_empty`; acima de 20.000 caracteres: `422` `note_too_long`; acima de 5.000 notas: `422`
+        `note_limit_reached`.
+      security:
+        - sessionCookie: []
+          csrfToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [body]
+              properties:
+                lessonId:
+                  oneOf:
+                    - $ref: "#/components/schemas/Uuid"
+                    - type: "null"
+                title:
+                  type: [string, "null"]
+                  maxLength: 160
+                body:
+                  type: string
+                  minLength: 1
+                  description: Markdown, até 20.000 caracteres.
+                videoSeconds:
+                  type: [number, "null"]
+                  description: "Instante do vídeo; negativo: `422`."
+              additionalProperties: false
+      responses:
+        "201":
+          description: Nota criada.
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/XRequestId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Note"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/AccessDenied"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "413":
+          $ref: "#/components/responses/PayloadTooLarge"
+        "415":
+          $ref: "#/components/responses/UnsupportedMediaType"
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+  /api/v1/notes/{id}:
+    get:
+      operationId: getNote
+      tags: [notes]
+      summary: Uma nota
+      x-permission: learning.track
+      x-nuva-pending: true
+      description: "Nota de outro usuário ou inexistente: `404`."
+      parameters:
+        - $ref: "#/components/parameters/IdPath"
+      responses:
+        "200":
+          description: A nota.
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/XRequestId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Note"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+    patch:
+      operationId: updateNote
+      tags: [notes]
+      summary: Editar nota
+      x-permission: learning.track
+      x-nuva-pending: true
+      description: |
+        Salvamento automático. `updatedAt` é o da versão que o cliente conhece; se a nota mudou em outro
+        dispositivo: `409` `version_conflict` com a versão atual em `current`. Perder o acesso ao curso
+        não impede editar. Mesmos `422` da criação.
+      security:
+        - sessionCookie: []
+          csrfToken: []
+      parameters:
+        - $ref: "#/components/parameters/IdPath"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [updatedAt]
+              properties:
+                title:
+                  type: [string, "null"]
+                  maxLength: 160
+                body:
+                  type: string
+                  minLength: 1
+                videoSeconds:
+                  type: [number, "null"]
+                updatedAt:
+                  $ref: "#/components/schemas/DateTime"
+                  description: O `updatedAt` da nota lida.
+              additionalProperties: false
+      responses:
+        "200":
+          description: Nota gravada.
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/XRequestId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Note"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/NoteConflict"
+        "413":
+          $ref: "#/components/responses/PayloadTooLarge"
+        "415":
+          $ref: "#/components/responses/UnsupportedMediaType"
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+    delete:
+      operationId: deleteNote
+      tags: [notes]
+      summary: Excluir nota
+      x-permission: learning.track
+      x-nuva-pending: true
+      description: "Definitivo, sem lixeira. Nota de outro usuário: `404`."
+      security:
+        - sessionCookie: []
+          csrfToken: []
+      parameters:
+        - $ref: "#/components/parameters/IdPath"
+      responses:
+        "204":
+          description: Nota excluída.
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/XRequestId"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+  /api/v1/lessons/{id}/notes:
+    get:
+      operationId: listLessonNotes
+      tags: [notes]
+      summary: Notas da aula
+      x-permission: learning.track
+      x-nuva-pending: true
+      description: |
+        As notas do usuário naquela aula, da mais antiga à mais recente, para a aba "Minhas notas".
+      parameters:
+        - $ref: "#/components/parameters/IdPath"
+      responses:
+        "200":
+          description: As notas da aula.
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/XRequestId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NoteList"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+  /api/v1/me/certificates:
+    get:
+      operationId: listMyCertificates
+      tags: [certificates]
+      summary: Meus certificados
+      x-permission: learning.track
+      x-nuva-pending: true
+      description: |
+        Os certificados do aluno e, à parte, os cursos concluídos que aguardam template
+        (`awaiting_template`), com o nome que sairá no certificado (`specs/015-certificados.md`).
+      responses:
+        "200":
+          description: Os certificados.
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/XRequestId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MyCertificates"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+  /api/v1/me/certificates/{id}/pdf:
+    get:
+      operationId: getMyCertificatePdf
+      tags: [certificates]
+      summary: PDF do certificado
+      x-permission: learning.track
+      x-nuva-pending: true
+      description: |
+        Só o dono. Certificado de outro aluno ou inexistente: `404`. PDF ainda não gerado: `409`
+        `certificate_preparing` ("em preparação").
+      parameters:
+        - $ref: "#/components/parameters/IdPath"
+      responses:
+        "200":
+          $ref: "#/components/responses/Pdf"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+  /api/v1/me/certificate-name:
+    put:
+      operationId: setCertificateName
+      tags: [certificates]
+      summary: Nome no certificado
+      x-permission: account.self_service
+      x-nuva-pending: true
+      description: |
+        Grava `users.full_name`, o nome que sai nos próximos certificados, sem confirmação com prazo.
+        `null` apaga, e vale o nome de exibição. Certificado já emitido não muda (a correção é a
+        reemissão pela equipe).
+      security:
+        - sessionCookie: []
+          csrfToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [fullName]
+              properties:
+                fullName:
+                  type: [string, "null"]
+                  minLength: 1
+                  maxLength: 160
+              additionalProperties: false
+      responses:
+        "200":
+          description: Nome gravado.
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/XRequestId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CertificateName"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "413":
+          $ref: "#/components/responses/PayloadTooLarge"
+        "415":
+          $ref: "#/components/responses/UnsupportedMediaType"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+  /api/v1/certificates/verify/{code}:
+    get:
+      operationId: verifyCertificate
+      tags: [certificates]
+      summary: Validação pública
+      x-nuva-pending: true
+      description: |
+        Sem login (`specs/015-certificados.md`, "Validação pública"). Código com ou sem hífens, sem
+        diferenciar maiúsculas. Código inexistente ou fora do formato: `404` `certificate_not_found`,
+        com a mesma resposta e o mesmo tempo para qualquer código. Não expõe e-mail, foto, perfil nem o
+        PDF. Acima de 30 consultas por minuto do mesmo IP: `429`.
+      security: []
+      parameters:
+        - name: code
+          in: path
+          required: true
+          description: O código do certificado.
+          schema:
+            type: string
+            minLength: 1
+            maxLength: 32
+      responses:
+        "200":
+          description: O certificado existe.
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/XRequestId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CertificateVerification"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
 components:
   securitySchemes:
     sessionCookie:
@@ -1430,6 +2496,14 @@ components:
         é um inteiro em texto: `400`.
       schema:
         $ref: "#/components/schemas/StreamEventId"
+    # --- comum: catálogo, aprendizado e certificados (Fase 2) ---
+    SlugPath:
+      name: slug
+      in: path
+      required: true
+      description: Identificador legível do produto na URL (único por tipo de produto).
+      schema:
+        $ref: "#/components/schemas/Slug"
   headers:
     # --- comum ---
     XRequestId:
@@ -1473,6 +2547,11 @@ components:
       schema:
         type: string
         const: nosniff
+    # --- comum: catálogo, aprendizado e certificados (Fase 2) ---
+    ContentDisposition:
+      description: Sempre `attachment`, com o nome sugerido do arquivo (`filename`).
+      schema:
+        type: string
   responses:
     # --- comum ---
     BadRequest:
@@ -1645,6 +2724,46 @@ components:
           $ref: "#/components/headers/Location"
         Set-Cookie:
           $ref: "#/components/headers/SetCookie"
+    # --- comum: catálogo, aprendizado e certificados (Fase 2) ---
+    Pdf:
+      description: |
+        O arquivo PDF. `Content-Disposition` sugere o nome do arquivo; a resposta não é guardada em
+        cache.
+      headers:
+        X-Request-Id:
+          $ref: "#/components/headers/XRequestId"
+        Cache-Control:
+          $ref: "#/components/headers/NoStore"
+        Content-Disposition:
+          $ref: "#/components/headers/ContentDisposition"
+        X-Content-Type-Options:
+          $ref: "#/components/headers/ContentTypeOptions"
+      content:
+        application/pdf:
+          schema:
+            type: string
+            contentMediaType: application/pdf
+    # --- só classroom-api: Fase 2 ---
+    AccessDenied:
+      description: |
+        Sem acesso ao conteúdo (`access_denied`, com `reason`), sem permissão (`permission_denied`) ou
+        escrita sem `X-CSRF-Token` válido (`csrf_token_invalid`).
+      headers:
+        X-Request-Id:
+          $ref: "#/components/headers/XRequestId"
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/AccessDeniedProblem"
+    NoteConflict:
+      description: A nota mudou em outro dispositivo (`version_conflict`), com a versão atual.
+      headers:
+        X-Request-Id:
+          $ref: "#/components/headers/XRequestId"
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/NoteConflictProblem"
   schemas:
     # --- comum ---
     Uuid:
@@ -2341,3 +3460,1573 @@ components:
           announcement.published: "#/components/schemas/StreamEventAnnouncementPublished"
           presence: "#/components/schemas/StreamEventPresence"
           ping: "#/components/schemas/StreamEventPing"
+    # --- comum: catálogo, aprendizado e certificados (Fase 2) ---
+    ProductType:
+      type: string
+      enum: [course, bundle, ebook]
+      description: Tipo de produto do catálogo (`specs/009-catalogo-e-conteudo.md`).
+    AccessMode:
+      type: string
+      enum: [open, paid, private]
+      description: |
+        Modo de acesso do produto (`specs/009-catalogo-e-conteudo.md`, "Modos de acesso"): `open` para
+        qualquer usuário logado, `paid` para quem tem direito ativo, `private` só por concessão, pacote
+        ou
+        plano, e nunca na vitrine.
+    PublicationStatus:
+      type: string
+      enum: [draft, published]
+      description: Estado de publicação de produto e de aula; só `published` aparece no classroom.
+    CourseLevel:
+      type: string
+      enum: [beginner, intermediate, advanced]
+      description: Nível do curso.
+    VideoProvider:
+      type: string
+      enum: [youtube, vimeo, bunny, panda, file, link]
+      description: |
+        Provedor do vídeo, classificado pela API a partir da URL na gravação
+        (`specs/009-catalogo-e-conteudo.md`,
+        "Vídeo e links externos"). URL fora dos padrões da tabela, inclusive `.m3u8` de outro host, vira
+        `link` (botão "Abrir vídeo", sem conclusão automática).
+    LessonLinkKind:
+      type: string
+      enum: [file, page]
+      description: "Tipo de link de apoio: arquivo ou página."
+    LessonLink:
+      type: object
+      description: Link de apoio de uma aula, na ordem de `position`.
+      required: [id, label, url, kind, position]
+      properties:
+        id:
+          $ref: "#/components/schemas/Uuid"
+        label:
+          type: string
+        url:
+          type: string
+          description: URL externa do material; só vai a quem tem acesso à aula.
+        kind:
+          $ref: "#/components/schemas/LessonLinkKind"
+        position:
+          type: integer
+          minimum: 0
+      additionalProperties: false
+    ProductCover:
+      type: object
+      description: |
+        Capa de um produto, imagem de finalidade `product_cover` em 16:9 (`specs/029-imagens.md`).
+      required: [imageId, url, largeUrl]
+      properties:
+        imageId:
+          $ref: "#/components/schemas/Uuid"
+        url:
+          type: string
+          format: uri-reference
+          description: Variante de 480 px (`/api/v1/images/{imageId}/480.webp`).
+        largeUrl:
+          type: string
+          format: uri-reference
+          description: Variante de 1280 px (`/api/v1/images/{imageId}/1280.webp`).
+      additionalProperties: false
+    CertificateState:
+      type: string
+      enum: [preparing, issued, revoked]
+      description: |
+        Estado de um certificado existente: `preparing` (registro criado, PDF ainda não gerado),
+        `issued` (com PDF) ou `revoked` (`specs/015-certificados.md`).
+    Slug:
+      type: string
+      minLength: 1
+      maxLength: 160
+      pattern: ^[a-z0-9]+(-[a-z0-9]+)*$
+      description: "Identificador legível na URL: minúsculas, dígitos e hífens."
+      examples: [introducao-ao-python]
+    # --- só classroom-api: catálogo, aprendizado e certificados (Fase 2) ---
+    CatalogItem:
+      type: object
+      description: Um produto na vitrine, sem nenhuma URL de conteúdo.
+      required:
+        [
+          type,
+          id,
+          slug,
+          title,
+          summary,
+          cover,
+          level,
+          accessMode,
+          priceCents,
+          accessDays,
+          moduleCount,
+          lessonCount,
+          durationSeconds,
+          itemCount,
+          pages,
+          publishedAt,
+          updatedAt,
+        ]
+      properties:
+        type:
+          $ref: "#/components/schemas/ProductType"
+        id:
+          $ref: "#/components/schemas/Uuid"
+        slug:
+          $ref: "#/components/schemas/Slug"
+        title:
+          type: string
+        summary:
+          type: [string, "null"]
+        cover:
+          oneOf:
+            - $ref: "#/components/schemas/ProductCover"
+            - type: "null"
+        level:
+          oneOf:
+            - $ref: "#/components/schemas/CourseLevel"
+            - type: "null"
+          description: Só em curso.
+        accessMode:
+          type: string
+          enum: [open, paid]
+          description: Modo de acesso; produto `private` nunca aparece na vitrine.
+        priceCents:
+          type: [integer, "null"]
+          minimum: 0
+          description: Preço em centavos no modo `paid`; `null` em `open`.
+        accessDays:
+          type: [integer, "null"]
+          minimum: 1
+          description: Dias de acesso a partir da compra; `null` é vitalício.
+        moduleCount:
+          type: [integer, "null"]
+          minimum: 0
+          description: Só em curso.
+        lessonCount:
+          type: [integer, "null"]
+          minimum: 0
+          description: Só em curso.
+        durationSeconds:
+          type: [integer, "null"]
+          minimum: 0
+          description: Só em curso.
+        itemCount:
+          type: [integer, "null"]
+          minimum: 0
+          description: Só em pacote.
+        pages:
+          type: [integer, "null"]
+          minimum: 1
+          description: Só em ebook.
+        publishedAt:
+          $ref: "#/components/schemas/DateTime"
+        updatedAt:
+          $ref: "#/components/schemas/DateTime"
+      additionalProperties: false
+    CatalogItemPage:
+      allOf:
+        - $ref: "#/components/schemas/Page"
+        - type: object
+          required: [items]
+          properties:
+            items:
+              type: array
+              items:
+                $ref: "#/components/schemas/CatalogItem"
+    ProgramLesson:
+      type: object
+      description: "Uma aula publicada no programa: título e duração, sem URL."
+      required: [id, title, durationSeconds, isSample, position]
+      properties:
+        id:
+          $ref: "#/components/schemas/Uuid"
+        title:
+          type: string
+        durationSeconds:
+          type: [integer, "null"]
+          minimum: 0
+        isSample:
+          type: boolean
+        position:
+          type: integer
+          minimum: 0
+      additionalProperties: false
+    ProgramModule:
+      type: object
+      required: [id, title, position, lessonCount, durationSeconds, lessons]
+      properties:
+        id:
+          $ref: "#/components/schemas/Uuid"
+        title:
+          type: string
+        position:
+          type: integer
+          minimum: 0
+        lessonCount:
+          type: integer
+          minimum: 0
+        durationSeconds:
+          type: integer
+          minimum: 0
+        lessons:
+          type: array
+          items:
+            $ref: "#/components/schemas/ProgramLesson"
+      additionalProperties: false
+    CatalogCourse:
+      type: object
+      description: Página de curso na vitrine, com o programa.
+      required:
+        [
+          type,
+          id,
+          slug,
+          title,
+          summary,
+          description,
+          cover,
+          level,
+          accessMode,
+          priceCents,
+          accessDays,
+          moduleCount,
+          lessonCount,
+          durationSeconds,
+          instructorName,
+          program,
+          publishedAt,
+          updatedAt,
+        ]
+      properties:
+        type:
+          type: string
+          const: course
+        id:
+          $ref: "#/components/schemas/Uuid"
+        slug:
+          $ref: "#/components/schemas/Slug"
+        title:
+          type: string
+        summary:
+          type: [string, "null"]
+        description:
+          type: [string, "null"]
+          description: Markdown.
+        cover:
+          oneOf:
+            - $ref: "#/components/schemas/ProductCover"
+            - type: "null"
+        level:
+          oneOf:
+            - $ref: "#/components/schemas/CourseLevel"
+            - type: "null"
+        accessMode:
+          type: string
+          enum: [open, paid]
+          description: Modo de acesso; produto `private` nunca aparece na vitrine.
+        priceCents:
+          type: [integer, "null"]
+          minimum: 0
+          description: Preço em centavos no modo `paid`; `null` em `open`.
+        accessDays:
+          type: [integer, "null"]
+          minimum: 1
+          description: Dias de acesso a partir da compra; `null` é vitalício.
+        moduleCount:
+          type: integer
+          minimum: 0
+        lessonCount:
+          type: integer
+          minimum: 0
+          description: Aulas publicadas.
+        durationSeconds:
+          type: integer
+          minimum: 0
+          description: Soma das aulas publicadas.
+        instructorName:
+          type: [string, "null"]
+          description: Nome de exibição do dono.
+        program:
+          type: array
+          items:
+            $ref: "#/components/schemas/ProgramModule"
+        publishedAt:
+          $ref: "#/components/schemas/DateTime"
+        updatedAt:
+          $ref: "#/components/schemas/DateTime"
+      additionalProperties: false
+    CatalogBundleItem:
+      type: object
+      description: Um item de pacote.
+      required: [type, id, slug, title, summary, cover, accessMode, priceCents, visible]
+      properties:
+        type:
+          type: string
+          enum: [course, ebook]
+        id:
+          $ref: "#/components/schemas/Uuid"
+        slug:
+          $ref: "#/components/schemas/Slug"
+        title:
+          type: string
+        summary:
+          type: [string, "null"]
+        cover:
+          oneOf:
+            - $ref: "#/components/schemas/ProductCover"
+            - type: "null"
+        accessMode:
+          $ref: "#/components/schemas/AccessMode"
+        priceCents:
+          type: [integer, "null"]
+          minimum: 0
+        visible:
+          type: boolean
+          description: "Falso em item `private`: aparece só o título, sem link para a página dele."
+      additionalProperties: false
+    CatalogBundle:
+      type: object
+      description: Página de pacote na vitrine.
+      required:
+        [
+          type,
+          id,
+          slug,
+          title,
+          summary,
+          description,
+          cover,
+          accessMode,
+          priceCents,
+          accessDays,
+          items,
+          itemsPriceCents,
+          publishedAt,
+          updatedAt,
+        ]
+      properties:
+        type:
+          type: string
+          const: bundle
+        id:
+          $ref: "#/components/schemas/Uuid"
+        slug:
+          $ref: "#/components/schemas/Slug"
+        title:
+          type: string
+        summary:
+          type: [string, "null"]
+        description:
+          type: [string, "null"]
+          description: Markdown.
+        cover:
+          oneOf:
+            - $ref: "#/components/schemas/ProductCover"
+            - type: "null"
+        accessMode:
+          type: string
+          enum: [open, paid]
+          description: Modo de acesso; produto `private` nunca aparece na vitrine.
+        priceCents:
+          type: [integer, "null"]
+          minimum: 0
+          description: Preço em centavos no modo `paid`; `null` em `open`.
+        accessDays:
+          type: [integer, "null"]
+          minimum: 1
+          description: Dias de acesso a partir da compra; `null` é vitalício.
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/CatalogBundleItem"
+        itemsPriceCents:
+          type: integer
+          minimum: 0
+          description: Soma dos preços avulsos dos itens `paid`, para mostrar a economia.
+        publishedAt:
+          $ref: "#/components/schemas/DateTime"
+        updatedAt:
+          $ref: "#/components/schemas/DateTime"
+      additionalProperties: false
+    CatalogEbook:
+      type: object
+      description: Página de ebook na vitrine, sem a URL do arquivo.
+      required:
+        [
+          type,
+          id,
+          slug,
+          title,
+          summary,
+          description,
+          cover,
+          accessMode,
+          priceCents,
+          accessDays,
+          authorName,
+          pages,
+          publishedAt,
+          updatedAt,
+        ]
+      properties:
+        type:
+          type: string
+          const: ebook
+        id:
+          $ref: "#/components/schemas/Uuid"
+        slug:
+          $ref: "#/components/schemas/Slug"
+        title:
+          type: string
+        summary:
+          type: [string, "null"]
+        description:
+          type: [string, "null"]
+          description: Markdown.
+        cover:
+          oneOf:
+            - $ref: "#/components/schemas/ProductCover"
+            - type: "null"
+        accessMode:
+          type: string
+          enum: [open, paid]
+          description: Modo de acesso; produto `private` nunca aparece na vitrine.
+        priceCents:
+          type: [integer, "null"]
+          minimum: 0
+          description: Preço em centavos no modo `paid`; `null` em `open`.
+        accessDays:
+          type: [integer, "null"]
+          minimum: 1
+          description: Dias de acesso a partir da compra; `null` é vitalício.
+        authorName:
+          type: [string, "null"]
+        pages:
+          type: [integer, "null"]
+          minimum: 1
+        publishedAt:
+          $ref: "#/components/schemas/DateTime"
+        updatedAt:
+          $ref: "#/components/schemas/DateTime"
+      additionalProperties: false
+    CatalogProduct:
+      description: Página do produto, conforme `type`.
+      oneOf:
+        - $ref: "#/components/schemas/CatalogCourse"
+        - $ref: "#/components/schemas/CatalogBundle"
+        - $ref: "#/components/schemas/CatalogEbook"
+      discriminator:
+        propertyName: type
+        mapping:
+          course: "#/components/schemas/CatalogCourse"
+          bundle: "#/components/schemas/CatalogBundle"
+          ebook: "#/components/schemas/CatalogEbook"
+    AccessDenialReason:
+      type: string
+      enum: [not_authenticated, suspended, no_entitlement, expired, unpublished]
+      description: |
+        Motivo da negativa de `canAccess` (`specs/010-direitos-de-acesso.md`), usado pelo site para
+        escolher a mensagem.
+    AccessState:
+      type: object
+      description: Estado de acesso do usuário a um produto.
+      required: [allowed, reason, expiresAt]
+      properties:
+        allowed:
+          type: boolean
+          description: O usuário acessa o conteúdo agora.
+        reason:
+          oneOf:
+            - $ref: "#/components/schemas/AccessDenialReason"
+            - type: "null"
+          description: "`null` quando `allowed`."
+        expiresAt:
+          oneOf:
+            - $ref: "#/components/schemas/DateTime"
+            - type: "null"
+          description: Fim do acesso mais longo; `null` vitalício, `open` ou sem acesso.
+      additionalProperties: false
+    CourseProgressState:
+      type: string
+      enum: [not_started, in_progress, completed]
+      description: Estado do curso para o aluno (`specs/014-aprendizado-e-progresso.md`, "Progresso").
+    ProgressCounts:
+      type: object
+      description: Progresso num curso ou módulo, sobre as aulas publicadas.
+      required: [completedLessons, totalLessons, percent, state]
+      properties:
+        completedLessons:
+          type: integer
+          minimum: 0
+        totalLessons:
+          type: integer
+          minimum: 0
+          description: Aulas publicadas.
+        percent:
+          type: integer
+          minimum: 0
+          maximum: 100
+        state:
+          $ref: "#/components/schemas/CourseProgressState"
+      additionalProperties: false
+    CourseCertificateStateName:
+      type: string
+      enum: [in_progress, awaiting_template, preparing, issued, revoked]
+      description: |
+        Estado do certificado para o aluno (`specs/015-certificados.md`, "Estado do certificado para o
+        aluno").
+    CourseCertificateState:
+      type: object
+      description: |
+        Estado do certificado de um curso com certificado habilitado. Nos campos que o usam, `null` é
+        certificado desabilitado: a página não menciona certificado.
+      required: [state, certificateId, code, studentName]
+      properties:
+        state:
+          $ref: "#/components/schemas/CourseCertificateStateName"
+        certificateId:
+          oneOf:
+            - $ref: "#/components/schemas/Uuid"
+            - type: "null"
+          description: Presente quando o certificado existe.
+        code:
+          type: [string, "null"]
+          description: Código, em `issued` e `revoked`.
+        studentName:
+          type: string
+          description: |
+            O nome que sai (ou saiu) no certificado: `users.full_name` ou, vazio, o nome de exibição; o
+            congelado, quando já emitido.
+      additionalProperties: false
+    CourseViewLesson:
+      type: object
+      required: [id, title, durationSeconds, isSample, position, accessible, completed]
+      properties:
+        id:
+          $ref: "#/components/schemas/Uuid"
+        title:
+          type: string
+        durationSeconds:
+          type: [integer, "null"]
+          minimum: 0
+        isSample:
+          type: boolean
+        position:
+          type: integer
+          minimum: 0
+        accessible:
+          type: boolean
+          description: O usuário abre a aula agora.
+        completed:
+          type: boolean
+      additionalProperties: false
+    CourseViewModule:
+      type: object
+      required: [id, title, position, progress, durationSeconds, lessons]
+      properties:
+        id:
+          $ref: "#/components/schemas/Uuid"
+        title:
+          type: string
+        position:
+          type: integer
+          minimum: 0
+        progress:
+          $ref: "#/components/schemas/ProgressCounts"
+        durationSeconds:
+          type: integer
+          minimum: 0
+        lessons:
+          type: array
+          items:
+            $ref: "#/components/schemas/CourseViewLesson"
+      additionalProperties: false
+    EbookRef:
+      type: object
+      description: Ebook vinculado a curso ou aula, sem a URL do arquivo.
+      required: [id, slug, title, cover, accessible]
+      properties:
+        id:
+          $ref: "#/components/schemas/Uuid"
+        slug:
+          $ref: "#/components/schemas/Slug"
+        title:
+          type: string
+        cover:
+          oneOf:
+            - $ref: "#/components/schemas/ProductCover"
+            - type: "null"
+        accessible:
+          type: boolean
+          description: O usuário baixa o ebook agora.
+      additionalProperties: false
+    CourseView:
+      type: object
+      description: O curso com o estado do usuário; sem URL de conteúdo.
+      required:
+        [
+          id,
+          slug,
+          title,
+          summary,
+          description,
+          cover,
+          level,
+          accessMode,
+          priceCents,
+          accessDays,
+          moduleCount,
+          lessonCount,
+          durationSeconds,
+          instructorName,
+          access,
+          progress,
+          continueLessonId,
+          modules,
+          ebooks,
+          certificate,
+          updatedAt,
+        ]
+      properties:
+        id:
+          $ref: "#/components/schemas/Uuid"
+        slug:
+          $ref: "#/components/schemas/Slug"
+        title:
+          type: string
+        summary:
+          type: [string, "null"]
+        description:
+          type: [string, "null"]
+          description: Markdown.
+        cover:
+          oneOf:
+            - $ref: "#/components/schemas/ProductCover"
+            - type: "null"
+        level:
+          oneOf:
+            - $ref: "#/components/schemas/CourseLevel"
+            - type: "null"
+        accessMode:
+          $ref: "#/components/schemas/AccessMode"
+        priceCents:
+          type: [integer, "null"]
+          minimum: 0
+          description: Preço em centavos no modo `paid`; `null` em `open`.
+        accessDays:
+          type: [integer, "null"]
+          minimum: 1
+          description: Dias de acesso a partir da compra; `null` é vitalício.
+        moduleCount:
+          type: integer
+          minimum: 0
+        lessonCount:
+          type: integer
+          minimum: 0
+          description: Aulas publicadas.
+        durationSeconds:
+          type: integer
+          minimum: 0
+          description: Soma das aulas publicadas.
+        instructorName:
+          type: [string, "null"]
+        access:
+          $ref: "#/components/schemas/AccessState"
+        progress:
+          $ref: "#/components/schemas/ProgressCounts"
+        continueLessonId:
+          oneOf:
+            - $ref: "#/components/schemas/Uuid"
+            - type: "null"
+          description: Aula do botão "Continuar"; `null` sem acesso.
+        modules:
+          type: array
+          items:
+            $ref: "#/components/schemas/CourseViewModule"
+        ebooks:
+          type: array
+          description: Ebooks vinculados ao curso.
+          items:
+            $ref: "#/components/schemas/EbookRef"
+        certificate:
+          oneOf:
+            - $ref: "#/components/schemas/CourseCertificateState"
+            - type: "null"
+          description: Estado do certificado; `null` com certificado desabilitado.
+        updatedAt:
+          $ref: "#/components/schemas/DateTime"
+      additionalProperties: false
+    CompletionVia:
+      type: string
+      enum: [manual, video_end]
+      description: "Como a aula foi concluída: pelo botão ou pelo fim do vídeo."
+    LessonUserState:
+      type: object
+      required: [completedAt, completedVia, positionSeconds, lastOpenedAt]
+      properties:
+        completedAt:
+          oneOf:
+            - $ref: "#/components/schemas/DateTime"
+            - type: "null"
+        completedVia:
+          oneOf:
+            - $ref: "#/components/schemas/CompletionVia"
+            - type: "null"
+        positionSeconds:
+          type: [number, "null"]
+          minimum: 0
+        lastOpenedAt:
+          oneOf:
+            - $ref: "#/components/schemas/DateTime"
+            - type: "null"
+      additionalProperties: false
+    LessonView:
+      type: object
+      description: A aula, para quem tem acesso.
+      required:
+        [
+          id,
+          title,
+          description,
+          durationSeconds,
+          isSample,
+          videoProvider,
+          videoUrl,
+          course,
+          module,
+          links,
+          ebooks,
+          previousLessonId,
+          nextLessonId,
+          isLastLesson,
+          userState,
+        ]
+      properties:
+        id:
+          $ref: "#/components/schemas/Uuid"
+        title:
+          type: string
+        description:
+          type: [string, "null"]
+          description: Markdown, exibido sanitizado.
+        durationSeconds:
+          type: [integer, "null"]
+          minimum: 0
+        isSample:
+          type: boolean
+        videoProvider:
+          oneOf:
+            - $ref: "#/components/schemas/VideoProvider"
+            - type: "null"
+        videoUrl:
+          type: [string, "null"]
+          description: Só sai a quem tem acesso à aula.
+        course:
+          type: object
+          required: [id, slug, title]
+          properties:
+            id:
+              $ref: "#/components/schemas/Uuid"
+            slug:
+              $ref: "#/components/schemas/Slug"
+            title:
+              type: string
+          additionalProperties: false
+        module:
+          type: object
+          required: [id, title]
+          properties:
+            id:
+              $ref: "#/components/schemas/Uuid"
+            title:
+              type: string
+          additionalProperties: false
+        links:
+          type: array
+          items:
+            $ref: "#/components/schemas/LessonLink"
+        ebooks:
+          type: array
+          description: Ebooks vinculados à aula; vazio em amostra de curso que o aluno não tem.
+          items:
+            $ref: "#/components/schemas/EbookRef"
+        previousLessonId:
+          oneOf:
+            - $ref: "#/components/schemas/Uuid"
+            - type: "null"
+        nextLessonId:
+          oneOf:
+            - $ref: "#/components/schemas/Uuid"
+            - type: "null"
+        isLastLesson:
+          type: boolean
+          description: Mostra "Concluir curso" no rodapé.
+        userState:
+          $ref: "#/components/schemas/LessonUserState"
+      additionalProperties: false
+    AccessDeniedProblem:
+      description: |
+        `Problem` de `403`. Em `access_denied` traz `reason`, o motivo da negativa; nos demais
+        `403` (`permission_denied`, `csrf_token_invalid`), não.
+      allOf:
+        - $ref: "#/components/schemas/Problem"
+        - type: object
+          properties:
+            reason:
+              $ref: "#/components/schemas/AccessDenialReason"
+    SampleLesson:
+      type: object
+      required: [id, title, durationSeconds, course]
+      properties:
+        id:
+          $ref: "#/components/schemas/Uuid"
+        title:
+          type: string
+        durationSeconds:
+          type: [integer, "null"]
+          minimum: 0
+        course:
+          type: object
+          required: [id, slug, title, cover]
+          properties:
+            id:
+              $ref: "#/components/schemas/Uuid"
+            slug:
+              $ref: "#/components/schemas/Slug"
+            title:
+              type: string
+            cover:
+              oneOf:
+                - $ref: "#/components/schemas/ProductCover"
+                - type: "null"
+          additionalProperties: false
+      additionalProperties: false
+    SampleLessonPage:
+      allOf:
+        - $ref: "#/components/schemas/Page"
+        - type: object
+          required: [items]
+          properties:
+            items:
+              type: array
+              items:
+                $ref: "#/components/schemas/SampleLesson"
+    EbookView:
+      type: object
+      description: O ebook com o estado do usuário, sem a URL do arquivo.
+      required:
+        [
+          id,
+          slug,
+          title,
+          summary,
+          description,
+          cover,
+          accessMode,
+          priceCents,
+          accessDays,
+          authorName,
+          pages,
+          access,
+          updatedAt,
+        ]
+      properties:
+        id:
+          $ref: "#/components/schemas/Uuid"
+        slug:
+          $ref: "#/components/schemas/Slug"
+        title:
+          type: string
+        summary:
+          type: [string, "null"]
+        description:
+          type: [string, "null"]
+          description: Markdown.
+        cover:
+          oneOf:
+            - $ref: "#/components/schemas/ProductCover"
+            - type: "null"
+        accessMode:
+          $ref: "#/components/schemas/AccessMode"
+        priceCents:
+          type: [integer, "null"]
+          minimum: 0
+          description: Preço em centavos no modo `paid`; `null` em `open`.
+        accessDays:
+          type: [integer, "null"]
+          minimum: 1
+          description: Dias de acesso a partir da compra; `null` é vitalício.
+        authorName:
+          type: [string, "null"]
+        pages:
+          type: [integer, "null"]
+          minimum: 1
+        access:
+          $ref: "#/components/schemas/AccessState"
+        updatedAt:
+          $ref: "#/components/schemas/DateTime"
+      additionalProperties: false
+    EbookDownload:
+      type: object
+      required: [url]
+      properties:
+        url:
+          type: string
+          description: URL externa do arquivo.
+      additionalProperties: false
+    EntitlementSource:
+      type: string
+      enum: [order, subscription, grant, cascade]
+      description: Fonte do direito (`specs/010-direitos-de-acesso.md`, "Fontes").
+    MyEntitlement:
+      type: object
+      required:
+        [
+          id,
+          productType,
+          productId,
+          productSlug,
+          productTitle,
+          source,
+          via,
+          state,
+          startsAt,
+          expiresAt,
+        ]
+      properties:
+        id:
+          $ref: "#/components/schemas/Uuid"
+        productType:
+          $ref: "#/components/schemas/ProductType"
+        productId:
+          $ref: "#/components/schemas/Uuid"
+        productSlug:
+          $ref: "#/components/schemas/Slug"
+        productTitle:
+          type: string
+        source:
+          $ref: "#/components/schemas/EntitlementSource"
+        via:
+          oneOf:
+            - $ref: "#/components/schemas/MyEntitlementVia"
+            - type: "null"
+          description: Produto de origem, quando o direito vem em cascata.
+        state:
+          type: string
+          enum: [active, scheduled, expired]
+        startsAt:
+          $ref: "#/components/schemas/DateTime"
+        expiresAt:
+          oneOf:
+            - $ref: "#/components/schemas/DateTime"
+            - type: "null"
+          description: "`null` é vitalício."
+      additionalProperties: false
+    MyEntitlementVia:
+      type: object
+      required: [productType, productTitle]
+      properties:
+        productType:
+          $ref: "#/components/schemas/ProductType"
+        productTitle:
+          type: string
+      additionalProperties: false
+    MyEntitlementList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/MyEntitlement"
+      additionalProperties: false
+    ShelfAccess:
+      type: object
+      required: [state, expiresAt]
+      properties:
+        state:
+          type: string
+          enum: [active, expired, open]
+          description: '`open`: curso aberto, sem direito; `expired`: selo "acesso vencido".'
+        expiresAt:
+          oneOf:
+            - $ref: "#/components/schemas/DateTime"
+            - type: "null"
+      additionalProperties: false
+    ShelfCourse:
+      type: object
+      required:
+        [
+          id,
+          slug,
+          title,
+          level,
+          cover,
+          progress,
+          access,
+          action,
+          continueLessonId,
+          lastAccessedAt,
+          acquiredAt,
+          publishedAt,
+          certificate,
+        ]
+      properties:
+        id:
+          $ref: "#/components/schemas/Uuid"
+        slug:
+          $ref: "#/components/schemas/Slug"
+        title:
+          type: string
+        level:
+          oneOf:
+            - $ref: "#/components/schemas/CourseLevel"
+            - type: "null"
+        cover:
+          oneOf:
+            - $ref: "#/components/schemas/ProductCover"
+            - type: "null"
+        progress:
+          $ref: "#/components/schemas/ProgressCounts"
+        access:
+          $ref: "#/components/schemas/ShelfAccess"
+        action:
+          type: string
+          enum: [start, continue, review, renew]
+          description: '"Começar", "Continuar", "Rever" ou "Renovar acesso".'
+        continueLessonId:
+          oneOf:
+            - $ref: "#/components/schemas/Uuid"
+            - type: "null"
+        lastAccessedAt:
+          oneOf:
+            - $ref: "#/components/schemas/DateTime"
+            - type: "null"
+        acquiredAt:
+          oneOf:
+            - $ref: "#/components/schemas/DateTime"
+            - type: "null"
+        publishedAt:
+          $ref: "#/components/schemas/DateTime"
+        certificate:
+          oneOf:
+            - $ref: "#/components/schemas/CourseCertificateState"
+            - type: "null"
+          description: Estado do certificado; `null` com certificado desabilitado.
+      additionalProperties: false
+    ShelfCounts:
+      type: object
+      required: [all, inProgress, notStarted, completed, completedLessonSeconds]
+      properties:
+        all:
+          type: integer
+          minimum: 0
+        inProgress:
+          type: integer
+          minimum: 0
+        notStarted:
+          type: integer
+          minimum: 0
+        completed:
+          type: integer
+          minimum: 0
+        completedLessonSeconds:
+          type: integer
+          minimum: 0
+          description: Horas de aula concluídas, em segundos.
+      additionalProperties: false
+    Shelf:
+      type: object
+      required: [counts, startHereCourseId, items]
+      properties:
+        counts:
+          $ref: "#/components/schemas/ShelfCounts"
+        startHereCourseId:
+          oneOf:
+            - $ref: "#/components/schemas/Uuid"
+            - type: "null"
+          description: '"Comece por aqui": com cursos e nenhum iniciado, o de aquisição mais recente.'
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/ShelfCourse"
+      additionalProperties: false
+    ContinueItem:
+      type: object
+      required: [course, lesson, progress, lastOpenedAt]
+      properties:
+        course:
+          type: object
+          required: [id, slug, title, cover]
+          properties:
+            id:
+              $ref: "#/components/schemas/Uuid"
+            slug:
+              $ref: "#/components/schemas/Slug"
+            title:
+              type: string
+            cover:
+              oneOf:
+                - $ref: "#/components/schemas/ProductCover"
+                - type: "null"
+          additionalProperties: false
+        lesson:
+          type: object
+          required: [id, title, positionSeconds]
+          properties:
+            id:
+              $ref: "#/components/schemas/Uuid"
+            title:
+              type: string
+            positionSeconds:
+              type: [number, "null"]
+              minimum: 0
+          additionalProperties: false
+        progress:
+          $ref: "#/components/schemas/ProgressCounts"
+        lastOpenedAt:
+          $ref: "#/components/schemas/DateTime"
+      additionalProperties: false
+    ContinueList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          maxItems: 3
+          items:
+            $ref: "#/components/schemas/ContinueItem"
+      additionalProperties: false
+    ProgressLesson:
+      type: object
+      required: [id, title, completedAt]
+      properties:
+        id:
+          $ref: "#/components/schemas/Uuid"
+        title:
+          type: string
+        completedAt:
+          oneOf:
+            - $ref: "#/components/schemas/DateTime"
+            - type: "null"
+      additionalProperties: false
+    ProgressModule:
+      type: object
+      required: [id, title, progress, lessons]
+      properties:
+        id:
+          $ref: "#/components/schemas/Uuid"
+        title:
+          type: string
+        progress:
+          $ref: "#/components/schemas/ProgressCounts"
+        lessons:
+          type: array
+          items:
+            $ref: "#/components/schemas/ProgressLesson"
+      additionalProperties: false
+    CourseProgress:
+      type: object
+      required: [courseId, progress, modules]
+      properties:
+        courseId:
+          $ref: "#/components/schemas/Uuid"
+        progress:
+          $ref: "#/components/schemas/ProgressCounts"
+        modules:
+          type: array
+          items:
+            $ref: "#/components/schemas/ProgressModule"
+      additionalProperties: false
+    LessonProgressResult:
+      type: object
+      description: O estado gravado e o progresso recalculado do módulo e do curso.
+      required: [lessonId, userState, module, course, countsForCourse]
+      properties:
+        lessonId:
+          $ref: "#/components/schemas/Uuid"
+        userState:
+          $ref: "#/components/schemas/LessonUserState"
+        module:
+          type: object
+          required: [id, progress]
+          properties:
+            id:
+              $ref: "#/components/schemas/Uuid"
+            progress:
+              $ref: "#/components/schemas/ProgressCounts"
+          additionalProperties: false
+        course:
+          type: object
+          required: [id, progress]
+          properties:
+            id:
+              $ref: "#/components/schemas/Uuid"
+            progress:
+              $ref: "#/components/schemas/ProgressCounts"
+          additionalProperties: false
+        countsForCourse:
+          type: boolean
+          description: "Falso em aula amostra de curso que o aluno não tem: não entra no progresso."
+      additionalProperties: false
+    MyProgressCourse:
+      type: object
+      required: [course, progress, modules]
+      properties:
+        course:
+          type: object
+          required: [id, slug, title]
+          properties:
+            id:
+              $ref: "#/components/schemas/Uuid"
+            slug:
+              $ref: "#/components/schemas/Slug"
+            title:
+              type: string
+          additionalProperties: false
+        progress:
+          $ref: "#/components/schemas/ProgressCounts"
+        modules:
+          type: array
+          items:
+            $ref: "#/components/schemas/ProgressModule"
+      additionalProperties: false
+    MyProgress:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/MyProgressCourse"
+      additionalProperties: false
+    ActivityDay:
+      type: object
+      required: [date, total, lessonsCompleted, forumPosts, communityActions, level]
+      properties:
+        date:
+          $ref: "#/components/schemas/Date"
+        total:
+          type: integer
+          minimum: 1
+        lessonsCompleted:
+          type: integer
+          minimum: 0
+        forumPosts:
+          type: integer
+          minimum: 0
+        communityActions:
+          type: integer
+          minimum: 0
+        level:
+          type: integer
+          minimum: 1
+          maximum: 4
+          description: Intensidade do quadrado (0 é o dia sem atividade, fora da lista).
+      additionalProperties: false
+    ActivityMap:
+      type: object
+      required: [timezone, from, to, days]
+      properties:
+        timezone:
+          type: string
+          description: Fuso IANA usado no cálculo dos dias.
+        from:
+          $ref: "#/components/schemas/Date"
+        to:
+          $ref: "#/components/schemas/Date"
+        days:
+          type: array
+          items:
+            $ref: "#/components/schemas/ActivityDay"
+      additionalProperties: false
+    MyEbook:
+      type: object
+      required: [id, slug, title, cover, authorName, pages, expiresAt]
+      properties:
+        id:
+          $ref: "#/components/schemas/Uuid"
+        slug:
+          $ref: "#/components/schemas/Slug"
+        title:
+          type: string
+        cover:
+          oneOf:
+            - $ref: "#/components/schemas/ProductCover"
+            - type: "null"
+        authorName:
+          type: [string, "null"]
+        pages:
+          type: [integer, "null"]
+          minimum: 1
+        expiresAt:
+          oneOf:
+            - $ref: "#/components/schemas/DateTime"
+            - type: "null"
+          description: Fim do acesso; `null` é vitalício.
+      additionalProperties: false
+    MyEbookList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/MyEbook"
+      additionalProperties: false
+    NoteLesson:
+      type: object
+      description: A aula de uma nota, para o link de volta.
+      required: [id, title, courseId, courseSlug, courseTitle, available]
+      properties:
+        id:
+          oneOf:
+            - $ref: "#/components/schemas/Uuid"
+            - type: "null"
+          description: "`null` quando a aula foi excluída."
+        title:
+          type: string
+          description: Título atual, ou o guardado na criação.
+        courseId:
+          oneOf:
+            - $ref: "#/components/schemas/Uuid"
+            - type: "null"
+        courseSlug:
+          type: [string, "null"]
+        courseTitle:
+          type: string
+        available:
+          type: boolean
+          description: "Falso com a aula despublicada ou excluída: a nota não tem link de volta."
+      additionalProperties: false
+    Note:
+      type: object
+      description: Uma nota, privada do dono.
+      required: [id, lesson, videoSeconds, title, body, createdAt, updatedAt]
+      properties:
+        id:
+          $ref: "#/components/schemas/Uuid"
+        lesson:
+          oneOf:
+            - $ref: "#/components/schemas/NoteLesson"
+            - type: "null"
+          description: "`null` na nota avulsa."
+        videoSeconds:
+          type: [number, "null"]
+          minimum: 0
+        title:
+          type: [string, "null"]
+        body:
+          type: string
+          description: Markdown.
+        createdAt:
+          $ref: "#/components/schemas/DateTime"
+        updatedAt:
+          $ref: "#/components/schemas/DateTime"
+      additionalProperties: false
+    NoteSummary:
+      type: object
+      required: [id, lesson, videoSeconds, title, excerpt, createdAt, updatedAt]
+      properties:
+        id:
+          $ref: "#/components/schemas/Uuid"
+        lesson:
+          oneOf:
+            - $ref: "#/components/schemas/NoteLesson"
+            - type: "null"
+        videoSeconds:
+          type: [number, "null"]
+          minimum: 0
+        title:
+          type: [string, "null"]
+        excerpt:
+          type: string
+          description: Início do corpo, sem Markdown, até 300 caracteres.
+        createdAt:
+          $ref: "#/components/schemas/DateTime"
+        updatedAt:
+          $ref: "#/components/schemas/DateTime"
+      additionalProperties: false
+    NoteSummaryPage:
+      allOf:
+        - $ref: "#/components/schemas/Page"
+        - type: object
+          required: [items]
+          properties:
+            items:
+              type: array
+              items:
+                $ref: "#/components/schemas/NoteSummary"
+    NoteList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/Note"
+      additionalProperties: false
+    NoteConflictProblem:
+      description: |
+        `Problem` de `409` `version_conflict`, com a versão gravada da nota em `current`.
+      allOf:
+        - $ref: "#/components/schemas/Problem"
+        - type: object
+          properties:
+            current:
+              $ref: "#/components/schemas/Note"
+    MyCertificate:
+      type: object
+      required:
+        [
+          id,
+          code,
+          state,
+          course,
+          courseTitle,
+          studentName,
+          hours,
+          completedAt,
+          issuedAt,
+          revokedAt,
+          validationUrl,
+        ]
+      properties:
+        id:
+          $ref: "#/components/schemas/Uuid"
+        code:
+          type: string
+          description: Código com hífens.
+        state:
+          $ref: "#/components/schemas/CertificateState"
+        course:
+          type: object
+          required: [id, slug, title]
+          properties:
+            id:
+              $ref: "#/components/schemas/Uuid"
+            slug:
+              $ref: "#/components/schemas/Slug"
+            title:
+              type: string
+          additionalProperties: false
+        courseTitle:
+          type: string
+          description: Título congelado na emissão.
+        studentName:
+          type: string
+          description: Nome congelado na emissão.
+        hours:
+          type: integer
+          minimum: 0
+        completedAt:
+          $ref: "#/components/schemas/DateTime"
+        issuedAt:
+          $ref: "#/components/schemas/DateTime"
+        revokedAt:
+          oneOf:
+            - $ref: "#/components/schemas/DateTime"
+            - type: "null"
+        validationUrl:
+          type: string
+          format: uri
+          description: Página pública de validação (`/certificados/<código>`).
+      additionalProperties: false
+    AwaitingCertificate:
+      type: object
+      required: [course, completedAt]
+      properties:
+        course:
+          type: object
+          required: [id, slug, title]
+          properties:
+            id:
+              $ref: "#/components/schemas/Uuid"
+            slug:
+              $ref: "#/components/schemas/Slug"
+            title:
+              type: string
+          additionalProperties: false
+        completedAt:
+          $ref: "#/components/schemas/DateTime"
+      additionalProperties: false
+    MyCertificates:
+      type: object
+      required: [studentName, items, awaitingTemplate]
+      properties:
+        studentName:
+          type: string
+          description: O nome que sairá nos próximos certificados.
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/MyCertificate"
+        awaitingTemplate:
+          type: array
+          description: Cursos concluídos cujo certificado ainda não foi liberado pelo instrutor.
+          items:
+            $ref: "#/components/schemas/AwaitingCertificate"
+      additionalProperties: false
+    CertificateName:
+      type: object
+      required: [fullName, studentName]
+      properties:
+        fullName:
+          type: [string, "null"]
+        studentName:
+          type: string
+          description: O nome que sairá no certificado.
+      additionalProperties: false
+    CertificateVerificationStatus:
+      type: string
+      enum: [valid, revoked, holder_removed]
+      description: "`holder_removed`: o titular excluiu a conta; o nome não aparece."
+    CertificateVerification:
+      type: object
+      description: |
+        Resultado da validação pública. Revogado mostra só o estado e a data, sem o motivo.
+      required:
+        [
+          status,
+          code,
+          studentName,
+          courseTitle,
+          hours,
+          completedAt,
+          issuedAt,
+          schoolName,
+          revokedAt,
+        ]
+      properties:
+        status:
+          $ref: "#/components/schemas/CertificateVerificationStatus"
+        code:
+          type: string
+        studentName:
+          type: [string, "null"]
+          description: Só em `valid`.
+        courseTitle:
+          type: [string, "null"]
+          description: Em `valid` e `holder_removed`.
+        hours:
+          type: [integer, "null"]
+          minimum: 0
+          description: Só em `valid`.
+        completedAt:
+          oneOf:
+            - $ref: "#/components/schemas/DateTime"
+            - type: "null"
+          description: Em `valid` e `holder_removed`.
+        issuedAt:
+          oneOf:
+            - $ref: "#/components/schemas/DateTime"
+            - type: "null"
+          description: Em `valid` e `holder_removed`.
+        schoolName:
+          type: [string, "null"]
+          description: Só em `valid`.
+        revokedAt:
+          oneOf:
+            - $ref: "#/components/schemas/DateTime"
+            - type: "null"
+          description: Só em `revoked`.
+      additionalProperties: false

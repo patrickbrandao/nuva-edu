@@ -66,6 +66,14 @@ tags:
     description: Versões dos Termos de Uso e da Política de Privacidade (`specs/030-lgpd.md`).
   - name: images
     description: Entrega de imagens (`specs/029-imagens.md`).
+  - name: catalog
+    description: Cursos, módulos, aulas, ebooks e pacotes (`specs/009-catalogo-e-conteudo.md`).
+  - name: entitlements
+    description: Direitos de acesso e concessão manual (`specs/010-direitos-de-acesso.md`).
+  - name: progress
+    description: Progresso dos alunos (`specs/014-aprendizado-e-progresso.md`).
+  - name: certificates
+    description: Certificados, templates e signatário (`specs/015-certificados.md`).
 security:
   - sessionCookie: []
 paths:
@@ -1275,6 +1283,3263 @@ paths:
           $ref: "#/components/responses/InternalError"
         "503":
           $ref: "#/components/responses/ServiceUnavailable"
+  /api/v1/courses:
+    get:
+      operationId: listCourses
+      tags: [catalog]
+      summary: Listar cursos
+      x-permission: course.edit
+      x-nuva-pending: true
+      description: |
+        Cursos do catálogo, com filtros e paginação por cursor. O `instructor` vê só os cursos de que é
+        dono (`specs/008-papeis-e-permissoes.md`, "Regra do instrutor").
+      parameters:
+        - name: q
+          in: query
+          description: Trecho do título ou do resumo.
+          schema:
+            type: string
+            minLength: 1
+            maxLength: 200
+        - name: status
+          in: query
+          description: "`archived` lista só os arquivados; os outros dois, só os não arquivados."
+          schema:
+            type: string
+            enum: [draft, published, archived]
+        - name: accessMode
+          in: query
+          schema:
+            $ref: "#/components/schemas/AccessMode"
+        - name: ownerId
+          in: query
+          description: Só os cursos deste dono.
+          schema:
+            $ref: "#/components/schemas/Uuid"
+        - name: awaitingReview
+          in: query
+          description: "`true`: só os cursos com pedido de publicação (`reviewRequestedAt`)."
+          schema:
+            type: boolean
+        - name: sort
+          in: query
+          schema:
+            type: string
+            enum: [title, -createdAt, -updatedAt]
+            default: -updatedAt
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Cursor"
+      responses:
+        "200":
+          description: Uma página de cursos.
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/XRequestId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CourseSummaryPage"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+    post:
+      operationId: createCourse
+      tags: [catalog]
+      summary: Criar curso
+      x-permission: course.create
+      x-nuva-pending: true
+      description: |
+        Cria o curso em `draft`. O `instructor` vira o dono; `manager` e `admin` informam `ownerId`
+        (ou nenhum). Sem `accessMode`, o curso nasce `private` e sem preço. `accessMode` exige
+        `product.set_access` e `priceCents`, `product.set_price`: o `instructor` que os envia recebe
+        `403`, e o `manager` que envia preço também.
+
+        - `slug` ausente: gerado do título. Repetido: `409` `slug_taken`.
+        - `ownerId` que não é `instructor`: `422` `owner_not_instructor`.
+      security:
+        - sessionCookie: []
+          csrfToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CourseCreate"
+      responses:
+        "201":
+          description: Curso criado.
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/XRequestId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CourseDetail"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "413":
+          $ref: "#/components/responses/PayloadTooLarge"
+        "415":
+          $ref: "#/components/responses/UnsupportedMediaType"
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+  /api/v1/courses/{id}:
+    get:
+      operationId: getCourse
+      tags: [catalog]
+      summary: Curso com módulos e aulas
+      x-permission: course.edit
+      x-nuva-pending: true
+      description: |
+        O curso para o editor: dados, módulos e aulas na ordem. Curso alheio ao `instructor`: `404`.
+      parameters:
+        - $ref: "#/components/parameters/IdPath"
+      responses:
+        "200":
+          description: O curso.
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/XRequestId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CourseDetail"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+    patch:
+      operationId: updateCourse
+      tags: [catalog]
+      summary: Editar curso
+      x-permission: course.edit
+      x-nuva-pending: true
+      description: |
+        Altera só os campos enviados. `accessMode` exige `product.set_access` (`manager` e `admin`) e
+        `priceCents`, `product.set_price` (`admin`): sem a ação, `403`. `certificateEnabled` e
+        `certificateHours` (`specs/015-certificados.md`) seguem `course.edit`. O template de
+        certificado não é editado aqui (`/courses/{id}/certificate-template`); o dono, em
+        `PATCH /courses/{id}/owner`.
+
+        - Curso alheio ao `instructor`: `404`. Slug repetido: `409` `slug_taken`.
+        - `paid` sem preço: `422` `price_required`. Capa que não é `product_cover` do próprio envio:
+          `422` `image_purpose_mismatch`.
+      security:
+        - sessionCookie: []
+          csrfToken: []
+      parameters:
+        - $ref: "#/components/parameters/IdPath"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CourseUpdate"
+      responses:
+        "200":
+          description: Curso atualizado.
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/XRequestId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CourseDetail"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "413":
+          $ref: "#/components/responses/PayloadTooLarge"
+        "415":
+          $ref: "#/components/responses/UnsupportedMediaType"
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+    delete:
+      operationId: deleteCourse
+      tags: [catalog]
+      summary: Excluir curso sem vínculos
+      x-permission: course.delete
+      x-nuva-pending: true
+      description: |
+        Exclui o curso com módulos, aulas, links e o template de certificado dele. Curso com pedido,
+        direito ou progresso: `409` `product_has_links`, para qualquer papel; o caminho é arquivar.
+      security:
+        - sessionCookie: []
+          csrfToken: []
+      parameters:
+        - $ref: "#/components/parameters/IdPath"
+      responses:
+        "204":
+          description: Curso excluído.
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/XRequestId"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+  /api/v1/courses/{id}/publish:
+    post:
+      operationId: publishCourse
+      tags: [catalog]
+      summary: Publicar
+      x-permission: course.publish
+      x-nuva-pending: true
+      description: |
+        Publica o curso. Exige ao menos um módulo com uma aula publicada (`422`
+        `course_without_published_lesson`). O `instructor` só publica curso `open` de que é dono; curso
+        `paid` ou `private` dele responde `403` (o caminho é `request-review`). Limpa
+        `reviewRequestedAt`. Produto arquivado: `409` `product_archived`.
+      security:
+        - sessionCookie: []
+          csrfToken: []
+      parameters:
+        - $ref: "#/components/parameters/IdPath"
+      responses:
+        "200":
+          description: Curso atualizado.
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/XRequestId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CourseDetail"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+  /api/v1/courses/{id}/unpublish:
+    post:
+      operationId: unpublishCourse
+      tags: [catalog]
+      summary: Despublicar
+      x-permission: course.publish
+      x-nuva-pending: true
+      description: |
+        Volta a `draft`. Não revoga direitos: o item some da vitrine e da estante até voltar a ser
+        publicado. O site mostra antes o número de alunos afetados (`studentCount` do detalhe).
+      security:
+        - sessionCookie: []
+          csrfToken: []
+      parameters:
+        - $ref: "#/components/parameters/IdPath"
+      responses:
+        "200":
+          description: Curso atualizado.
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/XRequestId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CourseDetail"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+  /api/v1/courses/{id}/archive:
+    post:
+      operationId: archiveCourse
+      tags: [catalog]
+      summary: Arquivar
+      x-permission: product.archive
+      x-nuva-pending: true
+      description: |
+        Só `admin` (`product.archive`). Equivale a despublicar em definitivo: grava `archivedAt` e
+        some do classroom. É o caminho para produto com pedido, direito ou progresso, que ninguém
+        exclui.
+        Já arquivado: `409` `product_archived`.
+      security:
+        - sessionCookie: []
+          csrfToken: []
+      parameters:
+        - $ref: "#/components/parameters/IdPath"
+      responses:
+        "200":
+          description: Curso atualizado.
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/XRequestId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CourseDetail"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+  /api/v1/courses/{id}/unarchive:
+    post:
+      operationId: unarchiveCourse
+      tags: [catalog]
+      summary: Desarquivar
+      x-permission: product.archive
+      x-nuva-pending: true
+      description: |
+        Só `admin` (`product.archive`). Volta como `draft`. Não arquivado: `409` `product_not_archived`.
+      security:
+        - sessionCookie: []
+          csrfToken: []
+      parameters:
+        - $ref: "#/components/parameters/IdPath"
+      responses:
+        "200":
+          description: Curso atualizado.
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/XRequestId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CourseDetail"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+  /api/v1/courses/{id}/request-review:
+    post:
+      operationId: requestCourseReview
+      tags: [catalog]
+      summary: Enviar para publicação
+      x-permission: course.edit
+      x-nuva-pending: true
+      description: |
+        Grava `reviewRequestedAt` (auditoria `course.request_review`) para o curso e as aulas `draft`
+        dele; gerente ou admin publicam. Repetir não muda a data.
+      security:
+        - sessionCookie: []
+          csrfToken: []
+      parameters:
+        - $ref: "#/components/parameters/IdPath"
+      responses:
+        "200":
+          description: Pedido registrado.
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/XRequestId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CourseDetail"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+    delete:
+      operationId: cancelCourseReview
+      tags: [catalog]
+      summary: Cancelar o pedido de publicação
+      x-permission: course.edit
+      x-nuva-pending: true
+      description: Limpa `reviewRequestedAt`. Sem pedido, responde o curso como está.
+      security:
+        - sessionCookie: []
+          csrfToken: []
+      parameters:
+        - $ref: "#/components/parameters/IdPath"
+      responses:
+        "200":
+          description: Pedido cancelado.
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/XRequestId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CourseDetail"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+  /api/v1/courses/{id}/owner:
+    patch:
+      operationId: setCourseOwner
+      tags: [catalog]
+      summary: Trocar o dono do curso
+      x-permission: course.set_owner
+      x-nuva-pending: true
+      description: |
+        `manager` e `admin` (`specs/008-papeis-e-permissoes.md`). `ownerId: null` deixa o curso sem
+        dono, gerido só por gerente e admin. Usuário que não é `instructor`: `422`
+        `owner_not_instructor`.
+      security:
+        - sessionCookie: []
+          csrfToken: []
+      parameters:
+        - $ref: "#/components/parameters/IdPath"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              description: Novo dono, ou `null`.
+              required: [ownerId]
+              properties:
+                ownerId:
+                  oneOf:
+                    - $ref: "#/components/schemas/Uuid"
+                    - type: "null"
+              additionalProperties: false
+      responses:
+        "200":
+          description: Dono alterado.
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/XRequestId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CourseDetail"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "413":
+          $ref: "#/components/responses/PayloadTooLarge"
+        "415":
+          $ref: "#/components/responses/UnsupportedMediaType"
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+  /api/v1/courses/{id}/modules:
+    post:
+      operationId: createModule
+      tags: [catalog]
+      summary: Criar módulo
+      x-permission: course.edit
+      x-nuva-pending: true
+      description: |
+        Acrescenta um módulo ao fim do curso. Acima de 100 módulos: `422` `course_module_limit`.
+      security:
+        - sessionCookie: []
+          csrfToken: []
+      parameters:
+        - $ref: "#/components/parameters/IdPath"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [title]
+              properties:
+                title:
+                  type: string
+                  minLength: 1
+                  maxLength: 160
+              additionalProperties: false
+      responses:
+        "201":
+          description: Módulo criado.
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/XRequestId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CourseModule"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "413":
+          $ref: "#/components/responses/PayloadTooLarge"
+        "415":
+          $ref: "#/components/responses/UnsupportedMediaType"
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+  /api/v1/courses/{id}/modules/order:
+    put:
+      operationId: reorderModules
+      tags: [catalog]
+      summary: Reordenar módulos
+      x-permission: course.edit
+      x-nuva-pending: true
+      description: |
+        Recebe todos os módulos do curso na ordem nova. Lista que não tem exatamente os módulos do
+        curso:
+        `422` `order_mismatch`.
+      security:
+        - sessionCookie: []
+          csrfToken: []
+      parameters:
+        - $ref: "#/components/parameters/IdPath"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [moduleIds]
+              properties:
+                moduleIds:
+                  type: array
+                  maxItems: 100
+                  uniqueItems: true
+                  items:
+                    $ref: "#/components/schemas/Uuid"
+              additionalProperties: false
+      responses:
+        "200":
+          description: Módulos na ordem nova.
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/XRequestId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CourseModuleList"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "413":
+          $ref: "#/components/responses/PayloadTooLarge"
+        "415":
+          $ref: "#/components/responses/UnsupportedMediaType"
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+  /api/v1/modules/{id}:
+    patch:
+      operationId: updateModule
+      tags: [catalog]
+      summary: Renomear módulo
+      x-permission: course.edit
+      x-nuva-pending: true
+      description: "Módulo de curso alheio ao `instructor`: `404`."
+      security:
+        - sessionCookie: []
+          csrfToken: []
+      parameters:
+        - $ref: "#/components/parameters/IdPath"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [title]
+              properties:
+                title:
+                  type: string
+                  minLength: 1
+                  maxLength: 160
+              additionalProperties: false
+      responses:
+        "200":
+          description: Módulo atualizado.
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/XRequestId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CourseModule"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "413":
+          $ref: "#/components/responses/PayloadTooLarge"
+        "415":
+          $ref: "#/components/responses/UnsupportedMediaType"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+    delete:
+      operationId: deleteModule
+      tags: [catalog]
+      summary: Excluir módulo vazio
+      x-permission: course.edit
+      x-nuva-pending: true
+      description: "Só módulo sem aulas; com aulas: `409` `module_not_empty` (as aulas saem antes)."
+      security:
+        - sessionCookie: []
+          csrfToken: []
+      parameters:
+        - $ref: "#/components/parameters/IdPath"
+      responses:
+        "204":
+          description: Módulo excluído.
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/XRequestId"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+  /api/v1/modules/{id}/lessons:
+    post:
+      operationId: createLesson
+      tags: [catalog]
+      summary: Criar aula
+      x-permission: course.edit
+      x-nuva-pending: true
+      description: |
+        Acrescenta uma aula `draft` ao fim do módulo. Acima de 500 aulas no curso: `422`
+        `course_lesson_limit`. URL de vídeo fora das regras: `422` `content_url_invalid`.
+      security:
+        - sessionCookie: []
+          csrfToken: []
+      parameters:
+        - $ref: "#/components/parameters/IdPath"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LessonCreate"
+      responses:
+        "201":
+          description: Aula criada.
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/XRequestId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LessonDetail"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "413":
+          $ref: "#/components/responses/PayloadTooLarge"
+        "415":
+          $ref: "#/components/responses/UnsupportedMediaType"
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+  /api/v1/modules/{id}/lessons/order:
+    put:
+      operationId: reorderLessons
+      tags: [catalog]
+      summary: Reordenar aulas do módulo
+      x-permission: course.edit
+      x-nuva-pending: true
+      description: |
+        Recebe as aulas do módulo na ordem nova; uma aula de outro módulo do mesmo curso, na lista, é
+        movida para este. Aula de outro curso ou aula do módulo que falta na lista: `422`
+        `order_mismatch`.
+      security:
+        - sessionCookie: []
+          csrfToken: []
+      parameters:
+        - $ref: "#/components/parameters/IdPath"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [lessonIds]
+              properties:
+                lessonIds:
+                  type: array
+                  maxItems: 500
+                  uniqueItems: true
+                  items:
+                    $ref: "#/components/schemas/Uuid"
+              additionalProperties: false
+      responses:
+        "200":
+          description: O módulo, com as aulas na ordem nova.
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/XRequestId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CourseModule"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "413":
+          $ref: "#/components/responses/PayloadTooLarge"
+        "415":
+          $ref: "#/components/responses/UnsupportedMediaType"
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+  /api/v1/lessons/{id}:
+    get:
+      operationId: getLesson
+      tags: [catalog]
+      summary: Aula para edição
+      x-permission: course.edit
+      x-nuva-pending: true
+      description: |
+        A aula com vídeo, links de apoio e ebooks vinculados. Curso alheio ao `instructor`: `404`.
+      parameters:
+        - $ref: "#/components/parameters/IdPath"
+      responses:
+        "200":
+          description: A aula.
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/XRequestId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LessonDetail"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+    patch:
+      operationId: updateLesson
+      tags: [catalog]
+      summary: Editar, publicar ou despublicar aula
+      x-permission: course.edit
+      x-nuva-pending: true
+      description: |
+        Altera só os campos enviados. `status` publica ou despublica a aula, com a regra do curso: o
+        `instructor` só o faz em curso `open` de que é dono (`403` nos demais). Despublicar aula de
+        curso publicado enfileira `course.completion_check`. Publicar a última aula `draft` limpa o
+        pedido de publicação do curso.
+      security:
+        - sessionCookie: []
+          csrfToken: []
+      parameters:
+        - $ref: "#/components/parameters/IdPath"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LessonUpdate"
+      responses:
+        "200":
+          description: Aula atualizada.
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/XRequestId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LessonDetail"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "413":
+          $ref: "#/components/responses/PayloadTooLarge"
+        "415":
+          $ref: "#/components/responses/UnsupportedMediaType"
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+    delete:
+      operationId: deleteLesson
+      tags: [catalog]
+      summary: Excluir aula
+      x-permission: course.edit
+      x-nuva-pending: true
+      description: |
+        Exclui a aula e os links dela. Progresso e notas dos alunos ficam (a nota guarda o título,
+        `specs/016-anotacoes.md`). Aula de curso publicado enfileira `course.completion_check`.
+      security:
+        - sessionCookie: []
+          csrfToken: []
+      parameters:
+        - $ref: "#/components/parameters/IdPath"
+      responses:
+        "204":
+          description: Aula excluída.
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/XRequestId"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+  /api/v1/lessons/{id}/links:
+    put:
+      operationId: setLessonLinks
+      tags: [catalog]
+      summary: Definir os links de apoio
+      x-permission: course.edit
+      x-nuva-pending: true
+      description: |
+        Substitui a lista inteira, na ordem enviada (até 20). URL fora das regras: `422`
+        `content_url_invalid`, com o índice do link.
+      security:
+        - sessionCookie: []
+          csrfToken: []
+      parameters:
+        - $ref: "#/components/parameters/IdPath"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [links]
+              properties:
+                links:
+                  type: array
+                  maxItems: 20
+                  items:
+                    type: object
+                    required: [label, url, kind]
+                    properties:
+                      label:
+                        type: string
+                        minLength: 1
+                        maxLength: 160
+                      url:
+                        type: [string, "null"]
+                        minLength: 1
+                        description: |
+                          URL do material. Regras de URL de conteúdo (`specs/009-catalogo-e-conteudo.md`): `https` (`http`
+                          só em
+                          `*.localhost`), sem credenciais, sem espaços, até 2.000 caracteres; fora delas, `422`
+                          `content_url_invalid` com o campo e o motivo. A URL nunca é buscada pelo servidor.
+                      kind:
+                        $ref: "#/components/schemas/LessonLinkKind"
+                    additionalProperties: false
+              additionalProperties: false
+      responses:
+        "200":
+          description: A aula com os links novos.
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/XRequestId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LessonDetail"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "413":
+          $ref: "#/components/responses/PayloadTooLarge"
+        "415":
+          $ref: "#/components/responses/UnsupportedMediaType"
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+  /api/v1/ebooks:
+    get:
+      operationId: listEbooks
+      tags: [catalog]
+      summary: Listar ebooks
+      x-permission: ebook.link
+      x-nuva-pending: true
+      description: |
+        Ebooks do catálogo. O `instructor` lê a lista para vincular ebooks existentes aos próprios
+        cursos e aulas; criar e editar é de `manager` e `admin`.
+      parameters:
+        - name: q
+          in: query
+          description: Trecho do título ou do resumo.
+          schema:
+            type: string
+            minLength: 1
+            maxLength: 200
+        - name: status
+          in: query
+          description: "`archived` lista só os arquivados; os outros dois, só os não arquivados."
+          schema:
+            type: string
+            enum: [draft, published, archived]
+        - name: accessMode
+          in: query
+          schema:
+            $ref: "#/components/schemas/AccessMode"
+        - name: sort
+          in: query
+          schema:
+            type: string
+            enum: [title, -createdAt, -updatedAt]
+            default: -updatedAt
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Cursor"
+      responses:
+        "200":
+          description: Uma página de ebooks.
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/XRequestId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EbookSummaryPage"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+    post:
+      operationId: createEbook
+      tags: [catalog]
+      summary: Criar ebook
+      x-permission: ebook_bundle.manage
+      x-nuva-pending: true
+      description: |
+        Cria o ebook em `draft`. Sem `accessMode`, nasce `private`. `priceCents` exige
+        `product.set_price`. Slug repetido: `409` `slug_taken`; URL fora das regras: `422`
+        `content_url_invalid`.
+      security:
+        - sessionCookie: []
+          csrfToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/EbookCreate"
+      responses:
+        "201":
+          description: Ebook criado.
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/XRequestId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EbookDetail"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "413":
+          $ref: "#/components/responses/PayloadTooLarge"
+        "415":
+          $ref: "#/components/responses/UnsupportedMediaType"
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+  /api/v1/ebooks/{id}:
+    get:
+      operationId: getEbook
+      tags: [catalog]
+      summary: Um ebook
+      x-permission: ebook.link
+      x-nuva-pending: true
+      description: |
+        Com os vínculos; o `instructor` vê só os vínculos com os próprios cursos e aulas.
+      parameters:
+        - $ref: "#/components/parameters/IdPath"
+      responses:
+        "200":
+          description: O ebook.
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/XRequestId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EbookDetail"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+    patch:
+      operationId: updateEbook
+      tags: [catalog]
+      summary: Editar ebook
+      x-permission: ebook_bundle.manage
+      x-nuva-pending: true
+      description: |
+        Altera só os campos enviados. `accessMode` exige `product.set_access`; `priceCents`,
+        `product.set_price`. Slug repetido: `409` `slug_taken`.
+      security:
+        - sessionCookie: []
+          csrfToken: []
+      parameters:
+        - $ref: "#/components/parameters/IdPath"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/EbookUpdate"
+      responses:
+        "200":
+          description: Ebook atualizado.
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/XRequestId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EbookDetail"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "413":
+          $ref: "#/components/responses/PayloadTooLarge"
+        "415":
+          $ref: "#/components/responses/UnsupportedMediaType"
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+    delete:
+      operationId: deleteEbook
+      tags: [catalog]
+      summary: Excluir ebook sem vínculos
+      x-permission: ebook_bundle.manage
+      x-nuva-pending: true
+      description: "Ebook com pedido ou direito: `409` `product_has_links`; o caminho é arquivar."
+      security:
+        - sessionCookie: []
+          csrfToken: []
+      parameters:
+        - $ref: "#/components/parameters/IdPath"
+      responses:
+        "204":
+          description: Ebook excluído.
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/XRequestId"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+  /api/v1/ebooks/{id}/publish:
+    post:
+      operationId: publishEbook
+      tags: [catalog]
+      summary: Publicar
+      x-permission: ebook_bundle.manage
+      x-nuva-pending: true
+      description: |
+        Publica o ebook. Exige `fileUrl` válida (`422` `ebook_without_file`). Arquivado: `409`
+        `product_archived`.
+      security:
+        - sessionCookie: []
+          csrfToken: []
+      parameters:
+        - $ref: "#/components/parameters/IdPath"
+      responses:
+        "200":
+          description: Ebook atualizado.
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/XRequestId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EbookDetail"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+  /api/v1/ebooks/{id}/unpublish:
+    post:
+      operationId: unpublishEbook
+      tags: [catalog]
+      summary: Despublicar
+      x-permission: ebook_bundle.manage
+      x-nuva-pending: true
+      description: |
+        Volta a `draft`. Não revoga direitos: o item some da vitrine e da estante até voltar a ser
+        publicado. O site mostra antes o número de alunos afetados (`studentCount` do detalhe).
+      security:
+        - sessionCookie: []
+          csrfToken: []
+      parameters:
+        - $ref: "#/components/parameters/IdPath"
+      responses:
+        "200":
+          description: Ebook atualizado.
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/XRequestId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EbookDetail"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+  /api/v1/ebooks/{id}/archive:
+    post:
+      operationId: archiveEbook
+      tags: [catalog]
+      summary: Arquivar
+      x-permission: product.archive
+      x-nuva-pending: true
+      description: |
+        Só `admin` (`product.archive`). Equivale a despublicar em definitivo: grava `archivedAt` e
+        some do classroom. É o caminho para produto com pedido, direito ou progresso, que ninguém
+        exclui.
+        Já arquivado: `409` `product_archived`.
+      security:
+        - sessionCookie: []
+          csrfToken: []
+      parameters:
+        - $ref: "#/components/parameters/IdPath"
+      responses:
+        "200":
+          description: Ebook atualizado.
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/XRequestId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EbookDetail"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+  /api/v1/ebooks/{id}/unarchive:
+    post:
+      operationId: unarchiveEbook
+      tags: [catalog]
+      summary: Desarquivar
+      x-permission: product.archive
+      x-nuva-pending: true
+      description: |
+        Só `admin` (`product.archive`). Volta como `draft`. Não arquivado: `409` `product_not_archived`.
+      security:
+        - sessionCookie: []
+          csrfToken: []
+      parameters:
+        - $ref: "#/components/parameters/IdPath"
+      responses:
+        "200":
+          description: Ebook atualizado.
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/XRequestId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EbookDetail"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+  /api/v1/ebooks/{id}/targets:
+    put:
+      operationId: setEbookTargets
+      tags: [catalog]
+      summary: Vincular o ebook a cursos e aulas
+      x-permission: ebook.link
+      x-nuva-pending: true
+      description: |
+        Substitui os vínculos de `product_ebooks` com alvo `course` ou `lesson` (o vínculo a pacote é
+        feito pelos itens do pacote). Para o `instructor`, a lista substitui só os vínculos com os
+        próprios cursos e aulas; os demais ficam como estão, e alvo alheio responde `404`. A mudança
+        enfileira o recálculo da cascata (`entitlement.recompute`, `specs/010-direitos-de-acesso.md`).
+      security:
+        - sessionCookie: []
+          csrfToken: []
+      parameters:
+        - $ref: "#/components/parameters/IdPath"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [targets]
+              properties:
+                targets:
+                  type: array
+                  maxItems: 200
+                  items:
+                    type: object
+                    required: [targetType, targetId]
+                    properties:
+                      targetType:
+                        type: string
+                        enum: [course, lesson]
+                      targetId:
+                        $ref: "#/components/schemas/Uuid"
+                    additionalProperties: false
+              additionalProperties: false
+      responses:
+        "200":
+          description: O ebook com os vínculos novos.
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/XRequestId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EbookDetail"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "413":
+          $ref: "#/components/responses/PayloadTooLarge"
+        "415":
+          $ref: "#/components/responses/UnsupportedMediaType"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+  /api/v1/bundles:
+    get:
+      operationId: listBundles
+      tags: [catalog]
+      summary: Listar pacotes
+      x-permission: ebook_bundle.manage
+      x-nuva-pending: true
+      description: Pacotes do catálogo, com filtros e paginação por cursor.
+      parameters:
+        - name: q
+          in: query
+          description: Trecho do título ou do resumo.
+          schema:
+            type: string
+            minLength: 1
+            maxLength: 200
+        - name: status
+          in: query
+          description: "`archived` lista só os arquivados; os outros dois, só os não arquivados."
+          schema:
+            type: string
+            enum: [draft, published, archived]
+        - name: accessMode
+          in: query
+          schema:
+            $ref: "#/components/schemas/AccessMode"
+        - name: sort
+          in: query
+          schema:
+            type: string
+            enum: [title, -createdAt, -updatedAt]
+            default: -updatedAt
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Cursor"
+      responses:
+        "200":
+          description: Uma página de pacotes.
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/XRequestId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BundleSummaryPage"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+    post:
+      operationId: createBundle
+      tags: [catalog]
+      summary: Criar pacote
+      x-permission: ebook_bundle.manage
+      x-nuva-pending: true
+      description: |
+        Cria o pacote em `draft`, sem itens. Sem `accessMode`, nasce `private`. `priceCents` exige
+        `product.set_price`. Slug repetido: `409` `slug_taken`.
+      security:
+        - sessionCookie: []
+          csrfToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BundleCreate"
+      responses:
+        "201":
+          description: Pacote criado.
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/XRequestId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BundleDetail"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "413":
+          $ref: "#/components/responses/PayloadTooLarge"
+        "415":
+          $ref: "#/components/responses/UnsupportedMediaType"
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+  /api/v1/bundles/{id}:
+    get:
+      operationId: getBundle
+      tags: [catalog]
+      summary: Um pacote, com os itens
+      x-permission: ebook_bundle.manage
+      x-nuva-pending: true
+      description: O pacote, os itens na ordem e a soma dos preços avulsos dos itens `paid`.
+      parameters:
+        - $ref: "#/components/parameters/IdPath"
+      responses:
+        "200":
+          description: O pacote.
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/XRequestId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BundleDetail"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+    patch:
+      operationId: updateBundle
+      tags: [catalog]
+      summary: Editar pacote
+      x-permission: ebook_bundle.manage
+      x-nuva-pending: true
+      description: |
+        Altera só os campos enviados. `accessMode` exige `product.set_access`; `priceCents`,
+        `product.set_price`. Slug repetido: `409` `slug_taken`.
+      security:
+        - sessionCookie: []
+          csrfToken: []
+      parameters:
+        - $ref: "#/components/parameters/IdPath"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BundleUpdate"
+      responses:
+        "200":
+          description: Pacote atualizado.
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/XRequestId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BundleDetail"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "413":
+          $ref: "#/components/responses/PayloadTooLarge"
+        "415":
+          $ref: "#/components/responses/UnsupportedMediaType"
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+    delete:
+      operationId: deleteBundle
+      tags: [catalog]
+      summary: Excluir pacote sem vínculos
+      x-permission: ebook_bundle.manage
+      x-nuva-pending: true
+      description: "Pacote com pedido ou direito: `409` `product_has_links`; o caminho é arquivar."
+      security:
+        - sessionCookie: []
+          csrfToken: []
+      parameters:
+        - $ref: "#/components/parameters/IdPath"
+      responses:
+        "204":
+          description: Pacote excluído.
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/XRequestId"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+  /api/v1/bundles/{id}/publish:
+    post:
+      operationId: publishBundle
+      tags: [catalog]
+      summary: Publicar
+      x-permission: ebook_bundle.manage
+      x-nuva-pending: true
+      description: |
+        Publica o pacote. Exige ao menos um item (`422` `bundle_without_items`). Arquivado: `409`
+        `product_archived`.
+      security:
+        - sessionCookie: []
+          csrfToken: []
+      parameters:
+        - $ref: "#/components/parameters/IdPath"
+      responses:
+        "200":
+          description: Pacote atualizado.
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/XRequestId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BundleDetail"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+  /api/v1/bundles/{id}/unpublish:
+    post:
+      operationId: unpublishBundle
+      tags: [catalog]
+      summary: Despublicar
+      x-permission: ebook_bundle.manage
+      x-nuva-pending: true
+      description: |
+        Volta a `draft`. Não revoga direitos: o item some da vitrine e da estante até voltar a ser
+        publicado. O site mostra antes o número de alunos afetados (`studentCount` do detalhe).
+      security:
+        - sessionCookie: []
+          csrfToken: []
+      parameters:
+        - $ref: "#/components/parameters/IdPath"
+      responses:
+        "200":
+          description: Pacote atualizado.
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/XRequestId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BundleDetail"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+  /api/v1/bundles/{id}/archive:
+    post:
+      operationId: archiveBundle
+      tags: [catalog]
+      summary: Arquivar
+      x-permission: product.archive
+      x-nuva-pending: true
+      description: |
+        Só `admin` (`product.archive`). Equivale a despublicar em definitivo: grava `archivedAt` e
+        some do classroom. É o caminho para produto com pedido, direito ou progresso, que ninguém
+        exclui.
+        Já arquivado: `409` `product_archived`.
+      security:
+        - sessionCookie: []
+          csrfToken: []
+      parameters:
+        - $ref: "#/components/parameters/IdPath"
+      responses:
+        "200":
+          description: Pacote atualizado.
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/XRequestId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BundleDetail"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+  /api/v1/bundles/{id}/unarchive:
+    post:
+      operationId: unarchiveBundle
+      tags: [catalog]
+      summary: Desarquivar
+      x-permission: product.archive
+      x-nuva-pending: true
+      description: |
+        Só `admin` (`product.archive`). Volta como `draft`. Não arquivado: `409` `product_not_archived`.
+      security:
+        - sessionCookie: []
+          csrfToken: []
+      parameters:
+        - $ref: "#/components/parameters/IdPath"
+      responses:
+        "200":
+          description: Pacote atualizado.
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/XRequestId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BundleDetail"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+  /api/v1/bundles/{id}/items:
+    put:
+      operationId: setBundleItems
+      tags: [catalog]
+      summary: Definir os itens do pacote
+      x-permission: ebook_bundle.manage
+      x-nuva-pending: true
+      description: |
+        Substitui a lista inteira, na ordem enviada: cursos e ebooks, nunca outro pacote. Produto
+        inexistente: `422` `bundle_item_invalid`. Em pacote já vendido, a mudança enfileira o recálculo
+        da cascata de quem o tem (`specs/010-direitos-de-acesso.md`); o site confirma antes a remoção
+        com
+        o `studentCount`.
+      security:
+        - sessionCookie: []
+          csrfToken: []
+      parameters:
+        - $ref: "#/components/parameters/IdPath"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [items]
+              properties:
+                items:
+                  type: array
+                  maxItems: 200
+                  items:
+                    type: object
+                    required: [productType, productId]
+                    properties:
+                      productType:
+                        type: string
+                        enum: [course, ebook]
+                      productId:
+                        $ref: "#/components/schemas/Uuid"
+                    additionalProperties: false
+              additionalProperties: false
+      responses:
+        "200":
+          description: O pacote com os itens novos.
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/XRequestId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BundleDetail"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "413":
+          $ref: "#/components/responses/PayloadTooLarge"
+        "415":
+          $ref: "#/components/responses/UnsupportedMediaType"
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+  /api/v1/images:
+    post:
+      operationId: uploadImage
+      tags: [images]
+      summary: Envio de imagem
+      x-permission: course.edit
+      x-nuva-pending: true
+      description: |
+        Recebe uma imagem em `multipart/form-data` (`specs/029-imagens.md`, "Fluxo de envio"):
+        `purpose` primeiro, depois `file` (um arquivo só). No admin a única finalidade é
+        `product_cover` (16:9, variantes 480 e 1280), de `instructor`, `manager` e `admin`. A imagem
+        passa a ter referência quando vira capa (`coverImageId` de curso, ebook ou pacote); sem
+        referência, o expurgo a apaga em 24 h.
+
+        - Campo a mais, segundo arquivo ou `purpose` ausente: `400` `validation_failed`.
+        - Corpo acima de 5 MB: `413` `payload_too_large`. Tipo que não é JPEG, PNG nem WebP: `415`
+          `image_type_unsupported`.
+        - Acima de 8000 px ou de 40 megapixels: `422` `image_dimensions_exceeded`; variante acima de
+          400 KB: `422` `image_too_heavy`.
+        - Processamento sobrecarregado: `503` `image_processing_busy`, com `Retry-After`.
+      security:
+        - sessionCookie: []
+          csrfToken: []
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [purpose, file]
+              properties:
+                purpose:
+                  $ref: "#/components/schemas/ImagePurpose"
+                file:
+                  type: string
+                  contentMediaType: application/octet-stream
+                  description: O arquivo da imagem (JPEG, PNG ou WebP), até 5 MB.
+              additionalProperties: false
+            encoding:
+              file:
+                contentType: image/jpeg, image/png, image/webp
+      responses:
+        "201":
+          description: Imagem gravada.
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/XRequestId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Image"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "413":
+          $ref: "#/components/responses/PayloadTooLarge"
+        "415":
+          $ref: "#/components/responses/UnsupportedMediaType"
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          description: |
+            Processamento de imagens sobrecarregado (`image_processing_busy`, com `Retry-After`) ou banco
+            indisponível (`database_unavailable`).
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/XRequestId"
+            Retry-After:
+              $ref: "#/components/headers/RetryAfter"
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+  /api/v1/images/{imageId}:
+    delete:
+      operationId: deleteImage
+      tags: [images]
+      summary: Apagar uma imagem ainda sem uso
+      x-permission: course.edit
+      x-nuva-pending: true
+      description: |
+        Apaga uma capa enviada pelo próprio usuário e ainda sem referência. Imagem inexistente, de outro
+        usuário ou já em uso: `404`.
+      security:
+        - sessionCookie: []
+          csrfToken: []
+      parameters:
+        - $ref: "#/components/parameters/ImageIdPath"
+      responses:
+        "204":
+          description: Imagem apagada.
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/XRequestId"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+  /api/v1/users/{id}/entitlements:
+    get:
+      operationId: listUserEntitlements
+      tags: [entitlements]
+      summary: Árvore de direitos de um usuário
+      x-permission: entitlement.manage
+      x-nuva-pending: true
+      description: |
+        As raízes (`order`, `subscription`, `grant`) com os derivados de cascata em `children`, com
+        fonte, validade e estado (`specs/010-direitos-de-acesso.md`). Inclui vencidos e revogados.
+      parameters:
+        - $ref: "#/components/parameters/IdPath"
+      responses:
+        "200":
+          description: Os direitos do usuário.
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/XRequestId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EntitlementTree"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+    post:
+      operationId: grantEntitlement
+      tags: [entitlements]
+      summary: Conceder acesso manual
+      x-permission: entitlement.manage
+      x-nuva-pending: true
+      description: |
+        Cria a raiz `grant` com a cascata do produto, numa transação, grava a auditoria e envia o e-mail
+        `access.granted`. Idempotente: a mesma concessão (usuário, quem concede, produto) ainda ativa
+        responde `200` com o direito existente. Produto inexistente: `404`. `expiresAt` no passado:
+        `422` `expires_at_in_past`.
+      security:
+        - sessionCookie: []
+          csrfToken: []
+      parameters:
+        - $ref: "#/components/parameters/IdPath"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [productType, productId, reason]
+              properties:
+                productType:
+                  $ref: "#/components/schemas/ProductType"
+                productId:
+                  $ref: "#/components/schemas/Uuid"
+                expiresAt:
+                  oneOf:
+                    - $ref: "#/components/schemas/DateTime"
+                    - type: "null"
+                  description: Fim do acesso; `null` ou ausente é vitalício.
+                reason:
+                  type: string
+                  minLength: 1
+                  maxLength: 500
+                  description: Motivo, obrigatório; vai para a auditoria.
+              additionalProperties: false
+      responses:
+        "200":
+          description: A mesma concessão já existia; nada foi criado.
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/XRequestId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EntitlementNode"
+        "201":
+          description: Acesso concedido.
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/XRequestId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EntitlementNode"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "413":
+          $ref: "#/components/responses/PayloadTooLarge"
+        "415":
+          $ref: "#/components/responses/UnsupportedMediaType"
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+  /api/v1/entitlements/{id}/revoke:
+    post:
+      operationId: revokeEntitlement
+      tags: [entitlements]
+      summary: Revogar concessão manual
+      x-permission: entitlement.manage
+      x-nuva-pending: true
+      description: |
+        Revoga a raiz `grant` e toda a sua cascata, com `revokeReason = manual`, e grava a auditoria.
+        Raiz de pedido ou de assinatura, ou direito derivado: `409` `entitlement_not_revocable`. Já
+        revogado: `409` `entitlement_already_revoked`.
+      security:
+        - sessionCookie: []
+          csrfToken: []
+      parameters:
+        - $ref: "#/components/parameters/IdPath"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [reason]
+              properties:
+                reason:
+                  type: string
+                  minLength: 1
+                  maxLength: 500
+                  description: Motivo, para a auditoria.
+              additionalProperties: false
+      responses:
+        "200":
+          description: Direito revogado, com a cascata.
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/XRequestId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EntitlementNode"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "413":
+          $ref: "#/components/responses/PayloadTooLarge"
+        "415":
+          $ref: "#/components/responses/UnsupportedMediaType"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+  /api/v1/products/{type}/{id}/entitlements:
+    get:
+      operationId: listProductEntitlements
+      tags: [entitlements]
+      summary: Quem tem acesso a um produto
+      x-permission: entitlement.manage
+      x-nuva-pending: true
+      description: |
+        Um item por direito ao produto, raiz ou derivado, mais recente primeiro. Sem `state`, só os
+        ativos.
+      parameters:
+        - name: type
+          in: path
+          required: true
+          schema:
+            $ref: "#/components/schemas/ProductType"
+        - $ref: "#/components/parameters/IdPath"
+        - name: state
+          in: query
+          schema:
+            $ref: "#/components/schemas/EntitlementState"
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Cursor"
+      responses:
+        "200":
+          description: Uma página de direitos.
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/XRequestId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProductEntitlementPage"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+  /api/v1/users/{id}/progress:
+    get:
+      operationId: getUserProgress
+      tags: [progress]
+      summary: Progresso de um usuário
+      x-permission: progress.view
+      x-nuva-pending: true
+      description: |
+        Um item por curso que o usuário iniciou ou a que tem acesso. O `instructor` vê só os próprios
+        cursos; usuário sem nenhum deles: `404`.
+      parameters:
+        - $ref: "#/components/parameters/IdPath"
+      responses:
+        "200":
+          description: O progresso por curso.
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/XRequestId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserProgressList"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+  /api/v1/courses/{id}/progress-summary:
+    get:
+      operationId: getCourseProgressSummary
+      tags: [progress]
+      summary: Resumo de progresso do curso
+      x-permission: progress.view
+      x-nuva-pending: true
+      description: |
+        Alunos com acesso por faixa de progresso e taxa de conclusão. Curso alheio ao `instructor`:
+        `404`.
+      parameters:
+        - $ref: "#/components/parameters/IdPath"
+      responses:
+        "200":
+          description: O resumo.
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/XRequestId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CourseProgressSummary"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+  /api/v1/courses/{id}/students:
+    get:
+      operationId: listCourseStudents
+      tags: [progress]
+      summary: Alunos do curso
+      x-permission: progress.view
+      x-nuva-pending: true
+      description: |
+        Alunos com acesso ao curso, com nome, avatar, progresso e última atividade, sem e-mail nem
+        compras
+        (`specs/008-papeis-e-permissoes.md`). É a lista de alunos do `instructor`, só nos próprios
+        cursos (`404` nos demais).
+      parameters:
+        - $ref: "#/components/parameters/IdPath"
+        - name: q
+          in: query
+          description: Trecho do nome.
+          schema:
+            type: string
+            minLength: 1
+            maxLength: 200
+        - name: state
+          in: query
+          schema:
+            $ref: "#/components/schemas/CourseProgressState"
+        - name: sort
+          in: query
+          schema:
+            type: string
+            enum: [name, -lastActivityAt, -percent]
+            default: -lastActivityAt
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Cursor"
+      responses:
+        "200":
+          description: Uma página de alunos.
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/XRequestId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CourseStudentPage"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+  /api/v1/certificates:
+    get:
+      operationId: listCertificates
+      tags: [certificates]
+      summary: Listar certificados
+      x-permission: progress.view
+      x-nuva-pending: true
+      description: Mais recentes primeiro. O `instructor` vê só os dos próprios cursos.
+      parameters:
+        - name: courseId
+          in: query
+          schema:
+            $ref: "#/components/schemas/Uuid"
+        - name: userId
+          in: query
+          schema:
+            $ref: "#/components/schemas/Uuid"
+        - name: state
+          in: query
+          schema:
+            $ref: "#/components/schemas/CertificateState"
+        - name: code
+          in: query
+          description: Código, com ou sem hífens, sem diferenciar maiúsculas.
+          schema:
+            type: string
+            minLength: 1
+            maxLength: 32
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Cursor"
+      responses:
+        "200":
+          description: Uma página de certificados.
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/XRequestId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CertificatePage"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+    post:
+      operationId: issueCertificate
+      tags: [certificates]
+      summary: Emitir certificado manualmente
+      x-permission: certificate.issue
+      x-nuva-pending: true
+      description: |
+        `manager` e `admin`, para aluno que não concluiu pelo sistema, com motivo; marca
+        `issuedManually` e enfileira `certificate.render`. Curso sem template efetivo: `422`
+        `certificate_template_missing`. O aluno já tem certificado do curso: `409`
+        `certificate_exists`. Usuário ou curso inexistente: `404`.
+      security:
+        - sessionCookie: []
+          csrfToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [userId, courseId, reason]
+              properties:
+                userId:
+                  $ref: "#/components/schemas/Uuid"
+                courseId:
+                  $ref: "#/components/schemas/Uuid"
+                reason:
+                  type: string
+                  minLength: 1
+                  maxLength: 500
+              additionalProperties: false
+      responses:
+        "201":
+          description: Certificado criado, em preparação.
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/XRequestId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Certificate"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "413":
+          $ref: "#/components/responses/PayloadTooLarge"
+        "415":
+          $ref: "#/components/responses/UnsupportedMediaType"
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+  /api/v1/certificates/{id}/revoke:
+    post:
+      operationId: revokeCertificate
+      tags: [certificates]
+      summary: Revogar certificado
+      x-permission: certificate.revoke
+      x-nuva-pending: true
+      description: |
+        Só `admin`, com motivo. A validação pública passa a mostrar "certificado revogado". Já revogado:
+        `409` `certificate_already_revoked`.
+      security:
+        - sessionCookie: []
+          csrfToken: []
+      parameters:
+        - $ref: "#/components/parameters/IdPath"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [reason]
+              properties:
+                reason:
+                  type: string
+                  minLength: 1
+                  maxLength: 500
+              additionalProperties: false
+      responses:
+        "200":
+          description: Certificado revogado.
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/XRequestId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Certificate"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "413":
+          $ref: "#/components/responses/PayloadTooLarge"
+        "415":
+          $ref: "#/components/responses/UnsupportedMediaType"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+  /api/v1/certificates/{id}/restore:
+    post:
+      operationId: restoreCertificate
+      tags: [certificates]
+      summary: Desfazer a revogação
+      x-permission: certificate.revoke
+      x-nuva-pending: true
+      description: "Só `admin`. Não revogado: `409` `certificate_not_revoked`."
+      security:
+        - sessionCookie: []
+          csrfToken: []
+      parameters:
+        - $ref: "#/components/parameters/IdPath"
+      responses:
+        "200":
+          description: Revogação desfeita.
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/XRequestId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Certificate"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+  /api/v1/certificates/{id}/reissue:
+    post:
+      operationId: reissueCertificate
+      tags: [certificates]
+      summary: Reemitir certificado
+      x-permission: certificate.issue
+      x-nuva-pending: true
+      description: |
+        Congela de novo o nome atual do aluno e a versão do template efetivo atual, mantém o código e
+        enfileira `certificate.render` (o certificado volta a `preparing` até o PDF novo). Curso sem
+        template efetivo: `422` `certificate_template_missing`. Revogado: `409`
+        `certificate_already_revoked`.
+      security:
+        - sessionCookie: []
+          csrfToken: []
+      parameters:
+        - $ref: "#/components/parameters/IdPath"
+      responses:
+        "200":
+          description: Reemissão enfileirada.
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/XRequestId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Certificate"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+  /api/v1/courses/{id}/certificates/backfill:
+    post:
+      operationId: backfillCourseCertificates
+      tags: [certificates]
+      summary: Emitir para quem já concluiu
+      x-permission: course.edit
+      x-nuva-pending: true
+      description: |
+        Enfileira `certificate.backfill` para o curso: emite para quem tem, na hora do lote, 100% das
+        aulas publicadas e acesso ao curso. Curso com certificado desabilitado: `422`
+        `certificate_disabled`; sem template efetivo: `422` `certificate_template_missing`.
+      security:
+        - sessionCookie: []
+          csrfToken: []
+      parameters:
+        - $ref: "#/components/parameters/IdPath"
+      responses:
+        "202":
+          description: Lote enfileirado.
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/XRequestId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CertificateBackfillQueued"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+  /api/v1/courses/{id}/certificate-template:
+    get:
+      operationId: getCourseCertificateTemplate
+      tags: [certificates]
+      summary: Template de certificado do curso
+      x-permission: certificate.template.edit
+      x-nuva-pending: true
+      description: |
+        O template próprio do curso (`html` nulo quando não tem), a origem do template efetivo
+        (`course`, `school` ou `none`, `specs/015-certificados.md`) e a versão atual, com quem e
+        quando gravou. Curso alheio ao `instructor`: `404`.
+      parameters:
+        - $ref: "#/components/parameters/IdPath"
+      responses:
+        "200":
+          description: O template.
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/XRequestId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CertificateTemplate"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+    put:
+      operationId: saveCourseCertificateTemplate
+      tags: [certificates]
+      summary: Gravar o template do curso
+      x-permission: certificate.template.edit
+      x-nuva-pending: true
+      description: |
+        Valida (palavras-chave e lista de permissões, `specs/015-certificados.md`, "Template") e grava
+        uma versão nova e imutável. Recusa o template inteiro com a lista de problemas, sem corrigir
+        nada:
+        `422` `certificate_template_invalid` com `details.problems`. `expectedVersionId` é a versão que
+        o editor abriu (`null` quando não havia template); se mudou: `409` `version_conflict`.
+
+        Quando o curso passa de "sem template efetivo" a "com template efetivo", enfileira
+        `certificate.backfill`, e `backfillQueued` é verdadeiro. Editar um
+        template que já existia não emite nada. Grava a auditoria.
+      security:
+        - sessionCookie: []
+          csrfToken: []
+      parameters:
+        - $ref: "#/components/parameters/IdPath"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CertificateTemplateSave"
+      responses:
+        "200":
+          description: Template gravado.
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/XRequestId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CertificateTemplateSaved"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "413":
+          $ref: "#/components/responses/PayloadTooLarge"
+        "415":
+          $ref: "#/components/responses/UnsupportedMediaType"
+        "422":
+          $ref: "#/components/responses/CertificateTemplateInvalid"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+    delete:
+      operationId: deleteCourseCertificateTemplate
+      tags: [certificates]
+      summary: Excluir o template do curso
+      x-permission: certificate.template.edit
+      x-nuva-pending: true
+      description: |
+        O curso volta ao padrão da escola; sem padrão, as próximas conclusões ficam aguardando template.
+        Certificados emitidos não mudam. Responde o estado novo; sem template próprio, nada muda.
+      security:
+        - sessionCookie: []
+          csrfToken: []
+      parameters:
+        - $ref: "#/components/parameters/IdPath"
+      responses:
+        "200":
+          description: O estado depois da exclusão.
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/XRequestId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CertificateTemplate"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+  /api/v1/settings/certificate-template:
+    get:
+      operationId: getSchoolCertificateTemplate
+      tags: [certificates]
+      summary: Template padrão da escola
+      x-permission: settings.manage
+      x-nuva-pending: true
+      description: |
+        O template padrão da escola (`html` nulo quando não há), no mesmo formato do template do curso;
+        `source` é `school` ou `none`. Só `admin` (`settings.manage`).
+      responses:
+        "200":
+          description: O template.
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/XRequestId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CertificateTemplate"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+    put:
+      operationId: saveSchoolCertificateTemplate
+      tags: [certificates]
+      summary: Gravar o template padrão
+      x-permission: settings.manage
+      x-nuva-pending: true
+      description: |
+        Valida (palavras-chave e lista de permissões, `specs/015-certificados.md`, "Template") e grava
+        uma versão nova e imutável. Recusa o template inteiro com a lista de problemas, sem corrigir
+        nada:
+        `422` `certificate_template_invalid` com `details.problems`. `expectedVersionId` é a versão que
+        o editor abriu (`null` quando não havia template); se mudou: `409` `version_conflict`.
+
+        Quando um curso passa de "sem template efetivo" a "com template efetivo", enfileira
+        `certificate.backfill` para cada curso com certificado habilitado e sem template próprio, e
+        `backfillQueued` é verdadeiro. Editar um
+        template que já existia não emite nada. Grava a auditoria.
+      security:
+        - sessionCookie: []
+          csrfToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CertificateTemplateSave"
+      responses:
+        "200":
+          description: Template gravado.
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/XRequestId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CertificateTemplateSaved"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "413":
+          $ref: "#/components/responses/PayloadTooLarge"
+        "415":
+          $ref: "#/components/responses/UnsupportedMediaType"
+        "422":
+          $ref: "#/components/responses/CertificateTemplateInvalid"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+    delete:
+      operationId: deleteSchoolCertificateTemplate
+      tags: [certificates]
+      summary: Excluir o template padrão
+      x-permission: settings.manage
+      x-nuva-pending: true
+      description: |
+        Os cursos sem template próprio passam a não ter template efetivo. Certificados emitidos não
+        mudam.
+        Responde o estado novo.
+      security:
+        - sessionCookie: []
+          csrfToken: []
+      responses:
+        "200":
+          description: O estado depois da exclusão.
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/XRequestId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CertificateTemplate"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+  /api/v1/certificate-templates/reference:
+    get:
+      operationId: getCertificateTemplateReference
+      tags: [certificates]
+      summary: Palavras-chave e modelo inicial
+      x-permission: certificate.template.edit
+      x-nuva-pending: true
+      description: |
+        A lista fechada de palavras-chave (nome, descrição, valor de exemplo, se é obrigatória, se só
+        vale
+        em posição de texto) e o HTML do modelo inicial ("Começar do modelo").
+      responses:
+        "200":
+          description: A referência.
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/XRequestId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CertificateTemplateReference"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+  /api/v1/certificate-templates/previews:
+    post:
+      operationId: createCertificatePreview
+      tags: [certificates]
+      summary: Pedir PDF de exemplo
+      x-permission: certificate.template.edit
+      x-nuva-pending: true
+      description: |
+        Valida o HTML ainda não salvo (mesmas regras e mesmo `422` `certificate_template_invalid` da
+        gravação), grava o pedido e enfileira `certificate.preview`. O PDF sai com dados de exemplo
+        (`specs/015-certificados.md`, "Pré-visualização"). `courseId` dá o título e o instrutor do
+        exemplo; curso alheio ao `instructor`: `404`. Acima de 20 pedidos na hora por usuário: `429`
+        `rate_limited`. Só quem pediu vê o pedido; ele some em 24 horas.
+      security:
+        - sessionCookie: []
+          csrfToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [html]
+              properties:
+                html:
+                  type: string
+                  minLength: 1
+                  description: "O template, até 768 KiB em UTF-8 (acima: problema `too_large`)."
+                courseId:
+                  oneOf:
+                    - $ref: "#/components/schemas/Uuid"
+                    - type: "null"
+              additionalProperties: false
+      responses:
+        "202":
+          description: Pedido aceito, em `pending`.
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/XRequestId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CertificatePreview"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "413":
+          $ref: "#/components/responses/PayloadTooLarge"
+        "415":
+          $ref: "#/components/responses/UnsupportedMediaType"
+        "422":
+          $ref: "#/components/responses/CertificateTemplateInvalid"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+  /api/v1/certificate-templates/previews/{id}:
+    get:
+      operationId: getCertificatePreview
+      tags: [certificates]
+      summary: Estado do PDF de exemplo
+      x-permission: certificate.template.edit
+      x-nuva-pending: true
+      description: |
+        `pending`, `ready` ou `failed` com o motivo. Pedido de outro usuário ou já expirado: `404`.
+      parameters:
+        - $ref: "#/components/parameters/IdPath"
+      responses:
+        "200":
+          description: O pedido.
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/XRequestId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CertificatePreview"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+  /api/v1/certificate-templates/previews/{id}/pdf:
+    get:
+      operationId: getCertificatePreviewPdf
+      tags: [certificates]
+      summary: PDF de exemplo
+      x-permission: certificate.template.edit
+      x-nuva-pending: true
+      description: |
+        O PDF do exemplo, para abrir numa aba nova. Pedido de outro usuário ou expirado: `404`. Ainda em
+        `pending` ou em `failed`: `409` `certificate_preview_not_ready`.
+      parameters:
+        - $ref: "#/components/parameters/IdPath"
+      responses:
+        "200":
+          $ref: "#/components/responses/Pdf"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+  /api/v1/settings/certificates:
+    get:
+      operationId: getCertificateSettings
+      tags: [certificates]
+      summary: Signatário do certificado
+      x-permission: settings.manage
+      x-nuva-pending: true
+      description: |
+        `certificate.signer_name` e `certificate.signer_role` (`specs/031-infraestrutura-e-deploy.md`,
+        "Configurações da escola") e, só para leitura, `school.name`.
+      responses:
+        "200":
+          description: As configurações.
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/XRequestId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CertificateSettings"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+    put:
+      operationId: saveCertificateSettings
+      tags: [certificates]
+      summary: Gravar o signatário do certificado
+      x-permission: settings.manage
+      x-nuva-pending: true
+      description: |
+        Grava os dois campos (`null` omite a assinatura no certificado). O nome da escola não é gravado
+        aqui. Vale para os certificados emitidos depois; os emitidos têm os dados congelados.
+      security:
+        - sessionCookie: []
+          csrfToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [signerName, signerRole]
+              properties:
+                signerName:
+                  type: [string, "null"]
+                  minLength: 1
+                  maxLength: 120
+                signerRole:
+                  type: [string, "null"]
+                  minLength: 1
+                  maxLength: 120
+              additionalProperties: false
+      responses:
+        "200":
+          description: Configurações gravadas.
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/XRequestId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CertificateSettings"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "413":
+          $ref: "#/components/responses/PayloadTooLarge"
+        "415":
+          $ref: "#/components/responses/UnsupportedMediaType"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
 components:
   securitySchemes:
     sessionCookie:
@@ -1375,6 +4640,14 @@ components:
         `ETag` de uma entrega anterior. Igual ao atual, a resposta é `304`, sem corpo.
       schema:
         type: string
+    # --- comum: catálogo, aprendizado e certificados (Fase 2) ---
+    SlugPath:
+      name: slug
+      in: path
+      required: true
+      description: Identificador legível do produto na URL (único por tipo de produto).
+      schema:
+        $ref: "#/components/schemas/Slug"
   headers:
     # --- comum ---
     XRequestId:
@@ -1418,6 +4691,11 @@ components:
       schema:
         type: string
         const: nosniff
+    # --- comum: catálogo, aprendizado e certificados (Fase 2) ---
+    ContentDisposition:
+      description: Sempre `attachment`, com o nome sugerido do arquivo (`filename`).
+      schema:
+        type: string
   responses:
     # --- comum ---
     BadRequest:
@@ -1581,6 +4859,37 @@ components:
           $ref: "#/components/headers/Location"
         Set-Cookie:
           $ref: "#/components/headers/SetCookie"
+    # --- comum: catálogo, aprendizado e certificados (Fase 2) ---
+    Pdf:
+      description: |
+        O arquivo PDF. `Content-Disposition` sugere o nome do arquivo; a resposta não é guardada em
+        cache.
+      headers:
+        X-Request-Id:
+          $ref: "#/components/headers/XRequestId"
+        Cache-Control:
+          $ref: "#/components/headers/NoStore"
+        Content-Disposition:
+          $ref: "#/components/headers/ContentDisposition"
+        X-Content-Type-Options:
+          $ref: "#/components/headers/ContentTypeOptions"
+      content:
+        application/pdf:
+          schema:
+            type: string
+            contentMediaType: application/pdf
+    # --- só admin-api: Fase 2 ---
+    CertificateTemplateInvalid:
+      description: |
+        Template fora das regras (`certificate_template_invalid`, com `details.problems`) ou outra regra
+        de negócio com `code` próprio.
+      headers:
+        X-Request-Id:
+          $ref: "#/components/headers/XRequestId"
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/CertificateTemplateInvalidProblem"
   schemas:
     # --- comum ---
     Uuid:
@@ -2303,4 +5612,1747 @@ components:
           description: Mais nova primeiro.
           items:
             $ref: "#/components/schemas/TermsVersionEntry"
+      additionalProperties: false
+    # --- comum: catálogo, aprendizado e certificados (Fase 2) ---
+    ProductType:
+      type: string
+      enum: [course, bundle, ebook]
+      description: Tipo de produto do catálogo (`specs/009-catalogo-e-conteudo.md`).
+    AccessMode:
+      type: string
+      enum: [open, paid, private]
+      description: |
+        Modo de acesso do produto (`specs/009-catalogo-e-conteudo.md`, "Modos de acesso"): `open` para
+        qualquer usuário logado, `paid` para quem tem direito ativo, `private` só por concessão, pacote
+        ou
+        plano, e nunca na vitrine.
+    PublicationStatus:
+      type: string
+      enum: [draft, published]
+      description: Estado de publicação de produto e de aula; só `published` aparece no classroom.
+    CourseLevel:
+      type: string
+      enum: [beginner, intermediate, advanced]
+      description: Nível do curso.
+    VideoProvider:
+      type: string
+      enum: [youtube, vimeo, bunny, panda, file, link]
+      description: |
+        Provedor do vídeo, classificado pela API a partir da URL na gravação
+        (`specs/009-catalogo-e-conteudo.md`,
+        "Vídeo e links externos"). URL fora dos padrões da tabela, inclusive `.m3u8` de outro host, vira
+        `link` (botão "Abrir vídeo", sem conclusão automática).
+    LessonLinkKind:
+      type: string
+      enum: [file, page]
+      description: "Tipo de link de apoio: arquivo ou página."
+    LessonLink:
+      type: object
+      description: Link de apoio de uma aula, na ordem de `position`.
+      required: [id, label, url, kind, position]
+      properties:
+        id:
+          $ref: "#/components/schemas/Uuid"
+        label:
+          type: string
+        url:
+          type: string
+          description: URL externa do material; só vai a quem tem acesso à aula.
+        kind:
+          $ref: "#/components/schemas/LessonLinkKind"
+        position:
+          type: integer
+          minimum: 0
+      additionalProperties: false
+    ProductCover:
+      type: object
+      description: |
+        Capa de um produto, imagem de finalidade `product_cover` em 16:9 (`specs/029-imagens.md`).
+      required: [imageId, url, largeUrl]
+      properties:
+        imageId:
+          $ref: "#/components/schemas/Uuid"
+        url:
+          type: string
+          format: uri-reference
+          description: Variante de 480 px (`/api/v1/images/{imageId}/480.webp`).
+        largeUrl:
+          type: string
+          format: uri-reference
+          description: Variante de 1280 px (`/api/v1/images/{imageId}/1280.webp`).
+      additionalProperties: false
+    CertificateState:
+      type: string
+      enum: [preparing, issued, revoked]
+      description: |
+        Estado de um certificado existente: `preparing` (registro criado, PDF ainda não gerado),
+        `issued` (com PDF) ou `revoked` (`specs/015-certificados.md`).
+    Slug:
+      type: string
+      minLength: 1
+      maxLength: 160
+      pattern: ^[a-z0-9]+(-[a-z0-9]+)*$
+      description: "Identificador legível na URL: minúsculas, dígitos e hífens."
+      examples: [introducao-ao-python]
+    # --- só admin-api: catálogo, aprendizado e certificados (Fase 2) ---
+    ImagePurpose:
+      type: string
+      enum: [product_cover]
+      description: |
+        Finalidade da imagem enviada pelo admin (`specs/029-imagens.md`). Na Fase 2 só existe
+        `product_cover`.
+    ImageVariantInfo:
+      type: object
+      required: [width, height, url]
+      properties:
+        width:
+          $ref: "#/components/schemas/ImageVariantWidth"
+        height:
+          type: integer
+          minimum: 1
+        url:
+          type: string
+          format: uri-reference
+          description: Caminho de entrega (`/api/v1/images/{imageId}/{variant}.webp`).
+          examples: [/api/v1/images/0193a5b2-7c1e-7d3a-9f4b-2a6c8e1d5f70/480.webp]
+      additionalProperties: false
+    Image:
+      type: object
+      description: Imagem enviada, com as variantes geradas.
+      required: [id, purpose, width, height, variants]
+      properties:
+        id:
+          $ref: "#/components/schemas/Uuid"
+        purpose:
+          $ref: "#/components/schemas/ImagePurpose"
+        width:
+          type: integer
+          minimum: 1
+          description: Largura do arquivo enviado, em pixels.
+        height:
+          type: integer
+          minimum: 1
+          description: Altura do arquivo enviado, em pixels.
+        variants:
+          type: array
+          minItems: 1
+          items:
+            $ref: "#/components/schemas/ImageVariantInfo"
+      additionalProperties: false
+    CourseSummary:
+      type: object
+      description: Um curso na lista do admin.
+      required:
+        [
+          id,
+          slug,
+          title,
+          summary,
+          cover,
+          accessMode,
+          priceCents,
+          accessDays,
+          status,
+          level,
+          owner,
+          reviewRequestedAt,
+          moduleCount,
+          lessonCount,
+          durationSeconds,
+          publishedAt,
+          archivedAt,
+          createdAt,
+          updatedAt,
+        ]
+      properties:
+        id:
+          $ref: "#/components/schemas/Uuid"
+        slug:
+          $ref: "#/components/schemas/Slug"
+        title:
+          type: string
+        summary:
+          type: [string, "null"]
+        cover:
+          oneOf:
+            - $ref: "#/components/schemas/ProductCover"
+            - type: "null"
+        accessMode:
+          $ref: "#/components/schemas/AccessMode"
+        priceCents:
+          type: [integer, "null"]
+          minimum: 0
+          description: Preço em centavos; `null` fora do modo `paid`.
+        accessDays:
+          type: [integer, "null"]
+          minimum: 1
+          description: Dias de acesso a partir da compra; `null` é vitalício.
+        status:
+          $ref: "#/components/schemas/PublicationStatus"
+        level:
+          oneOf:
+            - $ref: "#/components/schemas/CourseLevel"
+            - type: "null"
+        owner:
+          oneOf:
+            - $ref: "#/components/schemas/UserRef"
+            - type: "null"
+          description: Instrutor dono; `null` sem dono.
+        reviewRequestedAt:
+          oneOf:
+            - $ref: "#/components/schemas/DateTime"
+            - type: "null"
+          description: Pedido de publicação pendente (`request-review`).
+        moduleCount:
+          type: integer
+          minimum: 0
+        lessonCount:
+          type: integer
+          minimum: 0
+          description: Aulas publicadas.
+        durationSeconds:
+          type: integer
+          minimum: 0
+          description: Soma das durações das aulas publicadas.
+        publishedAt:
+          oneOf:
+            - $ref: "#/components/schemas/DateTime"
+            - type: "null"
+        archivedAt:
+          oneOf:
+            - $ref: "#/components/schemas/DateTime"
+            - type: "null"
+          description: "Preenchido quando arquivado: fora do classroom em definitivo."
+        createdAt:
+          $ref: "#/components/schemas/DateTime"
+        updatedAt:
+          $ref: "#/components/schemas/DateTime"
+      additionalProperties: false
+    CourseSummaryPage:
+      allOf:
+        - $ref: "#/components/schemas/Page"
+        - type: object
+          required: [items]
+          properties:
+            items:
+              type: array
+              items:
+                $ref: "#/components/schemas/CourseSummary"
+    CourseDetail:
+      type: object
+      description: O curso para o editor, com módulos e aulas na ordem.
+      required:
+        [
+          id,
+          slug,
+          title,
+          summary,
+          cover,
+          accessMode,
+          priceCents,
+          accessDays,
+          status,
+          level,
+          owner,
+          reviewRequestedAt,
+          moduleCount,
+          lessonCount,
+          durationSeconds,
+          publishedAt,
+          archivedAt,
+          createdAt,
+          updatedAt,
+          description,
+          certificateEnabled,
+          certificateHours,
+          studentCount,
+          modules,
+        ]
+      properties:
+        id:
+          $ref: "#/components/schemas/Uuid"
+        slug:
+          $ref: "#/components/schemas/Slug"
+        title:
+          type: string
+        summary:
+          type: [string, "null"]
+        cover:
+          oneOf:
+            - $ref: "#/components/schemas/ProductCover"
+            - type: "null"
+        accessMode:
+          $ref: "#/components/schemas/AccessMode"
+        priceCents:
+          type: [integer, "null"]
+          minimum: 0
+          description: Preço em centavos; `null` fora do modo `paid`.
+        accessDays:
+          type: [integer, "null"]
+          minimum: 1
+          description: Dias de acesso a partir da compra; `null` é vitalício.
+        status:
+          $ref: "#/components/schemas/PublicationStatus"
+        level:
+          oneOf:
+            - $ref: "#/components/schemas/CourseLevel"
+            - type: "null"
+        owner:
+          oneOf:
+            - $ref: "#/components/schemas/UserRef"
+            - type: "null"
+        reviewRequestedAt:
+          oneOf:
+            - $ref: "#/components/schemas/DateTime"
+            - type: "null"
+        moduleCount:
+          type: integer
+          minimum: 0
+        lessonCount:
+          type: integer
+          minimum: 0
+          description: Aulas publicadas.
+        durationSeconds:
+          type: integer
+          minimum: 0
+        publishedAt:
+          oneOf:
+            - $ref: "#/components/schemas/DateTime"
+            - type: "null"
+        archivedAt:
+          oneOf:
+            - $ref: "#/components/schemas/DateTime"
+            - type: "null"
+          description: "Preenchido quando arquivado: fora do classroom em definitivo."
+        createdAt:
+          $ref: "#/components/schemas/DateTime"
+        updatedAt:
+          $ref: "#/components/schemas/DateTime"
+        description:
+          type: [string, "null"]
+          description: Markdown.
+        certificateEnabled:
+          type: boolean
+        certificateHours:
+          type: [integer, "null"]
+          minimum: 1
+          description: Carga horária fixada; `null` é calculada pelas aulas publicadas.
+        studentCount:
+          type: integer
+          minimum: 0
+          description: Alunos com direito ativo ao produto, para os avisos de despublicar e de remover item.
+        modules:
+          type: array
+          items:
+            $ref: "#/components/schemas/CourseModule"
+      additionalProperties: false
+    CourseCreate:
+      type: object
+      required: [title]
+      properties:
+        slug:
+          $ref: "#/components/schemas/Slug"
+        title:
+          type: string
+          minLength: 1
+          maxLength: 160
+        summary:
+          type: [string, "null"]
+          maxLength: 300
+        description:
+          type: [string, "null"]
+          maxLength: 20000
+          description: Markdown, exibido sanitizado.
+        coverImageId:
+          oneOf:
+            - $ref: "#/components/schemas/Uuid"
+            - type: "null"
+          description: Imagem `product_cover` enviada antes por `POST /api/v1/images`; `null` remove.
+        level:
+          oneOf:
+            - $ref: "#/components/schemas/CourseLevel"
+            - type: "null"
+        accessMode:
+          $ref: "#/components/schemas/AccessMode"
+        priceCents:
+          type: [integer, "null"]
+          minimum: 0
+          description: |
+            Preço em centavos; exige `product.set_price` (só `admin`; outro papel: `403`). Obrigatório
+            (≥ 0) quando o modo é `paid`; `null` nos demais.
+        accessDays:
+          type: [integer, "null"]
+          minimum: 1
+          maximum: 36500
+          description: Dias de acesso a partir da compra; `null` é vitalício.
+        ownerId:
+          oneOf:
+            - $ref: "#/components/schemas/Uuid"
+            - type: "null"
+          description: Só `manager` e `admin`.
+      additionalProperties: false
+    CourseUpdate:
+      type: object
+      required: []
+      properties:
+        slug:
+          $ref: "#/components/schemas/Slug"
+        title:
+          type: string
+          minLength: 1
+          maxLength: 160
+        summary:
+          type: [string, "null"]
+          maxLength: 300
+        description:
+          type: [string, "null"]
+          maxLength: 20000
+          description: Markdown, exibido sanitizado.
+        coverImageId:
+          oneOf:
+            - $ref: "#/components/schemas/Uuid"
+            - type: "null"
+          description: Imagem `product_cover` enviada antes por `POST /api/v1/images`; `null` remove.
+        level:
+          oneOf:
+            - $ref: "#/components/schemas/CourseLevel"
+            - type: "null"
+        accessMode:
+          $ref: "#/components/schemas/AccessMode"
+        priceCents:
+          type: [integer, "null"]
+          minimum: 0
+          description: |
+            Preço em centavos; exige `product.set_price` (só `admin`; outro papel: `403`). Obrigatório
+            (≥ 0) quando o modo é `paid`; `null` nos demais.
+        accessDays:
+          type: [integer, "null"]
+          minimum: 1
+          maximum: 36500
+          description: Dias de acesso a partir da compra; `null` é vitalício.
+        certificateEnabled:
+          type: boolean
+        certificateHours:
+          type: [integer, "null"]
+          minimum: 1
+          maximum: 10000
+      additionalProperties: false
+      minProperties: 1
+    CourseModule:
+      type: object
+      description: Um módulo, com as aulas na ordem (rascunhos inclusive).
+      required: [id, courseId, title, position, lessons, createdAt, updatedAt]
+      properties:
+        id:
+          $ref: "#/components/schemas/Uuid"
+        courseId:
+          $ref: "#/components/schemas/Uuid"
+        title:
+          type: string
+        position:
+          type: integer
+          minimum: 0
+        lessons:
+          type: array
+          items:
+            $ref: "#/components/schemas/LessonSummary"
+        createdAt:
+          $ref: "#/components/schemas/DateTime"
+        updatedAt:
+          $ref: "#/components/schemas/DateTime"
+      additionalProperties: false
+    CourseModuleList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/CourseModule"
+      additionalProperties: false
+    LessonSummary:
+      type: object
+      required: [id, moduleId, title, status, isSample, durationSeconds, videoProvider, position]
+      properties:
+        id:
+          $ref: "#/components/schemas/Uuid"
+        moduleId:
+          $ref: "#/components/schemas/Uuid"
+        title:
+          type: string
+        status:
+          $ref: "#/components/schemas/PublicationStatus"
+        isSample:
+          type: boolean
+        durationSeconds:
+          type: [integer, "null"]
+          minimum: 0
+        videoProvider:
+          oneOf:
+            - $ref: "#/components/schemas/VideoProvider"
+            - type: "null"
+        position:
+          type: integer
+          minimum: 0
+      additionalProperties: false
+    LessonDetail:
+      type: object
+      description: A aula para o editor.
+      required:
+        [
+          id,
+          courseId,
+          moduleId,
+          title,
+          description,
+          type,
+          status,
+          isSample,
+          videoUrl,
+          videoProvider,
+          durationSeconds,
+          position,
+          links,
+          ebooks,
+          createdAt,
+          updatedAt,
+        ]
+      properties:
+        id:
+          $ref: "#/components/schemas/Uuid"
+        courseId:
+          $ref: "#/components/schemas/Uuid"
+        moduleId:
+          $ref: "#/components/schemas/Uuid"
+        title:
+          type: string
+        description:
+          type: [string, "null"]
+          description: Markdown.
+        type:
+          type: string
+          const: video
+          description: No MVP, só `video`.
+        status:
+          $ref: "#/components/schemas/PublicationStatus"
+        isSample:
+          type: boolean
+        videoUrl:
+          type: [string, "null"]
+        videoProvider:
+          oneOf:
+            - $ref: "#/components/schemas/VideoProvider"
+            - type: "null"
+        durationSeconds:
+          type: [integer, "null"]
+          minimum: 0
+        position:
+          type: integer
+          minimum: 0
+        links:
+          type: array
+          items:
+            $ref: "#/components/schemas/LessonLink"
+        ebooks:
+          type: array
+          description: Ebooks vinculados à aula (`product_ebooks` com alvo `lesson`).
+          items:
+            $ref: "#/components/schemas/EbookRef"
+        createdAt:
+          $ref: "#/components/schemas/DateTime"
+        updatedAt:
+          $ref: "#/components/schemas/DateTime"
+      additionalProperties: false
+    LessonCreate:
+      type: object
+      required: [title]
+      properties:
+        title:
+          type: string
+          minLength: 1
+          maxLength: 160
+        description:
+          type: [string, "null"]
+          maxLength: 20000
+          description: Markdown, exibido sanitizado.
+        videoUrl:
+          type: [string, "null"]
+          minLength: 1
+          description: |
+            Vídeo principal. Regras de URL de conteúdo (`specs/009-catalogo-e-conteudo.md`): `https` (`http`
+            só em
+            `*.localhost`), sem credenciais, sem espaços, até 2.000 caracteres; fora delas, `422`
+            `content_url_invalid` com o campo e o motivo. A URL nunca é buscada pelo servidor.
+        durationSeconds:
+          type: [integer, "null"]
+          minimum: 0
+          maximum: 86400
+          description: Informada pelo autor; o sistema não mede vídeo externo.
+        isSample:
+          type: boolean
+          default: false
+      additionalProperties: false
+    LessonUpdate:
+      type: object
+      required: []
+      properties:
+        title:
+          type: string
+          minLength: 1
+          maxLength: 160
+        description:
+          type: [string, "null"]
+          maxLength: 20000
+          description: Markdown, exibido sanitizado.
+        videoUrl:
+          type: [string, "null"]
+          minLength: 1
+          description: |
+            Vídeo principal. Regras de URL de conteúdo (`specs/009-catalogo-e-conteudo.md`): `https` (`http`
+            só em
+            `*.localhost`), sem credenciais, sem espaços, até 2.000 caracteres; fora delas, `422`
+            `content_url_invalid` com o campo e o motivo. A URL nunca é buscada pelo servidor.
+        durationSeconds:
+          type: [integer, "null"]
+          minimum: 0
+          maximum: 86400
+        isSample:
+          type: boolean
+        status:
+          $ref: "#/components/schemas/PublicationStatus"
+      additionalProperties: false
+      minProperties: 1
+    EbookRef:
+      type: object
+      required: [id, slug, title, status]
+      properties:
+        id:
+          $ref: "#/components/schemas/Uuid"
+        slug:
+          $ref: "#/components/schemas/Slug"
+        title:
+          type: string
+        status:
+          $ref: "#/components/schemas/PublicationStatus"
+      additionalProperties: false
+    EbookSummary:
+      type: object
+      description: Um ebook na lista do admin.
+      required:
+        [
+          id,
+          slug,
+          title,
+          summary,
+          cover,
+          accessMode,
+          priceCents,
+          accessDays,
+          status,
+          authorName,
+          pages,
+          publishedAt,
+          archivedAt,
+          createdAt,
+          updatedAt,
+        ]
+      properties:
+        id:
+          $ref: "#/components/schemas/Uuid"
+        slug:
+          $ref: "#/components/schemas/Slug"
+        title:
+          type: string
+        summary:
+          type: [string, "null"]
+        cover:
+          oneOf:
+            - $ref: "#/components/schemas/ProductCover"
+            - type: "null"
+        accessMode:
+          $ref: "#/components/schemas/AccessMode"
+        priceCents:
+          type: [integer, "null"]
+          minimum: 0
+          description: Preço em centavos; `null` fora do modo `paid`.
+        accessDays:
+          type: [integer, "null"]
+          minimum: 1
+          description: Dias de acesso a partir da compra; `null` é vitalício.
+        status:
+          $ref: "#/components/schemas/PublicationStatus"
+        authorName:
+          type: [string, "null"]
+        pages:
+          type: [integer, "null"]
+          minimum: 1
+        publishedAt:
+          oneOf:
+            - $ref: "#/components/schemas/DateTime"
+            - type: "null"
+        archivedAt:
+          oneOf:
+            - $ref: "#/components/schemas/DateTime"
+            - type: "null"
+          description: "Preenchido quando arquivado: fora do classroom em definitivo."
+        createdAt:
+          $ref: "#/components/schemas/DateTime"
+        updatedAt:
+          $ref: "#/components/schemas/DateTime"
+      additionalProperties: false
+    EbookSummaryPage:
+      allOf:
+        - $ref: "#/components/schemas/Page"
+        - type: object
+          required: [items]
+          properties:
+            items:
+              type: array
+              items:
+                $ref: "#/components/schemas/EbookSummary"
+    EbookTargetType:
+      type: string
+      enum: [course, bundle, lesson]
+      description: |
+        Alvo de um vínculo de ebook (`product_ebooks`). `bundle` existe na tabela, mas o vínculo a
+        pacote é feito pelos itens do pacote e não é oferecido na interface.
+    EbookTarget:
+      type: object
+      required: [targetType, targetId, title, course]
+      properties:
+        targetType:
+          $ref: "#/components/schemas/EbookTargetType"
+        targetId:
+          $ref: "#/components/schemas/Uuid"
+        title:
+          type: string
+          description: Título do curso, do pacote ou da aula.
+        course:
+          oneOf:
+            - $ref: "#/components/schemas/ProductRef"
+            - type: "null"
+          description: O curso da aula, em vínculo `lesson`; `null` nos demais.
+      additionalProperties: false
+    EbookDetail:
+      type: object
+      required:
+        [
+          id,
+          slug,
+          title,
+          summary,
+          cover,
+          accessMode,
+          priceCents,
+          accessDays,
+          status,
+          authorName,
+          pages,
+          publishedAt,
+          archivedAt,
+          createdAt,
+          updatedAt,
+          description,
+          fileUrl,
+          targets,
+          studentCount,
+        ]
+      properties:
+        id:
+          $ref: "#/components/schemas/Uuid"
+        slug:
+          $ref: "#/components/schemas/Slug"
+        title:
+          type: string
+        summary:
+          type: [string, "null"]
+        cover:
+          oneOf:
+            - $ref: "#/components/schemas/ProductCover"
+            - type: "null"
+        accessMode:
+          $ref: "#/components/schemas/AccessMode"
+        priceCents:
+          type: [integer, "null"]
+          minimum: 0
+          description: Preço em centavos; `null` fora do modo `paid`.
+        accessDays:
+          type: [integer, "null"]
+          minimum: 1
+          description: Dias de acesso a partir da compra; `null` é vitalício.
+        status:
+          $ref: "#/components/schemas/PublicationStatus"
+        authorName:
+          type: [string, "null"]
+        pages:
+          type: [integer, "null"]
+          minimum: 1
+        publishedAt:
+          oneOf:
+            - $ref: "#/components/schemas/DateTime"
+            - type: "null"
+        archivedAt:
+          oneOf:
+            - $ref: "#/components/schemas/DateTime"
+            - type: "null"
+          description: "Preenchido quando arquivado: fora do classroom em definitivo."
+        createdAt:
+          $ref: "#/components/schemas/DateTime"
+        updatedAt:
+          $ref: "#/components/schemas/DateTime"
+        description:
+          type: [string, "null"]
+          description: Markdown.
+        fileUrl:
+          type: [string, "null"]
+          description: Link externo do arquivo.
+        targets:
+          type: array
+          items:
+            $ref: "#/components/schemas/EbookTarget"
+        studentCount:
+          type: integer
+          minimum: 0
+          description: Alunos com direito ativo ao produto, para os avisos de despublicar e de remover item.
+      additionalProperties: false
+    EbookCreate:
+      type: object
+      required: [title]
+      properties:
+        slug:
+          $ref: "#/components/schemas/Slug"
+        title:
+          type: string
+          minLength: 1
+          maxLength: 160
+        summary:
+          type: [string, "null"]
+          maxLength: 300
+        description:
+          type: [string, "null"]
+          maxLength: 20000
+          description: Markdown, exibido sanitizado.
+        coverImageId:
+          oneOf:
+            - $ref: "#/components/schemas/Uuid"
+            - type: "null"
+          description: Imagem `product_cover` enviada antes por `POST /api/v1/images`; `null` remove.
+        authorName:
+          type: [string, "null"]
+          minLength: 1
+          maxLength: 160
+        fileUrl:
+          type: [string, "null"]
+          minLength: 1
+          description: |
+            Arquivo do ebook. Regras de URL de conteúdo (`specs/009-catalogo-e-conteudo.md`): `https`
+            (`http` só em
+            `*.localhost`), sem credenciais, sem espaços, até 2.000 caracteres; fora delas, `422`
+            `content_url_invalid` com o campo e o motivo. A URL nunca é buscada pelo servidor.
+        pages:
+          type: [integer, "null"]
+          minimum: 1
+          maximum: 100000
+        accessMode:
+          $ref: "#/components/schemas/AccessMode"
+        priceCents:
+          type: [integer, "null"]
+          minimum: 0
+          description: |
+            Preço em centavos; exige `product.set_price` (só `admin`; outro papel: `403`). Obrigatório
+            (≥ 0) quando o modo é `paid`; `null` nos demais.
+        accessDays:
+          type: [integer, "null"]
+          minimum: 1
+          maximum: 36500
+          description: Dias de acesso a partir da compra; `null` é vitalício.
+      additionalProperties: false
+    EbookUpdate:
+      type: object
+      required: []
+      properties:
+        slug:
+          $ref: "#/components/schemas/Slug"
+        title:
+          type: string
+          minLength: 1
+          maxLength: 160
+        summary:
+          type: [string, "null"]
+          maxLength: 300
+        description:
+          type: [string, "null"]
+          maxLength: 20000
+          description: Markdown, exibido sanitizado.
+        coverImageId:
+          oneOf:
+            - $ref: "#/components/schemas/Uuid"
+            - type: "null"
+          description: Imagem `product_cover` enviada antes por `POST /api/v1/images`; `null` remove.
+        authorName:
+          type: [string, "null"]
+          minLength: 1
+          maxLength: 160
+        fileUrl:
+          type: [string, "null"]
+          minLength: 1
+          description: |
+            Arquivo do ebook. Regras de URL de conteúdo (`specs/009-catalogo-e-conteudo.md`): `https`
+            (`http` só em
+            `*.localhost`), sem credenciais, sem espaços, até 2.000 caracteres; fora delas, `422`
+            `content_url_invalid` com o campo e o motivo. A URL nunca é buscada pelo servidor.
+        pages:
+          type: [integer, "null"]
+          minimum: 1
+          maximum: 100000
+        accessMode:
+          $ref: "#/components/schemas/AccessMode"
+        priceCents:
+          type: [integer, "null"]
+          minimum: 0
+          description: |
+            Preço em centavos; exige `product.set_price` (só `admin`; outro papel: `403`). Obrigatório
+            (≥ 0) quando o modo é `paid`; `null` nos demais.
+        accessDays:
+          type: [integer, "null"]
+          minimum: 1
+          maximum: 36500
+          description: Dias de acesso a partir da compra; `null` é vitalício.
+      additionalProperties: false
+      minProperties: 1
+    ProductRef:
+      type: object
+      description: Um produto citado por outro registro.
+      required: [type, id, title]
+      properties:
+        type:
+          $ref: "#/components/schemas/ProductType"
+        id:
+          $ref: "#/components/schemas/Uuid"
+        title:
+          type: string
+      additionalProperties: false
+    BundleSummary:
+      type: object
+      description: Um pacote na lista do admin.
+      required:
+        [
+          id,
+          slug,
+          title,
+          summary,
+          cover,
+          accessMode,
+          priceCents,
+          accessDays,
+          status,
+          itemCount,
+          publishedAt,
+          archivedAt,
+          createdAt,
+          updatedAt,
+        ]
+      properties:
+        id:
+          $ref: "#/components/schemas/Uuid"
+        slug:
+          $ref: "#/components/schemas/Slug"
+        title:
+          type: string
+        summary:
+          type: [string, "null"]
+        cover:
+          oneOf:
+            - $ref: "#/components/schemas/ProductCover"
+            - type: "null"
+        accessMode:
+          $ref: "#/components/schemas/AccessMode"
+        priceCents:
+          type: [integer, "null"]
+          minimum: 0
+          description: Preço em centavos; `null` fora do modo `paid`.
+        accessDays:
+          type: [integer, "null"]
+          minimum: 1
+          description: Dias de acesso a partir da compra; `null` é vitalício.
+        status:
+          $ref: "#/components/schemas/PublicationStatus"
+        itemCount:
+          type: integer
+          minimum: 0
+        publishedAt:
+          oneOf:
+            - $ref: "#/components/schemas/DateTime"
+            - type: "null"
+        archivedAt:
+          oneOf:
+            - $ref: "#/components/schemas/DateTime"
+            - type: "null"
+          description: "Preenchido quando arquivado: fora do classroom em definitivo."
+        createdAt:
+          $ref: "#/components/schemas/DateTime"
+        updatedAt:
+          $ref: "#/components/schemas/DateTime"
+      additionalProperties: false
+    BundleSummaryPage:
+      allOf:
+        - $ref: "#/components/schemas/Page"
+        - type: object
+          required: [items]
+          properties:
+            items:
+              type: array
+              items:
+                $ref: "#/components/schemas/BundleSummary"
+    BundleItem:
+      type: object
+      required: [productType, productId, title, accessMode, priceCents, status, archived, position]
+      properties:
+        productType:
+          type: string
+          enum: [course, ebook]
+        productId:
+          $ref: "#/components/schemas/Uuid"
+        title:
+          type: string
+        accessMode:
+          $ref: "#/components/schemas/AccessMode"
+        priceCents:
+          type: [integer, "null"]
+          minimum: 0
+        status:
+          $ref: "#/components/schemas/PublicationStatus"
+        archived:
+          type: boolean
+        position:
+          type: integer
+          minimum: 0
+      additionalProperties: false
+    BundleDetail:
+      type: object
+      required:
+        [
+          id,
+          slug,
+          title,
+          summary,
+          cover,
+          accessMode,
+          priceCents,
+          accessDays,
+          status,
+          itemCount,
+          publishedAt,
+          archivedAt,
+          createdAt,
+          updatedAt,
+          description,
+          items,
+          itemsPriceCents,
+          studentCount,
+        ]
+      properties:
+        id:
+          $ref: "#/components/schemas/Uuid"
+        slug:
+          $ref: "#/components/schemas/Slug"
+        title:
+          type: string
+        summary:
+          type: [string, "null"]
+        cover:
+          oneOf:
+            - $ref: "#/components/schemas/ProductCover"
+            - type: "null"
+        accessMode:
+          $ref: "#/components/schemas/AccessMode"
+        priceCents:
+          type: [integer, "null"]
+          minimum: 0
+          description: Preço em centavos; `null` fora do modo `paid`.
+        accessDays:
+          type: [integer, "null"]
+          minimum: 1
+          description: Dias de acesso a partir da compra; `null` é vitalício.
+        status:
+          $ref: "#/components/schemas/PublicationStatus"
+        itemCount:
+          type: integer
+          minimum: 0
+        publishedAt:
+          oneOf:
+            - $ref: "#/components/schemas/DateTime"
+            - type: "null"
+        archivedAt:
+          oneOf:
+            - $ref: "#/components/schemas/DateTime"
+            - type: "null"
+          description: "Preenchido quando arquivado: fora do classroom em definitivo."
+        createdAt:
+          $ref: "#/components/schemas/DateTime"
+        updatedAt:
+          $ref: "#/components/schemas/DateTime"
+        description:
+          type: [string, "null"]
+          description: Markdown.
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/BundleItem"
+        itemsPriceCents:
+          type: integer
+          minimum: 0
+          description: Soma dos preços avulsos dos itens `paid`, para mostrar a economia.
+        studentCount:
+          type: integer
+          minimum: 0
+          description: Alunos com direito ativo ao produto, para os avisos de despublicar e de remover item.
+      additionalProperties: false
+    BundleCreate:
+      type: object
+      required: [title]
+      properties:
+        slug:
+          $ref: "#/components/schemas/Slug"
+        title:
+          type: string
+          minLength: 1
+          maxLength: 160
+        summary:
+          type: [string, "null"]
+          maxLength: 300
+        description:
+          type: [string, "null"]
+          maxLength: 20000
+          description: Markdown, exibido sanitizado.
+        coverImageId:
+          oneOf:
+            - $ref: "#/components/schemas/Uuid"
+            - type: "null"
+          description: Imagem `product_cover` enviada antes por `POST /api/v1/images`; `null` remove.
+        accessMode:
+          $ref: "#/components/schemas/AccessMode"
+        priceCents:
+          type: [integer, "null"]
+          minimum: 0
+          description: |
+            Preço em centavos; exige `product.set_price` (só `admin`; outro papel: `403`). Obrigatório
+            (≥ 0) quando o modo é `paid`; `null` nos demais.
+        accessDays:
+          type: [integer, "null"]
+          minimum: 1
+          maximum: 36500
+          description: Dias de acesso a partir da compra; `null` é vitalício.
+      additionalProperties: false
+    BundleUpdate:
+      type: object
+      required: []
+      properties:
+        slug:
+          $ref: "#/components/schemas/Slug"
+        title:
+          type: string
+          minLength: 1
+          maxLength: 160
+        summary:
+          type: [string, "null"]
+          maxLength: 300
+        description:
+          type: [string, "null"]
+          maxLength: 20000
+          description: Markdown, exibido sanitizado.
+        coverImageId:
+          oneOf:
+            - $ref: "#/components/schemas/Uuid"
+            - type: "null"
+          description: Imagem `product_cover` enviada antes por `POST /api/v1/images`; `null` remove.
+        accessMode:
+          $ref: "#/components/schemas/AccessMode"
+        priceCents:
+          type: [integer, "null"]
+          minimum: 0
+          description: |
+            Preço em centavos; exige `product.set_price` (só `admin`; outro papel: `403`). Obrigatório
+            (≥ 0) quando o modo é `paid`; `null` nos demais.
+        accessDays:
+          type: [integer, "null"]
+          minimum: 1
+          maximum: 36500
+          description: Dias de acesso a partir da compra; `null` é vitalício.
+      additionalProperties: false
+      minProperties: 1
+    EntitlementSource:
+      type: string
+      enum: [order, subscription, grant, cascade]
+      description: Fonte do direito (`specs/010-direitos-de-acesso.md`, "Fontes").
+    EntitlementState:
+      type: string
+      enum: [active, scheduled, expired, revoked]
+      description: |
+        `active` (vigente), `scheduled` (`startsAt` no futuro), `expired` (passou de `expiresAt`) ou
+        `revoked`.
+    RevokeReason:
+      type: string
+      enum: [refund, chargeback, subscription_ended, manual, recalculation, account_deleted]
+    EntitlementNode:
+      type: object
+      description: Um direito com os derivados dele.
+      required:
+        [
+          id,
+          product,
+          source,
+          sourceId,
+          parentEntitlementId,
+          state,
+          startsAt,
+          expiresAt,
+          revokedAt,
+          revokeReason,
+          grantedReason,
+          grantedBy,
+          createdAt,
+          children,
+        ]
+      properties:
+        id:
+          $ref: "#/components/schemas/Uuid"
+        product:
+          $ref: "#/components/schemas/ProductRef"
+        source:
+          $ref: "#/components/schemas/EntitlementSource"
+        sourceId:
+          $ref: "#/components/schemas/Uuid"
+        parentEntitlementId:
+          oneOf:
+            - $ref: "#/components/schemas/Uuid"
+            - type: "null"
+        state:
+          $ref: "#/components/schemas/EntitlementState"
+        startsAt:
+          $ref: "#/components/schemas/DateTime"
+        expiresAt:
+          oneOf:
+            - $ref: "#/components/schemas/DateTime"
+            - type: "null"
+          description: "`null` é vitalício."
+        revokedAt:
+          oneOf:
+            - $ref: "#/components/schemas/DateTime"
+            - type: "null"
+        revokeReason:
+          oneOf:
+            - $ref: "#/components/schemas/RevokeReason"
+            - type: "null"
+        grantedReason:
+          type: [string, "null"]
+          description: Motivo, só em `grant`.
+        grantedBy:
+          oneOf:
+            - $ref: "#/components/schemas/UserRef"
+            - type: "null"
+          description: Quem concedeu, só em `grant`.
+        createdAt:
+          $ref: "#/components/schemas/DateTime"
+        children:
+          type: array
+          description: Direitos derivados (cascata), até a profundidade 2.
+          items:
+            $ref: "#/components/schemas/EntitlementNode"
+      additionalProperties: false
+    EntitlementTree:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          description: As raízes, mais recentes primeiro.
+          items:
+            $ref: "#/components/schemas/EntitlementNode"
+      additionalProperties: false
+    StudentRef:
+      type: object
+      description: "Aluno citado em listas de curso: nome e avatar, sem e-mail."
+      required: [id, name, avatarUrl]
+      properties:
+        id:
+          $ref: "#/components/schemas/Uuid"
+        name:
+          type: string
+        avatarUrl:
+          type: [string, "null"]
+          format: uri-reference
+          description: Variante de 256 px do avatar; `null` sem avatar.
+      additionalProperties: false
+    ProductEntitlement:
+      type: object
+      required: [id, user, source, via, state, startsAt, expiresAt, revokedAt]
+      properties:
+        id:
+          $ref: "#/components/schemas/Uuid"
+        user:
+          $ref: "#/components/schemas/StudentRef"
+        source:
+          $ref: "#/components/schemas/EntitlementSource"
+        via:
+          oneOf:
+            - $ref: "#/components/schemas/ProductRef"
+            - type: "null"
+          description: Produto da raiz, quando o direito é derivado (pacote ou curso).
+        state:
+          $ref: "#/components/schemas/EntitlementState"
+        startsAt:
+          $ref: "#/components/schemas/DateTime"
+        expiresAt:
+          oneOf:
+            - $ref: "#/components/schemas/DateTime"
+            - type: "null"
+        revokedAt:
+          oneOf:
+            - $ref: "#/components/schemas/DateTime"
+            - type: "null"
+      additionalProperties: false
+    ProductEntitlementPage:
+      allOf:
+        - $ref: "#/components/schemas/Page"
+        - type: object
+          required: [items]
+          properties:
+            items:
+              type: array
+              items:
+                $ref: "#/components/schemas/ProductEntitlement"
+    CourseProgressState:
+      type: string
+      enum: [not_started, in_progress, completed]
+      description: Estado do curso para o aluno (`specs/014-aprendizado-e-progresso.md`, "Progresso").
+    ProgressCounts:
+      type: object
+      description: Progresso de um aluno num curso, sobre as aulas publicadas.
+      required: [completedLessons, totalLessons, percent, state]
+      properties:
+        completedLessons:
+          type: integer
+          minimum: 0
+        totalLessons:
+          type: integer
+          minimum: 0
+          description: Aulas publicadas.
+        percent:
+          type: integer
+          minimum: 0
+          maximum: 100
+        state:
+          $ref: "#/components/schemas/CourseProgressState"
+      additionalProperties: false
+    UserCourseProgress:
+      type: object
+      required: [course, progress, lastActivityAt, certificate]
+      properties:
+        course:
+          $ref: "#/components/schemas/ProductRef"
+        progress:
+          $ref: "#/components/schemas/ProgressCounts"
+        lastActivityAt:
+          oneOf:
+            - $ref: "#/components/schemas/DateTime"
+            - type: "null"
+        certificate:
+          oneOf:
+            - $ref: "#/components/schemas/CertificateRef"
+            - type: "null"
+          description: O certificado do curso, quando existe.
+      additionalProperties: false
+    UserProgressList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/UserCourseProgress"
+      additionalProperties: false
+    CourseProgressSummary:
+      type: object
+      description: Resumo de progresso de um curso.
+      required: [courseId, totalLessons, studentCount, buckets, completionRate]
+      properties:
+        courseId:
+          $ref: "#/components/schemas/Uuid"
+        totalLessons:
+          type: integer
+          minimum: 0
+        studentCount:
+          type: integer
+          minimum: 0
+          description: Alunos com acesso ao curso.
+        buckets:
+          type: object
+          description: Alunos por faixa de progresso.
+          required: [notStarted, upTo25, upTo50, upTo75, upTo99, completed]
+          properties:
+            notStarted:
+              type: integer
+              minimum: 0
+            upTo25:
+              type: integer
+              minimum: 0
+              description: De 1% a 25%.
+            upTo50:
+              type: integer
+              minimum: 0
+              description: De 26% a 50%.
+            upTo75:
+              type: integer
+              minimum: 0
+              description: De 51% a 75%.
+            upTo99:
+              type: integer
+              minimum: 0
+              description: De 76% a 99%.
+            completed:
+              type: integer
+              minimum: 0
+          additionalProperties: false
+        completionRate:
+          type: number
+          minimum: 0
+          maximum: 1
+          description: Concluídos ÷ alunos com acesso; 0 sem alunos.
+      additionalProperties: false
+    CourseStudent:
+      type: object
+      required: [user, progress, lastActivityAt, accessExpiresAt]
+      properties:
+        user:
+          $ref: "#/components/schemas/StudentRef"
+        progress:
+          $ref: "#/components/schemas/ProgressCounts"
+        lastActivityAt:
+          oneOf:
+            - $ref: "#/components/schemas/DateTime"
+            - type: "null"
+        accessExpiresAt:
+          oneOf:
+            - $ref: "#/components/schemas/DateTime"
+            - type: "null"
+          description: Fim do acesso mais longo; `null` vitalício ou curso `open`.
+      additionalProperties: false
+    CourseStudentPage:
+      allOf:
+        - $ref: "#/components/schemas/Page"
+        - type: object
+          required: [items]
+          properties:
+            items:
+              type: array
+              items:
+                $ref: "#/components/schemas/CourseStudent"
+    CertificateRef:
+      type: object
+      required: [id, code, state]
+      properties:
+        id:
+          $ref: "#/components/schemas/Uuid"
+        code:
+          type: string
+          description: Código com hífens (`XXXX-XXXX-XXXX`).
+        state:
+          $ref: "#/components/schemas/CertificateState"
+      additionalProperties: false
+    Certificate:
+      type: object
+      description: Um certificado, com os dados congelados na emissão.
+      required:
+        [
+          id,
+          code,
+          state,
+          user,
+          course,
+          studentName,
+          courseTitle,
+          instructorName,
+          hours,
+          completedAt,
+          issuedAt,
+          issuedManually,
+          issuedBy,
+          issueReason,
+          revokedAt,
+          revokedBy,
+          revokeReason,
+          pdfRenderedAt,
+          templateVersionId,
+        ]
+      properties:
+        id:
+          $ref: "#/components/schemas/Uuid"
+        code:
+          type: string
+          pattern: ^[A-HJKMNP-Z2-9]{4}-[A-HJKMNP-Z2-9]{4}-[A-HJKMNP-Z2-9]{4}$
+          description: Código com hífens, sem `0`, `O`, `1`, `I` nem `L`.
+          examples: [ABCD-EFGH-JKMN]
+        state:
+          $ref: "#/components/schemas/CertificateState"
+        user:
+          $ref: "#/components/schemas/UserRef"
+        course:
+          $ref: "#/components/schemas/ProductRef"
+        studentName:
+          type: [string, "null"]
+          description: Congelado; `null` se a conta foi excluída.
+        courseTitle:
+          type: string
+          description: Congelado na emissão.
+        instructorName:
+          type: [string, "null"]
+        hours:
+          type: integer
+          minimum: 0
+        completedAt:
+          $ref: "#/components/schemas/DateTime"
+        issuedAt:
+          $ref: "#/components/schemas/DateTime"
+        issuedManually:
+          type: boolean
+        issuedBy:
+          oneOf:
+            - $ref: "#/components/schemas/UserRef"
+            - type: "null"
+        issueReason:
+          type: [string, "null"]
+        revokedAt:
+          oneOf:
+            - $ref: "#/components/schemas/DateTime"
+            - type: "null"
+        revokedBy:
+          oneOf:
+            - $ref: "#/components/schemas/UserRef"
+            - type: "null"
+        revokeReason:
+          type: [string, "null"]
+        pdfRenderedAt:
+          oneOf:
+            - $ref: "#/components/schemas/DateTime"
+            - type: "null"
+        templateVersionId:
+          $ref: "#/components/schemas/Uuid"
+      additionalProperties: false
+    CertificatePage:
+      allOf:
+        - $ref: "#/components/schemas/Page"
+        - type: object
+          required: [items]
+          properties:
+            items:
+              type: array
+              items:
+                $ref: "#/components/schemas/Certificate"
+    CertificateBackfillQueued:
+      type: object
+      required: [courseId, queued]
+      properties:
+        courseId:
+          $ref: "#/components/schemas/Uuid"
+        queued:
+          type: boolean
+          const: true
+      additionalProperties: false
+    CertificateTemplateSource:
+      type: string
+      enum: [course, school, none]
+      description: |
+        Origem do template efetivo: o do curso, o padrão da escola ou nenhum (o curso não emite
+        certificado).
+    CertificateTemplate:
+      type: object
+      description: Um template de certificado e a origem do efetivo.
+      required: [source, html, versionId, updatedAt, updatedBy]
+      properties:
+        source:
+          $ref: "#/components/schemas/CertificateTemplateSource"
+        html:
+          type: [string, "null"]
+          description: O template deste recurso (do curso ou o padrão); `null` quando não tem.
+        versionId:
+          oneOf:
+            - $ref: "#/components/schemas/Uuid"
+            - type: "null"
+          description: Versão atual, enviada de volta em `expectedVersionId`.
+        updatedAt:
+          oneOf:
+            - $ref: "#/components/schemas/DateTime"
+            - type: "null"
+        updatedBy:
+          oneOf:
+            - $ref: "#/components/schemas/UserRef"
+            - type: "null"
+      additionalProperties: false
+    CertificateTemplateSaved:
+      type: object
+      description: O template gravado.
+      required: [source, html, versionId, updatedAt, updatedBy, backfillQueued]
+      properties:
+        source:
+          $ref: "#/components/schemas/CertificateTemplateSource"
+        html:
+          type: string
+        versionId:
+          $ref: "#/components/schemas/Uuid"
+        updatedAt:
+          $ref: "#/components/schemas/DateTime"
+        updatedBy:
+          oneOf:
+            - $ref: "#/components/schemas/UserRef"
+            - type: "null"
+        backfillQueued:
+          type: boolean
+          description: Verdadeiro quando a gravação enfileirou a emissão retroativa.
+      additionalProperties: false
+    CertificateTemplateSave:
+      type: object
+      required: [html, expectedVersionId]
+      properties:
+        html:
+          type: string
+          minLength: 1
+          description: |
+            Documento HTML completo ou fragmento, até 768 KiB em UTF-8, com as imagens embutidas (acima:
+            problema `too_large`).
+        expectedVersionId:
+          oneOf:
+            - $ref: "#/components/schemas/Uuid"
+            - type: "null"
+          description: A versão que o editor abriu; `null` quando não havia template.
+      additionalProperties: false
+    CertificateTemplateProblemRule:
+      type: string
+      enum:
+        [
+          parse_error,
+          too_large,
+          element_not_allowed,
+          attribute_not_allowed,
+          url_not_allowed,
+          css_not_allowed,
+          image_not_found,
+          unknown_key,
+          unclosed_key,
+          key_in_attribute,
+          missing_required_key,
+        ]
+      description: Regra violada (`specs/015-certificados.md`, "Template").
+    CertificateTemplateProblem:
+      type: object
+      required: [rule, message, line, column]
+      properties:
+        rule:
+          $ref: "#/components/schemas/CertificateTemplateProblemRule"
+        message:
+          type: string
+        line:
+          type: [integer, "null"]
+          minimum: 1
+          description: "`null` em problema do documento inteiro."
+        column:
+          type: [integer, "null"]
+          minimum: 1
+      additionalProperties: false
+    CertificateTemplateInvalidProblem:
+      description: |
+        `Problem` de `422` `certificate_template_invalid`, com a lista de problemas em
+        `details.problems`. Outro `422` da operação não traz `details`.
+      allOf:
+        - $ref: "#/components/schemas/Problem"
+        - type: object
+          properties:
+            details:
+              type: object
+              required: [problems]
+              properties:
+                problems:
+                  type: array
+                  minItems: 1
+                  items:
+                    $ref: "#/components/schemas/CertificateTemplateProblem"
+              additionalProperties: false
+    CertificateTemplateKey:
+      type: object
+      required: [key, description, example, required, textOnly]
+      properties:
+        key:
+          type: string
+          examples: [aluno.nome]
+        description:
+          type: string
+        example:
+          type: string
+          description: Valor usado no PDF de exemplo.
+        required:
+          type: boolean
+        textOnly:
+          type: boolean
+          description: Só vale em posição de texto (`certificado.qrcode`).
+      additionalProperties: false
+    CertificateTemplateReference:
+      type: object
+      required: [keys, requiredOneOf, starterHtml]
+      properties:
+        keys:
+          type: array
+          items:
+            $ref: "#/components/schemas/CertificateTemplateKey"
+        requiredOneOf:
+          type: array
+          description: Grupo de que ao menos uma é obrigatória.
+          items:
+            type: string
+          examples:
+            - [certificado.url_validacao, certificado.qrcode]
+        starterHtml:
+          type: string
+          description: O modelo inicial.
+      additionalProperties: false
+    CertificatePreviewStatus:
+      type: string
+      enum: [pending, ready, failed]
+    CertificatePreview:
+      type: object
+      required: [id, courseId, status, error, createdAt, renderedAt, expiresAt]
+      properties:
+        id:
+          $ref: "#/components/schemas/Uuid"
+        courseId:
+          oneOf:
+            - $ref: "#/components/schemas/Uuid"
+            - type: "null"
+        status:
+          $ref: "#/components/schemas/CertificatePreviewStatus"
+        error:
+          type: [string, "null"]
+          description: Motivo, em `failed`.
+        createdAt:
+          $ref: "#/components/schemas/DateTime"
+        renderedAt:
+          oneOf:
+            - $ref: "#/components/schemas/DateTime"
+            - type: "null"
+        expiresAt:
+          $ref: "#/components/schemas/DateTime"
+          description: Quando o pedido é apagado (24 h).
+      additionalProperties: false
+    CertificateSettings:
+      type: object
+      required: [signerName, signerRole, schoolName]
+      properties:
+        signerName:
+          type: [string, "null"]
+          description: "`certificate.signer_name`."
+        signerRole:
+          type: [string, "null"]
+          description: "`certificate.signer_role`."
+        schoolName:
+          type: string
+          description: "`school.name`, só leitura aqui."
       additionalProperties: false
