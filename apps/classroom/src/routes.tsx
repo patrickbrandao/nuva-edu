@@ -104,13 +104,14 @@ export const routes: RouteObject[] = [
         },
       },
       {
-        // a página do curso do aluno é da tarefa 451; até lá, o botão "Acessar o curso" cai aqui
         path: '/meus-cursos/:slug',
-        handle: handle({ titleKey: 'menu.items.myCourses' }),
-        lazy: async () => {
-          const { UnderConstructionPage } = await import('./pages/UnderConstructionPage');
-          return { element: <UnderConstructionPage titleKey="menu.items.myCourses" /> };
-        },
+        handle: handle({ titleKey: 'pages.myCourse' }),
+        lazy: async () => ({ Component: (await import('./pages/CoursePage')).CoursePage }),
+      },
+      {
+        path: '/meus-cursos/:slug/aulas/:aula',
+        handle: handle({ titleKey: 'pages.lesson' }),
+        lazy: async () => ({ Component: (await import('./pages/LessonPage')).LessonPage }),
       },
       ...PENDING_PAGES.map(
         ({ path, titleKey }): RouteObject => ({

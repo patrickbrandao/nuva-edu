@@ -8,7 +8,9 @@
     "backHome": "Voltar à vitrine",
     "requestId": "Código da requisição: {{id}}",
     "newTab": "(abre em nova aba)",
-    "cancel": "Cancelar"
+    "cancel": "Cancelar",
+    "dismiss": "Fechar aviso",
+    "notices": "Avisos"
   },
   "theme": {
     "group": "Tema da página",
@@ -85,7 +87,9 @@
     "profile": "Perfil",
     "course": "Curso",
     "bundle": "Pacote",
-    "ebook": "Ebook"
+    "ebook": "Ebook",
+    "myCourse": "Curso",
+    "lesson": "Aula"
   },
   "footer": {
     "source": "Código-fonte",
@@ -210,6 +214,98 @@
       "openEbook": "Ir para meus ebooks",
       "signIn": "Entrar para acessar",
       "openText": "Gratuito para quem tem conta na escola."
+    }
+  },
+  "learning": {
+    "progress": {
+      "course": "Progresso do curso",
+      "lessons_one": "{{completed}} de {{count}} aula",
+      "lessons_other": "{{completed}} de {{count}} aulas",
+      "lessonsDone_one": "{{completed}} de {{count}} aula concluída",
+      "lessonsDone_other": "{{completed}} de {{count}} aulas concluídas",
+      "percent": "{{percent}}%"
+    },
+    "status": {
+      "completed": "Concluída",
+      "current": "Aula atual",
+      "pending": "Pendente",
+      "locked": "Bloqueada"
+    },
+    "reasons": {
+      "not_authenticated": "Entre na sua conta para assistir a esta aula.",
+      "suspended": "A sua conta está suspensa. Fale com a escola para saber mais.",
+      "no_entitlement": "Você ainda não tem acesso a este curso.",
+      "expired": "O seu acesso a este curso venceu.",
+      "unpublished": "Este conteúdo não está disponível no momento.",
+      "unknown": "Você não tem acesso a este conteúdo."
+    },
+    "course": {
+      "description": "Programa e progresso do curso {{title}}.",
+      "loading": "Carregando o curso…",
+      "errorTitle": "Não foi possível carregar o curso",
+      "notFoundTitle": "Curso não encontrado",
+      "notFoundText": "Este curso não existe ou não está mais disponível.",
+      "start": "Começar",
+      "continue": "Continuar",
+      "review": "Rever",
+      "lockedTitle": "Curso bloqueado",
+      "sampleHint": "As aulas marcadas como amostra grátis continuam liberadas.",
+      "publicPage": "Ver a página do curso",
+      "accessUntil": "Acesso até {{date}}.",
+      "program": "Programa",
+      "programEmpty": "Este curso ainda não tem aulas publicadas.",
+      "ebooks": "Ebooks do curso"
+    },
+    "lesson": {
+      "description": "Aula {{lesson}} do curso {{course}}.",
+      "loading": "Carregando a aula…",
+      "errorTitle": "Não foi possível carregar a aula",
+      "notFoundTitle": "Aula não encontrada",
+      "notFoundText": "Esta aula não existe ou não está mais disponível.",
+      "backToCourse": "Voltar ao curso",
+      "sample": "Aula liberada",
+      "done": "Aula concluída",
+      "noVideo": "Esta aula não tem vídeo.",
+      "videoErrorTitle": "O vídeo não carregou",
+      "videoErrorText": "Confira a conexão e recarregue a página, ou abra o vídeo direto no endereço dele.",
+      "openInNewTab": "Abrir em nova aba",
+      "lockedTitle": "Aula bloqueada",
+      "courseProgram": "Programa do curso",
+      "tabs": {
+        "label": "Conteúdo da aula",
+        "about": "Sobre",
+        "materials": "Materiais"
+      },
+      "aboutEmpty": "Esta aula não tem descrição.",
+      "materialsEmpty": "Esta aula não tem materiais.",
+      "links": "Links de apoio",
+      "ebooks": "Ebooks",
+      "linkKinds": {
+        "file": "Arquivo",
+        "page": "Página"
+      },
+      "navigation": "Navegação da aula",
+      "previous": "Aula anterior",
+      "next": "Próxima aula",
+      "markDone": "Marcar como concluída",
+      "unmarkDone": "Desmarcar conclusão",
+      "finishCourse": "Concluir curso",
+      "autoCompleted": "O vídeo terminou: aula marcada como concluída.",
+      "undo": "Desfazer"
+    },
+    "player": {
+      "openVideo": "Abrir vídeo",
+      "controls": "Controles do vídeo",
+      "rewind": "Voltar 10 s",
+      "forward": "Avançar 10 s",
+      "speed": "Velocidade",
+      "volume": "Volume",
+      "fullscreen": "Tela cheia",
+      "pictureInPicture": "Imagem sobre imagem"
+    },
+    "errors": {
+      "accessDenied": "Você não tem acesso a esta aula: a conclusão não foi gravada.",
+      "save": "Não foi possível gravar a conclusão da aula. Tente de novo."
     }
   },
   "auth": {

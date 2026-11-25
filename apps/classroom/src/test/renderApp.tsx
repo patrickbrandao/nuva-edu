@@ -122,6 +122,8 @@ export interface RecordedRequest {
   search: string;
   body: unknown;
   csrf: string | null;
+  /** `fetch` com `keepalive`: a requisição sobrevive à saída da página. */
+  keepalive: boolean;
 }
 
 interface RenderOptions {
@@ -168,6 +170,7 @@ export function renderApp(
         search: url.search,
         body,
         csrf: request.headers.get('X-CSRF-Token'),
+        keepalive: request.keepalive,
       });
       if (url.pathname === '/api/v1/session' && request.method === 'GET' && session !== 'fetch') {
         return shownSession ? jsonResponse(shownSession) : problemResponse(401, 'unauthenticated');
