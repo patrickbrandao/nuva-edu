@@ -6,6 +6,7 @@ Detalhe das decisões em `specs/decisions/`.
 ## [Não lançado]
 
 ### Adicionado
+- banco: migration 0010 dos direitos de acesso (`entitlements`): fontes, cascata com pai do mesmo usuário e fonte, motivos de revogação, índices da 010 e único parcial da idempotência; tipos do Kysely regenerados (task 406).
 - infra: `pnpm browsers:worker` instala o Chromium headless shell na versão do Playwright do e2e; o CI o instala com cache por versão antes dos testes (task 464).
 - core: base da Fase 2: módulos `catalog`, `entitlements`, `learning`, `certificates` e `notes`; tarefas `entitlement.recompute`, `course.completed`, `course.completion_check` e `certificate.render`/`backfill`/`preview` (pendentes de manipulador); e-mails `access.granted` e `certificate.issued` (pendentes de modelo, sem envio a conta com suspensão `full`); `certificate.signer_name`/`signer_role`; permissões `certificate.issue`, `certificate.template.edit` e `product.archive` no lugar de `course.delete_with_students` (task 405).
 - ui: `Markdown` restrito, `SortableList` (arrastar por mouse, toque e teclado, anúncios por props), `Accordion`, `Tabs`, `ProgressBar` e `ProductCard`, com `react-markdown` e `@dnd-kit` (task 404).
