@@ -1,12 +1,12 @@
 # Módulos do núcleo
 
-Uma pasta por área de negócio; `accounts`, `audit`, `images` (envio, variantes, entrega, exclusão e expurgo das órfãs), `jobs`, `notifications`, `permissions`, `privacy`, `settings` e `stream` têm código; `oauth` e as demais ainda estão vazias. Cada módulo ganha seu código (entidades, regras, consultas Kysely) junto com a tarefa que o implementa.
+Uma pasta por área de negócio; `accounts`, `audit`, `images` (envio, variantes, entrega, exclusão e expurgo das órfãs), `jobs`, `notifications`, `oauth`, `permissions`, `privacy`, `settings` e `stream` têm código. Os da Fase 2 (`catalog`, `entitlements`, `learning`, `certificates`, `notes`) já têm o `index.ts`, ainda vazio (tarefa 405); as demais pastas estão vazias. Cada módulo ganha seu código (entidades, regras, consultas Kysely) junto com a tarefa que o implementa.
 
-Os módulos da Fase 1 (`accounts`, `audit`, `images`, `jobs`, `notifications`, `oauth`, `permissions`, `privacy`) exportam pelo próprio `index.ts`, ligado ao `src/index.ts` por `export *`: a tarefa de um módulo altera só a pasta dele. Em `accounts`, a gestão pela equipe fica em `management/`, com `index.ts` próprio reexportado pelo do módulo. Os demais seguem com exportação nomeada no `src/index.ts` até ganharem o seu `index.ts`.
+Os módulos da Fase 1 (`accounts`, `audit`, `images`, `jobs`, `notifications`, `oauth`, `permissions`, `privacy`) e os da Fase 2 (`catalog`, `entitlements`, `learning`, `certificates`, `notes`) exportam pelo próprio `index.ts`, ligado ao `src/index.ts` por `export *`: a tarefa de um módulo altera só a pasta dele. Dois módulos não podem exportar o mesmo nome (o `export *` do `src/index.ts` fica ambíguo): prefixe com o assunto do módulo. Em `accounts`, a gestão pela equipe fica em `management/`, com `index.ts` próprio reexportado pelo do módulo. Os demais seguem com exportação nomeada no `src/index.ts` até ganharem o seu `index.ts`.
 
 | Pasta | Conteúdo | Spec |
 | --- | --- | --- |
-| `settings` | Configuração da escola | 003, 031 |
+| `settings` | Configuração da escola (inclusive quem assina o certificado) | 003, 031 |
 | `accounts` | Cadastro, login, sessão, admin inicial; gestão de usuários pela equipe em `management/` | 007 |
 | `oauth` | Login social: provedores Google, Facebook e Apple, `id_token`, vínculo | 007 |
 | `permissions` | Papéis e matriz de permissões | 008 |
@@ -25,14 +25,14 @@ Os módulos da Fase 1 (`accounts`, `audit`, `images`, `jobs`, `notifications`, `
 | `messages` | Mensagens diretas | 021 |
 | `cases` | Cases | 022 |
 | `tickets` | Chamados de suporte | 023 |
-| `notifications` | Notificações e e-mail | 024 |
+| `notifications` | Notificações e e-mail; tipos sem modelo no worker ficam em `PendingTemplateEmailType` | 024 |
 | `announcements` | Novidades | 025 |
 | `moderation` | Denúncias e moderação | 026 |
 | `mcp` | Chaves MCP | 027 |
 | `audit` | Auditoria | 028 |
 | `images` | Imagens | 029 |
 | `privacy` | Termos, exportação e exclusão (LGPD) | 030 |
-| `jobs` | Fila de tarefas | 005 |
+| `jobs` | Fila de tarefas; tipos sem manipulador no worker ficam em `PendingHandlerJobType` | 005 |
 | `stream` | Eventos em tempo real para o usuário (`NOTIFY nuva_user_events`) | 004 |
 
 Regras:

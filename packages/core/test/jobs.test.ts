@@ -27,6 +27,7 @@ import {
   type JobListener,
   type JobPayloads,
   listenForJobs,
+  PENDING_HANDLER_JOB_TYPES,
   type PendingHandlerJobType,
   PermanentJobError,
   recurringKey,
@@ -81,7 +82,13 @@ async function waitFor(condition: () => boolean, timeoutMs = 4_000): Promise<voi
 describe('registro de tipos', () => {
   it('reconhece os tipos do registro e recusa os demais', () => {
     expect(Object.keys(JOB_DEFINITIONS).sort()).toEqual([
+      'certificate.backfill',
+      'certificate.preview',
+      'certificate.render',
+      'course.completed',
+      'course.completion_check',
       'email.send',
+      'entitlement.recompute',
       'example.echo',
       'image.cleanup',
       'retention.purge',
@@ -118,8 +125,7 @@ describe('registro de tipos', () => {
     expect(cleanup).toMatchObject({ type: 'image.cleanup', maxAttempts: 5 });
   });
 
-  it('exige o manipulador de todos os tipos, suspension.expire e image.cleanup incluídos', () => {
-    expectTypeOf<PendingHandlerJobType>().toEqualTypeOf<never>();
+  it('exige o manipulador de todos os tipos fora dos pendentes, suspension.expire e image.cleanup incluídos', () => {
     expectTypeOf<keyof JobHandlers>().toEqualTypeOf<keyof typeof JOB_DEFINITIONS>();
     const noop = async (): Promise<void> => {};
     const base = {
@@ -135,7 +141,100 @@ describe('registro de tipos', () => {
       ...withoutCleanup,
       ...withoutExpire,
     };
-    expect(Object.keys(complete).sort()).toEqual(Object.keys(JOB_DEFINITIONS).sort());
+    const pending = new Set<string>(PENDING_HANDLER_JOB_TYPES);
+    expect(Object.keys(complete).sort()).toEqual(
+      Object.keys(JOB_DEFINITIONS)
+        .filter((type) => !pending.has(type))
+        .sort(),
+    );
+    // Pendente aceita manipulador, mas não o exige.
+    const withPending: JobHandlers = { ...complete, 'course.completed': noop };
+    expect(withPending['course.completed']).toBe(noop);
+  });
+});
+
+describe('tipos da Fase 2 (tarefa 405)', () => {
+  it('ficam pendentes até o worker ter o manipulador (tarefa 416)', () => {
+    expectTypeOf<PendingHandlerJobType>().toEqualTypeOf<
+      | 'entitlement.recompute'
+      | 'course.completed'
+      | 'course.completion_check'
+      | 'certificate.render'
+      | 'certificate.backfill'
+      | 'certificate.preview'
+    >();
+    expectTypeOf<
+      (typeof PENDING_HANDLER_JOB_TYPES)[number]
+    >().toEqualTypeOf<PendingHandlerJobType>();
+    for (const type of PENDING_HANDLER_JOB_TYPES) {
+      expect(isJobType(type)).toBe(true);
+    }
+  });
+
+  it('seguem as tentativas da tabela da spec 005', () => {
+    const attempts = Object.fromEntries(
+      PENDING_HANDLER_JOB_TYPES.map((type) => [type, JOB_DEFINITIONS[type]]),
+    );
+    expect(attempts).toEqual({
+      'entitlement.recompute': { maxAttempts: 5, priority: 0 },
+      'course.completed': { maxAttempts: 5, priority: 0 },
+      'course.completion_check': { maxAttempts: 5, priority: 0 },
+      'certificate.render': { maxAttempts: 5, priority: 0 },
+      'certificate.backfill': { maxAttempts: 3, priority: 0 },
+      'certificate.preview': { maxAttempts: 1, priority: 0 },
+    });
+  });
+
+  it('o payload leva só identificadores, tipado por tipo', () => {
+    expectTypeOf<JobPayloads['entitlement.recompute']>().toEqualTypeOf<{
+      productType: 'course' | 'bundle';
+      productId: string;
+    }>();
+    expectTypeOf<JobPayloads['course.completed']>().toEqualTypeOf<{
+      userId: string;
+      courseId: string;
+    }>();
+    expectTypeOf<JobPayloads['course.completion_check']>().toEqualTypeOf<{ courseId: string }>();
+    expectTypeOf<JobPayloads['certificate.render']>().toEqualTypeOf<{ certificateId: string }>();
+    expectTypeOf<JobPayloads['certificate.backfill']>().toEqualTypeOf<{ courseId: string }>();
+    expectTypeOf<JobPayloads['certificate.preview']>().toEqualTypeOf<{ previewId: string }>();
+  });
+
+  it('enfileirar course.completed com payload errado não compila', async () => {
+    const userId = crypto.randomUUID();
+    const courseId = crypto.randomUUID();
+    const job = await enqueue(
+      db,
+      'course.completed',
+      { userId, courseId },
+      { uniqueKey: `course.completed:${userId}:${courseId}` },
+    );
+    expect(job).toMatchObject({
+      type: 'course.completed',
+      maxAttempts: 5,
+      payload: { userId, courseId },
+    });
+    // Repetir com a mesma chave enquanto a primeira está ativa não cria outra (spec 014).
+    expect(
+      await enqueue(
+        db,
+        'course.completed',
+        { userId, courseId },
+        { uniqueKey: `course.completed:${userId}:${courseId}` },
+      ),
+    ).toBeNull();
+
+    const typeErrors = async () => {
+      // @ts-expect-error falta `courseId`.
+      await enqueue(db, 'course.completed', { userId });
+      // @ts-expect-error campo a mais (nunca dado pessoal no payload).
+      await enqueue(db, 'course.completed', { userId, courseId, email: 'aluno@example.com' });
+      // @ts-expect-error `userId` é texto.
+      await enqueue(db, 'course.completed', { userId: 1, courseId });
+      // @ts-expect-error produto pai do recálculo é curso ou pacote.
+      await enqueue(db, 'entitlement.recompute', { productType: 'ebook', productId: courseId });
+    };
+    expect(typeErrors).toBeTypeOf('function');
   });
 });
 

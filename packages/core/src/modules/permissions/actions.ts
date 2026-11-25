@@ -21,7 +21,7 @@ export const ADMIN_ACTIONS = [
   'course.edit',
   'course.publish',
   'course.delete',
-  'course.delete_with_students',
+  'product.archive',
   'course.set_owner',
   'ebook_bundle.manage',
   'ebook.link',
@@ -45,7 +45,9 @@ export const ADMIN_ACTIONS = [
   'gamification.configure',
   'ticket.handle',
   'progress.view',
+  'certificate.issue',
   'certificate.revoke',
+  'certificate.template.edit',
   // Sistema
   'mcp_key.own',
   'mcp_key.manage_all',

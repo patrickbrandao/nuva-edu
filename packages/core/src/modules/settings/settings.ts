@@ -25,6 +25,10 @@ export interface SettingValues {
   'school.accent_color': string | null;
   /** Endereço `https` do código-fonte (`sourceCodeUrl` do `/meta`); sempre presente (AGPL-3.0). */
   'school.source_code_url': string;
+  /** Nome de quem assina o certificado (spec 015), ou `null` para omitir a assinatura. */
+  'certificate.signer_name': string | null;
+  /** Cargo de quem assina, abaixo do nome (spec 015), ou `null`. */
+  'certificate.signer_role': string | null;
 }
 
 export type SettingKey = keyof SettingValues;
@@ -33,6 +37,8 @@ export const SCHOOL_NAME_MAX_LENGTH = 120;
 /** Repositório do projeto: padrão de `school.source_code_url`. */
 export const DEFAULT_SOURCE_CODE_URL = 'https://github.com/patrickbrandao/nuva-edu';
 export const SOURCE_CODE_URL_MAX_LENGTH = 2048;
+/** Limite de `certificate.signer_name` e `certificate.signer_role` (spec 031). */
+export const CERTIFICATE_SIGNER_MAX_LENGTH = 120;
 
 type ParseResult<T> = { ok: true; value: T } | { ok: false; message: string };
 
@@ -44,6 +50,26 @@ interface SettingDefinition<T> {
 }
 
 const ACCENT_COLOR_PATTERN = /^#[0-9a-f]{6}$/i;
+
+/** Texto de 1 a `CERTIFICATE_SIGNER_MAX_LENGTH` caracteres (sem os espaços das pontas), ou nulo. */
+function signerText(label: string): SettingDefinition<string | null> {
+  return {
+    defaultValue: null,
+    parse(value) {
+      if (value === null) {
+        return { ok: true, value: null };
+      }
+      const text = typeof value === 'string' ? value.trim() : '';
+      if (text === '' || text.length > CERTIFICATE_SIGNER_MAX_LENGTH) {
+        return {
+          ok: false,
+          message: `Informe ${label} com 1 a ${CERTIFICATE_SIGNER_MAX_LENGTH} caracteres, ou nulo.`,
+        };
+      }
+      return { ok: true, value: text };
+    },
+  };
+}
 
 const SETTING_DEFINITIONS: { readonly [K in SettingKey]: SettingDefinition<SettingValues[K]> } = {
   'school.name': {
@@ -105,6 +131,8 @@ const SETTING_DEFINITIONS: { readonly [K in SettingKey]: SettingDefinition<Setti
       return { ok: true, value: text };
     },
   },
+  'certificate.signer_name': signerText('o nome de quem assina'),
+  'certificate.signer_role': signerText('o cargo de quem assina'),
 };
 
 export const SETTING_KEYS = Object.keys(SETTING_DEFINITIONS) as SettingKey[];
@@ -116,6 +144,8 @@ export const SETTING_DEFAULTS: Readonly<SettingValues> = {
   'school.logo_image_id': SETTING_DEFINITIONS['school.logo_image_id'].defaultValue,
   'school.accent_color': SETTING_DEFINITIONS['school.accent_color'].defaultValue,
   'school.source_code_url': SETTING_DEFINITIONS['school.source_code_url'].defaultValue,
+  'certificate.signer_name': SETTING_DEFINITIONS['certificate.signer_name'].defaultValue,
+  'certificate.signer_role': SETTING_DEFINITIONS['certificate.signer_role'].defaultValue,
 };
 
 function isTimeZone(value: string): boolean {
@@ -183,6 +213,8 @@ export async function getSettings(
     'school.logo_image_id': read('school.logo_image_id'),
     'school.accent_color': read('school.accent_color'),
     'school.source_code_url': read('school.source_code_url'),
+    'certificate.signer_name': read('certificate.signer_name'),
+    'certificate.signer_role': read('certificate.signer_role'),
   };
 }
 

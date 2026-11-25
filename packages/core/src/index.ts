@@ -72,13 +72,19 @@ export {
 } from './logging/redact.ts';
 export * from './modules/accounts/index.ts';
 export * from './modules/audit/index.ts';
+export * from './modules/catalog/index.ts';
+export * from './modules/certificates/index.ts';
+export * from './modules/entitlements/index.ts';
 export * from './modules/images/index.ts';
 export * from './modules/jobs/index.ts';
+export * from './modules/learning/index.ts';
+export * from './modules/notes/index.ts';
 export * from './modules/notifications/index.ts';
 export * from './modules/oauth/index.ts';
 export * from './modules/permissions/index.ts';
 export * from './modules/privacy/index.ts';
 export {
+  CERTIFICATE_SIGNER_MAX_LENGTH,
   createSettingsReader,
   DEFAULT_SOURCE_CODE_URL,
   getSchoolName,

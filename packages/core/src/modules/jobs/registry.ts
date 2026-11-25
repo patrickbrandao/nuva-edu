@@ -5,8 +5,8 @@ import type { JsonObject } from '../../db/generated/database.ts';
  * mapa, então enfileirar com payload errado não compila.
  *
  * Payload leva apenas identificadores; nunca senha, token ou CPF (spec 005).
- * Fase 0: só o job de exemplo e o expurgo diário (ainda vazio). Os demais nomes do catálogo da
- * spec 005 entram junto com a fase que os implementa.
+ * Os nomes são os do catálogo da spec 005 e entram junto com a fase que os implementa; os da
+ * Fase 2 (tarefa 405) estão em `PendingHandlerJobType` até o worker ter o manipulador (tarefa 416).
  */
 export interface JobPayloads {
   /** Job de exemplo da Fase 0: o manipulador só registra a mensagem. Não é do catálogo da spec. */
@@ -25,7 +25,30 @@ export interface JobPayloads {
   'suspension.expire': Record<string, never>;
   /** Apaga imagens sem referência há mais de 24 horas (spec 029). Diária, sem parâmetros. */
   'image.cleanup': Record<string, never>;
+  /**
+   * Recalcula a cascata dos direitos de um produto pai cuja composição mudou (`bundle_items` ou
+   * `product_ebooks`; spec 010, "Recalcular a cascata"). Enfileirada pela `admin-api`. Ebook
+   * vinculado a uma aula recalcula o curso da aula. Os planos (`plan_items`) entram na Fase 3.
+   */
+  'entitlement.recompute': { productType: EntitlementRecomputeProductType; productId: string };
+  /**
+   * O curso passou a 100% para o aluno (spec 014). Emite o certificado, se o curso tem template
+   * efetivo (spec 015). `unique_key` = `course.completed:<userId>:<courseId>`.
+   */
+  'course.completed': { userId: string; courseId: string };
+  /** Aula despublicada ou excluída: enfileira `course.completed` de quem chegou a 100% (014). */
+  'course.completion_check': { courseId: string };
+  /** Gera o PDF de um certificado já criado, com a versão do template guardada nele (015). */
+  'certificate.render': { certificateId: string };
+  /** O curso passou a ter template efetivo: emite os certificados pendentes (015). */
+  'certificate.backfill': { courseId: string };
+  /** Renderiza o PDF de exemplo de uma linha de `certificate_previews` (015). */
+  'certificate.preview': { previewId: string };
 }
+
+/** Produto pai do recálculo de direitos na Fase 2: só curso e pacote têm itens derivados. */
+export const ENTITLEMENT_RECOMPUTE_PRODUCT_TYPES = ['course', 'bundle'] as const;
+export type EntitlementRecomputeProductType = (typeof ENTITLEMENT_RECOMPUTE_PRODUCT_TYPES)[number];
 
 export type JobType = keyof JobPayloads;
 
@@ -58,15 +81,37 @@ export const JOB_DEFINITIONS: { readonly [T in JobType]: JobDefinition } = {
   },
   'suspension.expire': { maxAttempts: 3, priority: 0 },
   'image.cleanup': { maxAttempts: 5, priority: 0 },
+  'entitlement.recompute': { maxAttempts: 5, priority: 0 },
+  'course.completed': { maxAttempts: 5, priority: 0 },
+  'course.completion_check': { maxAttempts: 5, priority: 0 },
+  'certificate.render': { maxAttempts: 5, priority: 0 },
+  'certificate.backfill': { maxAttempts: 3, priority: 0 },
+  'certificate.preview': { maxAttempts: 1, priority: 0 },
 };
 
 /**
  * Tipos já no registro cujo manipulador ainda não existe no worker (chega em outra tarefa).
- * Hoje a união é vazia: `JobHandlers` exige o manipulador de todos os tipos do registro.
- * Tipo novo cujo manipulador venha depois entra aqui até ele chegar; tarefa sem manipulador
- * falha como erro comum e segue as tentativas do tipo.
+ * `JobHandlers` exige o manipulador dos demais; estes são opcionais. Tipo novo cujo manipulador
+ * venha depois entra aqui até ele chegar; tarefa sem manipulador falha como erro comum e segue
+ * as tentativas do tipo. Os da Fase 2 saem na tarefa 416.
  */
-export type PendingHandlerJobType = never;
+export type PendingHandlerJobType =
+  | 'entitlement.recompute'
+  | 'course.completed'
+  | 'course.completion_check'
+  | 'certificate.render'
+  | 'certificate.backfill'
+  | 'certificate.preview';
+
+/** Os mesmos tipos de `PendingHandlerJobType`, para conferência em tempo de execução. */
+export const PENDING_HANDLER_JOB_TYPES = [
+  'entitlement.recompute',
+  'course.completed',
+  'course.completion_check',
+  'certificate.render',
+  'certificate.backfill',
+  'certificate.preview',
+] as const satisfies readonly PendingHandlerJobType[];
 
 export const JOB_STATUSES = ['queued', 'running', 'done', 'failed'] as const;
 export type JobStatus = (typeof JOB_STATUSES)[number];

@@ -1,6 +1,7 @@
 import { sql } from 'kysely';
 import { afterAll, beforeAll, beforeEach, describe, expect, inject, it } from 'vitest';
 import {
+  CERTIFICATE_SIGNER_MAX_LENGTH,
   closeDatabase,
   createDatabase,
   createLogger,
@@ -44,7 +45,7 @@ afterAll(async () => {
 });
 
 beforeEach(async () => {
-  await sql`DELETE FROM settings WHERE key LIKE 'school.%'`.execute(db);
+  await sql`DELETE FROM settings WHERE key LIKE 'school.%' OR key LIKE 'certificate.%'`.execute(db);
   queries = 0;
 });
 
@@ -56,6 +57,8 @@ describe('leitura das configurações', () => {
       'school.logo_image_id',
       'school.accent_color',
       'school.source_code_url',
+      'certificate.signer_name',
+      'certificate.signer_role',
     ]);
     for (const key of SETTING_KEYS) {
       expect(key).toMatch(/^[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*)*$/);
@@ -71,7 +74,9 @@ describe('leitura das configurações', () => {
   it('banco sem linha em settings devolve todos os padrões da tabela da spec 031', async () => {
     const count = await sql<{
       n: number;
-    }>`SELECT count(*)::int AS n FROM settings WHERE key LIKE 'school.%'`.execute(db);
+    }>`SELECT count(*)::int AS n FROM settings WHERE key LIKE 'school.%' OR key LIKE 'certificate.%'`.execute(
+      db,
+    );
     expect(count.rows[0]?.n).toBe(0);
     const defaults = {
       'school.name': 'nuva-edu',
@@ -79,6 +84,8 @@ describe('leitura das configurações', () => {
       'school.logo_image_id': null,
       'school.accent_color': null,
       'school.source_code_url': 'https://github.com/patrickbrandao/nuva-edu',
+      'certificate.signer_name': null,
+      'certificate.signer_role': null,
     };
     expect(SETTING_DEFAULTS).toEqual(defaults);
     expect(DEFAULT_SOURCE_CODE_URL).toBe(defaults['school.source_code_url']);
@@ -174,6 +181,50 @@ describe('leitura das configurações', () => {
     expect(await reader.get('school.accent_color')).toBeNull();
     expect(await reader.get('school.source_code_url')).toBe(DEFAULT_SOURCE_CODE_URL);
     expect(lines).toHaveLength(2);
+  });
+});
+
+describe('quem assina o certificado (spec 031)', () => {
+  it('grava nome e cargo sem os espaços das pontas; nulo omite a assinatura', async () => {
+    expect(await setSetting(db, 'certificate.signer_name', '  Ana Souza  ')).toBe('Ana Souza');
+    expect(await setSetting(db, 'certificate.signer_role', 'Diretora')).toBe('Diretora');
+    expect(await getSettings(db)).toEqual({
+      ...SETTING_DEFAULTS,
+      'certificate.signer_name': 'Ana Souza',
+      'certificate.signer_role': 'Diretora',
+    });
+    const max = 'a'.repeat(CERTIFICATE_SIGNER_MAX_LENGTH);
+    expect(await setSetting(db, 'certificate.signer_role', max)).toBe(max);
+    expect(await setSetting(db, 'certificate.signer_name', null)).toBeNull();
+    expect(await getSetting(db, 'certificate.signer_name')).toBeNull();
+  });
+
+  it('recusa vazio, só espaços, longo demais e não texto', async () => {
+    const invalid: unknown[] = ['', '   ', 'a'.repeat(CERTIFICATE_SIGNER_MAX_LENGTH + 1), 42, {}];
+    for (const key of ['certificate.signer_name', 'certificate.signer_role'] as const) {
+      for (const value of invalid) {
+        const error = await setSetting(db, key, value as string).catch((caught) => caught);
+        expect(isDomainError(error), `${key} ${JSON.stringify(value)}`).toBe(true);
+        expect(error).toMatchObject({ errors: [{ path: 'body.value' }] });
+      }
+    }
+  });
+
+  it('valor inválido no banco devolve o padrão (nulo) com aviso no log', async () => {
+    await sql`
+      INSERT INTO settings (key, value) VALUES
+        ('certificate.signer_name', '""'::jsonb),
+        ('certificate.signer_role', '7'::jsonb)
+    `.execute(db);
+    const lines: string[] = [];
+    const logger = createLogger({ service: 'core-test', write: (line) => lines.push(line) });
+    const settings = await getSettings(db, { logger });
+    expect(settings['certificate.signer_name']).toBeNull();
+    expect(settings['certificate.signer_role']).toBeNull();
+    expect(lines.map((line) => JSON.parse(line))).toEqual([
+      expect.objectContaining({ level: 'warn', setting_key: 'certificate.signer_name' }),
+      expect.objectContaining({ level: 'warn', setting_key: 'certificate.signer_role' }),
+    ]);
   });
 });
 

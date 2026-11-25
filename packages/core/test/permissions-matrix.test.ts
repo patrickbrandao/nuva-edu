@@ -50,7 +50,7 @@ const ADMIN: Record<string, [Mark, Mark, Mark, Mark]> = {
   'course.edit': ['—', '◐', '✓', '✓'],
   'course.publish': ['—', '◐', '✓', '✓'],
   'course.delete': ['—', '◐', '✓', '✓'],
-  'course.delete_with_students': ['—', '—', '—', '✓'],
+  'product.archive': ['—', '—', '—', '✓'],
   'course.set_owner': ['—', '—', '✓', '✓'],
   'ebook_bundle.manage': ['—', '—', '✓', '✓'],
   'ebook.link': ['—', '◐', '✓', '✓'],
@@ -72,7 +72,9 @@ const ADMIN: Record<string, [Mark, Mark, Mark, Mark]> = {
   'gamification.configure': ['—', '—', '—', '✓'],
   'ticket.handle': ['—', '◐', '✓', '✓'],
   'progress.view': ['—', '◐', '✓', '✓'],
+  'certificate.issue': ['—', '—', '✓', '✓'],
   'certificate.revoke': ['—', '—', '—', '✓'],
+  'certificate.template.edit': ['—', '◐', '✓', '✓'],
   'mcp_key.own': ['—', '—', '✓', '✓'],
   'mcp_key.manage_all': ['—', '—', '—', '✓'],
   'audit.view': ['—', '—', '—', '✓'],
@@ -102,16 +104,56 @@ const CLASSROOM: Record<string, [Mark, Mark, Mark, Mark, Mark]> = {
 const userOf = (role: Role, id = `id-${role}`): PermissionUser => ({ id, role });
 
 describe('identificadores das ações', () => {
-  it('são os 43 do admin e os 15 do classroom da spec, sem repetição', () => {
+  it('são os 45 do admin e os 15 do classroom da spec, sem repetição', () => {
     expect([...ADMIN_ACTIONS]).toEqual(Object.keys(ADMIN));
     expect([...CLASSROOM_ACTIONS]).toEqual(Object.keys(CLASSROOM));
-    expect(new Set(PERMISSION_ACTIONS).size).toBe(43 + 15);
+    expect(new Set(PERMISSION_ACTIONS).size).toBe(45 + 15);
   });
 
   it('isPermissionAction reconhece só identificadores da matriz', () => {
     expect(isPermissionAction('users.list')).toBe(true);
     expect(isPermissionAction('users.view')).toBe(false);
     expect(isPermissionAction(42)).toBe(false);
+  });
+
+  it('course.delete_with_students saiu e product.archive entrou no lugar (tarefa 463)', () => {
+    expect(isPermissionAction('course.delete_with_students')).toBe(false);
+    const index = ADMIN_ACTIONS.indexOf('product.archive');
+    expect(ADMIN_ACTIONS[index - 1]).toBe('course.delete');
+    expect(ADMIN_ACTIONS[index + 1]).toBe('course.set_owner');
+  });
+
+  it('as ações de certificado seguem a ordem da spec 008', () => {
+    const start = ADMIN_ACTIONS.indexOf('progress.view');
+    expect(ADMIN_ACTIONS.slice(start, start + 4)).toEqual([
+      'progress.view',
+      'certificate.issue',
+      'certificate.revoke',
+      'certificate.template.edit',
+    ]);
+  });
+});
+
+describe('ações da Fase 2', () => {
+  it('certificate.issue: gerente e admin; instrutor e aluno não', () => {
+    expect(can(userOf('manager'), 'certificate.issue')).toBe(true);
+    expect(can(userOf('admin'), 'certificate.issue')).toBe(true);
+    expect(can(userOf('instructor'), 'certificate.issue')).toBe(false);
+    expect(can(userOf('student'), 'certificate.issue')).toBe(false);
+  });
+
+  it('product.archive é só do admin', () => {
+    expect(ROLES.filter((role) => can(userOf(role), 'product.archive'))).toEqual(['admin']);
+  });
+
+  it('certificate.template.edit: instrutor só no próprio curso', () => {
+    const instructor = userOf('instructor', 'ivo');
+    expect(can(instructor, 'certificate.template.edit', { courseOwnerId: 'ivo' })).toBe(true);
+    expect(can(instructor, 'certificate.template.edit', { courseOwnerId: 'outro' })).toBe(false);
+    expect(can(userOf('manager'), 'certificate.template.edit', { courseOwnerId: 'ivo' })).toBe(
+      true,
+    );
+    expect(can(userOf('student'), 'certificate.template.edit')).toBe(false);
   });
 });
 
@@ -255,6 +297,7 @@ describe('permissionsFor', () => {
       'badge.award',
       'ticket.handle',
       'progress.view',
+      'certificate.template.edit',
     ]);
   });
 });

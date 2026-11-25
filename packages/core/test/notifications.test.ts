@@ -1,5 +1,5 @@
 import { sql } from 'kysely';
-import { afterAll, beforeAll, describe, expect, inject, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, expectTypeOf, inject, it } from 'vitest';
 import {
   closeDatabase,
   consumeEmailToken,
@@ -10,14 +10,19 @@ import {
   EMAIL_TYPES,
   EmailDataError,
   type EmailType,
+  emailTypeDefinition,
   enqueueEmail,
   hashEmailToken,
   invalidateEmailTokens,
+  isAnyEmailType,
   isDomainError,
   isEmailType,
+  isPendingTemplateEmailType,
   issueEmailToken,
   lockEmailTokens,
   normalizeEmailData,
+  PENDING_TEMPLATE_EMAIL_TYPES,
+  type PendingTemplateEmailType,
   parseEmailData,
   tokenExpired,
 } from '../src/index.ts';
@@ -59,13 +64,17 @@ async function inRollback<T>(fn: (trx: Database) => Promise<T>): Promise<T> {
   return result as T;
 }
 
-async function createUser(trx: Database, overrides: { deletedAt?: Date } = {}): Promise<string> {
+async function createUser(
+  trx: Database,
+  overrides: { deletedAt?: Date; suspendedKind?: 'posting' | 'full' } = {},
+): Promise<string> {
   const row = await trx
     .insertInto('users')
     .values({
       email: `aluno-${crypto.randomUUID()}@example.com`,
       name: 'Aluno',
       ...overrides,
+      ...(overrides.suspendedKind ? { suspendedAt: new Date() } : {}),
     })
     .returning('id')
     .executeTakeFirstOrThrow();
@@ -96,6 +105,7 @@ describe('tipos de e-mail', () => {
     expect(EMAIL_TYPES['moderation.suspended']).toEqual({
       group: 'moderation',
       tokenPurpose: null,
+      skipFullySuspended: false,
     });
     expect(isEmailType('account.exists')).toBe(true);
     expect(isEmailType('forum.reply')).toBe(false);
@@ -164,6 +174,77 @@ describe('tipos de e-mail', () => {
     expect(() =>
       normalizeEmailData('account.exists', null as unknown as Record<string, never>),
     ).toThrow(EmailDataError);
+  });
+});
+
+describe('tipos de e-mail da Fase 2 (pendentes de modelo no worker)', () => {
+  it('access.granted e certificate.issued ficam fora de EMAIL_TYPES até a tarefa 416', () => {
+    expectTypeOf<PendingTemplateEmailType>().toEqualTypeOf<
+      'access.granted' | 'certificate.issued'
+    >();
+    expectTypeOf<
+      (typeof PENDING_TEMPLATE_EMAIL_TYPES)[number]
+    >().toEqualTypeOf<PendingTemplateEmailType>();
+    expectTypeOf<Extract<EmailType, PendingTemplateEmailType>>().toEqualTypeOf<never>();
+    for (const type of PENDING_TEMPLATE_EMAIL_TYPES) {
+      expect(isEmailType(type)).toBe(false);
+      expect(isAnyEmailType(type)).toBe(true);
+      expect(isPendingTemplateEmailType(type)).toBe(true);
+      expect(Object.hasOwn(EMAIL_TYPES, type)).toBe(false);
+    }
+    expect(isPendingTemplateEmailType('account.exists')).toBe(false);
+    expect(isAnyEmailType('account.exists')).toBe(true);
+    expect(isAnyEmailType('forum.reply')).toBe(false);
+    expect(emailTypeDefinition('access.granted')).toEqual({
+      group: 'purchase',
+      tokenPurpose: null,
+      skipFullySuspended: true,
+    });
+    expect(emailTypeDefinition('certificate.issued')).toEqual({
+      group: 'courses',
+      tokenPurpose: null,
+      skipFullySuspended: true,
+    });
+  });
+
+  it('confere o data dos dois tipos, com a data de expiração em ISO ou nula', () => {
+    expect(
+      normalizeEmailData('access.granted', {
+        productType: 'course',
+        productTitle: 'Curso de Redes',
+        expiresAt: new Date('2027-01-31T03:00:00.000Z'),
+      }),
+    ).toEqual({
+      productType: 'course',
+      productTitle: 'Curso de Redes',
+      expiresAt: '2027-01-31T03:00:00.000Z',
+    });
+    expect(
+      parseEmailData('access.granted', {
+        productType: 'bundle',
+        productTitle: 'Pacote',
+        expiresAt: null,
+      }),
+    ).toEqual({ productType: 'bundle', productTitle: 'Pacote', expiresAt: null });
+    expect(
+      parseEmailData('certificate.issued', { courseTitle: 'Curso', code: 'ABCD-EFGH-JKMN' }),
+    ).toEqual({ courseTitle: 'Curso', code: 'ABCD-EFGH-JKMN' });
+
+    const cases: [string, unknown][] = [
+      ['access.granted', { productType: 'plan', productTitle: 'X', expiresAt: null }],
+      ['access.granted', { productType: 'ebook', productTitle: ' ', expiresAt: null }],
+      ['access.granted', { productType: 'ebook', productTitle: 'X', expiresAt: 'amanhã' }],
+      ['access.granted', { productType: 'ebook', productTitle: 'X' }],
+      ['access.granted', { productType: 'ebook', productTitle: 'X', expiresAt: null, cpf: '1' }],
+      ['certificate.issued', { courseTitle: 'Curso' }],
+      ['certificate.issued', { courseTitle: 'Curso', code: '', token: 'x' }],
+    ];
+    for (const [type, data] of cases) {
+      expect(
+        () => parseEmailData(type as PendingTemplateEmailType, data),
+        `${type} ${JSON.stringify(data)}`,
+      ).toThrow(EmailDataError);
+    }
   });
 });
 
@@ -250,6 +331,119 @@ describe('enqueueEmail', () => {
           userId,
           type: 'account.verify_email',
           data: { token: 'x' } as unknown as Record<string, never>,
+        }),
+      ).rejects.toThrow(EmailDataError);
+    });
+  });
+});
+
+describe('enqueueEmail — e-mails da Fase 2', () => {
+  it('grava access.granted e certificate.issued com o data da spec 024', async () => {
+    const { granted, issued, rows } = await inRollback(async (trx) => {
+      const userId = await createUser(trx);
+      const granted = await enqueueEmail(trx, {
+        userId,
+        type: 'access.granted',
+        data: {
+          productType: 'ebook',
+          productTitle: 'Guia de Linux',
+          expiresAt: new Date('2027-02-01T12:00:00.000Z'),
+        },
+      });
+      const issued = await enqueueEmail(trx, {
+        userId,
+        type: 'certificate.issued',
+        data: { courseTitle: 'Redes', code: 'ABCD-EFGH-JKMN' },
+      });
+      const rows = await trx
+        .selectFrom('emailOutbox')
+        .select(['id', 'type', 'data', 'status'])
+        .where('userId', '=', userId)
+        .orderBy('type')
+        .execute();
+      const jobs = await trx
+        .selectFrom('jobs')
+        .select(['type', 'payload'])
+        .where('id', 'in', [granted?.jobId ?? '', issued?.jobId ?? ''])
+        .execute();
+      return { granted, issued, rows: { outbox: rows, jobs } };
+    });
+    expect(granted).not.toBeNull();
+    expect(issued).not.toBeNull();
+    expect(rows.outbox).toEqual([
+      {
+        id: granted?.outboxId,
+        type: 'access.granted',
+        status: 'queued',
+        data: {
+          productType: 'ebook',
+          productTitle: 'Guia de Linux',
+          expiresAt: '2027-02-01T12:00:00.000Z',
+        },
+      },
+      {
+        id: issued?.outboxId,
+        type: 'certificate.issued',
+        status: 'queued',
+        data: { courseTitle: 'Redes', code: 'ABCD-EFGH-JKMN' },
+      },
+    ]);
+    expect(rows.jobs.map((job) => job.type)).toEqual(['email.send', 'email.send']);
+  });
+
+  it('conta com suspensão full não recebe os da Fase 2, mas recebe os da conta', async () => {
+    const results = await inRollback(async (trx) => {
+      const full = await createUser(trx, { suspendedKind: 'full' });
+      const posting = await createUser(trx, { suspendedKind: 'posting' });
+      const issued = (userId: string) =>
+        enqueueEmail(trx, {
+          userId,
+          type: 'certificate.issued',
+          data: { courseTitle: 'Redes', code: 'ABCD-EFGH-JKMN' },
+        });
+      return {
+        fullGranted: await enqueueEmail(trx, {
+          userId: full,
+          type: 'access.granted',
+          data: { productType: 'course', productTitle: 'Redes', expiresAt: null },
+        }),
+        fullIssued: await issued(full),
+        fullAccount: await enqueueEmail(trx, { userId: full, type: 'account.exists', data: {} }),
+        postingIssued: await issued(posting),
+        outboxOfFull: await trx
+          .selectFrom('emailOutbox')
+          .select('type')
+          .where('userId', '=', full)
+          .execute(),
+      };
+    });
+    expect(results.fullGranted).toBeNull();
+    expect(results.fullIssued).toBeNull();
+    expect(results.fullAccount).not.toBeNull();
+    expect(results.postingIssued).not.toBeNull();
+    expect(results.outboxOfFull).toEqual([{ type: 'account.exists' }]);
+  });
+
+  it('conta excluída não recebe e data inválido não chega ao banco', async () => {
+    await inRollback(async (trx) => {
+      const deleted = await createUser(trx, { deletedAt: new Date() });
+      expect(
+        await enqueueEmail(trx, {
+          userId: deleted,
+          type: 'certificate.issued',
+          data: { courseTitle: 'Redes', code: 'ABCD-EFGH-JKMN' },
+        }),
+      ).toBeNull();
+      const userId = await createUser(trx);
+      await expect(
+        enqueueEmail(trx, {
+          userId,
+          type: 'access.granted',
+          data: {
+            productType: 'plan',
+            productTitle: 'Plano',
+            expiresAt: null,
+          } as unknown as { productType: 'course'; productTitle: string; expiresAt: null },
         }),
       ).rejects.toThrow(EmailDataError);
     });

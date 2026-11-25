@@ -66,7 +66,8 @@ const ADMIN_MATRIX: Readonly<Record<AdminAction, readonly [Cell, Cell, Cell, Cel
   // Instrutor publica só curso próprio `open`; `paid` e `private` são de gerente ou admin.
   'course.publish': [N, O, A, A],
   'course.delete': [N, O, A, A],
-  'course.delete_with_students': [N, N, N, A],
+  // Arquivar e desarquivar curso, ebook e pacote (spec 009): ninguém exclui produto com vínculos.
+  'product.archive': [N, N, N, A],
   'course.set_owner': [N, N, A, A],
   'ebook_bundle.manage': [N, N, A, A],
   'ebook.link': [N, O, A, A],
@@ -89,7 +90,11 @@ const ADMIN_MATRIX: Readonly<Record<AdminAction, readonly [Cell, Cell, Cell, Cel
   'gamification.configure': [N, N, N, A],
   'ticket.handle': [N, O, A, A],
   'progress.view': [N, O, A, A],
+  // Emissão manual e reemissão (spec 015).
+  'certificate.issue': [N, N, A, A],
   'certificate.revoke': [N, N, N, A],
+  // Template do curso e PDF de exemplo; o padrão da escola é de `settings.manage`.
+  'certificate.template.edit': [N, O, A, A],
   'mcp_key.own': [N, N, A, A],
   'mcp_key.manage_all': [N, N, N, A],
   'audit.view': [N, N, N, A],
