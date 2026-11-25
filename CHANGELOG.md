@@ -137,6 +137,7 @@ Detalhe das decisões em `specs/decisions/`.
 - `scripts/volume-migrate.sh`: a ajuda e a falha do `docker compose config` dizem que os segredos vêm dos `--env-file` depois de `--` (o `.env.local` não é carregado sozinho) e mostram o comando local (task 220).
 - `@nuva-edu/core`: `updateUser` com troca de e-mail invalida, na mesma transação, os tokens `verify` e `reset` pendentes da conta (`invalidateEmailTokens`, com a trava da emissão) (task 270).
 - worker: `email.send` não envia link (`account.verify_email`, `account.password_reset`) para endereço que deixou de ser o da conta; marca `sent` com `skipped: email_changed`, sem token, sob a trava da emissão (task 271).
+- `@nuva-edu/core`: testes sensíveis a carga estáveis em execuções paralelas (prazo de 30 s no teste dos índices da auditoria, `retry: 2` no p95 do login) (task 281).
 
 ### Decisões
 - Textos de processo alinhados ao `scripts/task.mjs` (`--as`, `task:list`, push negado, conflito de rebase).

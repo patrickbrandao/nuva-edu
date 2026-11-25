@@ -516,7 +516,9 @@ describe('consulta', () => {
 });
 
 describe('índices', () => {
-  it('a consulta de 30 dias não faz varredura sequencial', async () => {
+  // Insere 60 mil linhas e roda ANALYZE: ~1,5 s sozinho, mas passa de 5 s com outras suítes
+  // disputando a CPU e o mesmo Postgres (task 281). O prazo folgado não muda o que se confere.
+  it('a consulta de 30 dias não faz varredura sequencial', { timeout: 30_000 }, async () => {
     await rolledBack(async (trx) => {
       // Dois anos de registros, um a cada 17 minutos (~60 mil).
       await sql`

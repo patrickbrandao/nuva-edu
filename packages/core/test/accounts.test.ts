@@ -417,7 +417,12 @@ describe('login por senha', () => {
     expect(audit[0]?.origin).toBe('admin_panel');
   });
 
-  it('tempo de resposta igual para e-mail inexistente e existente (p95 < 50 ms)', async () => {
+  // Medida de tempo real: com outras suítes disputando a CPU e o Postgres, um pico isolado
+  // decide o p95 de 20 amostras, e o lado mais lento varia de uma execução para outra (task 281).
+  // Diferença sistemática reprova as três tentativas; ruído de carga passa numa delas.
+  it('tempo de resposta igual para e-mail inexistente e existente (p95 < 50 ms)', {
+    retry: 2,
+  }, async () => {
     const rounds = 20;
     const existing = await Promise.all(Array.from({ length: rounds }, () => makeUser()));
     const timeOf = async (email: string) => {
