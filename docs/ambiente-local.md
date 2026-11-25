@@ -213,7 +213,11 @@ Cada `apps/<app>/Dockerfile` usa a raiz do repositório como contexto e tem trê
 - Sites: o `index.html` sai com `Content-Security-Policy` sem `unsafe-inline`. No build,
   `proxy/lighttpd/csp.mjs` lê o `dist/index.html` e grava `/etc/lighttpd/nuva-csp.conf` com o
   hash do script inline do tema; a política só aceita a própria origem (API, SSE, imagens,
-  fontes, estilos) e `data:` em imagens. O servidor de desenvolvimento do Vite não envia esse
+  fontes, estilos) e `data:` em imagens. O script recebe o site: no admin fica só isso; no
+  classroom entram as origens dos players de vídeo (spec 009): a IFrame API do YouTube em
+  `script-src`, os `iframe` de YouTube, Vimeo, Bunny e Panda em `frame-src`, o HLS da Bunny
+  (`*.b-cdn.net`) em `connect-src`, `https:` e `blob:` em `media-src` e `blob:` em `worker-src`.
+  A lista fica em `PLAYER_SOURCES`, conferida contra o player por `scripts/csp.test.mjs`. O servidor de desenvolvimento do Vite não envia esse
   cabeçalho: para conferir a política, use a imagem (`pnpm dev:up`).
 - Sites: para conferir a configuração sem subir o ambiente,
   `NUVA_TEST_DOCKER=1 node --test scripts/lighttpd.test.mjs` roda o `lighttpd -tt` num contêiner

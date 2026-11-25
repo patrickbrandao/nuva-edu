@@ -30,7 +30,7 @@ COPY proxy/lighttpd/csp.mjs proxy/lighttpd/csp.mjs
 # A política de segurança de conteúdo sai do index.html gerado: o hash do script inline do tema
 # acompanha o que a imagem realmente serve.
 RUN pnpm --filter "@nuva-edu/classroom" build \
-    && node proxy/lighttpd/csp.mjs apps/classroom/dist/index.html > /app/nuva-csp.conf
+    && node proxy/lighttpd/csp.mjs classroom apps/classroom/dist/index.html > /app/nuva-csp.conf
 
 # 3. runtime: Alpine com o lighttpd do próprio Alpine e o resultado do build. O /config.json
 #    (`app`, `adminUrl` e `classroomUrl`) é gerado na subida do contêiner
