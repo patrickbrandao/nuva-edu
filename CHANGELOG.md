@@ -171,6 +171,7 @@ Detalhe das decisões em `specs/decisions/`.
 - `@nuva-edu/core`: `updateUser` com troca de e-mail invalida, na mesma transação, os tokens `verify` e `reset` pendentes da conta (`invalidateEmailTokens`, com a trava da emissão) (task 270).
 - worker: `email.send` não envia link (`account.verify_email`, `account.password_reset`) para endereço que deixou de ser o da conta; marca `sent` com `skipped: email_changed`, sem token, sob a trava da emissão (task 271).
 - `@nuva-edu/core`: testes sensíveis a carga estáveis em execuções paralelas (prazo de 30 s no teste dos índices da auditoria, `retry: 2` no p95 do login) (task 281).
+- contrato do classroom e spec 016: notas alinhadas ao núcleo (códigos dos 422, com note_video_seconds_invalid; regras de GET /lessons/{id}/notes, de NoteLesson e do PATCH sem mudança), videoSeconds inteiro nas respostas e teto de 100 notas por aula (note_lesson_limit_reached), sem paginação na aba da aula; cliente regenerado (tasks 575, 595).
 
 ### Decisões
 - Textos de processo alinhados ao `scripts/task.mjs` (`--as`, `task:list`, push negado, conflito de rebase).
