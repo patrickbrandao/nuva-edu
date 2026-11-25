@@ -79,6 +79,7 @@ Legenda: ✓ permitido · ◐ só nos próprios cursos · — negado.
 | Editar tabela de pontos, níveis e medalhas | — | — | — | ✓ |
 | Atender chamados | — | ◐ (só os de conteúdo dos seus cursos, inclusive "link quebrado") | ✓ | ✓ |
 | Ver progresso e certificados dos alunos | — | ◐ | ✓ | ✓ |
+| Emitir e reemitir certificado manualmente ([015](015-certificados.md)) | — | — | ✓ | ✓ |
 | Revogar certificado | — | — | — | ✓ |
 | **Sistema** | | | | |
 | Emitir e revogar as próprias chaves MCP | — | — | ✓ | ✓ |
@@ -120,12 +121,13 @@ Cada linha das matrizes é uma ação de `packages/core`, com o identificador ab
 | Pessoas | `users.list`, `users.view_private`, `users.edit`, `users.suspend`, `users.sessions.revoke`, `users.password.view`, `users.password.set`, `staff.manage`, `users.delete` |
 | Conteúdo | `course.create`, `course.edit`, `course.publish`, `course.delete`, `course.delete_with_students`, `course.set_owner`, `ebook_bundle.manage`, `ebook.link`, `product.set_access`, `product.set_price`, `event.manage`, `announcement.publish` |
 | Acessos e vendas | `entitlement.manage`, `sales.view`, `order.refund`, `subscription.cancel`, `plan.manage`, `coupon.manage` |
-| Comunidade e suporte | `forum.category.manage`, `forum.moderate`, `report.handle`, `case.moderate`, `badge.award`, `gamification.configure`, `ticket.handle`, `progress.view`, `certificate.revoke` |
+| Comunidade e suporte | `forum.category.manage`, `forum.moderate`, `report.handle`, `case.moderate`, `badge.award`, `gamification.configure`, `ticket.handle`, `progress.view`, `certificate.issue`, `certificate.revoke` |
 | Sistema | `mcp_key.own`, `mcp_key.manage_all`, `audit.view`, `ops.manage`, `settings.manage` |
 | Classroom | `catalog.view`, `course.view_program`, `lesson.watch_open`, `lesson.watch_sample`, `content.access_paid`, `purchase.create`, `learning.track`, `forum.course.participate`, `forum.free.participate`, `members.view`, `dm.send`, `case.publish`, `ticket.open`, `report.create`, `account.self_service` |
 
 - Nas rotas de usuário da `admin-api`, `users.view` (ver a ficha) é a mesma ação de `users.list`; `users.view_private` decide se e-mail, CPF/CNPJ e compras vão na resposta.
-- `users.list` do `instructor` (alunos dos seus cursos) é servido pelas rotas do curso ([009](009-catalogo-e-conteudo.md), [014](014-aprendizado-e-progresso.md)), na Fase 2. Na Fase 1 não há curso: `GET /users` exige `users.list` com alcance total (`manager` e `admin`), e o `instructor` recebe `403`.
+- `users.list` do `instructor` (alunos dos seus cursos) é servido pelas rotas do curso ([009](009-catalogo-e-conteudo.md), [014](014-aprendizado-e-progresso.md): `GET /courses/{id}/students`, com `progress.view`), na Fase 2. Na Fase 1 não há curso: `GET /users` exige `users.list` com alcance total (`manager` e `admin`), e o `instructor` recebe `403`.
+- `certificate.issue` (emissão manual e reemissão) e `certificate.revoke` (revogar e desfazer a revogação) entraram na Fase 2 (tarefa 400); `certificate.issue` faltava na matriz, embora a [015](015-certificados.md) já desse a emissão manual a gerente e admin.
 - Ação sobre conta de equipe (`instructor`, `manager`, `admin`) exige `staff.manage`, mesmo que a ação sobre aluno exija outra (`users.edit`, `users.suspend`, `users.sessions.revoke`).
 
 ### Regra do instrutor

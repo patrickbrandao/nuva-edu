@@ -6,6 +6,7 @@ Detalhe das decisões em `specs/decisions/`.
 ## [Não lançado]
 
 ### Adicionado
+- Planejamento da Fase 2 (catálogo e aprendizado): tarefas 401 a 462, ADR 0025 (bibliotecas do certificado, Markdown, lista reordenável e player) e ajustes nas specs 005, 006, 008, 009, 010, 014, 015, 016, 024, 028, 029 e 031 (task 400).
 - e2e: fluxos do critério de saída da Fase 1 (senha, Mailpit, Google/Facebook/Apple no simulador, termos, bloqueio, equipe, suspensão, senha vista com auditoria, avatar, varredura da senha) (task 166).
 - e2e: fumaça do admin entra com o admin inicial (projeto `setup`) e confere a tela de entrada sem sessão (task 190).
 - infra: `pnpm deploy:test` sobe o Mailpit no servidor de testes e confere, sem ler os valores, `SESSION_SECRET`, `ADMIN_EMAIL` e `ADMIN_PASSWORD` no `.env.local` remoto; recusa `NUVA_OAUTH_MOCK_*` lá; passo a passo em `docs/ambiente-de-teste.md` (task 159).

@@ -41,12 +41,12 @@ O aluno anota enquanto assiste. A nota fica presa à aula, com um link de volta 
 - Lista todas as notas, da alteração mais recente à mais antiga, paginada de 30 em 30.
 - Cada item: título (ou o início do texto), trecho, data, e — nas de aula — curso, aula e instante, com o link de volta.
 - Filtros: todas, de aulas, avulsas, e por curso.
-- Busca por texto no título e no corpo (busca textual do Postgres, na configuração de idioma da instalação).
+- Busca por texto no título e no corpo (busca textual do Postgres, na configuração de idioma da instalação). Com `NUVA_LOCALE=pt-BR`, o único idioma da versão 1, a configuração é `portuguese`, fixada na migration que cria a coluna `search` (coluna gerada exige configuração constante); outro idioma pede migration.
 - Estado vazio com os três passos: abrir uma aula, ir à aba "Minhas notas", escrever; e os botões "Ir para meus cursos" e "Escrever uma ideia avulsa".
 
 ### Edição
 
-- Corpo em Markdown, com as mesmas regras de sanitização do fórum ([017](017-forum.md)): sem HTML bruto, links com `rel="noopener noreferrer"`.
+- Corpo em Markdown, com as mesmas regras de sanitização do fórum ([017](017-forum.md)): sem HTML bruto, links com `rel="noopener noreferrer"`. As regras moram no componente `Markdown` de `packages/ui` ([006](006-sites-e-interface.md), [0025](decisions/0025-bibliotecas-da-fase-2.md)), que nasce na Fase 2 com as notas e as descrições do catálogo e é o mesmo que o fórum usa.
 - Salvamento automático: 2 s após a última tecla e ao sair do campo; indicador "salvando…" e "salvo".
 - Conflito entre dois dispositivos: a gravação envia `updated_at` conhecido; se o registro mudou, a API responde `409` com a versão atual e o classroom oferece manter a local, a do servidor, ou copiar a local para uma nota nova.
 - Excluir pede confirmação e é definitivo (sem lixeira).

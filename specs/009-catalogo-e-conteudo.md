@@ -38,7 +38,7 @@ Esta spec define as entidades, os campos, os estados de publicação, os modos d
 
 - Curso `published` com aula `draft`: a aula não aparece no programa nem conta no total de aulas e de duração.
 - Despublicar um produto não revoga direitos de acesso; o item some da vitrine e da estante até voltar a ser publicado. O admin vê um aviso com o número de alunos afetados antes de confirmar.
-- Excluir produto com pedido, direito ou progresso associado é proibido (retorna `409`); usa-se `archived_at` (arquivar), que equivale a despublicar em definitivo e só o admin desfaz. Excluir sem nenhum vínculo é permitido ao admin.
+- Excluir produto com pedido, direito ou progresso associado é proibido (retorna `409`); usa-se `archived_at` (arquivar), que equivale a despublicar em definitivo e só o admin desfaz (`unarchive`). Excluir sem nenhum vínculo é permitido ao admin.
 - Publicar um curso exige ao menos um módulo com uma aula publicada; publicar pacote exige ao menos um item; publicar ebook exige `file_url` válida.
 
 ### Modos de acesso
@@ -123,6 +123,8 @@ Comprar, assistir e baixar exigem login.
 
 - `courses.owner_id` aponta para o instrutor dono do curso. Admin e gerente podem trocá-lo.
 - O instrutor não publica nem despublica curso `paid` ou `private`: ele envia para publicação, e gerente ou admin publicam. Curso `open` de que é dono, publica direto. Ele marca aulas como amostra grátis, mas não muda o modo de acesso nem o preço. Aulas novas em curso já publicado seguem a mesma regra do curso.
+- "Enviar para publicação" é `POST /courses/{id}/request-review`: grava `courses.review_requested_at` (e auditoria `course.request_review`) e vale para o curso e para as aulas `draft` dele. A lista de cursos do admin tem o filtro "aguardando publicação". Publicar o curso, ou publicar a última aula `draft` dele, limpa o campo; o instrutor pode cancelar o pedido (`DELETE /courses/{id}/request-review`). O aviso à equipe no sino entra com a central de notificações ([024](024-notificacoes-e-email.md), Fase 4).
+- Publicar e despublicar aula é `PATCH /lessons/{id}` com `status`, sujeito à mesma regra do curso: o instrutor só o faz em curso `open` de que é dono.
 - Toda alteração de catálogo grava auditoria ([028](028-auditoria.md)).
 
 ### Casos de erro
@@ -141,11 +143,12 @@ Comprar, assistir e baixar exigem login.
 
 `apps/admin-api/openapi.yaml` (escrita), sob `/api/v1`:
 
-- `GET|POST /courses`, `GET|PATCH|DELETE /courses/{id}`, `POST /courses/{id}/publish`, `POST /courses/{id}/unpublish`, `POST /courses/{id}/archive`
+- `GET|POST /courses`, `GET|PATCH|DELETE /courses/{id}`, `POST /courses/{id}/publish`, `POST /courses/{id}/unpublish`, `POST /courses/{id}/archive`, `POST /courses/{id}/unarchive`, `POST|DELETE /courses/{id}/request-review`
 - `POST /courses/{id}/modules`, `PATCH|DELETE /modules/{id}`, `PUT /courses/{id}/modules/order`
 - `POST /modules/{id}/lessons`, `GET|PATCH|DELETE /lessons/{id}`, `PUT /modules/{id}/lessons/order`, `PUT /lessons/{id}/links`
-- `GET|POST /ebooks`, `GET|PATCH|DELETE /ebooks/{id}` e ações de publicação
-- `GET|POST /bundles`, `GET|PATCH|DELETE /bundles/{id}`, `PUT /bundles/{id}/items` e ações de publicação
+- `GET|POST /ebooks`, `GET|PATCH|DELETE /ebooks/{id}` e ações de publicação (`publish`, `unpublish`, `archive`, `unarchive`, como no curso)
+- `GET|POST /bundles`, `GET|PATCH|DELETE /bundles/{id}`, `PUT /bundles/{id}/items` e as mesmas ações de publicação
+- `POST /images` e `DELETE /images/{imageId}` com a finalidade `product_cover` ([029](029-imagens.md))
 - `PUT /ebooks/{id}/targets` (vínculos em `product_ebooks`)
 
 `apps/classroom-api/openapi.yaml` (leitura), sob `/api/v1`:
@@ -163,7 +166,7 @@ Dono (escrita): `admin-api`. Leitura: `classroom-api` e `worker`.
 
 | Tabela | Campos principais |
 | --- | --- |
-| `courses` | `id`, `slug` (único), `title`, `summary`, `description`, `level` (`beginner` \| `intermediate` \| `advanced` \| nulo), `cover_image_id`, `owner_id` (instrutor dono, nulo quando gerido só por gerente e admin), `access_mode`, `price_cents`, `access_days`, `certificate_enabled`, `certificate_hours` ([015](015-certificados.md)), `status`, `published_at`, `archived_at`, `created_at`, `updated_at` |
+| `courses` | `id`, `slug` (único), `title`, `summary`, `description`, `level` (`beginner` \| `intermediate` \| `advanced` \| nulo), `cover_image_id`, `owner_id` (instrutor dono, nulo quando gerido só por gerente e admin), `access_mode`, `price_cents`, `access_days`, `certificate_enabled`, `certificate_hours` ([015](015-certificados.md)), `status`, `review_requested_at`, `published_at`, `archived_at`, `created_at`, `updated_at` |
 | `modules` | `id`, `course_id`, `title`, `position`, `created_at`, `updated_at` |
 | `lessons` | `id`, `module_id`, `title`, `description`, `type` (`video` no MVP), `video_url`, `video_provider`, `duration_seconds`, `is_sample`, `status`, `position`, `forum_topic_id`, `created_at`, `updated_at` |
 | `lesson_links` | `id`, `lesson_id`, `label`, `url`, `kind`, `position` |
@@ -173,8 +176,18 @@ Dono (escrita): `admin-api`. Leitura: `classroom-api` e `worker`.
 | `product_ebooks` | `ebook_id`, `target_type` (`course` \| `bundle` \| `lesson`), `target_id` |
 
 - `lessons.type` existe para extensão futura (questionário); o MVP só usa `video`.
+- `lessons.forum_topic_id` nasce nulo e sem chave estrangeira; a chave e a criação do tópico entram com o fórum ([017](017-forum.md), Fase 4).
 - Capas são imagens enviadas ([029](029-imagens.md)).
 - Retenção: dados de catálogo são permanentes; arquivados nunca são apagados automaticamente.
+
+### O que fica para outras fases
+
+A Fase 2 entrega esta spec inteira, exceto o que depende de recurso de fase posterior:
+
+- "Reportar problema" (player, materiais) abre chamado: entra com os chamados ([023](023-chamados-de-suporte.md), Fase 4); até lá o botão não aparece.
+- Lista de planos na vitrine: com as assinaturas ([012](012-assinaturas.md), Fase 3).
+- Botão de compra e cesta: com as vendas ([011](011-vendas-e-checkout.md), Fase 3). Na Fase 2 o acesso a produto `paid` vem só por concessão manual ([010](010-direitos-de-acesso.md)).
+- Tópico da aula no fórum: Fase 4.
 
 ## Critérios de aceite
 

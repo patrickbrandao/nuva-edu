@@ -144,7 +144,7 @@ Funções de `packages/core` (única implementação): `grant`, `revoke`, `exten
 
 ## Dados
 
-Dono (escrita): `worker` para fontes `order`, `subscription` e `cascade`; `admin-api` para a fonte `grant` e para disparar recálculo. Toda escrita passa pelas funções de `packages/core`.
+Dono (escrita): `worker` para as raízes `order` e `subscription`; `admin-api` para a raiz `grant` e para disparar recálculo. Os derivados `cascade` são gravados por quem grava a raiz, na mesma transação (passo 3 do algoritmo de concessão), e pelo `worker` no recálculo (`entitlement.recompute`). Toda escrita passa pelas funções de `packages/core`.
 
 `entitlements`:
 
@@ -164,6 +164,12 @@ Dono (escrita): `worker` para fontes `order`, `subscription` e `cascade`; `admin
 Índices: (`user_id`, `product_type`, `product_id`) para a verificação; (`parent_entitlement_id`); (`source`, `source_id`); único parcial em (`user_id`, `source`, `source_id`, `product_type`, `product_id`, `parent_entitlement_id`) para a idempotência.
 
 Retenção: direitos não são apagados enquanto a conta existir (são o histórico de acesso); na exclusão de conta são apagados ([030](030-lgpd.md)); o registro de quem concedeu ou revogou permanece na auditoria.
+
+### Entrega por fase
+
+- Fase 2: `grant`, `revoke`, `recalculate` (mudança em `bundle_items` e `product_ebooks`), `canAccess`, `hasActiveAccess` e `listEntitlements`; concessão manual pela `admin-api`; `GET /me/entitlements`. A notificação "acesso liberado" sai só por e-mail (`access.granted`, grupo `purchase`, por `enqueueEmail`), até a central de notificações ([024](024-notificacoes-e-email.md), Fase 4).
+- Fase 3: fontes `order` e `subscription`, `extend`, `plan_items` e o plano "tudo, inclusive futuros".
+- Fase 5: concessão e revogação pelo MCP.
 
 ## Critérios de aceite
 

@@ -67,11 +67,14 @@ Os vídeos são externos ([009](009-catalogo-e-conteudo.md)), então o sistema n
 - Aula nova publicada em curso já concluído: o curso volta a "em andamento" (por exemplo, 45 de 46), sem afetar o certificado já emitido.
 - Aula despublicada sai do cálculo; se com isso o aluno chegar a 100%, o curso passa a concluído e o certificado é emitido.
 - Ao atingir 100% pela primeira vez, o `classroom-api` enfileira `course.completed` ([005](005-worker-e-fila.md)), que emite o certificado, dá os pontos e notifica.
+- "Atingir 100%" é a passagem de menos de 100% a 100% causada pela gravação (`PUT /lessons/{id}/progress`), conferida na mesma transação. A tarefa leva `unique_key = course.completed:<user_id>:<course_id>`; gravar de novo uma aula já concluída não é passagem e não enfileira nada. Desmarcar e marcar de novo a última aula é outra passagem e enfileira outra vez: os manipuladores são idempotentes (um certificado por aluno e curso, [015](015-certificados.md); pontos com chave própria, [020](020-gamificacao.md)).
+- Despublicar ou excluir aula de curso publicado pode levar alunos a 100% sem gravação deles: a `admin-api` enfileira `course.completion_check` ([005](005-worker-e-fila.md)), que enfileira `course.completed` para cada um.
 
 ### Continuar de onde parou
 
 - Abrir uma aula grava `last_opened_at`; por curso, a "aula atual" é a de `last_opened_at` mais recente.
 - O botão "Continuar" do curso leva à aula atual se ela não estiver concluída; se estiver, à próxima não concluída na ordem do programa; se todas estiverem, à primeira aula.
+- O envio ao sair da página usa `fetch` com `keepalive: true` e o cabeçalho `X-CSRF-Token`, como qualquer escrita; `navigator.sendBeacon` não serve, porque não envia cabeçalhos.
 - `position_seconds` é gravado quando o player informa o tempo (vídeo nativo e provedores com API); ao reabrir, o player começa nessa posição, exceto se faltarem menos de 10 s para o fim.
 - O início do classroom mostra "Continue assistindo" com até 3 cursos em andamento, do mais recente ao mais antigo.
 
@@ -91,7 +94,7 @@ Os vídeos são externos ([009](009-catalogo-e-conteudo.md)), então o sistema n
 
 - "Meu progresso": para cada curso iniciado, uma grade com um quadrado por aula (concluída ou não), agrupada por módulo, e o percentual.
 - Mapa de atividade: 53 semanas × 7 dias, um quadrado por dia, com 5 intensidades. A contagem do dia soma aulas concluídas, tópicos e respostas no fórum e, quando a comunidade estiver ativa ([019](019-perfil-e-diretorio.md)), cases publicados e comentários.
-- Os dias são calculados no fuso do usuário (`profiles.timezone`, declarado em [019](019-perfil-e-diretorio.md); quando nulo vale `settings.timezone`, padrão `America/Sao_Paulo`).
+- Os dias são calculados no fuso do usuário (`profiles.timezone`, declarado em [019](019-perfil-e-diretorio.md); quando nulo vale a configuração `school.timezone`, padrão `America/Sao_Paulo`, [031](031-infraestrutura-e-deploy.md)). Até a Fase 6, que cria `profiles.timezone`, vale `school.timezone` para todos; a função do núcleo que resolve o fuso do usuário é o único ponto que muda.
 - O mapa do próprio usuário é sempre visível para ele; no perfil público, segue a preferência de privacidade ([019](019-perfil-e-diretorio.md)).
 - A contagem diária é consolidada em `activity_days`, incrementada na mesma transação da ação.
 
@@ -120,8 +123,9 @@ Os vídeos são externos ([009](009-catalogo-e-conteudo.md)), então o sistema n
 
 - `GET /users/{id}/progress` (admin, gerente; instrutor só nos próprios cursos)
 - `GET /courses/{id}/progress-summary` (alunos por faixa de progresso e taxa de conclusão)
+- `GET /courses/{id}/students` (alunos com acesso ao curso, com nome, avatar, progresso e última atividade; `progress.view`, instrutor só nos próprios cursos; é o `users.list` do instrutor, [008](008-papeis-e-permissoes.md))
 
-Tarefa da fila: `course.completed`.
+Tarefas da fila: `course.completed`, `course.completion_check`.
 
 ## Dados
 
@@ -135,6 +139,13 @@ Dono (escrita): `classroom-api`.
 - `lesson_progress.course_id` é redundante de propósito: permite calcular a estante sem junções com módulos.
 - Conclusão do curso é derivada (não há tabela de matrícula): o registro durável da conclusão é o certificado ([015](015-certificados.md)).
 - Retenção: progresso e atividade são mantidos enquanto a conta existir, mesmo após o fim do acesso; apagados na exclusão da conta ([030](030-lgpd.md)).
+
+### O que fica para outras fases
+
+- Aba **Comentários** e o tópico da aula: com o fórum ([017](017-forum.md), Fase 4); até lá a aba não aparece.
+- "Reportar problema": com os chamados ([023](023-chamados-de-suporte.md), Fase 4).
+- Pontos de `course.completed` e de aula concluída: com a gamificação ([020](020-gamificacao.md), Fase 6).
+- Mapa de atividade: na Fase 2 conta só aulas concluídas; `forum_posts` passa a contar na Fase 4 e `community_actions` na Fase 6.
 
 ## Critérios de aceite
 

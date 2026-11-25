@@ -50,14 +50,14 @@ Regras:
 ### PDF
 
 - Gerado no worker, sem depender de serviço externo e sem navegador embutido.
-- Conteúdo: logotipo e nome da escola, título "Certificado de conclusão", nome do aluno, texto "concluiu o curso <título>, com carga horária de <N> horas, em <data por extenso>", nome e cargo de quem assina (texto), código de validação, endereço da página de validação e código QR apontando para ela.
+- Conteúdo: logotipo (quando `school.logo_image_id` existe; sem ele, só o nome) e nome da escola, título "Certificado de conclusão", nome do aluno, texto "concluiu o curso <título>, com carga horária de <N> horas, em <data por extenso>", nome e cargo de quem assina (texto), código de validação, endereço da página de validação e código QR apontando para ela.
 - Modelo único no MVP; cores e logotipo vêm das configurações da escola (`settings`).
 - Idioma do `NUVA_LOCALE`.
 - Guardado em `certificates.pdf` (bytea); com 300 KB por certificado, 10.000 certificados ocupam cerca de 3 GB, dentro do gatilho de revisão de [0007](decisions/0007-imagens-no-postgres.md). Regenerável a partir dos dados congelados.
 
 ### Validação pública
 
-- Endereço: `https://<NUVA_CLASSROOM_HOST>/certificado/<código>`; há também um formulário para digitar o código.
+- Endereço: `https://<NUVA_CLASSROOM_HOST>/certificados/<código>` (a rota do classroom em [006](006-sites-e-interface.md)), impresso no PDF e no código QR; há também um formulário para digitar o código, em `/certificados`.
 - Código aceito com ou sem hífens e sem diferenciar maiúsculas.
 - Certificado válido: mostra nome do aluno, curso, carga horária, data de conclusão, data de emissão e escola.
 - Certificado revogado: mostra "certificado revogado" e a data, sem o motivo.
@@ -78,7 +78,7 @@ Regras:
 | --- | --- |
 | Baixar certificado de outro aluno | `404` |
 | Curso com certificado desabilitado | nenhuma emissão; a página do curso não menciona certificado |
-| Falha ao gerar o PDF | a tarefa repete (até 8 vezes); o registro existe e a validação já funciona; o download mostra "em preparação" |
+| Falha ao gerar o PDF | a tarefa repete (até 5 vezes, [005](005-worker-e-fila.md)); o registro existe e a validação já funciona; o download mostra "em preparação" |
 | Mais de 30 validações por minuto do mesmo IP | `429` |
 | Emissão manual para quem já tem certificado do curso | `409` |
 
@@ -97,7 +97,9 @@ Regras:
 - `POST /certificates` (emissão manual), `POST /certificates/{id}/revoke`, `POST /certificates/{id}/restore` (admin), `POST /certificates/{id}/reissue`
 - `PATCH /courses/{id}` com `certificate_enabled` e `certificate_hours`
 - `POST /courses/{id}/certificates/backfill`
-- `GET|PUT /settings/certificates` (nome da escola, logotipo, signatário, cargo, cores)
+- `GET|PUT /settings/certificates`: grava `certificate.signer_name` e `certificate.signer_role` ([031](031-infraestrutura-e-deploy.md), "Configurações da escola") e devolve também, só para leitura, o nome, o logotipo e a cor da escola (`school.*`), que são gravados pela identidade da escola (`/settings/branding`, [024](024-notificacoes-e-email.md)). `settings.manage` (admin).
+
+Permissões ([008](008-papeis-e-permissoes.md)): listar e ver, `progress.view` (instrutor só nos próprios cursos); emissão manual e reemissão, `certificate.issue`; revogar e desfazer, `certificate.revoke`; `PATCH /courses/{id}` e `backfill`, `course.edit`.
 
 Tarefas da fila: `course.completed`, `certificate.render`, `certificate.backfill` ([005](005-worker-e-fila.md)).
 
@@ -120,6 +122,13 @@ Dono (escrita): `worker` para emissão e PDF; `admin-api` para revogação, emis
 Campos em `courses`: `certificate_enabled` (padrão verdadeiro), `certificate_hours` (nulo = calculado).
 
 Retenção: certificados são permanentes enquanto a conta existir. Na exclusão da conta ([030](030-lgpd.md)) o registro permanece sem o nome do titular e o PDF é apagado: a página de validação mostra o código, o curso e a data, com o aviso "titular removeu a conta", e o PDF deixa de ser servido. O aluno é informado disso antes de confirmar a exclusão.
+
+### Entrega por fase
+
+- Fase 2: tudo acima, com o aviso ao aluno só por e-mail (`certificate.issued`, por `enqueueEmail`, [024](024-notificacoes-e-email.md)).
+- Fase 3: a caixa "revogar certificados deste curso" na tela de reembolso ([011](011-vendas-e-checkout.md)).
+- Fase 4: notificação na central; pedido de correção do nome por chamado ([023](023-chamados-de-suporte.md)). Até lá a equipe usa "reemitir" a pedido do aluno.
+- Fase 6: pontos da conclusão ([020](020-gamificacao.md)).
 
 ## Critérios de aceite
 

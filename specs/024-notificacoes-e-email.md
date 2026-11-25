@@ -75,6 +75,18 @@ O grupo `account` não tem canal "plataforma", então não passa pela tarefa `no
 - `data` não leva senha, token nem motivo interno de suspensão.
 - Conta suspensa, com suspensão `full` ou `posting`, recebe todos os e-mails desta tabela: são de segurança da própria conta (confirmação de e-mail, redefinição de senha, bloqueio, dispositivo novo, mudança de senha ou de papel) e não dependem de a pessoa poder entrar. Conta excluída não recebe nenhum: `enqueueEmail` a deixa de fora. A suspensão não muda o envio; só a exclusão o impede.
 
+### E-mails da Fase 2
+
+Até a central de notificações (Fase 4), os dois avisos da Fase 2 saem só por e-mail, pelo mesmo caminho do grupo `account`: `enqueueEmail` na transação da ação. Com a Fase 4 passam a sair por `notify`, com os dois canais e as preferências do grupo.
+
+| Tipo | Grupo | Quando | `data` | Link |
+| --- | --- | --- | --- | --- |
+| `access.granted` | `purchase` | Concessão manual de acesso ([010](010-direitos-de-acesso.md)); na Fase 3 também pedido pago e assinatura | `productType`, `productTitle`, `expiresAt` (ou nulo) | `<classroomUrl>/meus-cursos` (curso e pacote) ou `<classroomUrl>/meus-ebooks` (ebook) |
+| `certificate.issued` | `courses` | Certificado emitido, automático ou manual ([015](015-certificados.md)); não sai na reemissão | `courseTitle`, `code` | `<classroomUrl>/progresso` e `<classroomUrl>/certificados/<code>` |
+
+- Só para o titular; conta excluída não recebe, e conta suspensa (`full`) também não, porque não pode usar o que o e-mail anuncia.
+- `certificate.issued` é de grupo desligável, mas até a Fase 4 não há preferência a respeitar: sai sempre, sem `List-Unsubscribe`. O cabeçalho entra com as preferências.
+
 ### Links com token
 
 - A tarefa `email.send` cria o token do link no momento de montar o e-mail (tipos `account.verify_email` e `account.password_reset`): gera o valor aleatório, grava o SHA-256 em `email_tokens` com validade de 24 h, invalida os anteriores do mesmo usuário e propósito e põe o valor em claro só no corpo enviado ([007](007-contas-e-autenticacao.md), "Tokens de e-mail").

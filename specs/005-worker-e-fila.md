@@ -74,7 +74,8 @@ Este é o catálogo único de tipos de tarefa; as demais specs usam exatamente e
 | `order.fulfill` | `payment.webhook`, reconciliação | Marca o pedido pago e cria os direitos em cascata ([010](010-direitos-de-acesso.md)) | 10 |
 | `refund.execute` | `admin-api` | Estorna no Mercado Pago e revoga direitos em cascata ([011](011-vendas-e-checkout.md)) | 10 |
 | `entitlement.recompute` | Mudança de vínculo ebook ↔ produto, de itens de pacote ou de plano | Recalcula direitos derivados dos usuários afetados | 5 |
-| `course.completed` | `classroom-api`, ao atingir 100% do curso | Dispara `certificate.render`, `gamification.award` e `notify` ([014](014-aprendizado-e-progresso.md)) | 5 |
+| `course.completed` | `classroom-api`, quando o curso passa a 100% para o aluno; `course.completion_check` | Cria o certificado (registro e código) e enfileira `certificate.render`; dispara `gamification.award` e `notify` ([014](014-aprendizado-e-progresso.md), [015](015-certificados.md)) | 5 |
+| `course.completion_check` | `admin-api`, ao despublicar ou excluir aula de curso publicado | Enfileira `course.completed` para cada aluno que, sem a aula, passou a ter 100% do curso ([014](014-aprendizado-e-progresso.md)); lotes de 500 | 5 |
 | `certificate.render` | `course.completed`, emissão manual, reemissão | Gera o PDF e o código de validação ([015](015-certificados.md)) | 5 |
 | `certificate.backfill` | Admin liga o certificado num curso já concluído por alunos | Emite os certificados pendentes ([015](015-certificados.md)) | 3 |
 | `gamification.award` | Aula concluída, publicação, case, curso concluído | Lança pontos, recalcula nível e medalhas automáticas ([020](020-gamificacao.md)) | 5 |
@@ -83,6 +84,10 @@ Este é o catálogo único de tipos de tarefa; as demais specs usam exatamente e
 | `account.export` | Pedido do aluno ou do admin | Monta o arquivo de dados pessoais ([030](030-lgpd.md)) | 3 |
 | `account.anonymize` | Fim da carência da exclusão de conta | Anonimiza o usuário ([030](030-lgpd.md)) | 5 |
 | `example.echo` | Testes e diagnóstico; nenhum fluxo do produto o enfileira | Registra no log a `message` do payload, sem outro efeito | 3 |
+
+Direito vencido não tem tarefa: deixa de valer no instante de `expires_at`, pela própria verificação de acesso, e nada é gravado ([010](010-direitos-de-acesso.md), RF-09). A antiga `entitlement.expire` saiu do catálogo por isso (tarefa 400).
+
+Na Fase 2, sem a central de notificações ([024](024-notificacoes-e-email.md)) e sem a gamificação ([020](020-gamificacao.md)), `course.completed` só emite o certificado e envia o e-mail `certificate.issued` por `enqueueEmail`; `gamification.award` e `notify` entram nas fases desses recursos.
 
 `example.echo` nasceu como exemplo da Fase 0 e fica no catálogo como tarefa de diagnóstico: serve aos testes da fila, ao e2e de fumaça e para conferir numa instalação que o worker está consumindo.
 
@@ -93,7 +98,6 @@ Este é o catálogo único de tipos de tarefa; as demais specs usam exatamente e
 | `payment.reconcile_orders` | A cada 5 min | Consulta no provedor os pedidos `pending` há mais de 2 min e conclui, ou expira os vencidos: 30 min para cartão e Pix (`NUVA_ORDER_PENDING_MINUTES`), 3 dias para boleto (`NUVA_ORDER_BOLETO_DAYS`) ([011](011-vendas-e-checkout.md), [013](013-pagamentos-mercado-pago.md)) | 3 |
 | `payment.reconcile_subscriptions` | A cada 6 h | Confere as assinaturas no provedor; aplica a carência de 3 dias e a suspensão ([012](012-assinaturas.md)) | 3 |
 | `payment.reconcile_refunds` | A cada 30 min | Conclui ou marca falha nos reembolsos pedidos ([013](013-pagamentos-mercado-pago.md)) | 3 |
-| `entitlement.expire` | A cada 15 min | Marca como vencidos os direitos com `expires_at` passado e desfaz a cascata | 3 |
 | `suspension.expire` | A cada 15 min | Encerra as suspensões com prazo vencido ([026](026-moderacao-e-denuncias.md)) | 3 |
 | `ticket.autoclose` | Diária 04:00 | Fecha os chamados `resolved` vencidos ([023](023-chamados-de-suporte.md)) | 5 |
 | `gamification.weekly` | Segunda-feira 00:00 | Fecha o ranking semanal e zera o acumulado da semana ([020](020-gamificacao.md)) | 5 |
@@ -111,7 +115,7 @@ O agendador roda dentro do `worker` e, a cada minuto, enfileira as recorrentes d
   | --- | --- | --- |
   | Diária | Data local, `AAAA-MM-DD` | `retention.purge:2026-11-24` |
   | Semanal | Data local da segunda-feira | `gamification.weekly:2026-11-23` |
-  | A cada N minutos ou horas | Início do intervalo em UTC, `AAAA-MM-DDTHH:MM`, alinhado a múltiplos de N desde 00:00 UTC | `entitlement.expire:2026-11-24T10:15` |
+  | A cada N minutos ou horas | Início do intervalo em UTC, `AAAA-MM-DDTHH:MM`, alinhado a múltiplos de N desde 00:00 UTC | `suspension.expire:2026-11-24T10:15` |
 
 - **Uma única vez por janela.** `enqueueRecurring` só insere se não existir tarefa com a mesma chave em **nenhum** estado (`queued`, `running`, `done` ou `failed`). O índice único parcial sozinho não basta: ele deixaria um segundo worker reenfileirar a janela que o primeiro já concluiu. A consulta de existência usa o índice simples de `unique_key`.
 - **Janela residual.** Dois workers podem passar juntos pela consulta de existência; o índice único segura o segundo enquanto a tarefa do primeiro está ativa. Se ela terminar exatamente nesse intervalo, a janela é enfileirada duas vezes. Não há trava para isso: os manipuladores das recorrentes são idempotentes (RF-05), e a segunda execução não encontra nada a fazer.
@@ -179,7 +183,7 @@ Aviso (`NOTIFY nuva_jobs`, sem conteúdo), por gatilho:
 
 Tarefa agendada para depois não gera aviso; a varredura de 5 s a pega. O aviso só é entregue no `COMMIT`, então tarefa de transação desfeita não acorda ninguém.
 
-O `worker` também é o único que escreve em: `payments`, estado de `orders` após a criação, `subscriptions`, `entitlements` com `source` `order`, `subscription` e `cascade`, `points_ledger`, `user_badges` automáticas, `certificates`, `notifications` (criação) e estado de processamento em `webhook_events`.
+O `worker` também é o único que escreve em: `payments`, estado de `orders` após a criação, `subscriptions`, `entitlements` com `source` `order` e `subscription` (e os `cascade` dessas raízes), `points_ledger`, `user_badges` automáticas, `certificates` (emissão, código e PDF; revogação, emissão manual e reemissão são da `admin-api`, [015](015-certificados.md)), `notifications` (criação) e estado de processamento em `webhook_events`.
 
 Retenção: `done` por 7 dias, `failed` por 30 dias ([033](033-observabilidade-retencao-backup.md)).
 
