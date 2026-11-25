@@ -56,13 +56,24 @@ export function isSensitiveKey(key: string): boolean {
   return rest.includes('key');
 }
 
-// O separador `:` só vale seguido de espaço ou depois de aspas, para não comer `arquivo.ts:10:5`
-// nas pilhas de erro.
+// As expressões abaixo rodam em toda linha de log e recebem texto vindo de fora: cada uma precisa
+// levar tempo linear no tamanho do texto, também em entrada feita para travá-la (tarefa 325).
+// A regra: nenhuma tentativa pode recomeçar no meio de uma sequência que outra já percorreu, e
+// nenhuma repetição pode devolver caracteres para outra repetição da mesma classe.
+//
+// Par `nome=valor`. O nome é sempre a sequência inteira de `[\w.-]` (o separador nunca é dessa
+// classe), por isso a tentativa só começa no início da sequência (`(?<![\w.-])`), exige um trecho
+// proibido dentro dela (verificação que não sai da sequência) e a consome de uma vez, sem
+// retrocesso, com o truque do grupo atômico (`(?=(...))\1`). O separador `:` só vale seguido de
+// espaço ou depois de aspas, para não comer `arquivo.ts:10:5` nas pilhas de erro.
 const KEY_VALUE = new RegExp(
-  `([\\w.-]*(?:${SENSITIVE_KEY_PARTS.join('|')})[\\w.-]*)(\\s?=\\s?|["']\\s?:\\s?|:\\s+)(?!\\[REDACTED\\])(?:"[^"]*"|'[^']*'|[^\\s&,;"'}]+)`,
+  `(?<![\\w.-])(?=[\\w.-]*?(?:${SENSITIVE_KEY_PARTS.join('|')}))(?=([\\w.-]+))\\1(\\s?=\\s?|["']\\s?:\\s?|:\\s+)(?!\\[REDACTED\\])(?:"[^"]*"|'[^']*'|[^\\s&,;"'}]+)`,
   'gi',
 );
-const URL_CREDENTIALS = /([a-z][a-z0-9+.-]*:\/\/[^\s/:@]*):[^\s/@]+@/gi;
+// Credencial em URL (`esquema://usuario:senha@`). A busca ancora no `://` literal e só então
+// confere o esquema para trás: o esquema não contém `/`, então cada conferência para no `://`
+// anterior e o texto é percorrido uma vez só.
+const URL_CREDENTIALS = /:\/\/(?<=[a-z][a-z0-9+.-]*:\/\/)([^\s/:@]*):[^\s/@]+@/gi;
 const AUTH_SCHEME = /\b(Bearer|Basic)\s+[\w.~+/=-]+/gi;
 const CNPJ_FORMATTED = /(?<![\w.])[A-Z\d]{2}\.[A-Z\d]{3}\.[A-Z\d]{3}\/[A-Z\d]{4}-\d{2}(?!\d)/gi;
 const CPF_FORMATTED = /(?<![\w.])\d{3}\.\d{3}\.\d{3}-\d{2}(?!\d)/g;
@@ -76,7 +87,7 @@ const BARE_DIGITS = /(?<![\w.])(\d{14}|\d{11})(?!\w)/g;
  */
 export function redactString(text: string): string {
   return text
-    .replace(URL_CREDENTIALS, `$1:${REDACTED}@`)
+    .replace(URL_CREDENTIALS, `://$1:${REDACTED}@`)
     .replace(AUTH_SCHEME, `$1 ${REDACTED}`)
     .replace(KEY_VALUE, (match: string, name: string, separator: string) =>
       isSensitiveKey(name) ? `${name}${separator}${REDACTED}` : match,

@@ -275,6 +275,11 @@ describe('redactString', () => {
     ['CNPJ 12.ABC.345/01DE-35 inválido', `CNPJ ${REDACTED} inválido`],
     ['aluno 52998224725 criado', `aluno ${REDACTED} criado`],
     ['empresa 11222333000181 criada', `empresa ${REDACTED} criada`],
+    // A busca ancorada no `://` e no início da sequência não pode perder estes (tarefa 325).
+    ['1http://u:p@h e x+y://v:q@h', `1http://u:${REDACTED}@h e x+y://v:${REDACTED}@h`],
+    ['a=password=abc&b=1', `a=password=${REDACTED}&b=1`],
+    ['x.y-z.ApiKey: abc e TOKEN="t"', `x.y-z.ApiKey: ${REDACTED} e TOKEN=${REDACTED}`],
+    ['password="a"token=b', `password=${REDACTED}token=${REDACTED}`],
   ])('mascara "%s"', (input, expected) => {
     expect(redactString(input)).toBe(expected);
   });
@@ -297,5 +302,37 @@ describe('redactString', () => {
   it('não mascara duas vezes', () => {
     const once = redactString('password=abc123');
     expect(redactString(once)).toBe(once);
+  });
+
+  // Roda em toda linha de log, com texto vindo de fora: tempo linear também em entrada feita para
+  // travar cada expressão (tarefa 325). Antes, `key` repetido em 10 mil caracteres passava de 20 s.
+  const fill = (unit: string, size: number): string =>
+    unit.repeat(Math.ceil(size / unit.length)).slice(0, size);
+  const SIZE = 100_000;
+  it.each([
+    ['texto comum', fill('Falha no pedido 1234 de joao@example.com em /api/v1/x; ', SIZE)],
+    ['um caractere repetido', 'x'.repeat(SIZE)],
+    ['nome proibido repetido', fill('key', SIZE)],
+    ['nome proibido com ponto', fill('key.', SIZE)],
+    ['par sem valor', fill('password=', SIZE)],
+    ['aspa sem fechar', `password="${'a'.repeat(SIZE)}`],
+    ['separador com espaços sem valor', `token:${' '.repeat(SIZE)}`],
+    ['esquema de URL sem fim', fill('a.', SIZE)],
+    ['URL sem arroba', fill('a://', SIZE)],
+    ['URL com dois-pontos sem arroba', `a://${fill('x:', SIZE)}`],
+    ['Bearer seguido de espaços', `Bearer${' '.repeat(SIZE)}`],
+    ['dígitos', '1'.repeat(SIZE)],
+    ['CPF incompleto', fill('111.', SIZE)],
+    ['CNPJ incompleto', fill('AA.AAA.', SIZE)],
+  ])('100 mil caracteres (%s) em menos de 200 ms', (_name, text) => {
+    // Melhor de três: com a máquina carregada, uma pausa isolada passa dos 200 ms; o tempo
+    // quadrático de antes, não (segundos a cada execução).
+    let best = Number.POSITIVE_INFINITY;
+    for (let run = 0; run < 3; run += 1) {
+      const start = performance.now();
+      redactString(text);
+      best = Math.min(best, performance.now() - start);
+    }
+    expect(best).toBeLessThan(200);
   });
 });

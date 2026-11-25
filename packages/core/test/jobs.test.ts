@@ -1,14 +1,6 @@
+import { createTestDatabase, loadEnvFiles, type TestDatabase } from '@nuva-edu/database';
 import { sql } from 'kysely';
-import {
-  afterAll,
-  beforeAll,
-  beforeEach,
-  describe,
-  expect,
-  expectTypeOf,
-  inject,
-  it,
-} from 'vitest';
+import { afterAll, beforeAll, beforeEach, describe, expect, expectTypeOf, it } from 'vitest';
 import {
   claimJobs,
   closeDatabase,
@@ -43,18 +35,24 @@ import {
   retryJob,
 } from '../src/index.ts';
 
+// Banco próprio deste arquivo (tarefa 325): o `beforeEach` apaga `jobs`, e os outros arquivos da
+// execução que enfileiram tarefas no banco comum não podem perder as suas no meio do teste.
+let testDb: TestDatabase;
 let db: Database;
 /** Segunda conexão, com pool próprio: outro "processo" disputando a fila. */
 let other: Database;
 
-beforeAll(() => {
-  db = createDatabase({ connectionString: inject('databaseUrl'), maxConnections: 6 });
-  other = createDatabase({ connectionString: inject('databaseUrl'), maxConnections: 6 });
+beforeAll(async () => {
+  loadEnvFiles();
+  testDb = await createTestDatabase();
+  db = createDatabase({ connectionString: testDb.url, maxConnections: 6 });
+  other = createDatabase({ connectionString: testDb.url, maxConnections: 6 });
 });
 
 afterAll(async () => {
   await closeDatabase(db);
   await closeDatabase(other);
+  await testDb.drop();
 });
 
 beforeEach(async () => {
@@ -786,7 +784,7 @@ describe('listenForJobs', () => {
     wakes = 0;
     lines.length = 0;
     listener = listenForJobs({
-      connectionString: inject('databaseUrl'),
+      connectionString: testDb.url,
       applicationName,
       logger,
       reconnectMinDelayMs: 20,
@@ -891,7 +889,7 @@ describe('listenForJobs', () => {
     const errors: string[] = [];
     let calls = 0;
     const fragile = listenForJobs({
-      connectionString: inject('databaseUrl'),
+      connectionString: testDb.url,
       logger: createLogger({ service: 'core-test', write: (line) => errors.push(line) }),
       onNotify: () => {
         calls += 1;

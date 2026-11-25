@@ -104,6 +104,7 @@ Detalhe das decisões em `specs/decisions/`.
 - `scripts/task.mjs` conhece a janela de contrato: `task:start MMM --as <papel> --join NNN`, `task:finish MMM` marca `pronta`, `task:finish NNN` exige todas prontas e remove os arquivos da janela; `task:list` com a coluna `JANELA` (task 104).
 
 ### Alterado
+- `@nuva-edu/core`: `redactString` em tempo linear (100 mil caracteres patológicos em poucos ms, antes mais de 20 s); `jobs.test.ts` com banco próprio (task 325).
 - `@nuva-edu/core`: `NUVA_RETENTION_AUDIT_DAYS` abaixo de 365 impede a subida, em vez de fazer o `retention.purge` falhar (task 278).
 - Contratos `admin-api` e `classroom-api`: sai `x-nuva-pending` das 48 operações da Fase 1, todas com rota; `check-contract --no-pending` passa nas duas APIs (task 165).
 - `@nuva-edu/core`: `PendingHandlerJobType` volta a `never`; `JobHandlers` exige os manipuladores de `suspension.expire` e `image.cleanup` (task 276).
