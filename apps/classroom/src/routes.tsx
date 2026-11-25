@@ -79,6 +79,39 @@ export const routes: RouteObject[] = [
           return { element: <LegalPage document="privacy" /> };
         },
       },
+      {
+        path: '/cursos/:slug',
+        handle: handle({ titleKey: 'pages.course' }),
+        lazy: async () => {
+          const { ProductPage } = await import('./pages/ProductPage');
+          return { element: <ProductPage type="course" /> };
+        },
+      },
+      {
+        path: '/pacotes/:slug',
+        handle: handle({ titleKey: 'pages.bundle' }),
+        lazy: async () => {
+          const { ProductPage } = await import('./pages/ProductPage');
+          return { element: <ProductPage type="bundle" /> };
+        },
+      },
+      {
+        path: '/ebooks/:slug',
+        handle: handle({ titleKey: 'pages.ebook' }),
+        lazy: async () => {
+          const { ProductPage } = await import('./pages/ProductPage');
+          return { element: <ProductPage type="ebook" /> };
+        },
+      },
+      {
+        // a página do curso do aluno é da tarefa 451; até lá, o botão "Acessar o curso" cai aqui
+        path: '/meus-cursos/:slug',
+        handle: handle({ titleKey: 'menu.items.myCourses' }),
+        lazy: async () => {
+          const { UnderConstructionPage } = await import('./pages/UnderConstructionPage');
+          return { element: <UnderConstructionPage titleKey="menu.items.myCourses" /> };
+        },
+      },
       ...PENDING_PAGES.map(
         ({ path, titleKey }): RouteObject => ({
           path,

@@ -3,9 +3,13 @@ import userEvent from '@testing-library/user-event';
 import { describe, expect, it } from 'vitest';
 import { MENU_STORAGE_KEY } from '../config';
 import ptBR from '../locales/pt-BR.json';
-import { jsonResponse, META, renderApp, unavailableResponse } from '../test/renderApp';
+import { apiRoutes, jsonResponse, META, renderApp, unavailableResponse } from '../test/renderApp';
 import { ACCENT_VARIABLE, DEFAULT_SOURCE_CODE_URL } from './brand';
 import { NAV_GROUPS } from './navigation';
+
+/** API simulada com `/api/v1/meta` alterado; o resto responde o padrão (vitrine vazia). */
+const withMeta = (overrides: Partial<typeof META>) =>
+  apiRoutes({ 'GET /api/v1/meta': () => jsonResponse({ ...META, ...overrides }) });
 
 describe('casca do classroom', () => {
   it('mostra a barra superior, o menu da spec 006, o conteúdo e o rodapé', async () => {
@@ -52,7 +56,7 @@ describe('casca do classroom', () => {
 
   it('aponta o link "Código-fonte" para o sourceCodeUrl do /meta', async () => {
     const sourceCodeUrl = 'https://git.escola.test/aurora/nuva-edu';
-    renderApp('/', async () => jsonResponse({ ...META, sourceCodeUrl }));
+    renderApp('/', withMeta({ sourceCodeUrl }));
     await waitFor(() => expect(sourceLink().getAttribute('href')).toBe(sourceCodeUrl));
   });
 
@@ -62,7 +66,7 @@ describe('casca do classroom', () => {
     expect(sourceLink().getAttribute('href')).toBe(DEFAULT_SOURCE_CODE_URL);
     failed.unmount();
 
-    renderApp('/', async () => jsonResponse({ ...META, sourceCodeUrl: 'javascript:alert(1)' }));
+    renderApp('/', withMeta({ sourceCodeUrl: 'javascript:alert(1)' }));
     await screen.findByRole('link', { name: META.schoolName });
     expect(sourceLink().getAttribute('href')).toBe(DEFAULT_SOURCE_CODE_URL);
   });
@@ -75,7 +79,7 @@ describe('casca do classroom', () => {
 
   it('com logotipo, a marca mostra a imagem com texto alternativo e o mesmo nome acessível', async () => {
     const logoUrl = '/api/v1/images/0190a1b2-logo';
-    renderApp('/', async () => jsonResponse({ ...META, logoUrl }));
+    renderApp('/', withMeta({ logoUrl }));
 
     const logo = await screen.findByAltText(logoAlt);
     expect(logo.getAttribute('src')).toBe(logoUrl);
@@ -96,14 +100,14 @@ describe('casca do classroom', () => {
   });
 
   it('com cor de destaque, aplica o valor na variável --minui-accent', async () => {
-    renderApp('/', async () => jsonResponse({ ...META, accentColor: '#0A7CFF' }));
+    renderApp('/', withMeta({ accentColor: '#0A7CFF' }));
     await waitFor(() => expect(accent()).toBe('#0A7CFF'));
   });
 
   it.each(['#0a7', 'red', '#0A7CFF; background: url(https://x.test)', '0A7CFF'])(
     'ignora a cor de destaque fora do formato #RRGGBB (%s)',
     async (accentColor) => {
-      renderApp('/', async () => jsonResponse({ ...META, accentColor }));
+      renderApp('/', withMeta({ accentColor }));
       await screen.findByRole('link', { name: META.schoolName });
       expect(accent()).toBe('');
     },

@@ -137,12 +137,12 @@ interface RenderOptions {
 }
 
 /**
- * Monta o site inteiro em memória, com a API simulada por `fetch`. `GET /api/v1/session` é
- * respondido aqui (visitante por padrão), a menos que `session: 'fetch'`.
+ * Monta o site inteiro em memória, com a API simulada por `fetch` (por padrão, `apiRoutes({})`).
+ * `GET /api/v1/session` é respondido aqui (visitante por padrão), a menos que `session: 'fetch'`.
  */
 export function renderApp(
   path = '/',
-  fetch: FetchMock = async () => jsonResponse(META),
+  fetch: FetchMock = apiRoutes({}),
   { config = RUNTIME_CONFIG, session, role = null }: RenderOptions = {},
 ) {
   setCsrfToken(null);
@@ -185,7 +185,13 @@ export function renderApp(
   return { ...view, router, requests, calls, queryClient };
 }
 
-/** Roteia as respostas simuladas por "MÉTODO /caminho"; o que faltar responde `/api/v1/meta`. */
+/** Vitrine sem produtos (`GET /api/v1/catalog`, esquema `CatalogItemPage`). */
+export const EMPTY_CATALOG: ClassroomSchemas['CatalogItemPage'] = { items: [], nextCursor: null };
+
+/**
+ * Roteia as respostas simuladas por "MÉTODO /caminho". O que faltar responde `/api/v1/meta`, a
+ * vitrine vazia em `/api/v1/catalog` e, no resto, a rota inexistente.
+ */
 export function apiRoutes(
   handlers: Record<string, (request: Request) => Response | Promise<Response>>,
 ): FetchMock {
@@ -194,6 +200,7 @@ export function apiRoutes(
     const handler = handlers[`${request.method} ${pathname}`];
     if (handler) return handler(request);
     if (pathname === '/api/v1/meta') return jsonResponse(META);
+    if (pathname === '/api/v1/catalog') return jsonResponse(EMPTY_CATALOG);
     return missingRouteResponse();
   };
 }

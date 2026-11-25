@@ -82,7 +82,10 @@
     "privacy": "Privacidade",
     "socialSignUp": "Concluir cadastro",
     "access": "Acesso e senha",
-    "profile": "Perfil"
+    "profile": "Perfil",
+    "course": "Curso",
+    "bundle": "Pacote",
+    "ebook": "Ebook"
   },
   "footer": {
     "source": "Código-fonte",
@@ -90,27 +93,123 @@
   },
   "home": {
     "title": "Vitrine",
-    "description": "Cursos, pacotes, ebooks e planos de {{school}}.",
-    "descriptionFallback": "Cursos, pacotes, ebooks e planos da escola.",
+    "description": "Cursos, pacotes e ebooks de {{school}}.",
+    "descriptionFallback": "Cursos, pacotes e ebooks da escola.",
     "welcome": "Boas-vindas",
-    "lead": "Cursos, pacotes, ebooks e planos para aprender no seu ritmo.",
+    "lead": "Cursos, pacotes e ebooks para aprender no seu ritmo.",
     "catalog": {
       "title": "Catálogo",
+      "list": "Produtos da vitrine",
+      "loading": "Carregando a vitrine…",
+      "errorTitle": "Não foi possível carregar a vitrine",
       "emptyTitle": "Ainda não há cursos publicados",
-      "emptyText": "Assim que a escola publicar cursos, pacotes, ebooks ou planos, eles aparecem aqui.",
-      "action": "Criar conta"
+      "emptyText": "Assim que a escola publicar cursos, pacotes ou ebooks, eles aparecem aqui.",
+      "action": "Criar conta",
+      "noResultsTitle": "Nenhum produto encontrado",
+      "noResultsText": "Tente outra busca ou limpe os filtros.",
+      "count_one": "{{count}} produto na lista",
+      "count_other": "{{count}} produtos na lista",
+      "more": "Carregar mais",
+      "loadingMore": "Carregando…"
     },
-    "about": {
-      "title": "Sobre esta escola",
-      "loading": "Carregando os dados da escola…",
-      "errorTitle": "Não foi possível carregar os dados da escola",
-      "errorText": "Confira a conexão e tente de novo em instantes.",
-      "school": "Escola",
-      "version": "Versão",
-      "currency": "Moeda",
-      "locale": "Idioma",
-      "signIn": "Formas de entrar",
-      "emailAndPassword": "E-mail e senha"
+    "filters": {
+      "label": "Filtros da vitrine",
+      "search": "Buscar por título ou resumo",
+      "searchPlaceholder": "Buscar cursos, pacotes e ebooks",
+      "typeLabel": "Tipo",
+      "levelLabel": "Nível",
+      "priceLabel": "Preço",
+      "sortLabel": "Ordem",
+      "type": {
+        "all": "Todos os tipos",
+        "course": "Cursos",
+        "bundle": "Pacotes",
+        "ebook": "Ebooks"
+      },
+      "level": {
+        "all": "Todos os níveis"
+      },
+      "price": {
+        "all": "Gratuitos e pagos",
+        "free": "Gratuitos",
+        "paid": "Pagos"
+      },
+      "sort": {
+        "recent": "Mais recentes",
+        "title": "Título (A–Z)",
+        "priceAsc": "Menor preço",
+        "priceDesc": "Maior preço"
+      },
+      "clear": "Limpar filtros"
+    }
+  },
+  "product": {
+    "types": {
+      "course": "Curso",
+      "bundle": "Pacote",
+      "ebook": "Ebook"
+    },
+    "levels": {
+      "beginner": "Iniciante",
+      "intermediate": "Intermediário",
+      "advanced": "Avançado"
+    },
+    "free": "Gratuito",
+    "locked": "Acesso liberado pela escola",
+    "lockedHint": "Este produto ainda não é vendido pelo site. A escola libera o acesso diretamente a cada aluno.",
+    "validity": {
+      "lifetime": "Acesso vitalício",
+      "days_one": "Acesso por {{count}} dia",
+      "days_other": "Acesso por {{count}} dias"
+    },
+    "totals": {
+      "modules_one": "{{count}} módulo",
+      "modules_other": "{{count}} módulos",
+      "lessons_one": "{{count}} aula",
+      "lessons_other": "{{count}} aulas",
+      "items_one": "{{count}} item",
+      "items_other": "{{count}} itens",
+      "pages_one": "{{count}} página",
+      "pages_other": "{{count}} páginas"
+    },
+    "duration": {
+      "hoursMinutes": "{{hours}} h {{minutes}} min",
+      "hours": "{{hours}} h",
+      "minutes": "{{minutes}} min"
+    },
+    "descriptionFallback": {
+      "course": "Conheça o curso {{title}}: descrição, programa e preço.",
+      "bundle": "Conheça o pacote {{title}}: itens e preço.",
+      "ebook": "Conheça o ebook {{title}}: descrição e preço."
+    },
+    "loading": "Carregando o produto…",
+    "errorTitle": "Não foi possível carregar esta página",
+    "notFoundTitle": "Produto não encontrado",
+    "notFoundText": "Este produto não existe ou não está mais disponível.",
+    "about": "Sobre",
+    "program": "Programa",
+    "programEmpty": "O programa deste curso ainda não foi publicado.",
+    "sample": "Amostra grátis",
+    "items": "Itens do pacote",
+    "itemsEmpty": "Este pacote ainda não tem itens.",
+    "savings": "Comprados à parte, os itens custam {{total}}: economia de {{saved}} no pacote.",
+    "details": {
+      "title": "Preço e detalhes",
+      "type": "Tipo",
+      "level": "Nível",
+      "content": "Conteúdo",
+      "instructor": "Instrutor",
+      "author": "Autor",
+      "updatedAt": "Atualizado em"
+    },
+    "access": {
+      "title": "Preço e acesso",
+      "granted": "Você tem acesso a este produto.",
+      "grantedUntil": "Você tem acesso a este produto até {{date}}.",
+      "openCourse": "Acessar o curso",
+      "openEbook": "Ir para meus ebooks",
+      "signIn": "Entrar para acessar",
+      "openText": "Gratuito para quem tem conta na escola."
     }
   },
   "auth": {
