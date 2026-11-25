@@ -25,6 +25,15 @@ export type JsonValue = JsonArray | JsonObject | JsonPrimitive;
 
 export type Timestamp = ColumnType<Date, Date | string, Date | string>;
 
+export interface ActivityDays {
+  communityActions: Generated<number>;
+  day: Timestamp;
+  forumPosts: Generated<number>;
+  lessonsCompleted: Generated<number>;
+  total: Generated<number>;
+  userId: string;
+}
+
 export interface AuditLog {
   action: string;
   actorRole: string | null;
@@ -202,6 +211,18 @@ export interface LessonLinks {
   url: string;
 }
 
+export interface LessonProgress {
+  completedAt: Timestamp | null;
+  completedVia: string | null;
+  courseId: string;
+  firstOpenedAt: Generated<Timestamp>;
+  lastOpenedAt: Generated<Timestamp>;
+  lessonId: string;
+  positionSeconds: Generated<number>;
+  updatedAt: Generated<Timestamp>;
+  userId: string;
+}
+
 export interface Lessons {
   createdAt: Generated<Timestamp>;
   description: string | null;
@@ -237,6 +258,21 @@ export interface Modules {
   title: string;
   updatedAt: Generated<Timestamp>;
   version: Generated<number>;
+}
+
+export interface Notes {
+  body: string;
+  courseId: string | null;
+  courseTitleSnapshot: string | null;
+  createdAt: Generated<Timestamp>;
+  id: Generated<string>;
+  lessonId: string | null;
+  lessonTitleSnapshot: string | null;
+  search: Generated<string>;
+  title: string | null;
+  updatedAt: Generated<Timestamp>;
+  userId: string;
+  videoSeconds: number | null;
 }
 
 export interface OauthIdentities {
@@ -347,6 +383,7 @@ export interface UserSuspensions {
 }
 
 export interface DB {
+  activityDays: ActivityDays;
   auditLog: AuditLog;
   bundleItems: BundleItems;
   bundles: Bundles;
@@ -359,9 +396,11 @@ export interface DB {
   imageVariants: ImageVariants;
   jobs: Jobs;
   lessonLinks: LessonLinks;
+  lessonProgress: LessonProgress;
   lessons: Lessons;
   loginAttempts: LoginAttempts;
   modules: Modules;
+  notes: Notes;
   oauthIdentities: OauthIdentities;
   productEbooks: ProductEbooks;
   profiles: Profiles;
