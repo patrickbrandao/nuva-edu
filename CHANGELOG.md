@@ -139,6 +139,7 @@ Detalhe das decisões em `specs/decisions/`.
 - Spec 032: passo `licencas` do `verify:quick` registrado na tabela de passos, no exemplo de resumo e nos critérios de aceite (task 391).
 - worker: manipulador de `entitlement.recompute` (recálculo da cascata pelo núcleo, idempotente, payload inválido falha sem nova tentativa) e modelo pt-BR do e-mail `access.granted`, com link para `/meus-cursos` ou `/meus-ebooks`; conta com suspensão `full` no envio não recebe (`skipped: user_suspended`) (task 434).
 - infra: a CSP do classroom passa a aceitar as origens dos players de vídeo (IFrame API do YouTube em `script-src`; `iframe` de YouTube sem cookie, Vimeo, Bunny e Panda em `frame-src`; HLS de `*.b-cdn.net` em `connect-src`; `https:` e `blob:` em `media-src`; `blob:` em `worker-src`); `csp.mjs` recebe o site, e o admin segue só com a própria origem (task 065).
+- admin-api: rotas do catálogo de cursos (009): lista, criação (slug gerado do título), edição, exclusão, publicação, arquivo, pedido de publicação e dono; módulos, aulas, ordem e links de apoio; `POST` e `DELETE /images` com `product_cover` (029). A edição sem `version` no contrato usa a versão lida na rota (task 420).
 
 ### Alterado
 - arquiteto: contrato da admin-api e specs 009, 015 e 028 alinhados ao núcleo: referência do template (`keys` com `placeholder` e `requiredOneOf`, `modelHtml`), problemas do 422 com linha e coluna sempre presentes e teto de 200, códigos de erro e limites do catálogo, ações de auditoria de ordem e de cancelamento do pedido de publicação; cliente regenerado (task 555).

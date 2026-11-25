@@ -12,7 +12,7 @@ API do site de administração (`@nuva-edu/admin-api`), descrita em `openapi.yam
 | `src/session.ts` | Tratadores de `sessionCookie` e `csrfToken`, renovação e remoção do cookie, limites de taxa e auditoria da negação |
 | `src/initial-admin.ts` | Admin inicial na subida (`ADMIN_EMAIL`, `ADMIN_PASSWORD`) |
 | `src/create-admin.ts` | Comando de emergência `create-admin` |
-| `src/routes/` | Uma função `register...Routes` por grupo de rotas (`auth.ts`: login, saída e sessão; `images.ts`: entrega; o `/meta` vem do `api-kit`) |
+| `src/routes/` | Uma função `register...Routes` por grupo de rotas (`auth.ts`: login, saída e sessão; `images.ts`: envio da capa, exclusão e entrega; `courses.ts`: cursos, módulos, aulas e links; o `/meta` vem do `api-kit`) |
 | `test/` | Integração (requisições injetadas, banco de teste) |
 | `test/contract/` | Teste de contrato: rotas x `openapi.yaml`, regra do `csrfToken` e respostas de erro declaradas |
 
@@ -37,6 +37,11 @@ Escuta na porta 3000 (spec 031); `PORT` troca a porta fora do contêiner. Precis
 | `POST /api/v1/auth/logout` | Encerra a sessão atual e apaga o cookie (exige `X-CSRF-Token`) |
 | `GET /api/v1/session` | Dono da sessão, token CSRF e ações permitidas (`no-store`) |
 | `GET /api/v1/images/{id}/{largura}.webp` | Entrega pública de uma variante, com `ETag` e `304` |
+| `POST /api/v1/images`, `DELETE /api/v1/images/{id}` | Envio da capa de produto (`product_cover`, multipart) por `instructor`, `manager` e `admin`; exclusão da própria imagem ainda sem uso |
+| `GET`, `POST /api/v1/courses`; `GET`, `PATCH`, `DELETE /api/v1/courses/{id}` | Catálogo de cursos (spec 009): o `instructor` só alcança os próprios (`404` nos demais); modo de acesso e preço exigem ações próprias (`403`) |
+| `POST /api/v1/courses/{id}/publish`, `/unpublish`, `/archive`, `/unarchive`; `POST`, `DELETE .../request-review`; `PATCH .../owner` | Publicação, arquivo (`admin`), pedido de publicação e dono do curso |
+| `POST /api/v1/courses/{id}/modules`, `PUT .../modules/order`; `PATCH`, `DELETE /api/v1/modules/{id}`; `POST /api/v1/modules/{id}/lessons`, `PUT .../lessons/order` | Módulos e ordem |
+| `GET`, `PATCH`, `DELETE /api/v1/lessons/{id}`; `PUT /api/v1/lessons/{id}/links` | Aula (o `status` publica e despublica) e links de apoio |
 | `GET`, `POST /api/v1/users` | Lista com busca, filtros e cursor (`manager`, `admin`); criação de conta de equipe (`admin`) |
 | `GET`, `PATCH /api/v1/users/{id}` | Ficha; edição de nome, nome completo e e-mail com `version` |
 | `PATCH /api/v1/users/{id}/role` | Muda o papel (`admin`) |

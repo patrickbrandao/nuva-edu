@@ -12,6 +12,7 @@ import {
   createSettingsReader,
   type Database,
   databasePoolStats,
+  type ImageProcessingLimiter,
   type Logger,
   type OAuth,
   type SettingsReader,
@@ -20,6 +21,7 @@ import { loadAdminContract } from './contract.ts';
 import { readServiceVersion } from './meta.ts';
 import { registerAuditRoutes } from './routes/audit.ts';
 import { registerAuthRoutes } from './routes/auth.ts';
+import { registerCourseRoutes } from './routes/courses.ts';
 import { registerImageRoutes } from './routes/images.ts';
 import { registerOAuthRoutes } from './routes/oauth.ts';
 import { registerTermsRoutes } from './routes/terms.ts';
@@ -51,6 +53,8 @@ export interface AdminAppOptions {
    * passam um com o `fetch` do provedor falso.
    */
   oauth?: OAuth;
+  /** Limitador do processamento de imagens (spec 029). Padrão: o do processo. */
+  imageLimiter?: ImageProcessingLimiter;
   /** Relógio do limite de taxa; para os testes. */
   rateLimiter?: RateLimiterOptions;
 }
@@ -103,9 +107,15 @@ export function buildAdminApp(options: AdminAppOptions): FastifyInstance {
   // O cookie de retorno é assinado pelo núcleo (HMAC com `SESSION_SECRET`), não pelo
   // `@fastify/cookie`: o app não recebe `cookieSecret`.
   registerOAuthRoutes(app, { db, ttlDays, oauth: options.oauth ?? createOAuth(config) });
-  registerImageRoutes(app, { db });
+  registerImageRoutes(app, {
+    db,
+    config,
+    ...(options.imageLimiter === undefined ? {} : { limiter: options.imageLimiter }),
+  });
   registerUserRoutes(app, { db });
   registerAuditRoutes(app, { db });
   registerTermsRoutes(app, { db });
+  // Catálogo (spec 009): cursos, módulos, aulas e links de apoio.
+  registerCourseRoutes(app, { db });
   return app;
 }
