@@ -25,8 +25,8 @@ import {
   diffFields,
   enqueueRecomputes,
   priceFromDb,
-  productHasEntitlementLinks,
   productHasLinks,
+  productHasLinksError,
   readCommercialInput,
   requireCatalogAction,
   withSlugCheck,
@@ -380,8 +380,8 @@ export async function updateCourse(
 }
 
 /**
- * `DELETE /courses/{id}` (`course.delete`; instrutor só o próprio). Com direito associado (e,
- * quando existirem, pedido ou progresso): `409` `product_has_links` para todos, inclusive o
+ * `DELETE /courses/{id}` (`course.delete`; instrutor só o próprio). Com direito ou progresso
+ * de aula associado (e, na Fase 3, pedido): `409` `product_has_links` para todos, inclusive o
  * admin (P2). Apaga módulos, aulas e links (cascata), os vínculos de ebook ao curso e às aulas e
  * o curso nos pacotes, com o recálculo dos pacotes. Grava `course.delete`.
  */
@@ -398,7 +398,7 @@ export async function deleteCourse(
       'course.delete',
       'course.delete',
     );
-    if (await productHasEntitlementLinks(trx, 'course', course.id)) throw productHasLinks();
+    if (await productHasLinks(trx, 'course', course.id)) throw productHasLinksError();
     const bundles = await bundlesContaining(trx, 'course', course.id);
     await trx
       .deleteFrom('bundleItems')

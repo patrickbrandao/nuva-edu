@@ -412,6 +412,27 @@ describe('cursos', () => {
     expect((await unarchiveCourse(db, admin, course.id)).version).toBe(restored.version);
   });
 
+  it('excluir curso com progresso e sem direito é 409 product_has_links para todos os papéis', async () => {
+    const { course, lesson } = await courseWithLesson(instructor);
+    await sql`
+      INSERT INTO lesson_progress (user_id, lesson_id, course_id)
+      VALUES (${student.actor.id}, ${lesson.id}, ${course.id})`.execute(db);
+    const entitlements = await sql<{ n: number }>`
+      SELECT count(*)::int AS n FROM entitlements WHERE product_id = ${course.id}`.execute(db);
+    expect(entitlements.rows[0]?.n).toBe(0);
+    for (const request of [admin, manager, instructor]) {
+      await expectError(deleteCourse(db, request, course.id), 409, 'product_has_links');
+    }
+    // Quem não alcança o curso continua sem saber dele; o aluno não tem a ação.
+    await expectError(deleteCourse(db, otherInstructor, course.id), 404, 'not_found');
+    await expectError(deleteCourse(db, student, course.id), 403, 'permission_denied');
+    expect(await findCatalogCourse(db, course.id)).toBeDefined();
+    // Sem o progresso, o curso volta a poder ser excluído.
+    await sql`DELETE FROM lesson_progress WHERE course_id = ${course.id}`.execute(db);
+    await deleteCourse(db, admin, course.id);
+    expect(await findCatalogCourse(db, course.id)).toBeUndefined();
+  });
+
   it('excluir curso sem vínculos apaga a estrutura, tira dos pacotes e recalcula', async () => {
     const { course, lesson } = await courseWithLesson(instructor);
     const ebook = await createEbook(db, manager, { slug: slug(), title: 'E' });

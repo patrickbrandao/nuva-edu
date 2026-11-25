@@ -159,7 +159,7 @@ export function slugTaken(): DomainError {
 }
 
 /** `409` `product_has_links` (resposta à P2): o caminho é arquivar. */
-export function productHasLinks(): DomainError {
+export function productHasLinksError(): DomainError {
   return conflict(
     'product_has_links',
     'O produto tem pedido, direito ou progresso associado; arquive em vez de excluir.',
@@ -363,26 +363,41 @@ export async function assertProductCover(
   }
 }
 
-// Direitos: vínculos e alunos afetados (lidos de `entitlements`, spec 010).
+// Vínculos que impedem a exclusão (direitos e progresso) e alunos afetados (`entitlements`).
 
 /**
- * O produto tem vínculo que impede a exclusão (P2)? Hoje: qualquer direito, vigente ou não. O
- * progresso (migration da tarefa 407) e os pedidos (Fase 3) entram aqui quando as tabelas
- * existirem (tarefa 510).
+ * O produto tem vínculo que impede a exclusão (P2 da tarefa 400; spec 009, "Estados de
+ * publicação")? Numa consulta: qualquer direito, vigente ou não, e, no curso, qualquer linha de
+ * progresso de aula dele (`lesson_progress`, migration 0011), mesmo de quem nunca teve direito
+ * (curso `open`). Os pedidos (`order_items`) entram aqui na Fase 3, na tarefa de vendas do
+ * núcleo (spec 011), quando a tabela existir.
  */
-export async function productHasEntitlementLinks(
+export async function productHasLinks(
   trx: Database,
   productType: CatalogProductType,
   productId: string,
 ): Promise<boolean> {
   const row = await trx
-    .selectFrom('entitlements')
-    .select('id')
-    .where('productType', '=', productType)
-    .where('productId', '=', productId)
-    .limit(1)
-    .executeTakeFirst();
-  return row !== undefined;
+    .selectNoFrom((eb) => {
+      const entitlement = eb.exists(
+        eb
+          .selectFrom('entitlements')
+          .select('id')
+          .where('productType', '=', productType)
+          .where('productId', '=', productId),
+      );
+      if (productType !== 'course') return entitlement.as('linked');
+      return eb
+        .or([
+          entitlement,
+          eb.exists(
+            eb.selectFrom('lessonProgress').select('lessonId').where('courseId', '=', productId),
+          ),
+        ])
+        .as('linked');
+    })
+    .executeTakeFirstOrThrow();
+  return row.linked === true;
 }
 
 /**

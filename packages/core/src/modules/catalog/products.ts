@@ -26,8 +26,8 @@ import {
   diffFields,
   enqueueRecomputes,
   priceFromDb,
-  productHasEntitlementLinks,
   productHasLinks,
+  productHasLinksError,
   readCommercialInput,
   recomputeParentOfTarget,
   requireCatalogAction,
@@ -358,7 +358,7 @@ async function deleteProduct(
 ): Promise<void> {
   await catalogWrite(db, request, async (trx) => {
     const product = await loadProductForWrite(trx, request, kind, productId, `${kind}.delete`);
-    if (await productHasEntitlementLinks(trx, kind, product.id)) throw productHasLinks();
+    if (await productHasLinks(trx, kind, product.id)) throw productHasLinksError();
     if (kind === 'ebook') {
       const targets = await trx
         .selectFrom('productEbooks')
