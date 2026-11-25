@@ -61,6 +61,8 @@ describe('migrations reais', () => {
       'tabela email_outbox',
       'tabela terms_versions',
       'tabela terms_acceptances',
+      'tabela courses',
+      'tabela product_ebooks',
     ]) {
       assert.ok(full.includes(item), item);
     }
