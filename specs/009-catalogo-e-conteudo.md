@@ -133,14 +133,28 @@ Comprar, assistir e baixar exigem login.
 
 | Situação | Resposta |
 | --- | --- |
-| URL fora das regras | `422` com o campo e o motivo |
+| URL fora das regras | `422` `content_url_invalid` com o campo e o motivo |
 | Instrutor editando curso de outro dono | `404` ([008](008-papeis-e-permissoes.md)) |
 | Instrutor alterando preço ou modo de acesso; gerente alterando preço | `403` |
 | Excluir produto com vínculos, por qualquer papel | `409` `product_has_links` |
 | Arquivar ou desarquivar sem ser admin | `403` |
-| Publicar curso sem aula publicada | `422` |
-| Slug repetido | `409` |
-| Pacote contendo pacote | `422` |
+| Publicar curso sem aula publicada | `422` `course_has_no_published_lesson` |
+| Slug repetido | `409` `slug_taken` |
+| Pacote contendo pacote | `422` `bundle_in_bundle` |
+| Publicar pacote sem item; publicar ebook sem `file_url` | `422` `bundle_has_no_items`; `422` `ebook_file_required` |
+| Publicar produto `paid` sem preço; tornar `paid` um produto publicado sem preço | `422` `price_required` |
+| Enviar preço para produto `open` | `422` `price_not_allowed` (mudar para `open` sem enviar preço apaga o preço) |
+| Publicar, ou pedir publicação de, produto arquivado | `422` `product_archived` |
+| Arquivar o que já está arquivado; desarquivar o que não está | `200`, sem gravar nem auditar |
+| Item de pacote ou alvo de vínculo de ebook que não existe | `422` `catalog_item_not_found`, com o campo |
+| Capa que não é imagem `product_cover` | `422` `cover_image_invalid` |
+| Dono que não é instrutor, ou foi excluído | `422` `owner_invalid` |
+| Ordem de módulos ou de aulas que não lista exatamente os itens atuais | `422` `order_mismatch` |
+| Quantidade acima de um limite | `422` `catalog_limit_exceeded`, com `limit` (o nome do limite) e `max` |
+| Excluir módulo que ainda tem aulas | `409` `module_not_empty` (as aulas saem antes, cada uma com a própria auditoria) |
+| Gravação sobre versão antiga (`version`) | `409` `version_conflict` ([003](003-admin-api.md)) |
+
+Limites além da RNF-03, validados no `packages/core` (`CATALOG_LIMITS`) e repetidos no contrato: slug, rótulo de link e nome do autor até 160 caracteres; até 200 itens por pacote; até 500 vínculos por ebook; duração da aula até 86.400 s; preço até 1.000.000.000 centavos; validade até 36.500 dias; carga horária do certificado até 10.000 horas; até 100.000 páginas. Campo de texto ou número fora do limite é `400` `validation_failed`; `catalog_limit_exceeded` é só para quantidade (`modulesPerCourse`, `lessonsPerCourse`, `linksPerLesson`, `itemsPerBundle`, `targetsPerEbook`).
 
 ## Interfaces e contratos
 

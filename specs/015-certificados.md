@@ -49,7 +49,7 @@ Regras:
 - Dados congelados: mudança posterior no nome do aluno, no título, nas aulas do curso ou no template não altera certificado já emitido. Repetir `certificate.render` usa a versão do template guardada no certificado.
 - Nome no certificado: `users.full_name`; se vazio, o nome de exibição, no momento da emissão. Não há espera de confirmação ([0026](decisions/0026-certificado-por-template-html.md)): a página do curso (quando o certificado está habilitado) e a aba Certificados mostram ao aluno o nome que sairá, com "Alterar", que grava `users.full_name` (`PUT /me/certificate-name`).
 - Corrigir o nome depois da emissão: o aluno pede por chamado; admin ou gerente usam "reemitir", que congela de novo o nome atual e a versão do template efetivo atual, regenera o PDF, mantém o código e registra auditoria. Reemitir curso sem template efetivo: `422` `certificate_template_missing`.
-- Carga horária: soma de `duration_seconds` das aulas publicadas no momento da emissão, arredondada para cima em horas inteiras; o admin pode fixar outro valor por curso (`certificate_hours`).
+- Carga horária: soma de `duration_seconds` das aulas publicadas no momento da emissão, arredondada para cima em horas inteiras; quem edita o curso pode fixar outro valor (`certificate_hours`, de 1 a 10.000), com a mesma permissão de `certificate_enabled` e do template do curso: `course.edit`, o instrutor só nos próprios cursos ([008](008-papeis-e-permissoes.md)).
 - Data de conclusão: a da última aula concluída.
 - Curso `open` também emite certificado, se habilitado.
 - Aula amostra concluída sem o curso não conta; a emissão exige que o aluno tenha tido acesso ao curso.
@@ -99,7 +99,16 @@ Regras das palavras-chave:
 | Tamanho | Até 768 KiB em UTF-8. |
 | Análise | HTML que o analisador não lê, ou CSS com erro de sintaxe, é recusado. |
 
-Recusa: `422` `certificate_template_invalid`, com `details.problems`: lista de `{ rule, message, line, column }`, em que `rule` é um de `parse_error`, `too_large`, `element_not_allowed`, `attribute_not_allowed`, `url_not_allowed`, `css_not_allowed`, `image_not_found`, `unknown_key`, `unclosed_key`, `key_in_attribute`, `missing_required_key`.
+Regras mais rígidas que a tabela resume (a lista exata é a de `packages/core`, `certificates/template/rules.ts`):
+
+- `meta` só com `charset`, e só `utf-8`.
+- Em SVG valem os atributos de apresentação e `class`, `id`, `style`, `lang`; `title` e `dir` não. `xmlns` só com `http://www.w3.org/2000/svg`. Referência em atributo de apresentação só local: `url(#id)`.
+- `a href` em `https:` não aceita espaço nem caractere de controle.
+- O caminho de imagem da instalação precisa apontar para uma largura que existe como variante ([029](029-imagens.md)).
+- CSS: regras `@` só `font-face`, `media`, `page`, `supports` e `keyframes`. Além do `url()` fora das regras, são recusadas as funções que carregam recurso ou trazem valor de fora (`src`, `image`, `image-set`, `cross-fade`, `element`, `paint`, `attr`, com os prefixos de fornecedor) e `expression`; e as propriedades `behavior` e `-moz-binding`. `</style` dentro do CSS é erro de análise.
+- Caractere nulo, texto que não é UTF-8 válido, seção CDATA e construção ambígua do HTML são erro de análise.
+
+Recusa: `422` `certificate_template_invalid`, com `details.problems`: lista de `{ rule, message, line, column }`, em que `rule` é um de `parse_error`, `too_large`, `element_not_allowed`, `attribute_not_allowed`, `url_not_allowed`, `css_not_allowed`, `image_not_found`, `unknown_key`, `unclosed_key`, `key_in_attribute`, `missing_required_key`. `line` e `column` contam a partir de 1 e nunca são nulos: problema do documento inteiro (`too_large`, `missing_required_key`) vem em 1:1. A lista traz no máximo 200 problemas, na ordem em que foram encontrados; com 200, pode haver outros além dos listados (o editor avisa), e nada é gravado em nenhum caso.
 
 Fontes: a imagem do worker traz a Inter (OFL-1.1), que é a fonte padrão do documento; outras fontes só embutidas por `@font-face` em `data:`.
 
@@ -201,7 +210,7 @@ Na lista de certificados do admin, cada certificado com PDF tem a ação "Baixar
 - `POST /courses/{id}/certificates/backfill`
 - `GET|PUT|DELETE /courses/{id}/certificate-template`: `GET` devolve o template do curso (ou nulo), a origem do efetivo (`course`, `school` ou `none`), a versão, quem e quando gravou; `PUT` com `html` e `expectedVersionId` devolve o mesmo e `backfillQueued`
 - `GET|PUT|DELETE /settings/certificate-template`: o padrão da escola, no mesmo formato
-- `GET /certificate-templates/reference`: a lista de palavras-chave (nome, descrição, valor de exemplo, obrigatória) e o HTML do modelo inicial
+- `GET /certificate-templates/reference`: `keys`, as 13 palavras-chave na ordem da tabela, cada uma com `key`, `placeholder` (`{{aluno.nome}}`), `description`, `example` (o valor do PDF de exemplo, no idioma e no fuso da escola; no QR, um texto que o descreve), `required` (as três sempre obrigatórias) e `requiredOneOf` (verdadeiro em `certificado.url_validacao` e `certificado.qrcode`, das quais basta uma); e `modelHtml`, o HTML do modelo inicial
 - `POST /certificate-templates/previews` (`202`), `GET /certificate-templates/previews/{id}`, `GET /certificate-templates/previews/{id}/pdf`
 - `GET|PUT /settings/certificates`: grava `certificate.signer_name` e `certificate.signer_role` ([031](031-infraestrutura-e-deploy.md), "Configurações da escola") e devolve também, só para leitura, `school.name`. `settings.manage` (admin).
 
