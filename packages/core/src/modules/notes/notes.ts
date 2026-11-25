@@ -14,6 +14,7 @@ import {
   type ListNotesQuery,
   NOTE_BODY_MAX_LENGTH,
   NOTE_KINDS,
+  NOTE_MAX_PER_LESSON,
   NOTE_MAX_PER_USER,
   NOTE_PAGE_DEFAULT_LIMIT,
   NOTE_PAGE_MAX_LIMIT,
@@ -133,7 +134,8 @@ export async function getNote(db: Database, user: NoteOwner, noteId: string): Pr
  * `403 access_denied` com `reason`; aula inexistente ou despublicada: `404`) e congela os títulos
  * da aula e do curso. Sem `lessonId`, avulsa. Corpo só com espaços: `422 note_empty`; acima de
  * 20.000 caracteres: `422 note_too_long`; `videoSeconds` negativo ou em nota avulsa: `422
- * note_video_seconds_invalid`; usuário com 5.000 notas: `422 note_limit_reached`.
+ * note_video_seconds_invalid`; usuário com 5.000 notas: `422 note_limit_reached`; com 100 notas
+ * naquela aula: `422 note_lesson_limit_reached` (a avulsa não tem esse teto).
  */
 export async function createNote(
   db: Database,
@@ -178,6 +180,21 @@ export async function createNote(
         'note_limit_reached',
         `Limite de ${NOTE_MAX_PER_USER.toLocaleString('pt-BR')} anotações atingido.`,
       );
+    }
+    if (lesson) {
+      // Sob a mesma trava do usuário: a lista da aula não é paginada, o teto limita a resposta.
+      const inLesson = await trx
+        .selectFrom('notes')
+        .select(sql<number>`count(*)::int`.as('total'))
+        .where('userId', '=', userId)
+        .where('lessonId', '=', lesson.id)
+        .executeTakeFirstOrThrow();
+      if (inLesson.total >= NOTE_MAX_PER_LESSON) {
+        throw businessRule(
+          'note_lesson_limit_reached',
+          `Limite de ${NOTE_MAX_PER_LESSON} anotações nesta aula atingido.`,
+        );
+      }
     }
     const row = await trx
       .insertInto('notes')

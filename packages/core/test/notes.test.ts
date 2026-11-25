@@ -15,6 +15,7 @@ import {
   listLessonNotes,
   listNotes,
   NOTE_BODY_MAX_LENGTH,
+  NOTE_MAX_PER_LESSON,
   NOTE_MAX_PER_USER,
   type Note,
   noteExcerpt,
@@ -268,6 +269,46 @@ describe('criação', () => {
       .transaction()
       .execute((trx) => createNote(trx, other, { body: 'em transação' }));
     expect(inTrx.body).toBe('em transação');
+  });
+
+  it('100 notas por aula: a 100ª entra, a 101ª é recusada; outra aula e avulsa seguem livres', async () => {
+    const user = await makeUser();
+    const other = await makeUser();
+    const course = await makeCourse({ mode: 'open' });
+    const lessonId = await makeLesson(course.id);
+    const otherLessonId = await makeLesson(course.id);
+    await sql`
+      INSERT INTO notes (user_id, lesson_id, course_id, lesson_title_snapshot, course_title_snapshot, body)
+      SELECT ${user.id}::uuid, ${lessonId}::uuid, ${course.id}::uuid, 'Aula', 'Curso', 'nota ' || n
+      FROM generate_series(1, ${NOTE_MAX_PER_LESSON - 1}) n
+    `.execute(db);
+    // Duas ao mesmo tempo na última vaga da aula: só uma entra.
+    const results = await Promise.allSettled([
+      createNote(db, user, { lessonId, body: 'centésima' }),
+      createNote(db, user, { lessonId, body: 'texto sigiloso excedente' }),
+    ]);
+    expect(results.filter((result) => result.status === 'fulfilled')).toHaveLength(1);
+    const rejected = results.find((result) => result.status === 'rejected');
+    expect(rejected?.reason).toMatchObject({ code: 'note_lesson_limit_reached', status: 422 });
+    expect(await listLessonNotes(db, user, lessonId)).toHaveLength(NOTE_MAX_PER_LESSON);
+
+    const refused = await failure(createNote(db, user, { lessonId, body: 'texto sigiloso 101' }));
+    expect(refused).toMatchObject({ code: 'note_lesson_limit_reached', status: 422 });
+    expect(JSON.stringify(refused)).not.toContain('sigiloso');
+    expect(await listLessonNotes(db, user, lessonId)).toHaveLength(NOTE_MAX_PER_LESSON);
+
+    // Outra aula, nota avulsa e outro usuário na mesma aula não são afetados.
+    await createNote(db, user, { lessonId: otherLessonId, body: 'outra aula' });
+    await createNote(db, user, { body: 'avulsa' });
+    await createNote(db, other, { lessonId, body: 'de outro usuário' });
+
+    // Nota cuja aula foi excluída fica sem `lesson_id` e deixa de contar para a aula.
+    await db
+      .updateTable('notes')
+      .set({ lessonId: null })
+      .where('id', '=', (await listLessonNotes(db, user, lessonId))[0]?.id ?? '')
+      .execute();
+    await createNote(db, user, { lessonId, body: 'vaga reaberta' });
   });
 });
 

@@ -1,5 +1,5 @@
 // Tipos e limites das anotações (spec 016, RNF-02 e "Dados"). Os valores repetem as restrições
-// da migration 0011; o limite de notas por usuário só existe aqui.
+// da migration 0011; os limites de notas por usuário e por aula só existem aqui.
 
 /** Corpo da nota: até 20.000 caracteres (pontos de código, como o `char_length` do banco). */
 export const NOTE_BODY_MAX_LENGTH = 20_000;
@@ -7,6 +7,8 @@ export const NOTE_BODY_MAX_LENGTH = 20_000;
 export const NOTE_TITLE_MAX_LENGTH = 160;
 /** Notas por usuário. */
 export const NOTE_MAX_PER_USER = 5_000;
+/** Notas de um usuário na mesma aula: a lista da aba "Minhas notas" não é paginada. */
+export const NOTE_MAX_PER_LESSON = 100;
 /** Trecho do corpo na página "Anotações" (`NoteSummary.excerpt`). */
 export const NOTE_EXCERPT_MAX_LENGTH = 300;
 /** Termo de busca (`q`): 1 a 200 caracteres. */
