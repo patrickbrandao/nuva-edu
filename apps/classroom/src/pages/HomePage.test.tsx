@@ -1,6 +1,7 @@
 import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it } from 'vitest';
+import { PRIORITY_COVERS } from '../catalog/CatalogCard';
 import ptBR from '../locales/pt-BR.json';
 import { expectNoAxeViolations } from '../test/axe';
 import { BUNDLE_ITEM, COURSE_ITEM, EBOOK_ITEM } from '../test/catalog';
@@ -181,6 +182,50 @@ describe('vitrine', () => {
     expect(
       (screen.getByRole('searchbox', { name: ptBR.home.filters.search }) as HTMLInputElement).value,
     ).toBe('git');
+  });
+
+  it('só as capas da primeira fileira são pedidas com prioridade; as demais, sob demanda', async () => {
+    const user = userEvent.setup();
+    const covered = (index: number) => ({
+      ...COURSE_ITEM,
+      id: `0193a5b2-0000-7000-8000-0000000001${String(index).padStart(2, '0')}`,
+      slug: `curso-${index}`,
+      title: `Curso ${index}`,
+    });
+    renderApp(
+      '/',
+      apiRoutes({
+        [`GET ${CATALOG}`]: (request) =>
+          new URL(request.url).searchParams.get('cursor') === 'cursor-2'
+            ? jsonResponse({ items: [covered(7), covered(8)], nextCursor: null })
+            : jsonResponse({
+                items: [1, 2, 3, 4, 5, 6].map(covered),
+                nextCursor: 'cursor-2',
+              }),
+      }),
+    );
+    const covers = async () =>
+      within(await list())
+        .getAllByRole('presentation')
+        .map((image) => [image.getAttribute('loading'), image.getAttribute('fetchpriority')]);
+
+    expect(await covers()).toEqual([
+      ...Array(PRIORITY_COVERS).fill(['eager', 'high']),
+      ['lazy', null],
+      ['lazy', null],
+    ]);
+
+    // os itens de "Carregar mais" chegam abaixo da dobra: sem prioridade
+    await user.click(screen.getByRole('button', { name: ptBR.home.catalog.more }));
+    await card('Curso 8');
+    const all = await covers();
+    expect(all).toHaveLength(8);
+    expect(all.filter(([loading]) => loading === 'eager')).toHaveLength(PRIORITY_COVERS);
+    expect(
+      all
+        .slice(PRIORITY_COVERS)
+        .every(([loading, priority]) => loading === 'lazy' && priority === null),
+    ).toBe(true);
   });
 
   it('"Carregar mais" pede a página seguinte pelo cursor', async () => {

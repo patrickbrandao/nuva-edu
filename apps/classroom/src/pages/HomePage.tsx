@@ -17,7 +17,7 @@ import { useTranslation } from 'react-i18next';
 import { useSearchParams } from 'react-router';
 import { describeError } from '../api/errors';
 import { useMeta } from '../api/meta';
-import { CatalogCard } from '../catalog/CatalogCard';
+import { CatalogCard, PRIORITY_COVERS } from '../catalog/CatalogCard';
 import {
   type CatalogFilters,
   hasActiveFilters,
@@ -225,11 +225,12 @@ export function HomePage() {
           ) : (
             <div className="flex flex-col gap-4" aria-busy={catalog.isPlaceholderData}>
               <ProductCardList aria-label={t('home.catalog.list')}>
-                {items.map((item) => (
+                {items.map((item, index) => (
                   <CatalogCard
                     key={`${item.type}-${item.id}`}
                     item={item}
                     formatPrice={formatPrice}
+                    coverPriority={index < PRIORITY_COVERS}
                   />
                 ))}
               </ProductCardList>
