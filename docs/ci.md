@@ -97,6 +97,9 @@ repositórios).
   listada em `license-allowlist.json`, na raiz. Para aceitar uma licença nova, confirme a
   compatibilidade com a AGPL-3.0 e acrescente-a em `allowed`; para liberar um pacote isolado,
   use `exceptions` com o motivo.
+- A mesma conferência roda no `pnpm verify:quick` (passo `licencas`) quando a tarefa altera o
+  `pnpm-lock.yaml`, o `license-allowlist.json` ou o `scripts/check-licenses.mjs`: dependência
+  com licença fora da lista para no `task:finish`, antes do push.
 - CodeQL para JavaScript/TypeScript e para os próprios fluxos; os alertas aparecem em
   *Security → Code scanning*.
 

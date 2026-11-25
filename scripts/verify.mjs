@@ -21,6 +21,7 @@ import {
   describeRoot,
   exitCodeFor,
   formatSummary,
+  LICENSES_SCRIPT,
   NO_PENDING_FLAG,
   normalizePath,
   parseCliArgs,
@@ -333,6 +334,29 @@ export function preparedNote({ template, removedDatabases = [], removedTemplates
   return notes.join('; ');
 }
 
+/**
+ * Passo "licencas" do modo rápido: com lockfile, lista de licenças ou script alterados, confere
+ * as licenças das dependências (`pnpm licenses:check`), o mesmo do fluxo `security` do CI.
+ * O script sai com 2 quando não há dependências instaladas: é ambiente, não reprovação.
+ *
+ * @param plan  plano do `planQuick` (usa `plan.licenses`)
+ * @param exec  roda um comando: `(argv, { cwd }) => código de saída`
+ */
+export async function licensesStep(plan, { exec = run } = {}) {
+  if (!plan.licenses) {
+    return { status: 'skipped', note: 'sem mudança' };
+  }
+  heading(`scripts: pnpm ${LICENSES_SCRIPT}`);
+  const code = await exec(['node', 'scripts/check-licenses.mjs'], { cwd: root });
+  if (code === 0) {
+    return { status: 'ok', note: 'dependências dentro de license-allowlist.json' };
+  }
+  if (code === 2) {
+    return { status: 'fail', note: 'sem dependências instaladas', environment: true };
+  }
+  return { status: 'fail', note: 'licença fora de license-allowlist.json' };
+}
+
 async function quick(options) {
   const packages = loadPackages();
   const changed = changedFiles(options.files);
@@ -466,6 +490,9 @@ async function quick(options) {
     }
     return runScripts(targets, DB_TYPES_SCRIPT);
   });
+
+  // Dependência nova (lockfile alterado): a licença dela tem de estar na lista.
+  await step('licencas', () => licensesStep(plan));
 
   return finish();
 }

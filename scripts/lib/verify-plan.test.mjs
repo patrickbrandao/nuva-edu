@@ -13,6 +13,7 @@ import {
   describeRoot,
   exitCodeFor,
   formatSummary,
+  LICENSE_FILES,
   packageOf,
   parseCliArgs,
   parseWorkspacePatterns,
@@ -524,6 +525,32 @@ describe('plano do modo rápido: cliente gerado e tipos do banco', () => {
     });
     assert.deepEqual(result.dbTypes, []);
     assert.deepEqual([...result.database], [[DATABASE_PACKAGE, null]]);
+  });
+});
+
+describe('plano do modo rápido: licenças', () => {
+  const plan = (...paths) => planQuick({ changed: changedOf(...paths), packages, exists: disk() });
+
+  test('lockfile, lista de licenças ou script alterados ligam a conferência', () => {
+    for (const path of LICENSE_FILES) {
+      assert.equal(plan(path).licenses, true, path);
+    }
+    assert.equal(plan('packages/core/src/access.ts', 'pnpm-lock.yaml').licenses, true);
+  });
+
+  test('lockfile apagado também confere', () => {
+    const result = planQuick({
+      changed: [{ path: 'pnpm-lock.yaml', deleted: true }],
+      packages,
+      exists: disk(),
+    });
+    assert.equal(result.licenses, true);
+  });
+
+  test('outra mudança não confere licenças', () => {
+    assert.equal(plan('packages/core/src/access.ts').licenses, false);
+    assert.equal(plan('packages/core/pnpm-lock.yaml').licenses, false);
+    assert.equal(plan('scripts/verify.mjs', 'README.md').licenses, false);
   });
 });
 

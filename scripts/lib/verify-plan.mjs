@@ -23,6 +23,21 @@ export const CONTRACT_CHECK_SCRIPT = 'check-contract';
 /** Opção que faz o `check-contract` falhar com operação `x-nuva-pending` no contrato. */
 export const NO_PENDING_FLAG = '--no-pending';
 
+/**
+ * Arquivos que mudam o resultado da conferência de licenças (`pnpm licenses:check`, spec 032):
+ * o lockfile (dependência nova ou atualizada), a lista de licenças e o próprio script. Mudança em
+ * qualquer um deles liga o passo "licencas" do modo rápido, para a dependência com licença fora
+ * da lista parar na tarefa e não só no fluxo `security` do CI, depois do push.
+ */
+export const LICENSE_FILES = [
+  'pnpm-lock.yaml',
+  'license-allowlist.json',
+  'scripts/check-licenses.mjs',
+];
+
+/** Script da raiz que confere as licenças das dependências. */
+export const LICENSES_SCRIPT = 'licenses:check';
+
 /** Nome usado para a raiz do repositório quando ela é tratada como um pacote. */
 export const ROOT_PACKAGE = '(raiz)';
 
@@ -43,7 +58,8 @@ quick  confere só o que mudou: alterações não commitadas mais os commits do 
        caminhos dados (relativos à raiz). Roda todos os passos e sai com código diferente de
        zero se algum falhar.
        Contrato alterado roda o teste de contrato da API e confere o cliente gerado; migration
-       alterada roda os testes de banco e confere os tipos gerados do banco.
+       alterada roda os testes de banco e confere os tipos gerados do banco; pnpm-lock.yaml
+       ou license-allowlist.json alterados conferem as licenças das dependências.
 full   lint, tipos, tipos gerados do banco, todos os testes com banco isolado (Testcontainers),
        contrato (testes e check-contract --no-pending de cada API), banco e build; --e2e
        acrescenta os testes de ponta a ponta. Para na primeira falha.
@@ -265,7 +281,8 @@ function addTo(map, key, values) {
  *          mapas nome do pacote → arquivos de teste relativos ao pacote. Em `database`, o valor
  *          `null` quer dizer "a suíte inteira do pacote". `client`: pacotes do cliente gerado a
  *          conferir (contrato ou gerado alterado). `dbTypes`: pacotes cujos tipos gerados do
- *          banco conferir (migration ou gerado alterado).
+ *          banco conferir (migration ou gerado alterado). `licenses`: verdadeiro quando um dos
+ *          `LICENSE_FILES` mudou (inclusive apagado).
  */
 export function planQuick({ changed, packages, exists }) {
   const plan = {
@@ -276,6 +293,7 @@ export function planQuick({ changed, packages, exists }) {
     client: [],
     database: new Map(),
     dbTypes: [],
+    licenses: false,
   };
   const typed = new Set();
   let allTypes = false;
@@ -288,6 +306,10 @@ export function planQuick({ changed, packages, exists }) {
     const pkg = packageOf(path, packages);
     const relative = relativeTo(pkg, path);
     const isDatabase = pkg.name === DATABASE_PACKAGE;
+
+    if (LICENSE_FILES.includes(path)) {
+      plan.licenses = true;
+    }
 
     if (!deleted && LINT_EXTENSIONS.test(path) && !LINT_EXCLUDED.test(path)) {
       plan.lint.push(path);

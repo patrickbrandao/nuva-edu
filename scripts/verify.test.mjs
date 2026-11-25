@@ -3,7 +3,13 @@ import { spawnSync } from 'node:child_process';
 import { relative, resolve } from 'node:path';
 import { describe, test } from 'node:test';
 import { describePackage, describeRoot, exitCodeFor, formatSummary } from './lib/verify-plan.mjs';
-import { fullSteps, preparedNote, prepareLocalDatabase, runSequence } from './verify.mjs';
+import {
+  fullSteps,
+  licensesStep,
+  preparedNote,
+  prepareLocalDatabase,
+  runSequence,
+} from './verify.mjs';
 
 const script = resolve(import.meta.dirname, 'verify.mjs');
 
@@ -33,7 +39,16 @@ describe('linha de comando do verify', () => {
   test('quick sem nada ligado aos arquivos dados: tudo pulado, código 0', () => {
     const result = verify('quick', '--files', 'README.md');
     assert.equal(result.status, 0, result.stderr);
-    for (const name of ['lint', 'tipos', 'testes', 'contrato', 'cliente', 'banco', 'tipos-banco']) {
+    for (const name of [
+      'lint',
+      'tipos',
+      'testes',
+      'contrato',
+      'cliente',
+      'banco',
+      'tipos-banco',
+      'licencas',
+    ]) {
       assert.match(result.stdout, new RegExp(`^– ${name}\\s+pulado`, 'm'));
     }
     assert.doesNotMatch(result.stdout, /^[✓✗]/m);
@@ -425,5 +440,38 @@ describe('passos do modo completo', () => {
     const { status, calls } = await runFull(t, {});
     assert.equal(status.contrato, 'skipped');
     assert.ok(calls.some((call) => call.dir === 'apps/admin-api' && call.command === 'vitest run'));
+  });
+});
+
+describe('passo licencas do quick', () => {
+  const calls = [];
+  const exec = (code) => async (argv) => {
+    calls.push(argv);
+    return code;
+  };
+
+  test('sem mudança em lockfile ou lista: pulado, sem rodar nada', async () => {
+    calls.length = 0;
+    const result = await licensesStep({ licenses: false }, { exec: exec(0) });
+    assert.equal(result.status, 'skipped');
+    assert.equal(calls.length, 0);
+  });
+
+  test('lockfile alterado: roda check-licenses; 0 passa, 1 reprova, 2 é ambiente', async () => {
+    calls.length = 0;
+    assert.equal((await licensesStep({ licenses: true }, { exec: exec(0) })).status, 'ok');
+    assert.deepEqual(calls[0], ['node', 'scripts/check-licenses.mjs']);
+    const refusedLicense = await licensesStep({ licenses: true }, { exec: exec(1) });
+    assert.equal(refusedLicense.status, 'fail');
+    assert.equal(refusedLicense.environment, undefined);
+    const noDeps = await licensesStep({ licenses: true }, { exec: exec(2) });
+    assert.equal(noDeps.status, 'fail');
+    assert.equal(noDeps.environment, true);
+  });
+
+  test('quick com --files pnpm-lock.yaml roda a conferência (não fica pulada)', () => {
+    const result = verify('quick', '--files', 'pnpm-lock.yaml');
+    assert.match(result.stdout, /^[✓✗] licencas\s/m, result.stdout + result.stderr);
+    assert.match(result.stdout, /^– lint\s+pulado/m);
   });
 });
