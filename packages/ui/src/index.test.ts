@@ -31,6 +31,13 @@ describe('ponto de entrada do pacote', () => {
       'AdminTextArea',
       'ImagePicker',
       'Alert',
+      'Markdown',
+      'SortableList',
+      'Accordion',
+      'Tabs',
+      'ProgressBar',
+      'ProductCard',
+      'ProductCardList',
     ];
     for (const name of expected) expect(ui, name).toHaveProperty(name);
   });

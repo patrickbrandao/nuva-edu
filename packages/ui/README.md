@@ -118,6 +118,28 @@ Cada componente também aceita `linkComponent`, que vale mais que o do provedor.
 `PageTitle`, `TextLink`, `LoadingState` (`role="status"`) e `ErrorState` (`role="alert"`, com
 `onRetry` e `retryLabel`). Usam os tokens `--adm-*`: ficam dentro de `AdminScope` ou de uma casca.
 
+## Catálogo (TypeScript)
+
+Bibliotecas da ADR 0025. Nenhum texto fixo: tudo chega por props, já traduzido. Dentro das
+cascas usam `--adm-*`; fora delas caem nos `--minui-*`.
+
+- `Markdown`: `react-markdown` sem `rehype-raw`. Só `p`, `strong`, `em`, listas, `a`, `code`,
+  `pre`, `blockquote` e `br` (`MARKDOWN_ELEMENTS`); o resto é desembrulhado. HTML bruto aparece
+  como texto. Link só `https`, `http` e `mailto` (`safeMarkdownUrl`), em outra aba com
+  `rel="noopener noreferrer"`; os demais viram texto comum. `newTabLabel` é lido depois do link.
+- `SortableList`: `@dnd-kit/core` e `@dnd-kit/sortable`. Arrasta pela alça com mouse, toque e
+  teclado (espaço pega, setas movem, espaço solta, Esc cancela); `onReorder` recebe a ordem
+  inteira. `labels` (obrigatório) traz instruções, rótulo da alça e os anúncios com a posição.
+- `Accordion`: padrão de acordeão da WAI-ARIA (cabeçalho com botão, painel `region`);
+  `multiple`, `defaultOpen` ou `open` com `onOpenChange`, `headingLevel`.
+- `Tabs`: abas do site do aluno (no painel, `AdminTabs`), ativação automática, setas, Home e
+  End; só o painel da aba selecionada é montado.
+- `ProgressBar`: `role="progressbar"` com `aria-valuenow` de 0 a 100 (`clampPercent`),
+  `valueText` e `caption`.
+- `ProductCard` e `ProductCardList`: capa 16:9, título com link (o cartão inteiro é clicável),
+  resumo, nível, totais, preço ou `freeLabel`, selo, validade (`meta`), progresso e `action`;
+  `layout` `grid` ou `list`.
+
 ## O que veio do minui-react
 
 | Origem (`src/`) | Aqui |

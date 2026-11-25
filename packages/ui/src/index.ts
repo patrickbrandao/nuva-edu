@@ -189,6 +189,29 @@ export {
   isHexColor,
   relativeLuminance,
 } from './accent/accent';
+// catálogo: Markdown restrito, lista reordenável, acordeão, abas, progresso e cartão (TypeScript)
+export type { AccordionItem, AccordionProps } from './components/catalog/Accordion';
+export { Accordion } from './components/catalog/Accordion';
+export type { MarkdownProps } from './components/catalog/Markdown';
+export {
+  MARKDOWN_ELEMENTS,
+  MARKDOWN_PROTOCOLS,
+  Markdown,
+  safeMarkdownUrl,
+} from './components/catalog/Markdown';
+export type {
+  ProductCardLayout,
+  ProductCardListProps,
+  ProductCardProgress,
+  ProductCardProps,
+} from './components/catalog/ProductCard';
+export { ProductCard, ProductCardList } from './components/catalog/ProductCard';
+export type { ProgressBarProps } from './components/catalog/ProgressBar';
+export { clampPercent, ProgressBar } from './components/catalog/ProgressBar';
+export type { SortableListLabels, SortableListProps } from './components/catalog/SortableList';
+export { SortableList } from './components/catalog/SortableList';
+export type { TabItem, TabsProps } from './components/catalog/Tabs';
+export { Tabs } from './components/catalog/Tabs';
 export { ICON_PATHS } from './components/core/iconPaths.js';
 // avisos e diálogos: Dialog, ConfirmDialog, Toast com provedor, Alert (TypeScript)
 export type { AlertProps, AlertTone } from './components/feedback/Alert';

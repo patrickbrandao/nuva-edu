@@ -1,0 +1,533 @@
+/*
+ * Componentes do catálogo: Markdown, lista reordenável, acordeão, abas, barra de progresso
+ * e cartão de produto. Dentro das cascas usam os tokens --adm-* (derivados dos --minui-*);
+ * fora delas caem nos --minui-* direto. Sem `style` no HTML (CSP style-src 'self'): o
+ * único estilo dinâmico (posição no arrasto, largura da barra) vai pelo CSSOM.
+ */
+
+.minui-markdown,
+.minui-sortable,
+.minui-accordion,
+.minui-tabs,
+.minui-progress,
+.minui-product-card,
+.minui-product-list {
+  --cat-ink: var(--adm-ink, var(--minui-text));
+  --cat-ink-2: var(--adm-ink-2, var(--minui-text-body));
+  --cat-ink-3: var(--adm-ink-3, var(--minui-text-muted));
+  --cat-card: var(--adm-card, var(--minui-surface-base));
+  --cat-sunken: var(--adm-sunken, var(--minui-panel-well));
+  --cat-hover: var(--adm-hover, var(--minui-field));
+  --cat-line: var(--adm-line, var(--minui-field-line));
+  --cat-line-soft: var(--adm-line-soft, var(--minui-field-line));
+  --cat-focus: var(--adm-focus, var(--minui-focus));
+  --cat-fill: var(--adm-primary, var(--minui-accent-fill, var(--minui-text)));
+  --cat-fill-ink: var(--adm-primary-ink, var(--minui-accent-on, var(--minui-surface-base)));
+  --cat-accent: var(--minui-accent-text, var(--cat-ink));
+  --cat-radius: var(--adm-r-card, 9px);
+  font-family: var(--minui-font);
+}
+
+.minui-sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  border: 0;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/* =================== Markdown =================== */
+.minui-markdown {
+  color: var(--cat-ink-2);
+  font-size: 14px;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+
+.minui-markdown > :first-child {
+  margin-top: 0;
+}
+
+.minui-markdown > :last-child {
+  margin-bottom: 0;
+}
+
+.minui-markdown :is(p, ul, ol, blockquote, pre) {
+  margin: 0 0 0.75em;
+}
+
+.minui-markdown :is(ul, ol) {
+  padding-left: 1.4em;
+}
+
+.minui-markdown strong {
+  color: var(--cat-ink);
+  font-weight: 600;
+}
+
+.minui-markdown a {
+  color: var(--cat-accent);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.minui-markdown a:focus-visible {
+  outline: 2px solid var(--cat-focus);
+  outline-offset: 2px;
+  border-radius: 2px;
+}
+
+.minui-markdown code {
+  padding: 0.1em 0.35em;
+  border-radius: 4px;
+  background: var(--cat-sunken);
+  font-family: var(--minui-mono);
+  font-size: 0.9em;
+}
+
+.minui-markdown pre {
+  padding: 10px 12px;
+  overflow-x: auto;
+  border-radius: 8px;
+  background: var(--cat-sunken);
+}
+
+.minui-markdown pre code {
+  padding: 0;
+  background: none;
+}
+
+.minui-markdown blockquote {
+  padding-left: 12px;
+  border-left: 3px solid var(--cat-line);
+  color: var(--cat-ink-3);
+}
+
+/* =================== Lista reordenável =================== */
+.minui-sortable {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.minui-sortable__item {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px 6px 6px;
+  border: 1px solid var(--cat-line);
+  border-radius: var(--cat-radius);
+  background: var(--cat-card);
+}
+
+.minui-sortable__item[data-dragging="true"] {
+  z-index: 1;
+  box-shadow: var(--adm-shadow-pop, 0 8px 20px rgba(0, 0, 0, 0.18));
+}
+
+.minui-sortable__handle {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  background: none;
+  color: var(--cat-ink-3);
+  cursor: grab;
+  touch-action: none;
+}
+
+.minui-sortable__handle:hover {
+  background: var(--cat-hover);
+  color: var(--cat-ink);
+}
+
+.minui-sortable__handle:focus-visible {
+  outline: 2px solid var(--cat-focus);
+  outline-offset: 0;
+}
+
+.minui-sortable__handle[aria-pressed="true"] {
+  cursor: grabbing;
+}
+
+.minui-sortable__handle[aria-disabled="true"] {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.minui-sortable__content {
+  flex: 1;
+  min-width: 0;
+}
+
+/* =================== Acordeão =================== */
+.minui-accordion {
+  border: 1px solid var(--cat-line);
+  border-radius: var(--cat-radius);
+  background: var(--cat-card);
+}
+
+.minui-accordion__item + .minui-accordion__item {
+  border-top: 1px solid var(--cat-line-soft);
+}
+
+.minui-accordion__heading {
+  margin: 0;
+  font-size: inherit;
+  font-weight: inherit;
+}
+
+.minui-accordion__trigger {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 12px 14px;
+  border: 0;
+  background: none;
+  color: var(--cat-ink);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+}
+
+.minui-accordion__trigger:hover {
+  background: var(--cat-hover);
+}
+
+.minui-accordion__trigger:focus-visible {
+  outline: 2px solid var(--cat-focus);
+  outline-offset: -2px;
+}
+
+.minui-accordion__title {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.minui-accordion__meta {
+  flex: none;
+  color: var(--cat-ink-3);
+  font-size: 12px;
+  font-weight: 400;
+}
+
+.minui-accordion__chevron {
+  flex: none;
+  color: var(--cat-ink-3);
+  transition: transform 0.15s ease;
+}
+
+.minui-accordion__item[data-open="true"] .minui-accordion__chevron {
+  transform: rotate(180deg);
+}
+
+.minui-accordion__panel {
+  padding: 0 14px 12px;
+}
+
+@media (max-width: 480px) {
+  .minui-accordion__trigger {
+    flex-wrap: wrap;
+  }
+}
+
+/* =================== Abas =================== */
+.minui-tabs__list {
+  display: flex;
+  gap: 4px;
+  overflow-x: auto;
+  border-bottom: 1px solid var(--cat-line);
+}
+
+.minui-tabs__tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: -1px;
+  padding: 8px 12px;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  background: none;
+  color: var(--cat-ink-3);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 500;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.minui-tabs__tab:hover {
+  color: var(--cat-ink);
+}
+
+.minui-tabs__tab[aria-selected="true"] {
+  border-bottom-color: var(--cat-fill);
+  color: var(--cat-ink);
+}
+
+.minui-tabs__tab:focus-visible {
+  outline: 2px solid var(--cat-focus);
+  outline-offset: -2px;
+  border-radius: 4px;
+}
+
+.minui-tabs__tab:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.minui-tabs__count {
+  padding: 0 6px;
+  border-radius: 999px;
+  background: var(--cat-sunken);
+  color: var(--cat-ink-3);
+  font-size: 12px;
+}
+
+.minui-tabs__panel {
+  padding-top: 14px;
+}
+
+/* =================== Barra de progresso =================== */
+.minui-progress {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.minui-progress__track {
+  flex: 1;
+  height: 8px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--cat-sunken);
+  box-shadow: inset 0 0 0 1px var(--cat-line-soft);
+}
+
+.minui-progress[data-size="sm"] .minui-progress__track {
+  height: 5px;
+}
+
+.minui-progress__fill {
+  height: 100%;
+  border-radius: inherit;
+  background: var(--cat-fill);
+  transition: width 0.2s ease;
+}
+
+.minui-progress__caption {
+  flex: none;
+  color: var(--cat-ink-3);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+/* =================== Cartão de produto =================== */
+.minui-product-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 16px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.minui-product-list[data-layout="list"] {
+  grid-template-columns: 1fr;
+  gap: 10px;
+}
+
+.minui-product-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: hidden;
+  border: 1px solid var(--cat-line);
+  border-radius: var(--adm-r-panel, 12px);
+  background: var(--cat-card);
+  box-shadow: var(--adm-shadow-card, none);
+}
+
+.minui-product-card:hover {
+  border-color: var(--adm-line-strong, var(--cat-line));
+}
+
+.minui-product-card:focus-within {
+  outline: 2px solid var(--cat-focus);
+  outline-offset: 2px;
+}
+
+.minui-product-card__cover {
+  position: relative;
+  aspect-ratio: 16 / 9;
+  background: var(--cat-sunken);
+}
+
+.minui-product-card__cover img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.minui-product-card__placeholder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  color: var(--cat-ink-3);
+}
+
+.minui-product-card__badge {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--cat-card);
+  color: var(--cat-ink);
+  font-size: 12px;
+  font-weight: 500;
+  box-shadow: 0 0 0 1px var(--cat-line);
+}
+
+.minui-product-card__badge[data-tone="accent"] {
+  background: var(--cat-fill);
+  color: var(--cat-fill-ink);
+}
+
+.minui-product-card__badge[data-tone="warning"] {
+  background: var(--adm-amber, var(--minui-word-hot));
+  color: #18181b;
+}
+
+.minui-product-card__body {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 14px 14px;
+  min-width: 0;
+}
+
+.minui-product-card__title {
+  margin: 0;
+  color: var(--cat-ink);
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
+.minui-product-card__link {
+  color: inherit;
+  text-decoration: none;
+}
+
+.minui-product-card__link:focus-visible {
+  outline: none;
+}
+
+/* área clicável do cartão inteiro */
+.minui-product-card__link::after {
+  position: absolute;
+  inset: 0;
+  content: "";
+}
+
+.minui-product-card__summary,
+.minui-product-card__meta {
+  margin: 0;
+  color: var(--cat-ink-3);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.minui-product-card__summary {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+}
+
+.minui-product-card__facts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  margin: 0;
+  padding: 0;
+  color: var(--cat-ink-3);
+  font-size: 12px;
+  list-style: none;
+}
+
+.minui-product-card__footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-top: auto;
+  padding-top: 4px;
+}
+
+.minui-product-card__price {
+  color: var(--cat-ink);
+  font-size: 15px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.minui-product-card__price[data-free="true"] {
+  color: var(--adm-green, var(--minui-green));
+}
+
+/* a ação fica acima da área clicável do cartão */
+.minui-product-card__action {
+  position: relative;
+  z-index: 1;
+}
+
+.minui-product-card[data-layout="list"] {
+  flex-direction: row;
+}
+
+.minui-product-card[data-layout="list"] .minui-product-card__cover {
+  flex: none;
+  width: 200px;
+}
+
+@media (max-width: 560px) {
+  .minui-product-card[data-layout="list"] .minui-product-card__cover {
+    width: 120px;
+  }
+
+  .minui-product-card[data-layout="list"] .minui-product-card__summary {
+    display: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .minui-accordion__chevron,
+  .minui-progress__fill {
+    transition: none;
+  }
+}

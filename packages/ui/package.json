@@ -20,7 +20,11 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "lucide-react": "1.77.0"
+    "@dnd-kit/core": "6.3.1",
+    "@dnd-kit/sortable": "10.0.0",
+    "@dnd-kit/utilities": "3.2.2",
+    "lucide-react": "1.77.0",
+    "react-markdown": "10.1.0"
   },
   "peerDependencies": {
     "react": "^19.0.0",
