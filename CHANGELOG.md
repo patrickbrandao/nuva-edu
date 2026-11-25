@@ -203,3 +203,4 @@ Detalhe das decisões em `specs/decisions/`.
 - Commit direto na `main`, diretório compartilhado; `verify:quick` e `verify:full`.
 - Sites `admin` e `classroom` servidos por lighttpd (pacote do Alpine, imagem própria) no lugar do Nginx; Traefik segue como proxy; fim da exceção do Trivy: ADR 0023, specs 001, 006, 031 e 032 (task 120).
 - Um worktree por tarefa (`pnpm task:start`/`task:finish`, branch `task/NNN`, `main` só por fast-forward) no lugar do commit direto em diretório compartilhado: ADR 0021 substitui a 0013; specs 002 e 032, `AGENTS.md` e definições de papel atualizados.
+- Spec 010 alinhada à 009 e ao núcleo: a cascata do pacote cita os ebooks de `product_ebooks` com alvo no pacote e a ordem em largura (ebook por dois caminhos fica sob o pacote, ou sob o curso de menor `position`); concessão manual repetida com a anterior vencida revoga a antiga e cria raiz nova; ebook não tem dono e o instrutor segue a regra de aluno (task 696).

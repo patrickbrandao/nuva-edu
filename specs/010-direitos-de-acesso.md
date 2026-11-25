@@ -12,7 +12,7 @@ Um direito nasce de quatro fontes: pedido pago, assinatura ativa, concessão man
 ## Requisitos
 
 - RF-01: Todo acesso a conteúdo pago ou privado é decidido por direitos ativos em `entitlements`.
-- RF-02: Conceder o direito a um pacote concede, em cascata, o direito a cada curso e ebook do pacote.
+- RF-02: Conceder o direito a um pacote concede, em cascata, o direito a cada curso e ebook do pacote: os itens de `bundle_items` e os ebooks de `product_ebooks` com alvo no pacote ([009](009-catalogo-e-conteudo.md), "Ebooks vinculados").
 - RF-03: Conceder o direito a um curso concede, em cascata, o direito aos ebooks vinculados ao curso e às suas aulas.
 - RF-04: Revogar um direito revoga toda a sua cascata, e só ela.
 - RF-05: Um item coberto por mais de uma fonte permanece acessível enquanto ao menos um direito seu estiver ativo.
@@ -47,14 +47,21 @@ Direitos de fonte `order`, `subscription` e `grant` são **raízes**. Direitos `
 
 1. Criar o direito raiz para o produto.
 2. Expandir os filhos do produto:
-   - pacote → cada curso e ebook em `bundle_items`;
+   - pacote → cada curso e ebook em `bundle_items`, mais cada ebook em `product_ebooks` com alvo no pacote (a [009](009-catalogo-e-conteudo.md) trata esse vínculo como equivalente a incluir o ebook no pacote);
    - curso → cada ebook em `product_ebooks` com alvo no curso ou em qualquer aula do curso;
    - ebook → nenhum.
 3. Para cada filho, criar um direito `cascade` com `parent_entitlement_id` = direito de origem, mesmo `source_id`, mesmo `starts_at` e mesmo `expires_at`; repetir o passo 2 para o filho (um curso vindo de pacote expande seus ebooks).
-4. A profundidade máxima é 2 (pacote → curso → ebook). Um ebook alcançado por dois caminhos dentro da mesma raiz gera um único direito derivado (o primeiro caminho encontrado).
+4. A profundidade máxima é 2 (pacote → curso → ebook). Um ebook alcançado por dois caminhos dentro da mesma raiz gera um único direito derivado, no primeiro caminho da ordem abaixo.
 5. Publicar a notificação "acesso liberado" ([024](024-notificacoes-e-email.md)) e gravar auditoria quando a fonte for `grant`.
 
-A concessão é idempotente por (`user_id`, `source`, `source_id`, `product_type`, `product_id`): repetir a chamada não duplica direitos (protege contra webhook reprocessado).
+Ordem da expansão (em largura), que decide sob qual pai fica o ebook alcançado por mais de um caminho:
+
+1. primeiro os filhos diretos do pacote: os itens de `bundle_items` na ordem de `position`, depois os ebooks de `product_ebooks` com alvo no pacote;
+2. depois os ebooks de cada curso do pacote, percorrendo os cursos na ordem de `position`.
+
+Consequências: o ebook que é filho direto do pacote e também está vinculado a um curso (ou a uma aula) do pacote fica sob o pacote, não sob o curso; o ebook vinculado a dois cursos do pacote fica sob o curso de menor `position`; o ebook que está em `bundle_items` e em `product_ebooks` com alvo no mesmo pacote conta uma vez. Item de `bundle_items` que aponta para produto inexistente é ignorado.
+
+A concessão é idempotente por (`user_id`, `source`, `source_id`, `product_type`, `product_id`) entre os direitos não revogados: repetir a chamada não duplica direitos (protege contra webhook reprocessado) e devolve a raiz existente sem gravar nada, sem notificação e sem auditoria. Isso vale também quando a raiz existente já venceu: direito vencido não é revogado e continua ocupando a chave. `grant` não reativa nem substitui a raiz vencida; quem chama decide (a concessão manual a substitui, ver [Concessão manual](#concessão-manual)).
 
 ### Algoritmo de revogação
 
@@ -78,11 +85,13 @@ Revogar não apaga progresso, anotações, certificados já emitidos nem postage
 
 Disparado pelo `admin-api` como tarefa do worker ([005](005-worker-e-fila.md)) quando muda `bundle_items`, `product_ebooks` ou `plan_items`:
 
-- Item acrescentado: para cada direito ativo do produto pai, criar o derivado que falta.
-- Item removido: revogar, com motivo `recalculation`, os derivados daquele item cujo pai é o produto alterado.
+- Item acrescentado: para cada direito ativo do produto pai, criar o derivado que falta (com os filhos dele).
+- Item removido: revogar, com motivo `recalculation`, os derivados daquele item cujo pai é o produto alterado, com os descendentes.
+- Ebook que muda de caminho dentro da mesma raiz (por exemplo, passa a ser filho direto do pacote, ou o curso sob o qual estava sai do pacote e outro curso do pacote também o vincula): o derivado antigo é revogado com `recalculation` e o novo é criado no caminho que a ordem da expansão indica, na mesma transação, sem intervalo sem acesso.
+- A árvore esperada é a do [algoritmo de concessão](#algoritmo-de-concessão), inclusive os ebooks de `product_ebooks` com alvo no pacote. São conferidas as raízes não revogadas e não vencidas (ativas ou com início futuro) que contêm o produto, como raiz ou como curso derivado de pacote.
 - Plano "tudo, inclusive futuros": ver [012](012-assinaturas.md); a publicação de um produto novo dispara o mesmo recálculo para as assinaturas ativas desses planos.
 
-A tarefa é idempotente e processa em lotes de 500 direitos.
+A tarefa é idempotente (sem mudança no catálogo, não grava nada) e processa em lotes de 500 raízes, uma transação por lote.
 
 ### Verificação de acesso
 
@@ -91,16 +100,17 @@ A tarefa é idempotente e processa em lotes de 500 direitos.
 | Alvo | Acesso permitido quando |
 | --- | --- |
 | Aula | (a) o usuário é da equipe com permissão sobre o curso; ou (b) a aula e o curso estão publicados e: a aula é amostra, ou o curso é `open`, ou há direito ativo ao curso |
-| Curso (conteúdo) | equipe; ou curso publicado e (`open` ou direito ativo ao curso) |
-| Curso (programa) | curso publicado e não `private`; ou direito ativo; ou equipe |
-| Ebook (download) | equipe; ou ebook publicado e (`open` ou direito ativo ao ebook) |
+| Curso (conteúdo) | equipe com permissão sobre o curso; ou curso publicado e (`open` ou direito ativo ao curso) |
+| Curso (programa) | curso publicado e não `private`; ou direito ativo; ou equipe com permissão sobre o curso |
+| Ebook (download) | admin ou gerente; ou ebook publicado e (`open` ou direito ativo ao ebook) |
 | Pacote | não tem conteúdo próprio; a página mostra os itens e o estado de cada um |
 
 Regras gerais:
 
 - Usuário não logado nunca acessa conteúdo, só a vitrine ([009](009-catalogo-e-conteudo.md)).
 - Usuário suspenso ou com e-mail não confirmado segue as regras de [007](007-contas-e-autenticacao.md): suspenso não acessa nada; não confirmado acessa o que já tem, mas não compra nem posta.
-- Equipe: admin e gerente acessam tudo; instrutor acessa os cursos e ebooks de sua autoria e, para os demais, vale a regra de aluno.
+- Equipe: admin e gerente acessam tudo; instrutor acessa os cursos de que é dono (`courses.owner_id`) e as aulas deles, mesmo em rascunho, e, para os demais cursos, vale a regra de aluno.
+- Ebook não tem dono: é criado e editado só por gerente e admin ([009](009-catalogo-e-conteudo.md), RF-11), e `author_name` é texto livre, não uma conta. Por isso o instrutor segue a regra de aluno em todo ebook, inclusive nos vinculados aos próprios cursos e aulas: baixa o ebook `open` publicado ou aquele a que tem direito ativo.
 - Produto despublicado ou arquivado: nega o acesso de aluno, mesmo com direito ativo, até ser republicado.
 - "Acesso ativo" (usado por fórum, mensagens diretas e eventos) = o usuário tem ao menos um direito ativo de qualquer fonte, ou é da equipe. Curso `open` não conta como acesso ativo.
 
@@ -108,7 +118,11 @@ A resposta de `canAccess` traz o motivo da negativa (`not_authenticated`, `suspe
 
 ### Concessão manual
 
-- Admin e gerente concedem a qualquer usuário o direito a um curso, pacote ou ebook, com motivo (texto, obrigatório) e `expires_at` opcional.
+- Admin e gerente concedem a qualquer usuário o direito a um curso, pacote ou ebook, com motivo (texto, obrigatório) e `expires_at` opcional. `expires_at` no passado: `422` `expires_at_in_past`.
+- A chave da concessão manual é (usuário, quem concede, produto), porque o `source_id` da raiz `grant` é quem concedeu. Repetir a mesma concessão:
+  - com a anterior ainda ativa (ou com início futuro): devolve a existente, com `200`, sem gravar nada, sem auditoria e sem e-mail. Não muda motivo nem validade; para mudá-los, revoga-se e concede-se de novo;
+  - com a anterior já vencida: a raiz vencida é revogada com `manual`, junto da cascata, e uma raiz nova é criada com a cascata da composição atual, na mesma transação. A auditoria `entitlement.grant` leva `replacedEntitlementId`. A vencida fica no histórico como revogada.
+- Concessões do mesmo produto ao mesmo usuário por pessoas diferentes são raízes distintas ([RF-05](#requisitos)).
 - Revogação manual só atinge raízes de fonte `grant`. Direito vindo de pedido só é revogado por reembolso ([011](011-vendas-e-checkout.md)); de assinatura, pelo ciclo da assinatura ([012](012-assinaturas.md)).
 - Instrutor não concede nem revoga.
 - Concessão e revogação manuais gravam auditoria ([028](028-auditoria.md)) e estão disponíveis no MCP ([027](027-mcp.md)).
@@ -119,6 +133,11 @@ A resposta de `canAccess` traz o motivo da negativa (`not_authenticated`, `suspe
 | --- | --- |
 | Curso comprado avulso e também recebido por pacote; pacote reembolsado | Curso continua acessível pela raiz `order` do curso |
 | Ebook vinculado a duas aulas do mesmo curso | Um só direito derivado sob o curso |
+| Ebook em `bundle_items` (ou vinculado ao pacote por `product_ebooks`) e também vinculado a um curso do pacote | Um só direito derivado, sob o pacote (ordem em largura) |
+| Ebook vinculado a dois cursos do mesmo pacote | Um só direito derivado, sob o curso de menor `position` |
+| Ebook vinculado ao pacote por `product_ebooks`, fora de `bundle_items` | Entra na cascata do pacote como filho direto |
+| Concessão manual repetida pela mesma pessoa, com a anterior vencida | A vencida é revogada (`manual`) e nasce uma raiz nova; com a anterior ativa, nada muda |
+| Instrutor abre ebook vinculado ao próprio curso, sem direito e com o ebook pago | Negado com `no_entitlement`: ebook não tem dono |
 | Ebook recebido por curso A e por curso B; curso A revogado | Ebook segue ativo pelo derivado de B |
 | Assinatura vence e o aluno tem concessão manual do mesmo curso | Curso segue ativo pela raiz `grant` |
 | Ebook removido do vínculo com o curso | Derivados daquele ebook sob o curso são revogados (`recalculation`); quem comprou o ebook avulso não é afetado |
@@ -161,7 +180,7 @@ Dono (escrita): `worker` para as raízes `order` e `subscription`; `admin-api` p
 | `granted_reason` | texto do motivo, só em `grant` |
 | `created_at` | criação |
 
-Índices: (`user_id`, `product_type`, `product_id`) para a verificação; (`parent_entitlement_id`); (`source`, `source_id`); único parcial em (`user_id`, `source`, `source_id`, `product_type`, `product_id`, `parent_entitlement_id`) para a idempotência.
+Índices: (`user_id`, `product_type`, `product_id`) para a verificação; (`parent_entitlement_id`); (`source`, `source_id`); único parcial em (`user_id`, `source`, `source_id`, `product_type`, `product_id`, `parent_entitlement_id`), só entre os não revogados, para a idempotência (direito vencido continua na chave; revogado sai dela).
 
 Retenção: direitos não são apagados enquanto a conta existir (são o histórico de acesso); na exclusão de conta são apagados ([030](030-lgpd.md)); o registro de quem concedeu ou revogou permanece na auditoria.
 
@@ -174,6 +193,9 @@ Retenção: direitos não são apagados enquanto a conta existir (são o histór
 ## Critérios de aceite
 
 - [ ] Comprar pacote com 2 cursos e 1 ebook cria 1 raiz e os derivados corretos, incluindo os ebooks vinculados aos cursos.
+- [ ] Ebook vinculado ao pacote por `product_ebooks` entra na cascata; ebook alcançado pelo pacote e por um curso dele gera um só derivado, sob o pacote.
+- [ ] Repetir a concessão manual com a anterior vencida revoga a antiga e cria uma raiz nova; com a anterior ativa, responde `200` sem gravar.
+- [ ] Instrutor sem direito não baixa ebook pago, mesmo vinculado ao próprio curso.
 - [ ] Reembolsar o pacote revoga toda a árvore e nada além dela.
 - [ ] Curso com raiz `order` e derivado de pacote permanece acessível após reembolso do pacote.
 - [ ] Reprocessar o mesmo webhook de pagamento não duplica direitos.
