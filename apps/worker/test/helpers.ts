@@ -120,6 +120,8 @@ export function handlerDependencies(
       emailSentDays: 30,
       emailFailedDays: 90,
       auditDays: 730,
+      jobDoneDays: 7,
+      jobFailedDays: 30,
     },
     ...overrides,
   };

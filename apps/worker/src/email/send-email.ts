@@ -1,13 +1,13 @@
 import {
   type Database,
   EMAIL_TYPES,
-  type EmailTokenPurpose,
   type EmailType,
   getSettings,
   isEmailType,
   issueEmailToken,
   type JobHandler,
   type Logger,
+  lockEmailTokens,
   PermanentJobError,
   parseEmailData,
   schoolLogoUrl,
@@ -184,28 +184,6 @@ export function createEmailSendHandler(deps: EmailSendDependencies): JobHandler<
       log.warn('Linha de email_outbox não existe; nada a enviar');
     }
   };
-}
-
-/**
- * A mesma trava por usuário e propósito que `issueEmailToken` e `invalidateEmailTokens` tomam
- * (`packages/core`, `email-tokens.ts`); a trava de transação é reentrante, então a emissão logo
- * depois a toma de novo sem esperar. A chave precisa ser idêntica à do núcleo: o teste da
- * corrida com a troca de e-mail acusa divergência.
- */
-async function lockEmailTokens(
-  trx: Database,
-  userId: string,
-  purpose: EmailTokenPurpose,
-): Promise<void> {
-  await trx
-    .selectNoFrom((eb) =>
-      eb
-        .fn('pg_advisory_xact_lock', [
-          eb.fn('hashtextextended', [eb.val(`email_tokens:${userId}:${purpose}`), eb.lit(0)]),
-        ])
-        .as('locked'),
-    )
-    .execute();
 }
 
 async function markSent(

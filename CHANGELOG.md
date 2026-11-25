@@ -7,6 +7,7 @@ Detalhe das decisões em `specs/decisions/`.
 
 ### Adicionado
 - core: `lockEmailTokens(trx, userId, purpose)` exportado, com a chave usada por `issueEmailToken` e `invalidateEmailTokens` (task 282).
+- worker: envio de e-mail usa o `lockEmailTokens` do núcleo; `jobDoneDays` e `jobFailedDays` obrigatórios no expurgo, sem prazos de reserva (task 283).
 - classroom-api: `createApiApp` sem o `cookieSecret` sem uso; `SESSION_SECRET` segue só no `createOAuth` (task 338).
 - classroom-api: `getImageVariant` sai dos limites `session` e `visitor` e ganha `image-ip`, 600/min por IP com ou sem sessão, contando os `304` (task 335).
 - specs: limites de taxa alinhados entre 003, 004, 029 e 033; a 033 passa a remeter aos limites de cada serviço (task 337).

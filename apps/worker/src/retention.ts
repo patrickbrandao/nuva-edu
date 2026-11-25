@@ -4,9 +4,6 @@ import { type Config, type Database, purgeAudit } from '@nuva-edu/core';
 export const RETENTION_BATCH_SIZE = 5_000;
 /** Dispositivos conhecidos sem uso há 1 ano (prazo fixo, spec 033). */
 export const DEVICE_RETENTION_DAYS = 365;
-/** Padrões da spec 033 para a fila, usados só quando o chamador não passa o prazo. */
-export const JOB_DONE_RETENTION_DEFAULT_DAYS = 7;
-export const JOB_FAILED_RETENTION_DEFAULT_DAYS = 30;
 
 export type RetentionSettings = Pick<
   Config['retention'],
@@ -16,8 +13,9 @@ export type RetentionSettings = Pick<
   | 'emailSentDays'
   | 'emailFailedDays'
   | 'auditDays'
-> &
-  Partial<Pick<Config['retention'], 'jobDoneDays' | 'jobFailedDays'>>;
+  | 'jobDoneDays'
+  | 'jobFailedDays'
+>;
 
 /** Quantas linhas cada regra apagou, para o log (só contagens, nenhum dado pessoal). */
 export interface RetentionReport {
@@ -161,19 +159,9 @@ function rules(settings: RetentionSettings, now: Date): Record<BatchRuleName, Ba
     // Tarefas da fila contam de `finished_at`, que só existe em `done` e `failed` (migration
     // 0002). `queued` e `running` nunca entram, qualquer que seja a idade.
     jobsDone: (db, limit) =>
-      purgeFinishedJobs(
-        db,
-        limit,
-        'done',
-        ago((settings.jobDoneDays ?? JOB_DONE_RETENTION_DEFAULT_DAYS) * DAY_MS),
-      ),
+      purgeFinishedJobs(db, limit, 'done', ago(settings.jobDoneDays * DAY_MS)),
     jobsFailed: (db, limit) =>
-      purgeFinishedJobs(
-        db,
-        limit,
-        'failed',
-        ago((settings.jobFailedDays ?? JOB_FAILED_RETENTION_DEFAULT_DAYS) * DAY_MS),
-      ),
+      purgeFinishedJobs(db, limit, 'failed', ago(settings.jobFailedDays * DAY_MS)),
   };
 }
 

@@ -4,8 +4,6 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createHandlers } from '../src/handlers.ts';
 import {
   DEVICE_RETENTION_DAYS,
-  JOB_DONE_RETENTION_DEFAULT_DAYS,
-  JOB_FAILED_RETENTION_DEFAULT_DAYS,
   purgeRetention,
   RETENTION_BATCH_SIZE,
   type RetentionSettings,
@@ -309,14 +307,11 @@ describe('retention.purge', () => {
     await db.deleteFrom('jobs').where('id', 'in', [queuedOld, runningOld]).execute();
   });
 
-  it('fila de tarefas: segue os prazos recebidos e, sem eles, os padrões da spec 033', async () => {
-    expect(JOB_DONE_RETENTION_DEFAULT_DAYS).toBe(7);
-    expect(JOB_FAILED_RETENTION_DEFAULT_DAYS).toBe(30);
+  it('fila de tarefas: segue os prazos recebidos', async () => {
     const done = await insertJob('done', 3 * DAY);
     const failed = await insertJob('failed', 10 * DAY);
 
-    const { jobDoneDays: _done, jobFailedDays: _failed, ...withoutJobs } = SETTINGS;
-    await purgeRetention(db, withoutJobs);
+    await purgeRetention(db, SETTINGS);
     expect(await exists('jobs', done)).toBe(true);
     expect(await exists('jobs', failed)).toBe(true);
 
