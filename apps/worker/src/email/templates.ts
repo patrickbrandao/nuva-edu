@@ -1,8 +1,32 @@
-import type { EmailDataByType, EmailType } from '@nuva-edu/core';
+import {
+  type AnyEmailDataByType,
+  type AnyEmailType,
+  type EmailType,
+  isEmailType,
+} from '@nuva-edu/core';
 import { ptBR } from './locales/pt-BR.ts';
 
 // Montagem dos e-mails (spec 024, RF-06): o modelo do tipo, no idioma da instalação, vira
 // assunto, texto e HTML. Os textos ficam nos arquivos de `locales/`; aqui só o layout.
+
+/**
+ * Tipos que o núcleo ainda lista como "sem modelo no worker" (`PendingTemplateEmailType`) e que
+ * já têm modelo aqui. Quando o núcleo os passar para `EmailType` (tarefa 416), a lista fica
+ * redundante e pode ser esvaziada, sem outra mudança.
+ */
+export const EXTRA_TEMPLATE_EMAIL_TYPES = [
+  'access.granted',
+] as const satisfies readonly AnyEmailType[];
+
+/** Tipos com modelo no worker: os do núcleo e os de `EXTRA_TEMPLATE_EMAIL_TYPES`. */
+export type TemplateEmailType = EmailType | (typeof EXTRA_TEMPLATE_EMAIL_TYPES)[number];
+
+const EXTRA_TEMPLATE_SET: ReadonlySet<string> = new Set(EXTRA_TEMPLATE_EMAIL_TYPES);
+
+/** `true` para o tipo que o worker sabe montar. */
+export function isTemplateEmailType(type: string): type is TemplateEmailType {
+  return isEmailType(type) || EXTRA_TEMPLATE_SET.has(type);
+}
 
 export interface EmailAction {
   label: string;
@@ -26,16 +50,16 @@ export interface EmailLinks {
   admin: string;
 }
 
-export interface TemplateContext<T extends EmailType> {
+export interface TemplateContext<T extends TemplateEmailType> {
   school: string;
-  data: EmailDataByType[T];
+  data: AnyEmailDataByType[T];
   links: EmailLinks;
   /** Data e hora no fuso da escola, por extenso curto (`24/11/2026, 14:30`). */
   formatDateTime(iso: string): string;
 }
 
 export type EmailTemplates = {
-  [T in EmailType]: (context: TemplateContext<T>) => EmailContent;
+  [T in TemplateEmailType]: (context: TemplateContext<T>) => EmailContent;
 } & {
   greeting(name: string): string;
   linkHint: string;
@@ -50,9 +74,9 @@ export function templatesFor(locale: string): EmailTemplates {
   return LOCALES[locale] ?? (LOCALES[DEFAULT_LOCALE] as EmailTemplates);
 }
 
-export interface RenderInput<T extends EmailType> {
+export interface RenderInput<T extends TemplateEmailType> {
   type: T;
-  data: EmailDataByType[T];
+  data: AnyEmailDataByType[T];
   locale: string;
   recipientName: string;
   school: { name: string; timezone: string; accentColor: string | null; logoUrl: string | null };
@@ -68,7 +92,7 @@ export interface RenderedEmail {
   html: string;
 }
 
-export function renderEmail<T extends EmailType>(input: RenderInput<T>): RenderedEmail {
+export function renderEmail<T extends TemplateEmailType>(input: RenderInput<T>): RenderedEmail {
   const templates = templatesFor(input.locale);
   const dateFormat = new Intl.DateTimeFormat(templatesLocale(input.locale), {
     dateStyle: 'short',
@@ -122,7 +146,7 @@ function renderHtml(
   content: EmailContent,
   footer: string,
   linkHint: string,
-  school: RenderInput<EmailType>['school'],
+  school: RenderInput<TemplateEmailType>['school'],
 ): string {
   const accent = school.accentColor ?? DEFAULT_ACCENT;
   const header =

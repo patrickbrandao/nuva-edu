@@ -1,20 +1,26 @@
 import {
+  type AnyEmailDataByType,
   ConfigError,
   EMAIL_TYPES,
-  type EmailDataByType,
-  type EmailType,
+  emailTypeDefinition,
   loadConfig,
 } from '@nuva-edu/core';
 import { describe, expect, it } from 'vitest';
 import { classifySmtpError, smtpTransportOptions } from '../src/email/smtp.ts';
-import { escapeHtml, renderEmail } from '../src/email/templates.ts';
+import {
+  EXTRA_TEMPLATE_EMAIL_TYPES,
+  escapeHtml,
+  isTemplateEmailType,
+  renderEmail,
+  type TemplateEmailType,
+} from '../src/email/templates.ts';
 import { workerRequiredSecrets } from '../src/secrets.ts';
 
 const TOKEN = 'a'.repeat(43);
 const CLASSROOM = 'https://classroom.escola.test';
 const ADMIN = 'https://edu-admin.escola.test';
 
-const SAMPLE_DATA: { [T in EmailType]: EmailDataByType[T] } = {
+const SAMPLE_DATA: { [T in TemplateEmailType]: AnyEmailDataByType[T] } = {
   'account.verify_email': {},
   'account.password_reset': {},
   'account.exists': {},
@@ -29,9 +35,22 @@ const SAMPLE_DATA: { [T in EmailType]: EmailDataByType[T] } = {
   'account.password_changed': { by: 'admin' },
   'account.role_changed': { role: 'manager' },
   'moderation.suspended': { kind: 'posting', endsAt: null },
+  'access.granted': {
+    productType: 'course',
+    productTitle: 'Violão <do zero>',
+    expiresAt: '2026-12-01T03:00:00.000Z',
+  },
 };
 
-function render<T extends EmailType>(type: T, data: EmailDataByType[T] = SAMPLE_DATA[type]) {
+const TEMPLATE_TYPES = [
+  ...Object.keys(EMAIL_TYPES),
+  ...EXTRA_TEMPLATE_EMAIL_TYPES,
+] as TemplateEmailType[];
+
+function render<T extends TemplateEmailType>(
+  type: T,
+  data: AnyEmailDataByType[T] = SAMPLE_DATA[type] as AnyEmailDataByType[T],
+) {
   return renderEmail({
     type,
     data,
@@ -45,12 +64,12 @@ function render<T extends EmailType>(type: T, data: EmailDataByType[T] = SAMPLE_
     },
     classroomUrl: CLASSROOM,
     adminUrl: ADMIN,
-    token: EMAIL_TYPES[type].tokenPurpose === null ? null : TOKEN,
+    token: emailTypeDefinition(type).tokenPurpose === null ? null : TOKEN,
   });
 }
 
 describe('modelos de e-mail', () => {
-  it.each(Object.keys(EMAIL_TYPES) as EmailType[])('%s monta assunto, texto e HTML', (type) => {
+  it.each(TEMPLATE_TYPES)('%s monta assunto, texto e HTML', (type) => {
     const email = render(type);
     expect(email.subject).toContain('Escola & Cia');
     expect(email.text).toContain('Olá, Ana <b>.');
@@ -76,6 +95,43 @@ describe('modelos de e-mail', () => {
     expect(render('account.role_changed').text).toContain(`${ADMIN}/`);
     expect(render('account.role_changed', { role: 'student' }).text).not.toContain(ADMIN);
     expect(render('moderation.suspended').text).not.toContain('http');
+  });
+
+  it('access.granted cita o produto, a validade e leva à estante certa (spec 024)', () => {
+    const course = render('access.granted');
+    expect(course.subject).toBe('Acesso liberado em Escola & Cia: Violão <do zero>');
+    expect(course.text).toContain('acesso ao curso "Violão <do zero>" em Escola & Cia.');
+    expect(course.text).toContain('O acesso vale até 01/12/2026, 00:00.');
+    expect(course.text).toContain(`Ver meus cursos:\n${CLASSROOM}/meus-cursos\n`);
+    expect(course.html).toContain('Violão &lt;do zero&gt;');
+    expect(course.html).not.toContain('<do zero>');
+
+    const bundle = render('access.granted', {
+      productType: 'bundle',
+      productTitle: 'Pacote completo',
+      expiresAt: null,
+    });
+    expect(bundle.text).toContain('acesso ao pacote "Pacote completo"');
+    expect(bundle.text).toContain('Os cursos e ebooks do pacote já estão na sua conta.');
+    expect(bundle.text).toContain('O acesso não tem data para terminar.');
+    expect(bundle.text).toContain(`${CLASSROOM}/meus-cursos`);
+    expect(bundle.text).not.toContain('meus-ebooks');
+
+    const ebook = render('access.granted', {
+      productType: 'ebook',
+      productTitle: 'Cifras',
+      expiresAt: null,
+    });
+    expect(ebook.text).toContain('acesso ao ebook "Cifras"');
+    expect(ebook.text).toContain(`Ver meus ebooks:\n${CLASSROOM}/meus-ebooks\n`);
+    expect(ebook.text).not.toContain('meus-cursos');
+    expect(ebook.text).not.toContain('token=');
+  });
+
+  it('só os tipos com modelo são aceitos pelo worker', () => {
+    expect(isTemplateEmailType('access.granted')).toBe(true);
+    expect(isTemplateEmailType('account.locked')).toBe(true);
+    expect(isTemplateEmailType('tipo.inexistente')).toBe(false);
   });
 
   it('datas no fuso da escola e campos ausentes por extenso', () => {

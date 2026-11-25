@@ -2,8 +2,11 @@ import {
   type Database,
   deleteOrphanImages,
   expireSuspensions,
+  isDomainError,
   type JobHandlers,
   type Logger,
+  PermanentJobError,
+  recalculateEntitlements,
 } from '@nuva-edu/core';
 import { createEmailSendHandler } from './email/send-email.ts';
 import type { Mailer } from './email/smtp.ts';
@@ -63,6 +66,27 @@ export function createHandlers(deps: HandlerDependencies): JobHandlers {
         context.signal,
       );
       logger.info({ job_id: job.id, deleted }, 'Imagens órfãs apagadas');
+    },
+    // Composição de curso ou pacote mudou (spec 010, "Recalcular a cascata"): o núcleo compara
+    // cada árvore com o catálogo atual, em lotes de 500 raízes, uma transação por lote. Repetir
+    // sem mudança no catálogo não grava nada; parar no meio deixa lotes inteiros prontos.
+    'entitlement.recompute': async (job, context) => {
+      context.signal.throwIfAborted();
+      const { productType, productId } = job.payload;
+      let result: Awaited<ReturnType<typeof recalculateEntitlements>>;
+      try {
+        result = await recalculateEntitlements(db, { productType, productId });
+      } catch (error) {
+        // Payload fora do formato (tipo ou id inválido) não melhora com nova tentativa.
+        if (isDomainError(error) && error.code === 'validation_failed') {
+          throw new PermanentJobError('entitlement.recompute: payload inválido', { cause: error });
+        }
+        throw error;
+      }
+      logger.info(
+        { job_id: job.id, product_type: productType, product_id: productId, ...result },
+        'Cascata de direitos recalculada',
+      );
     },
   };
 }

@@ -1,6 +1,6 @@
 import type { EmailTemplates } from '../templates.ts';
 
-// Textos dos e-mails em pt-BR (spec 024, "E-mails do grupo account e da Fase 1"). Um modelo por
+// Textos dos e-mails em pt-BR (spec 024, "E-mails do grupo account e da Fase 1" e "E-mails da Fase 2"). Um modelo por
 // tipo: assunto, parágrafos e botões. O layout (texto e HTML) é montado em `../templates.ts`.
 // Nunca ponha aqui senha nem motivo interno de suspensão; o token só entra pelo link pronto.
 
@@ -14,6 +14,13 @@ const ROLE_LABELS = {
 const SITE_LABELS = {
   classroom: 'site do aluno',
   admin: 'painel de administração',
+} as const;
+
+/** Produto liberado em `access.granted`: como ele é citado e para onde o botão leva. */
+const GRANTED_PRODUCTS = {
+  course: { name: 'ao curso', path: '/meus-cursos', action: 'Ver meus cursos' },
+  bundle: { name: 'ao pacote', path: '/meus-cursos', action: 'Ver meus cursos' },
+  ebook: { name: 'ao ebook', path: '/meus-ebooks', action: 'Ver meus ebooks' },
 } as const;
 
 export const ptBR: EmailTemplates = {
@@ -114,4 +121,21 @@ export const ptBR: EmailTemplates = {
     ],
     actions: [],
   }),
+
+  'access.granted': ({ school, data, links, formatDateTime }) => {
+    const product = GRANTED_PRODUCTS[data.productType];
+    return {
+      subject: `Acesso liberado em ${school}: ${data.productTitle}`,
+      paragraphs: [
+        `Você agora tem acesso ${product.name} "${data.productTitle}" em ${school}.`,
+        ...(data.productType === 'bundle'
+          ? ['Os cursos e ebooks do pacote já estão na sua conta.']
+          : []),
+        data.expiresAt === null
+          ? 'O acesso não tem data para terminar.'
+          : `O acesso vale até ${formatDateTime(data.expiresAt)}.`,
+      ],
+      actions: [{ label: product.action, url: links.classroom(product.path) }],
+    };
+  },
 };

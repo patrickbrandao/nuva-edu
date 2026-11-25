@@ -1,9 +1,7 @@
 import {
   type Database,
-  EMAIL_TYPES,
-  type EmailType,
+  emailTypeDefinition,
   getSettings,
-  isEmailType,
   issueEmailToken,
   type JobHandler,
   type Logger,
@@ -13,7 +11,7 @@ import {
   schoolLogoUrl,
 } from '@nuva-edu/core';
 import { classifySmtpError, type Mailer } from './smtp.ts';
-import { renderEmail } from './templates.ts';
+import { isTemplateEmailType, renderEmail, type TemplateEmailType } from './templates.ts';
 
 export interface EmailSendDependencies {
   db: Database;
@@ -69,17 +67,18 @@ export function createEmailSendHandler(deps: EmailSendDependencies): JobHandler<
         if (row.status !== 'queued') {
           return 'not_queued';
         }
-        if (!isEmailType(row.type)) {
+        if (!isTemplateEmailType(row.type)) {
           throw new SendFailure('Tipo de e-mail desconhecido', true);
         }
-        const emailType: EmailType = row.type;
+        const emailType: TemplateEmailType = row.type;
+        const definition = emailTypeDefinition(emailType);
         let data: ReturnType<typeof parseEmailData>;
         try {
           data = parseEmailData(emailType, row.data);
         } catch {
           throw new SendFailure('Dados do e-mail fora do formato do tipo', true);
         }
-        const purpose = EMAIL_TYPES[emailType].tokenPurpose;
+        const purpose = definition.tokenPurpose;
         // Tipo com link: a trava da emissão vem antes da leitura da conta, para a troca de e-mail
         // pela equipe (que invalida os tokens sob a mesma trava) não passar entre a conferência
         // do endereço e a emissão (spec 007, "Tokens de e-mail").
@@ -88,11 +87,17 @@ export function createEmailSendHandler(deps: EmailSendDependencies): JobHandler<
         }
         const user = await trx
           .selectFrom('users')
-          .select(['name', 'email', 'emailVerifiedAt', 'deletedAt'])
+          .select(['name', 'email', 'emailVerifiedAt', 'deletedAt', 'suspendedKind'])
           .where('id', '=', row.userId)
           .executeTakeFirst();
         if (!user || user.deletedAt !== null) {
           await markSent(trx, outboxId, { lastError: 'skipped: user_deleted' });
+          return 'skipped';
+        }
+        // Suspensa (`full`) depois do enfileiramento: não recebe o que não pode usar (spec 024,
+        // "E-mails da Fase 2"). O `enqueueEmail` já recusa quem está suspenso na hora da ação.
+        if (definition.skipFullySuspended && user.suspendedKind === 'full') {
+          await markSent(trx, outboxId, { lastError: 'skipped: user_suspended' });
           return 'skipped';
         }
         // Link na fila para o endereço anterior não sai nem gera token (spec 024, "Links com token").

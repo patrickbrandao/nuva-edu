@@ -10,6 +10,7 @@ Roda direto no Node 26, sem build. Métricas e verificações do `/readyz` vêm 
 | `src/app.ts` | Liga banco, laço de consumo, agendador e HTTP interno |
 | `src/worker.ts` | Laço: `NOTIFY` + varredura, concorrência, batimento, tarefa presa, encerramento |
 | `src/handlers.ts` | Um manipulador por tipo do registro do núcleo, todos idempotentes |
+| `entitlement.recompute` (em `src/handlers.ts`) | Recálculo da cascata (spec 010): chama `recalculateEntitlements` do núcleo, lotes de 500 raízes; payload inválido falha sem nova tentativa |
 | `src/email/send-email.ts` | `email.send` (spec 024): lê `email_outbox`, cria o token do link, envia e marca `sent` numa transação |
 | `src/email/templates.ts`, `src/email/locales/pt-BR.ts` | Layout (texto e HTML) e textos de cada tipo de e-mail, por idioma |
 | `src/email/smtp.ts` | Transporte SMTP (Nodemailer), regra de TLS e classificação dos erros |
@@ -53,7 +54,9 @@ Os rótulos saem em ordem alfabética (`jobs_total{outcome="done",type="..."}`).
 
 Recusa 5xx do destinatário ou da mensagem marca `failed` sem nova tentativa (`PermanentJobError`); o resto segue a espera própria do tipo (1 min, 5 min, 30 min, 2 h). Na última tentativa a linha também fica `failed`. Confirmação para quem já confirmou o e-mail, ou para conta excluída, fica `sent` sem envio (`skipped: already_verified`, `skipped: user_deleted`).
 
-Texto novo de e-mail: acrescente o tipo em `src/email/locales/pt-BR.ts`; o tipo `EmailTemplates` obriga um modelo por tipo do núcleo.
+`access.granted` (spec 024, "E-mails da Fase 2") leva a `/meus-cursos` (curso e pacote) ou `/meus-ebooks` (ebook). Os tipos com `skipFullySuspended` no núcleo não saem para a conta com suspensão `full` no momento do envio (`skipped: user_suspended`).
+
+Texto novo de e-mail: acrescente o tipo em `src/email/locales/pt-BR.ts`; o tipo `EmailTemplates` obriga um modelo por tipo do núcleo. Tipo que o núcleo ainda lista como pendente de modelo entra também em `EXTRA_TEMPLATE_EMAIL_TYPES` (`src/email/templates.ts`).
 
 ## Tipo novo de tarefa
 

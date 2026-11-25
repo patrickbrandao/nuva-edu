@@ -125,6 +125,7 @@ Detalhe das decisões em `specs/decisions/`.
 - `scripts/task.mjs` conhece a janela de contrato: `task:start MMM --as <papel> --join NNN`, `task:finish MMM` marca `pronta`, `task:finish NNN` exige todas prontas e remove os arquivos da janela; `task:list` com a coluna `JANELA` (task 104).
 - infra: licença MIT-0 (nodemailer, smtp-server) na allowlist; `verify:quick` confere licenças (passo `licencas`) quando muda o `pnpm-lock.yaml` (task 390).
 - Spec 032: passo `licencas` do `verify:quick` registrado na tabela de passos, no exemplo de resumo e nos critérios de aceite (task 391).
+- worker: manipulador de `entitlement.recompute` (recálculo da cascata pelo núcleo, idempotente, payload inválido falha sem nova tentativa) e modelo pt-BR do e-mail `access.granted`, com link para `/meus-cursos` ou `/meus-ebooks`; conta com suspensão `full` no envio não recebe (`skipped: user_suspended`) (task 434).
 
 ### Alterado
 - arquiteto: contrato da admin-api e specs 009, 015 e 028 alinhados ao núcleo: referência do template (`keys` com `placeholder` e `requiredOneOf`, `modelHtml`), problemas do 422 com linha e coluna sempre presentes e teto de 200, códigos de erro e limites do catálogo, ações de auditoria de ordem e de cancelamento do pedido de publicação; cliente regenerado (task 555).

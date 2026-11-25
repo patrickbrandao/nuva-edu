@@ -5,7 +5,6 @@ import {
   consumeEmailToken,
   type Database,
   type EmailDataInput,
-  type EmailType,
   enqueue,
   enqueueEmail,
   invalidateEmailTokens,
@@ -17,6 +16,7 @@ import { SMTPServer } from 'smtp-server';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { createEmailSendHandler } from '../src/email/send-email.ts';
 import { createMailer, type Mailer, type OutgoingEmail } from '../src/email/smtp.ts';
+import type { TemplateEmailType } from '../src/email/templates.ts';
 import { createHandlers } from '../src/handlers.ts';
 import { createWorker, type Worker } from '../src/worker.ts';
 import {
@@ -95,7 +95,7 @@ async function createUser(email = `aluno-${randomUUID()}@escola.test`): Promise<
   return row.id;
 }
 
-async function send<T extends EmailType>(
+async function send<T extends TemplateEmailType>(
   userId: string,
   type: T,
   data: EmailDataInput<T>,
@@ -361,6 +361,96 @@ describe('email.send', () => {
       .transaction()
       .execute((trx) => consumeEmailToken(trx, current as string, 'reset'));
     expect(owner.userId).toBe(userId);
+  });
+
+  it('access.granted sai pelo SMTP com o produto, a validade e o link da estante', async () => {
+    const email = `liberado-${randomUUID()}@escola.test`;
+    const userId = await createUser(email);
+    const { outboxId, jobId } = await send(userId, 'access.granted', {
+      productType: 'course',
+      productTitle: 'Violão do zero',
+      expiresAt: new Date('2026-12-01T03:00:00.000Z'),
+    });
+    await jobDone(jobId);
+
+    expect(received).toHaveLength(1);
+    const mail = received[0] as ParsedMail;
+    const subject = `Acesso liberado em ${SCHOOL}: Violão do zero`;
+    expect(mail.subject).toBe(subject);
+    const to = Array.isArray(mail.to) ? mail.to[0] : mail.to;
+    expect(to?.value[0]?.address).toBe(email);
+    expect(mail.text).toContain('Olá, Ana Teste.');
+    expect(mail.text).toContain(`acesso ao curso "Violão do zero" em ${SCHOOL}.`);
+    expect(mail.text).toContain('O acesso vale até 01/12/2026, 00:00.');
+    expect(mail.text).toContain(`${CLASSROOM_URL}/meus-cursos`);
+    expect(mail.html).toContain(`href="${CLASSROOM_URL}/meus-cursos"`);
+    expect(mail.text).not.toContain('token=');
+    expect(await outbox(outboxId)).toMatchObject({
+      status: 'sent',
+      subject,
+      attempts: 1,
+      lastError: null,
+    });
+    expect(await tokensOf(userId)).toHaveLength(0);
+    expect(JSON.stringify(captured.lines)).not.toContain(email);
+
+    // Repetir a tarefa não envia de novo.
+    const again = await enqueue(db, 'email.send', { outboxId });
+    await jobDone(again?.id ?? '');
+    expect(received).toHaveLength(1);
+  });
+
+  it('access.granted de ebook leva a /meus-ebooks', async () => {
+    const userId = await createUser();
+    const { jobId } = await send(userId, 'access.granted', {
+      productType: 'ebook',
+      productTitle: 'Cifras',
+      expiresAt: null,
+    });
+    await jobDone(jobId);
+    expect(received).toHaveLength(1);
+    expect(received[0]?.text).toContain('O acesso não tem data para terminar.');
+    expect(received[0]?.text).toContain(`${CLASSROOM_URL}/meus-ebooks`);
+  });
+
+  it('access.granted não sai para a conta suspensa (full) depois do enfileiramento', async () => {
+    const userId = await createUser();
+    const { outboxId, jobId } = await send(userId, 'access.granted', {
+      productType: 'bundle',
+      productTitle: 'Pacote',
+      expiresAt: null,
+    });
+    await worker?.stop({ timeoutMs: 1_000 });
+    await db
+      .updateTable('users')
+      .set({ suspendedKind: 'full', suspendedAt: new Date(), suspendedReason: 'teste' })
+      .where('id', '=', userId)
+      .execute();
+    await startWorker();
+    await jobDone(jobId);
+    expect(received).toHaveLength(0);
+    expect(await outbox(outboxId)).toMatchObject({
+      status: 'sent',
+      subject: null,
+      lastError: 'skipped: user_suspended',
+    });
+  });
+
+  it('tipo do catálogo ainda sem modelo no worker falha sem nova tentativa', async () => {
+    const userId = await createUser();
+    const queued = await db.transaction().execute((trx) =>
+      enqueueEmail(trx, {
+        userId,
+        type: 'certificate.issued',
+        data: { courseTitle: 'Violão', code: 'ABC123' },
+      }),
+    );
+    await jobDone(queued?.jobId ?? '', 'failed');
+    expect(received).toHaveLength(0);
+    expect(await outbox(queued?.outboxId ?? '')).toMatchObject({
+      status: 'failed',
+      lastError: 'Tipo de e-mail desconhecido',
+    });
   });
 
   it('dispensa a confirmação de quem já confirmou o e-mail', async () => {
