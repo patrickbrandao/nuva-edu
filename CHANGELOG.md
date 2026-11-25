@@ -122,6 +122,7 @@ Detalhe das decisões em `specs/decisions/`.
 - Spec 032: passo `licencas` do `verify:quick` registrado na tabela de passos, no exemplo de resumo e nos critérios de aceite (task 391).
 
 ### Alterado
+- arquiteto: critério de aceite da 030 alinhado à retenção dos certificados (o registro fica, sem nome e sem PDF); 015 e 030 registram que a exclusão da conta anula `pdf_rendered_at` junto com o PDF (task 530).
 - `@nuva-edu/core`: `redactString` em tempo linear (100 mil caracteres patológicos em poucos ms, antes mais de 20 s); `jobs.test.ts` com banco próprio (task 325).
 - `@nuva-edu/core`: `NUVA_RETENTION_AUDIT_DAYS` abaixo de 365 impede a subida, em vez de fazer o `retention.purge` falhar (task 278).
 - Contratos `admin-api` e `classroom-api`: sai `x-nuva-pending` das 48 operações da Fase 1, todas com rota; `check-contract --no-pending` passa nas duas APIs (task 165).

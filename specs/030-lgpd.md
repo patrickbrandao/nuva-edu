@@ -88,7 +88,7 @@ Contas de equipe (`instructor`, `manager`, `admin`) não se excluem sozinhas: o 
 | CPF/CNPJ e nome do comprador nos pedidos | Mantidos pelo prazo fiscal, depois apagados |
 | Pedidos, pagamentos, reembolsos (valores e datas) | Mantidos; após o prazo fiscal ficam sem vínculo com pessoa |
 | Direitos de acesso, progresso, anotações | Apagados |
-| Certificados | O registro permanece sem o nome do titular e o PDF é apagado; a página pública de validação mostra o código, o curso e a data, com o aviso "titular removeu a conta" ([015](015-certificados.md)). O aluno é avisado disso antes de confirmar a exclusão |
+| Certificados | O registro permanece sem o nome do titular e o PDF é apagado (`student_name`, `pdf` e `pdf_rendered_at` ficam nulos, os dois últimos sempre juntos); a página pública de validação mostra o código, o curso e a data, com o aviso "titular removeu a conta" ([015](015-certificados.md)). O aluno é avisado disso antes de confirmar a exclusão |
 | Tópicos, respostas e comentários | Mantidos com autor "usuário removido" |
 | Cases e suas imagens | Apagados |
 | Mensagens diretas | Mantidas para o outro participante, com remetente "usuário removido" |
@@ -146,7 +146,8 @@ Decisões de esquema da migration 0007 (aceitas na tarefa 198):
 - [ ] O link de exportação não funciona sem sessão do próprio usuário nem depois de 24 horas.
 - [ ] Entrar durante a carência e cancelar restaura a conta intacta.
 - [ ] Após a exclusão, uma busca no banco pelo e-mail e pelo nome do usuário só encontra os pedidos dentro do prazo fiscal.
-- [ ] Tópicos do usuário excluído aparecem com "usuário removido"; cases e certificados deixam de existir.
+- [ ] Tópicos do usuário excluído aparecem com "usuário removido"; os cases deixam de existir.
+- [ ] Certificado do usuário excluído permanece sem o nome do titular e sem o PDF (`pdf` e `pdf_rendered_at` nulos): a validação pública mostra o código, o curso e a data, com o aviso "titular removeu a conta", e o PDF deixa de ser servido.
 - [ ] O último `admin` não consegue excluir a própria conta.
 - [ ] Exportação e exclusão feitas pelo admin geram registro em `audit_log`.
 

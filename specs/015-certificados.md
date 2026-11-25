@@ -236,7 +236,7 @@ Dono (escrita): `worker` para emissão, PDF e exemplo; `admin-api` para revogaç
 
 Campos em `courses`: `certificate_enabled` (padrão verdadeiro), `certificate_hours` (nulo = calculado).
 
-Retenção: certificados são permanentes enquanto a conta existir. Na exclusão da conta ([030](030-lgpd.md)) o registro permanece sem o nome do titular e o PDF é apagado: a página de validação mostra o código, o curso e a data, com o aviso "titular removeu a conta", e o PDF deixa de ser servido. O aluno é informado disso antes de confirmar a exclusão. Versões de template sem referência e pedidos de exemplo seguem a [033](033-observabilidade-retencao-backup.md).
+Retenção: certificados são permanentes enquanto a conta existir. Na exclusão da conta ([030](030-lgpd.md)) o registro permanece sem o nome do titular e o PDF é apagado (`student_name`, `pdf` e `pdf_rendered_at` passam a nulos; `pdf` e `pdf_rendered_at` andam sempre juntos): a página de validação mostra o código, o curso e a data, com o aviso "titular removeu a conta", e o PDF deixa de ser servido. O aluno é informado disso antes de confirmar a exclusão. Versões de template sem referência e pedidos de exemplo seguem a [033](033-observabilidade-retencao-backup.md).
 
 ### Entrega por fase
 
