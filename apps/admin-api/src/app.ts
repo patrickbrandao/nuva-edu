@@ -24,6 +24,7 @@ import { registerAuthRoutes } from './routes/auth.ts';
 import { registerCourseRoutes } from './routes/courses.ts';
 import { registerImageRoutes } from './routes/images.ts';
 import { registerOAuthRoutes } from './routes/oauth.ts';
+import { registerProductRoutes } from './routes/products.ts';
 import { registerTermsRoutes } from './routes/terms.ts';
 import { registerUserRoutes } from './routes/users.ts';
 import {
@@ -117,5 +118,7 @@ export function buildAdminApp(options: AdminAppOptions): FastifyInstance {
   registerTermsRoutes(app, { db });
   // Catálogo (spec 009): cursos, módulos, aulas e links de apoio.
   registerCourseRoutes(app, { db });
+  // Ebooks, pacotes, itens do pacote e vínculos do ebook.
+  registerProductRoutes(app, { db });
   return app;
 }
