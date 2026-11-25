@@ -1050,17 +1050,22 @@ export interface paths {
         /**
          * Página "Anotações"
          * @description Todas as notas do próprio usuário, da alteração mais recente à mais antiga
-         *     (`specs/016-anotacoes.md`). Busca textual no título e no corpo. Ninguém lê nota alheia, nem a
-         *     equipe.
+         *     (`specs/016-anotacoes.md`). Busca textual no título e no corpo: `q` exige todas as palavras; só
+         *     espaços conta como ausente. `kind=lesson` inclui a nota cuja aula foi excluída. Ninguém lê nota
+         *     alheia, nem a equipe.
          */
         get: operations["listNotes"];
         put?: never;
         /**
          * Criar nota
          * @description Nota de aula (com `lessonId`) ou avulsa (sem). Nota de aula exige acesso à aula no momento:
-         *     `403` `access_denied` com `reason`; aula inexistente: `404`. Corpo só com espaços: `422`
-         *     `note_empty`; acima de 20.000 caracteres: `422` `note_too_long`; acima de 5.000 notas: `422`
-         *     `note_limit_reached`.
+         *     `403` `access_denied` com `reason`; aula inexistente ou despublicada: `404`. Título sem os
+         *     espaços das pontas; só espaços vira `null`; acima de 160: `400`.
+         *
+         *     `422`, pelo `code`: `note_empty` (corpo só com espaços); `note_too_long` (acima de 20.000
+         *     caracteres); `note_limit_reached` (o usuário já tem 5.000 notas); `note_lesson_limit_reached`
+         *     (já tem 100 notas nesta aula); `note_video_seconds_invalid` (`videoSeconds` negativo, não
+         *     finito, acima de 2.147.483.647, ou enviado em nota avulsa).
          */
         post: operations["createNote"];
         delete?: never;
@@ -1093,8 +1098,15 @@ export interface paths {
         /**
          * Editar nota
          * @description Salvamento automático. `updatedAt` é o da versão que o cliente conhece; se a nota mudou em outro
-         *     dispositivo: `409` `version_conflict` com a versão atual em `current`. Perder o acesso ao curso
-         *     não impede editar. Mesmos `422` da criação.
+         *     dispositivo: `409` `version_conflict` com a versão atual em `current`, mesmo que o pedido não
+         *     mude nada. Perder o acesso ao curso não impede editar. Campo ausente mantém o valor; pedido que
+         *     não altera nenhum campo devolve `200` com a nota como está, sem nova versão (mesmo `updatedAt`).
+         *     Toda gravação avança `updatedAt` (precisão de milissegundos): o cliente usa o da última resposta
+         *     no pedido seguinte.
+         *
+         *     `422`, pelo `code`: `note_empty`, `note_too_long` e `note_video_seconds_invalid`
+         *     (`videoSeconds` negativo, não finito, acima de 2.147.483.647, ou enviado em nota avulsa), como
+         *     na criação. Título acima de 160: `400`.
          */
         patch: operations["updateNote"];
         trace?: never;
@@ -1109,6 +1121,9 @@ export interface paths {
         /**
          * Notas da aula
          * @description As notas do usuário naquela aula, da mais antiga à mais recente, para a aba "Minhas notas".
+         *     Sem paginação: são no máximo 100, o teto de notas por aula (`note_lesson_limit_reached` na
+         *     criação). Não exige acesso à aula: as notas seguem legíveis depois de perdê-lo. `404` só quando
+         *     o usuário não tem nota ali e a aula não existe ou está despublicada.
          */
         get: operations["listLessonNotes"];
         put?: never;
@@ -2283,12 +2298,20 @@ export interface components {
         NoteLesson: {
             /** @description `null` quando a aula foi excluída. */
             id: components["schemas"]["Uuid"] | null;
-            /** @description Título atual, ou o guardado na criação. */
+            /**
+             * @description Título atual enquanto `available`; o guardado na criação da nota quando a aula está
+             *     despublicada, o curso despublicado ou arquivado, ou a aula foi excluída. `courseTitle`
+             *     segue a mesma regra.
+             */
             title: string;
             courseId: components["schemas"]["Uuid"] | null;
             courseSlug: string | null;
             courseTitle: string;
-            /** @description Falso com a aula despublicada ou excluída: a nota não tem link de volta. */
+            /**
+             * @description Falso com a aula despublicada ou excluída, ou o curso despublicado ou arquivado: a nota
+             *     não tem link de volta. Verdadeiro não garante acesso: o link pode levar à tela de "sem
+             *     acesso" da aula.
+             */
             available: boolean;
         };
         /** @description Uma nota, privada do dono. */
@@ -4122,7 +4145,10 @@ export interface operations {
                     title?: string | null;
                     /** @description Markdown, até 20.000 caracteres. */
                     body: string;
-                    /** @description Instante do vídeo; negativo: `422`. */
+                    /**
+                     * @description Instante do vídeo em segundos, só em nota de aula. A fração é descartada (`83.9`
+                     *     vira `83`). Inválido: `422` `note_video_seconds_invalid`.
+                     */
                     videoSeconds?: number | null;
                 };
             };
@@ -4225,6 +4251,10 @@ export interface operations {
                 "application/json": {
                     title?: string | null;
                     body?: string;
+                    /**
+                     * @description `null` remove o instante. Só em nota de aula; a fração é descartada. Inválido:
+                     *     `422` `note_video_seconds_invalid`.
+                     */
                     videoSeconds?: number | null;
                     /** @description O `updatedAt` da nota lida. */
                     updatedAt: components["schemas"]["DateTime"];
