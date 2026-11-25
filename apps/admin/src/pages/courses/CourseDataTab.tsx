@@ -191,7 +191,7 @@ export function CourseDataTab({ course, canSetAccess, canSetPrice }: Props) {
       <AdminSection title={t('courses.cover.title')}>
         <ImagePicker
           key={pickerKey}
-          shape="square"
+          shape="wide"
           label={t('courses.cover.label')}
           chooseLabel={t('courses.cover.choose')}
           changeLabel={t('courses.cover.change')}

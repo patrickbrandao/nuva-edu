@@ -209,7 +209,7 @@ export function ProductDataTab({ kind, product, canSetAccess, canSetPrice }: Pro
       <AdminSection title={t('courses.cover.title')}>
         <ImagePicker
           key={pickerKey}
-          shape="square"
+          shape="wide"
           label={t(`products.${kind}.coverLabel`)}
           chooseLabel={t('courses.cover.choose')}
           changeLabel={t('courses.cover.change')}

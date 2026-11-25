@@ -189,6 +189,30 @@ describe('ebooks (/ebooks)', () => {
   });
 });
 
+describe('capa de ebook e de pacote', () => {
+  it.each([
+    ['ebook', `/ebooks/${EBOOK_ID}`, 'Guia de Python'],
+    ['pacote', `/pacotes/${BUNDLE_ID}`, 'Trilha Python'],
+  ])('a prévia da capa do %s é 16:9, sem `style` em linha', async (_kind, path, title) => {
+    const cover = {
+      imageId: '0193a5b2-0000-7000-8000-0000000000aa',
+      url: '/api/v1/images/capa/480.webp',
+      largeUrl: '/api/v1/images/capa/1280.webp',
+    };
+    const catalog = fakeCatalog({
+      ebooks: [ebookDetail({ cover })],
+      bundles: [bundleDetail({ cover })],
+    });
+    renderApp(path, catalog.respond);
+    await heading(title);
+    const frame = document.querySelector('.minui-image-picker__frame');
+    expect(frame?.getAttribute('data-shape')).toBe('wide');
+    expect(frame?.hasAttribute('style')).toBe(false);
+    expect(frame?.querySelector('img')?.getAttribute('src')).toBe(cover.url);
+    expect(frame?.querySelector('img')?.hasAttribute('style')).toBe(false);
+  });
+});
+
 describe('pacotes (/pacotes)', () => {
   it('cria o pacote, adiciona curso e ebook e só então publica', async () => {
     const user = userEvent.setup();

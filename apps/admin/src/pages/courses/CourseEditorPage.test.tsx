@@ -510,6 +510,10 @@ describe('editor de curso: dados, capa e certificado', () => {
     renderApp(PATH, catalog.respond);
     await heading('Curso de Python');
     expect(screen.getByText('Sem capa')).toBeTruthy();
+    // a capa é 16:9 (spec 029): a moldura da prévia é a larga, sem `style` em linha
+    const frame = document.querySelector('.minui-image-picker__frame');
+    expect(frame?.getAttribute('data-shape')).toBe('wide');
+    expect(frame?.hasAttribute('style')).toBe(false);
 
     const file = new File(['capa'], 'capa.png', { type: 'image/png' });
     await user.upload(screen.getByTestId('image-picker-input'), file);
