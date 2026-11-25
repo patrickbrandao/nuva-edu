@@ -136,6 +136,24 @@ export interface EmailTokens {
   userId: string;
 }
 
+export interface Entitlements {
+  createdAt: Generated<Timestamp>;
+  expiresAt: Timestamp | null;
+  grantedReason: string | null;
+  id: Generated<string>;
+  parentEntitlementId: string | null;
+  productId: string;
+  productType: string;
+  revokedAt: Timestamp | null;
+  revokeReason: string | null;
+  source: string;
+  sourceId: string;
+  startsAt: Generated<Timestamp>;
+  updatedAt: Generated<Timestamp>;
+  userId: string;
+  version: Generated<number>;
+}
+
 export interface Images {
   createdAt: Generated<Timestamp>;
   hiddenAt: Timestamp | null;
@@ -336,6 +354,7 @@ export interface DB {
   ebooks: Ebooks;
   emailOutbox: EmailOutbox;
   emailTokens: EmailTokens;
+  entitlements: Entitlements;
   images: Images;
   imageVariants: ImageVariants;
   jobs: Jobs;
