@@ -1501,6 +1501,29 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/certificates/{id}/pdf": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * PDF do certificado
+         * @description O PDF que o aluno recebeu, para a equipe conferir. O `instructor` só nos próprios cursos (de
+         *     outro curso, `404`). Certificado revogado continua disponível à equipe. PDF ainda não gerado:
+         *     `409` `certificate_preparing`. Certificado inexistente, ou PDF apagado pela exclusão da conta
+         *     do titular: `404`. Leitura comum: não grava auditoria.
+         */
+        get: operations["getCertificatePdf"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/courses/{id}/certificates/backfill": {
         parameters: {
             query?: never;
@@ -6100,6 +6123,29 @@ export interface operations {
             404: components["responses"]["NotFound"];
             409: components["responses"]["Conflict"];
             422: components["responses"]["UnprocessableEntity"];
+            429: components["responses"]["TooManyRequests"];
+            500: components["responses"]["InternalError"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    getCertificatePdf: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Identificador do recurso. */
+                id: components["parameters"]["IdPath"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: components["responses"]["Pdf"];
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
             429: components["responses"]["TooManyRequests"];
             500: components["responses"]["InternalError"];
             503: components["responses"]["ServiceUnavailable"];
