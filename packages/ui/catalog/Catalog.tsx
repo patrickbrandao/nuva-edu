@@ -3,6 +3,7 @@ import type { CSSProperties, ReactNode } from 'react';
 import { useState } from 'react';
 import {
   ActionButton,
+  ActivityHeatmap,
   AdminAvatar,
   AdminAvatars,
   AdminBadge,
@@ -48,9 +49,15 @@ import {
   ThemeSwitch,
   Txt,
   useTheme,
+  VideoPlayer,
 } from '../src/index';
 import './catalog.css';
 import { FeedbackPieces } from './FeedbackPieces';
+
+const HEATMAP_SAMPLE = Array.from({ length: 120 }, (_, i) => ({
+  day: new Date(Date.UTC(2026, 10, 25) - i * 3 * 86_400_000).toISOString().slice(0, 10),
+  total: (i * 7) % 5,
+}));
 
 const PLANS = [
   {
@@ -556,6 +563,42 @@ export function Catalog() {
             />
             <SnippetCard tag="ebook" hue={140} description="Guia de Docker" path="/ebooks/docker" />
           </SnippetGrid>
+        </div>
+      </section>
+      <section>
+        <h2>Aprendizado</h2>
+        <p className="cat__note">
+          VideoPlayer (aqui com provedor link) e ActivityHeatmap com dados de exemplo.
+        </p>
+        <div className="cat__stack">
+          <VideoPlayer
+            src="https://example.com/aula-externa"
+            provider="link"
+            labels={{
+              title: 'Aula de exemplo',
+              openVideo: 'Abrir vídeo',
+              newTab: '(abre em nova aba)',
+              controls: 'Controles do vídeo',
+              rewind: 'Voltar 10 s',
+              forward: 'Avançar 10 s',
+              speed: 'Velocidade',
+              volume: 'Volume',
+              fullscreen: 'Tela cheia',
+              pictureInPicture: 'Imagem sobre imagem',
+            }}
+          />
+          <ActivityHeatmap
+            today="2026-11-25"
+            days={HEATMAP_SAMPLE}
+            labels={{
+              title: 'Atividade nos últimos 12 meses',
+              day: (date, total) =>
+                `${total} ${total === 1 ? 'atividade' : 'atividades'} em ${date}`,
+              summary: (total, active) => `${total} atividades em ${active} dias`,
+              less: 'Menos',
+              more: 'Mais',
+            }}
+          />
         </div>
       </section>
     </div>

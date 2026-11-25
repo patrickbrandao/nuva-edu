@@ -251,6 +251,34 @@ export {
   PASSWORD_MIN_LENGTH,
   PasswordInput,
 } from './components/form/PasswordInput';
+// aprendizado: player de vídeo por provedor e mapa de atividade (TypeScript)
+export type {
+  ActivityDay,
+  ActivityHeatmapLabels,
+  ActivityHeatmapProps,
+  HeatmapCell,
+} from './components/learning/ActivityHeatmap';
+export {
+  ActivityHeatmap,
+  activityLevel,
+  buildActivityGrid,
+  HEATMAP_LEVELS,
+  HEATMAP_WEEKS,
+} from './components/learning/ActivityHeatmap';
+export type {
+  VideoPlayerError,
+  VideoPlayerHandle,
+  VideoPlayerLabels,
+  VideoPlayerProps,
+} from './components/learning/VideoPlayer';
+export { VideoPlayer } from './components/learning/VideoPlayer';
+export type { VideoProvider, VideoSource } from './components/learning/video/source';
+export { resolveVideoSource } from './components/learning/video/source';
+export {
+  RESUME_TAIL_SECONDS,
+  resumePosition,
+  TIME_REPORT_INTERVAL_MS,
+} from './components/learning/video/time';
 // link do roteador (TypeScript)
 export type {
   LinkComponent,

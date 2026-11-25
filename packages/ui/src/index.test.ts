@@ -38,6 +38,8 @@ describe('ponto de entrada do pacote', () => {
       'ProgressBar',
       'ProductCard',
       'ProductCardList',
+      'VideoPlayer',
+      'ActivityHeatmap',
     ];
     for (const name of expected) expect(ui, name).toHaveProperty(name);
   });

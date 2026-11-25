@@ -6,7 +6,13 @@ import { describe, expect, it } from 'vitest';
  * (Mensagem de erro de programação, como a de useToast fora do provedor, não conta.)
  */
 const sources = import.meta.glob<string>(
-  ['./catalog/*.tsx', './feedback/*.tsx', './form/*.tsx', '!./**/*.test.tsx'],
+  [
+    './catalog/*.tsx',
+    './feedback/*.tsx',
+    './form/*.tsx',
+    './learning/**/*.tsx',
+    '!./**/*.test.tsx',
+  ],
   {
     query: '?raw',
     import: 'default',
@@ -18,7 +24,7 @@ const withoutComments = (code: string) =>
   code.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:])\/\/.*$/gm, '$1');
 
 describe('sem texto fixo', () => {
-  it('confere os doze componentes', () => {
+  it('confere os componentes em TypeScript', () => {
     const files = Object.keys(sources).sort();
     expect(files).toEqual([
       './catalog/Accordion.tsx',
@@ -33,6 +39,12 @@ describe('sem texto fixo', () => {
       './form/AdminTextArea.tsx',
       './form/ImagePicker.tsx',
       './form/PasswordInput.tsx',
+      './learning/ActivityHeatmap.tsx',
+      './learning/VideoPlayer.tsx',
+      './learning/video/message.tsx',
+      './learning/video/native.tsx',
+      './learning/video/vimeo.tsx',
+      './learning/video/youtube.tsx',
     ]);
   });
 
