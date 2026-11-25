@@ -36,6 +36,25 @@ export function hashEmailToken(token: string): string {
 }
 
 /**
+ * Trava consultiva do par usuário-propósito (`email_tokens:<userId>:<purpose>`), válida até o
+ * fim da transação. É a que `issueEmailToken` e `invalidateEmailTokens` tomam; quem precisa
+ * serializar com elas (o worker, antes de decidir se um e-mail com link ainda vale) usa esta
+ * função, nunca uma cópia da chave. Reentrante: a mesma transação a toma de novo sem esperar.
+ */
+export async function lockEmailTokens(
+  trx: Database,
+  userId: string,
+  purpose: EmailTokenPurpose,
+): Promise<void> {
+  if (!trx.isTransaction) {
+    throw new TypeError('lockEmailTokens exige uma transação aberta (db.transaction()).');
+  }
+  await sql`SELECT pg_advisory_xact_lock(hashtextextended(${`email_tokens:${userId}:${purpose}`}, 0))`.execute(
+    trx,
+  );
+}
+
+/**
  * Cria o token do link e invalida os anteriores não usados do mesmo usuário e propósito: vale
  * o último link enviado (spec 007). Exige transação: a trava do par usuário-propósito vale até
  * o fim dela, então duas emissões simultâneas não deixam dois links válidos.
@@ -48,9 +67,7 @@ export async function issueEmailToken(
   if (!trx.isTransaction) {
     throw new TypeError('issueEmailToken exige uma transação aberta (db.transaction()).');
   }
-  await sql`SELECT pg_advisory_xact_lock(hashtextextended(${`email_tokens:${userId}:${purpose}`}, 0))`.execute(
-    trx,
-  );
+  await lockEmailTokens(trx, userId, purpose);
   await trx
     .updateTable('emailTokens')
     .set({ usedAt: sql<Date>`now()` })
@@ -82,9 +99,7 @@ export async function invalidateEmailTokens(trx: Database, userId: string): Prom
     throw new TypeError('invalidateEmailTokens exige uma transação aberta (db.transaction()).');
   }
   for (const purpose of INVALIDATION_ORDER) {
-    await sql`SELECT pg_advisory_xact_lock(hashtextextended(${`email_tokens:${userId}:${purpose}`}, 0))`.execute(
-      trx,
-    );
+    await lockEmailTokens(trx, userId, purpose);
   }
   const result = await trx
     .updateTable('emailTokens')

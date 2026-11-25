@@ -16,6 +16,7 @@ import {
   isDomainError,
   isEmailType,
   issueEmailToken,
+  lockEmailTokens,
   normalizeEmailData,
   parseEmailData,
   tokenExpired,
@@ -354,6 +355,51 @@ describe('tokens de e-mail', () => {
 
   it('invalidateEmailTokens exige transação', async () => {
     await expect(invalidateEmailTokens(db, crypto.randomUUID())).rejects.toThrow(/transação/);
+  });
+
+  /** Tenta, de outra conexão, a chave literal de hoje (a mesma que o worker ainda copia). */
+  async function keyIsFree(userId: string, purpose: 'verify' | 'reset'): Promise<boolean> {
+    return db.transaction().execute(async (other) => {
+      const result = await sql<{
+        free: boolean;
+      }>`SELECT pg_try_advisory_xact_lock(hashtextextended(${`email_tokens:${userId}:${purpose}`}, 0)) AS free`.execute(
+        other,
+      );
+      return result.rows[0]?.free === true;
+    });
+  }
+
+  it('lockEmailTokens trava a mesma chave que issueEmailToken e invalidateEmailTokens', async () => {
+    const userId = crypto.randomUUID();
+    expect(await keyIsFree(userId, 'verify')).toBe(true);
+    expect(await keyIsFree(userId, 'reset')).toBe(true);
+
+    await inRollback(async (trx) => {
+      await lockEmailTokens(trx, userId, 'reset');
+      expect(await keyIsFree(userId, 'reset')).toBe(false);
+      expect(await keyIsFree(userId, 'verify')).toBe(true);
+      // Reentrante: a mesma transação toma de novo sem esperar.
+      await lockEmailTokens(trx, userId, 'reset');
+    });
+    expect(await keyIsFree(userId, 'reset')).toBe(true);
+
+    await inRollback(async (trx) => {
+      const owner = await createUser(trx);
+      await issueEmailToken(trx, owner, 'verify');
+      expect(await keyIsFree(owner, 'verify')).toBe(false);
+      expect(await keyIsFree(owner, 'reset')).toBe(true);
+    });
+
+    await inRollback(async (trx) => {
+      await invalidateEmailTokens(trx, userId);
+      expect(await keyIsFree(userId, 'verify')).toBe(false);
+      expect(await keyIsFree(userId, 'reset')).toBe(false);
+    });
+    expect(await keyIsFree(userId, 'verify')).toBe(true);
+  });
+
+  it('lockEmailTokens exige transação', async () => {
+    await expect(lockEmailTokens(db, crypto.randomUUID(), 'verify')).rejects.toThrow(/transação/);
   });
 
   it('nunca grava o token em claro em jobs, email_outbox ou no log', async () => {
