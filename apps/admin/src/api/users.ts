@@ -48,7 +48,7 @@ export function useUsersList(query: Omit<UsersQuery, 'cursor' | 'limit'>, enable
 }
 
 /** Ficha de um usuário (`GET /api/v1/users/{id}`). */
-export function useUser(id: string) {
+export function useUser(id: string, enabled = true) {
   const api = useApi();
   return useQuery({
     queryKey: usersKeys.detail(id),
@@ -60,6 +60,7 @@ export function useUser(id: string) {
       if (!data) throw new Error('GET /api/v1/users/{id} respondeu sem corpo');
       return data;
     },
+    enabled,
   });
 }
 

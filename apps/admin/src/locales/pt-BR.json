@@ -573,7 +573,13 @@
         "draft": "Rascunho",
         "published": "Publicado",
         "archived": "Arquivado"
-      }
+      },
+      "ownerAll": "Dono: todos",
+      "ownerOf": "Dono: {{name}}",
+      "ownerUnknown": "Dono: escolhido",
+      "ownerTitle": "Filtrar por dono",
+      "ownerDescription": "Mostra só os cursos do instrutor escolhido.",
+      "ownerClear": "Todos os donos"
     },
     "accessModes": {
       "open": "Aberto",
@@ -816,6 +822,10 @@
       "deleteText": "é excluída com os links de apoio. O progresso e as notas dos alunos ficam guardados.",
       "deleted": "Aula “{{title}}” excluída.",
       "reorderError": "Não foi possível gravar a ordem das aulas",
+      "move": "Mover",
+      "moveOf": "Mover a aula {{title}} para outro módulo",
+      "moved": "Aula “{{title}}” movida para o módulo “{{module}}”.",
+      "moveError": "Não foi possível mover a aula",
       "videoUrl": "Endereço do vídeo",
       "videoUrlHint": "Link do YouTube, Vimeo, Bunny, Panda ou de um arquivo .mp4 ou .webm. Outro endereço https vira o botão “Abrir vídeo”.",
       "duration": "Duração",
@@ -837,6 +847,28 @@
         "unnamed": "Link {{position}}",
         "saveError": "A aula foi salva, mas os links não"
       }
+    },
+    "owner": {
+      "title": "Dono do curso",
+      "hint": "O instrutor dono edita o curso e vê os alunos dele. Sem dono, o curso é gerido só por gerente e administrador.",
+      "current": "Dono atual",
+      "change": "Trocar o dono",
+      "dialogTitle": "Dono do curso “{{title}}”",
+      "dialogDescription": "Escolha um instrutor ou deixe o curso sem dono.",
+      "chosen": "Novo dono",
+      "none": "Deixar sem dono",
+      "search": "Buscar instrutor por nome ou e-mail",
+      "searchPlaceholder": "Nome ou e-mail",
+      "resultsLabel": "Instrutores encontrados",
+      "loading": "Buscando instrutores…",
+      "searchError": "Não foi possível buscar os instrutores",
+      "noResults": "Nenhum instrutor encontrado.",
+      "choose": "Escolher",
+      "chooseOf": "Escolher {{name}}",
+      "chosenTag": "Escolhido",
+      "currentTag": "Dono atual",
+      "saved": "Dono do curso alterado para {{name}}.",
+      "removed": "O curso ficou sem dono."
     }
   },
   "products": {

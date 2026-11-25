@@ -50,6 +50,7 @@ export function useCourseError() {
 const CODE_FIELD: Record<string, string> = {
   slug_taken: 'slug',
   price_required: 'priceCents',
+  owner_invalid: 'ownerId',
   price_not_allowed: 'priceCents',
   content_url_invalid: 'videoUrl',
 };

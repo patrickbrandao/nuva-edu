@@ -2,6 +2,7 @@ import {
   AdminButton,
   AdminEmpty,
   AdminField,
+  AdminMenu,
   AdminSection,
   AdminStatus,
   AdminTag,
@@ -106,6 +107,35 @@ export function CourseContentTab({ course, canPublish }: Props) {
     }, t('courses.lessons.reorderError'));
   };
 
+  /**
+   * Leva a aula ao fim de outro módulo do curso: o `PUT .../lessons/order` do módulo de destino
+   * aceita, na lista, uma aula de outro módulo do mesmo curso e a move (spec 009, RF-08).
+   */
+  const moveLesson = (lesson: LessonSummary, targetId: string) => {
+    const target = course.modules.find((item) => item.id === targetId);
+    if (!target || target.id === lesson.moduleId) return;
+    const moved = { ...lesson, moduleId: target.id, position: target.lessons.length };
+    setModulesOrder(
+      queryClient,
+      course.id,
+      course.modules.map((item) =>
+        item.id === target.id
+          ? { ...item, lessons: [...item.lessons, moved] }
+          : item.id === lesson.moduleId
+            ? { ...item, lessons: item.lessons.filter((other) => other.id !== lesson.id) }
+            : item,
+      ),
+    );
+    void write(async () => {
+      await api.PUT('/api/v1/modules/{id}/lessons/order', {
+        params: { path: { id: target.id } },
+        body: { lessonIds: [...target.lessons.map((item) => item.id), lesson.id] },
+      });
+      await refreshCourse(queryClient, course.id);
+      toast.success(t('courses.lessons.moved', { title: lesson.title, module: target.title }));
+    }, t('courses.lessons.moveError'));
+  };
+
   const setLessonStatus = (lesson: LessonSummary, status: LessonSummary['status']) =>
     void write(
       async () => {
@@ -156,6 +186,20 @@ export function CourseContentTab({ course, canPublish }: Props) {
               {t('courses.lessons.publish')}
             </AdminButton>
           )
+        ) : null}
+        {course.modules.length > 1 ? (
+          <AdminMenu
+            size="sm"
+            variant="ghost"
+            align="end"
+            label={t('courses.lessons.move')}
+            aria-label={t('courses.lessons.moveOf', { title: lesson.title })}
+            disabled={op.busy}
+            options={course.modules
+              .filter((item) => item.id !== lesson.moduleId)
+              .map((item) => ({ id: item.id, label: item.title }))}
+            onChange={(id: string) => moveLesson(lesson, id)}
+          />
         ) : null}
         <AdminButton
           size="sm"

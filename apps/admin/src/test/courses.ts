@@ -1,6 +1,7 @@
 import type { AdminSchemas } from '@nuva-edu/api-client/admin';
 import { apiRoutes, defaultRoutes, problem, type Routes, type StaffRole } from './api';
 import { jsonResponse } from './render';
+import { userDetail, userSummary } from './users';
 
 type CourseDetail = AdminSchemas['CourseDetail'];
 type CourseSummary = AdminSchemas['CourseSummary'];
@@ -149,6 +150,8 @@ interface Options {
   lessons?: LessonDetail[];
   ebooks?: EbookDetail[];
   bundles?: BundleDetail[];
+  /** Instrutores da escola, para a busca de dono (`GET /users?role=instructor`). */
+  instructors?: { id: string; name: string }[];
   /** Respostas no lugar das do catálogo simulado, por `MÉTODO /caminho` (ex.: uma recusa). */
   overrides?: Routes;
 }
@@ -168,6 +171,7 @@ export function fakeCatalog({
   lessons = [],
   ebooks = [],
   bundles = [],
+  instructors = [INSTRUCTOR],
   overrides = {},
 }: Options = {}) {
   const ebookStore = new Map(ebooks.map((ebook) => [ebook.id, structuredClone(ebook)]));
@@ -365,11 +369,45 @@ export function fakeCatalog({
     const input = (body ?? {}) as Record<string, unknown>;
     let match: RegExpMatchArray | null;
 
+    if (path === '/api/v1/users' && method === 'GET') {
+      const q = lastQuery.get('q')?.toLowerCase();
+      const items =
+        lastQuery.get('role') === 'instructor'
+          ? instructors
+              .filter((item) => !q || item.name.toLowerCase().includes(q))
+              .map((item) =>
+                userSummary({
+                  ...item,
+                  role: 'instructor',
+                  email: `${item.name.split(' ')[0]?.toLowerCase()}@escola.test`,
+                }),
+              )
+          : [];
+      return jsonResponse({ items, nextCursor: null });
+    }
+    match = path.match(/^\/api\/v1\/users\/([^/]+)$/);
+    if (match && method === 'GET') {
+      const found = instructors.find((item) => item.id === match?.[1]);
+      return found ? jsonResponse(userDetail({ ...found, role: 'instructor' })) : undefined;
+    }
+    match = path.match(/^\/api\/v1\/courses\/([^/]+)\/owner$/);
+    if (match && method === 'PATCH') {
+      const course = store.get(match[1] ?? '');
+      if (!course) return problem(404, 'not_found');
+      const owner = instructors.find((item) => item.id === input.ownerId);
+      if (input.ownerId !== null && !owner) return problem(422, 'owner_invalid');
+      course.owner = owner ? { id: owner.id, name: owner.name } : null;
+      return jsonResponse(course);
+    }
+
     if (path === '/api/v1/courses' && method === 'GET') {
-      const items = [...store.values()].map(({ modules, ...course }) => {
-        void modules;
-        return courseSummary(course as Partial<CourseSummary>);
-      });
+      const ownerId = lastQuery.get('ownerId');
+      const items = [...store.values()]
+        .filter((course) => !ownerId || course.owner?.id === ownerId)
+        .map(({ modules, ...course }) => {
+          void modules;
+          return courseSummary(course as Partial<CourseSummary>);
+        });
       return jsonResponse({ items, nextCursor: null });
     }
     if (path === '/api/v1/courses' && method === 'POST') {
@@ -514,10 +552,20 @@ export function fakeCatalog({
       const course = courseOfModule(match[1] ?? '');
       const item = course?.modules.find((candidate) => candidate.id === match?.[1]);
       if (!course || !item) return problem(404, 'not_found');
+      // uma aula de outro módulo do mesmo curso, na lista, é movida para este
       const ids = input.lessonIds as string[];
-      item.lessons = ids
-        .map((id) => item.lessons.find((lesson) => lesson.id === id))
-        .filter((lesson): lesson is LessonSummary => lesson !== undefined);
+      const all = course.modules.flatMap((candidate) => candidate.lessons);
+      const next = ids.map((id) => all.find((lesson) => lesson.id === id));
+      if (
+        next.some((lesson) => lesson === undefined) ||
+        item.lessons.some((lesson) => !ids.includes(lesson.id))
+      ) {
+        return problem(422, 'order_mismatch');
+      }
+      for (const other of course.modules) {
+        other.lessons = other.lessons.filter((lesson) => !ids.includes(lesson.id));
+      }
+      item.lessons = next as LessonSummary[];
       recount(course);
       return jsonResponse(item);
     }

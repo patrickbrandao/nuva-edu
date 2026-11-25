@@ -32,6 +32,7 @@ import { CourseCertificateTab } from './CourseCertificateTab';
 import { CourseContentTab, LESSON_PARAM } from './CourseContentTab';
 import { CourseDataTab } from './CourseDataTab';
 import { CourseEbooksTab } from './CourseEbooksTab';
+import { CourseOwnerSection } from './CourseOwner';
 import { useCourseError } from './errors';
 
 const TABS = ['dados', 'conteudo', 'ebooks', 'certificado', 'alunos'] as const;
@@ -213,11 +214,14 @@ function CourseEditor({ course }: { course: CourseDetail }) {
         onChange={selectTab}
       />
       {tab === 'dados' ? (
-        <CourseDataTab
-          course={course}
-          canSetAccess={can('product.set_access') && !instructor}
-          canSetPrice={can('product.set_price')}
-        />
+        <>
+          <CourseDataTab
+            course={course}
+            canSetAccess={can('product.set_access') && !instructor}
+            canSetPrice={can('product.set_price')}
+          />
+          {can('course.set_owner') ? <CourseOwnerSection course={course} /> : null}
+        </>
       ) : tab === 'conteudo' ? (
         <CourseContentTab course={course} canPublish={canPublish} />
       ) : tab === 'ebooks' ? (

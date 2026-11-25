@@ -15,7 +15,7 @@ import {
 } from '@nuva-edu/ui';
 import { useQueryClient } from '@tanstack/react-query';
 import { GraduationCap } from 'lucide-react';
-import { type FormEvent, useEffect, useId, useState } from 'react';
+import { type FormEvent, lazy, Suspense, useEffect, useId, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate, useSearchParams } from 'react-router';
 import { useAction } from '../../api/action';
@@ -38,6 +38,7 @@ import {
 } from '../../api/courses';
 import { useMeta } from '../../api/meta';
 import { QueryErrorState } from '../../api/problems';
+import { useUser } from '../../api/users';
 import { formatDateTime } from '../../format';
 import { useCan } from '../../session/session';
 import { CourseStatusCell } from './CourseBits';
@@ -45,6 +46,12 @@ import { useCourseError, useFieldRefusal } from './errors';
 import { formatDuration, formatPrice } from './format';
 
 const ALL = 'all';
+const UUID = /^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i;
+
+/* A escolha do dono para o filtro entra sob demanda (spec 006, RNF-03). */
+const OwnerFilterDialog = lazy(() =>
+  import('./CourseOwner').then((module) => ({ default: module.OwnerFilterDialog })),
+);
 
 function pick<T extends string>(value: string | null, allowed: readonly T[]): T | undefined {
   return allowed.find((item) => item === value);
@@ -65,6 +72,12 @@ export function CoursesPage() {
   const status = pick(params.get('status'), COURSE_STATUSES);
   const accessMode = pick(params.get('access'), ACCESS_MODES);
   const awaitingReview = params.get('awaiting') === '1';
+  // filtro por dono: só de quem troca o dono (gerente e admin); o instrutor já recebe só os dele
+  const canFilterOwner = can('course.set_owner');
+  const ownerParam = params.get('dono');
+  const ownerId = canFilterOwner && ownerParam && UUID.test(ownerParam) ? ownerParam : undefined;
+  const [pickingOwner, setPickingOwner] = useState(false);
+  const [pickedOwner, setPickedOwner] = useState<{ id: string; name: string } | null>(null);
   const sort = pick(params.get('sort'), COURSES_SORTS) ?? DEFAULT_COURSES_SORT;
   const [search, setSearch] = useState(q ?? '');
   useEffect(() => setSearch(q ?? ''), [q]);
@@ -75,10 +88,19 @@ export function CoursesPage() {
     ...(status ? { status } : {}),
     ...(accessMode ? { accessMode } : {}),
     ...(awaitingReview ? { awaitingReview: true } : {}),
+    ...(ownerId ? { ownerId } : {}),
     sort,
   });
   const rows: CourseSummary[] = list.data?.pages.flatMap((page) => page.items) ?? [];
-  const filtered = Boolean(q || status || accessMode || awaitingReview);
+  const filtered = Boolean(q || status || accessMode || awaitingReview || ownerId);
+  // o nome do dono no botão: o escolhido agora, o de um curso da lista ou, no endereço
+  // recarregado sem cursos, a ficha dele
+  const knownOwner =
+    pickedOwner?.id === ownerId
+      ? pickedOwner?.name
+      : rows.find((course) => course.owner?.id === ownerId)?.owner?.name;
+  const ownerUser = useUser(ownerId ?? '', Boolean(ownerId) && !knownOwner && !list.isPending);
+  const ownerName = knownOwner ?? ownerUser.data?.name;
 
   const update = (key: string, value: string | undefined) => {
     setParams(
@@ -212,6 +234,15 @@ export function CoursesPage() {
           onChange={(id: string) => update('sort', id === DEFAULT_COURSES_SORT ? undefined : id)}
           aria-label={t('courses.filters.sortLabel', { value: labelOf(sortOptions, sort) })}
         />
+        {canFilterOwner ? (
+          <AdminButton aria-haspopup="dialog" onClick={() => setPickingOwner(true)}>
+            {ownerId
+              ? ownerName
+                ? t('courses.filters.ownerOf', { name: ownerName })
+                : t('courses.filters.ownerUnknown')
+              : t('courses.filters.ownerAll')}
+          </AdminButton>
+        ) : null}
         <AdminCheckbox
           checked={awaitingReview}
           onChange={(checked: boolean) => update('awaiting', checked ? '1' : undefined)}
@@ -269,6 +300,19 @@ export function CoursesPage() {
         </>
       )}
 
+      {pickingOwner ? (
+        <Suspense fallback={null}>
+          <OwnerFilterDialog
+            ownerId={ownerId}
+            onClose={() => setPickingOwner(false)}
+            onPick={(owner) => {
+              setPickedOwner(owner ?? null);
+              update('dono', owner?.id);
+              setPickingOwner(false);
+            }}
+          />
+        </Suspense>
+      ) : null}
       {creating ? (
         <CreateCourseDialog
           onClose={() => setCreating(false)}
