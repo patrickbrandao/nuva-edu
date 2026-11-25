@@ -28,23 +28,28 @@ export interface ImageVariantSpec {
 
 /**
  * Finalidades implementadas e as variantes de cada uma (spec 029, "Finalidades e variantes").
- * Na Fase 1 só existe `avatar`; as demais entram com os recursos que as usam (e, nas de
+ * Hoje existem `avatar` e `product_cover`; as demais entram com os recursos que as usam (e, nas de
  * proporção original, depois que o `arquiteto` fixar a regra em aberto na spec).
  */
 export const IMAGE_VARIANT_SPECS: Readonly<Partial<Record<ImagePurpose, ImageVariantSpec>>> = {
   avatar: { widths: [64, 256], aspect: 1 },
+  // Fase 2 (tarefa 410): capa de curso, ebook e pacote, 16:9.
+  product_cover: { widths: [480, 1280], aspect: 16 / 9 },
 };
 
 /** Site que recebe o envio: cada um aceita só as finalidades dele. */
 export type ImageUploadSite = 'classroom' | 'admin';
 
+/** Quem pode enviar: qualquer usuário, ou só os papéis listados. */
+type UploadRule = 'any' | readonly string[];
+
 /**
- * Finalidades aceitas por site e os papéis que podem enviá-las. Fase 1: o classroom aceita
- * `avatar` de qualquer usuário; o admin só entrega imagens.
+ * Finalidades aceitas por site e os papéis que podem enviá-las. O classroom aceita `avatar` de
+ * qualquer usuário; o admin aceita `product_cover` de `instructor`, `manager` e `admin` (Fase 2).
  */
-const UPLOAD_RULES: Readonly<Record<ImageUploadSite, Partial<Record<ImagePurpose, 'any'>>>> = {
+const UPLOAD_RULES: Readonly<Record<ImageUploadSite, Partial<Record<ImagePurpose, UploadRule>>>> = {
   classroom: { avatar: 'any' },
-  admin: {},
+  admin: { product_cover: ['instructor', 'manager', 'admin'] },
 };
 
 /** RNF-02: maior lado aceito na entrada. */
@@ -79,7 +84,8 @@ export function canUploadImagePurpose(
     return false;
   }
   const rule = UPLOAD_RULES[site][purpose];
-  return rule === 'any' && role.length > 0;
+  if (rule === undefined || role.length === 0) return false;
+  return rule === 'any' || rule.includes(role);
 }
 
 /** `403` `permission_denied` quando o site não aceita a finalidade ou o papel não pode enviá-la. */

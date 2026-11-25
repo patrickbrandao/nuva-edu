@@ -284,11 +284,17 @@ export function imageEtagMatches(ifNoneMatch: string | undefined, etag: string):
 }
 
 /**
- * Condição "a imagem tem referência". Fase 1: `profiles.avatar_image_id`. As finalidades novas
- * acrescentam aqui as colunas das tabelas donas (spec 029, "Expurgo").
+ * Condição "a imagem tem referência" (spec 029, "Expurgo"): `profiles.avatar_image_id` e, na
+ * Fase 2, a capa de `courses`, `ebooks` e `bundles`. As finalidades novas acrescentam aqui as
+ * colunas das tabelas donas.
  */
 function isReferenced(imageIdColumn: Expression<string>): Expression<SqlBool> {
-  return sql<SqlBool>`EXISTS (SELECT 1 FROM profiles WHERE profiles.avatar_image_id = ${imageIdColumn})`;
+  return sql<SqlBool>`(
+    EXISTS (SELECT 1 FROM profiles WHERE profiles.avatar_image_id = ${imageIdColumn})
+    OR EXISTS (SELECT 1 FROM courses WHERE courses.cover_image_id = ${imageIdColumn})
+    OR EXISTS (SELECT 1 FROM ebooks WHERE ebooks.cover_image_id = ${imageIdColumn})
+    OR EXISTS (SELECT 1 FROM bundles WHERE bundles.cover_image_id = ${imageIdColumn})
+  )`;
 }
 
 /**
