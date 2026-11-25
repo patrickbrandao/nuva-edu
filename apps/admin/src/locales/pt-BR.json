@@ -674,7 +674,8 @@
         "dados": "Dados",
         "conteudo": "Módulos e aulas",
         "ebooks": "Ebooks",
-        "certificado": "Certificado"
+        "certificado": "Certificado",
+        "alunos": "Alunos"
       }
     },
     "data": {
@@ -1048,6 +1049,163 @@
       "removeConfirm": "Remover do pacote",
       "removing": "Removendo…",
       "removed": "“{{title}}” removido do pacote."
+    }
+  },
+  "access": {
+    "title": "Acessos",
+    "loading": "Carregando os acessos…",
+    "errorTitle": "Não foi possível carregar os acessos",
+    "empty": "Nenhum acesso",
+    "emptyText": "Este usuário não tem acesso a nenhum curso, ebook ou pacote.",
+    "treeLabel": "Acessos de {{name}}",
+    "cascadeLabel": "Liberados por {{title}}",
+    "types": {
+      "course": "Curso",
+      "ebook": "Ebook",
+      "bundle": "Pacote"
+    },
+    "sources": {
+      "order": "Compra",
+      "subscription": "Assinatura",
+      "grant": "Concessão manual",
+      "cascade": "Cascata"
+    },
+    "states": {
+      "active": "Ativo",
+      "scheduled": "Agendado",
+      "expired": "Vencido",
+      "revoked": "Revogado"
+    },
+    "revokeReasons": {
+      "refund": "reembolso",
+      "chargeback": "contestação do pagamento",
+      "subscription_ended": "fim da assinatura",
+      "manual": "revogação manual",
+      "recalculation": "item retirado do produto",
+      "account_deleted": "conta excluída"
+    },
+    "lifetime": "Vitalício",
+    "until": "Até {{date}}",
+    "from": "A partir de {{date}}",
+    "revokedAt": "Revogado em {{date}} ({{reason}})",
+    "revokedAtNoReason": "Revogado em {{date}}",
+    "grantedBy": "Concedido por {{name}}: {{reason}}",
+    "grantedReason": "Motivo: {{reason}}",
+    "grant": {
+      "open": "Conceder acesso",
+      "title": "Conceder acesso a {{name}}",
+      "description": "O acesso vale para o produto e para o que ele libera em cascata. A concessão fica na auditoria e o usuário é avisado por e-mail.",
+      "type": "Tipo de produto",
+      "typeLabel": "Tipo de produto: {{value}}",
+      "search": "Buscar produto por título ou resumo",
+      "resultsLabel": "Produtos encontrados",
+      "loading": "Buscando…",
+      "searchError": "Não foi possível buscar os produtos",
+      "noResults": "Nenhum produto encontrado.",
+      "choose": "Escolher",
+      "chooseOf": "Escolher {{title}}",
+      "product": "Produto",
+      "chosen": "{{type}}: {{title}}",
+      "change": "Trocar o produto",
+      "productRequired": "Escolha o produto.",
+      "reason": "Motivo",
+      "reasonHint": "Obrigatório. Vai para a auditoria.",
+      "expires": "Validade (opcional)",
+      "expiresHint": "Último dia de acesso. Em branco, o acesso é vitalício.",
+      "expiresInvalid": "Informe uma data válida.",
+      "submit": "Conceder",
+      "busy": "Concedendo…",
+      "done": "Acesso a “{{title}}” concedido.",
+      "existing": "“{{title}}” já estava concedido por você a este usuário. Nada mudou."
+    },
+    "revoke": {
+      "open": "Revogar",
+      "openOf": "Revogar o acesso a {{title}}",
+      "title": "Revogar o acesso a “{{title}}”?",
+      "description": "{{name}} perde o acesso ao produto e ao que ele liberou em cascata, se não os tiver por outro caminho. Progresso, anotações e certificados continuam guardados.",
+      "reason": "Motivo",
+      "reasonHint": "Obrigatório. Vai para a auditoria.",
+      "submit": "Revogar o acesso",
+      "busy": "Revogando…",
+      "done": "Acesso a “{{title}}” revogado."
+    },
+    "errors": {
+      "expires_at_in_past": "A validade precisa ser uma data futura.",
+      "entitlement_not_revocable": "Só concessões manuais podem ser revogadas aqui. Acesso de compra sai por reembolso; de assinatura, pelo ciclo da assinatura.",
+      "entitlement_already_revoked": "Este acesso já foi revogado.",
+      "not_found": "O usuário ou o produto não existe mais.",
+      "validation_failed": "Confira os campos e tente de novo."
+    },
+    "progress": {
+      "title": "Progresso",
+      "loading": "Carregando o progresso…",
+      "errorTitle": "Não foi possível carregar o progresso",
+      "empty": "Nenhum curso",
+      "emptyText": "Este usuário não iniciou nem tem acesso a nenhum curso.",
+      "listLabel": "Progresso de {{name}} por curso",
+      "barLabel": "Progresso em {{title}}",
+      "lessons": "{{completed}} de {{total}} aulas concluídas",
+      "percent": "{{percent}}%",
+      "lastActivity": "Última atividade em {{date}}",
+      "noActivity": "Sem atividade",
+      "certificate": "Certificado {{code}}",
+      "certificateStates": {
+        "preparing": "em preparo",
+        "issued": "emitido",
+        "revoked": "revogado"
+      },
+      "states": {
+        "not_started": "Não iniciado",
+        "in_progress": "Em andamento",
+        "completed": "Concluído"
+      }
+    },
+    "students": {
+      "title": "Alunos do curso",
+      "hint": "Quem tem acesso ao curso, com o progresso nas aulas publicadas.",
+      "loading": "Carregando os alunos…",
+      "errorTitle": "Não foi possível carregar os alunos",
+      "loadMoreError": "Não foi possível carregar mais alunos.",
+      "empty": "Nenhum aluno",
+      "emptyText": "Ninguém tem acesso a este curso ainda.",
+      "emptyFiltered": "Nenhum aluno encontrado",
+      "emptyFilteredText": "Mude a busca ou o filtro.",
+      "search": "Buscar aluno pelo nome",
+      "searchPlaceholder": "Nome",
+      "searchButton": "Buscar",
+      "allStates": "Todos os progressos",
+      "stateLabel": "Progresso: {{value}}",
+      "sortLabel": "Ordem: {{value}}",
+      "sort": {
+        "-lastActivityAt": "Atividade mais recente",
+        "name": "Nome",
+        "-percent": "Maior progresso"
+      },
+      "columns": {
+        "student": "Aluno",
+        "progress": "Progresso",
+        "state": "Situação",
+        "lastActivity": "Última atividade",
+        "accessUntil": "Acesso até"
+      },
+      "noExpiry": "Sem prazo"
+    },
+    "summary": {
+      "title": "Resumo de progresso",
+      "loading": "Carregando o resumo…",
+      "errorTitle": "Não foi possível carregar o resumo",
+      "students": "Alunos com acesso",
+      "completionRate": "Taxa de conclusão",
+      "lessons": "Aulas publicadas",
+      "bucketsTitle": "Alunos por faixa de progresso",
+      "buckets": {
+        "notStarted": "Não iniciaram",
+        "upTo25": "De 1% a 25%",
+        "upTo50": "De 26% a 50%",
+        "upTo75": "De 51% a 75%",
+        "upTo99": "De 76% a 99%",
+        "completed": "Concluíram"
+      }
     }
   }
 }

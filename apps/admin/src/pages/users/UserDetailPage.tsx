@@ -13,7 +13,7 @@ import {
 } from '@nuva-edu/ui';
 import { useQueryClient } from '@tanstack/react-query';
 import { MonitorSmartphone, UserX } from 'lucide-react';
-import { useState } from 'react';
+import { lazy, Suspense, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useParams } from 'react-router';
 import { useApi } from '../../api/client';
@@ -29,6 +29,14 @@ import { SetPasswordDialog } from './dialogs/SetPasswordDialog';
 import { SimpleConfirm } from './dialogs/SimpleConfirm';
 import { SuspendDialog } from './dialogs/SuspendDialog';
 import { STUDENTS_PATH, UserStatusCell } from './UserBits';
+
+/*
+ * Acessos e progresso (specs 010 e 014) entram sob demanda (spec 006, RNF-03): a ficha abre com
+ * os dados da conta e as duas seções chegam em seguida, fora do JavaScript inicial.
+ */
+const UserAccessPanels = lazy(() =>
+  import('../access/UserAccessPanels').then((module) => ({ default: module.UserAccessPanels })),
+);
 
 type DialogName = 'edit' | 'suspend' | 'reactivate' | 'sessions' | 'reveal' | 'password' | 'role';
 
@@ -220,6 +228,12 @@ function UserOverview({ user }: { user: UserDetail }) {
                 />
               )}
             </AdminSection>
+          ) : null}
+
+          {can('entitlement.manage') || can('progress.view') ? (
+            <Suspense fallback={<LoadingState label={t('common.loadingPage')} />}>
+              <UserAccessPanels user={user} />
+            </Suspense>
           ) : null}
         </div>
 

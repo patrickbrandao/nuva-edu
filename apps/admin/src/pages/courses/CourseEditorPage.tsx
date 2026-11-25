@@ -26,6 +26,7 @@ import { QueryErrorState } from '../../api/problems';
 import { formatDateTime } from '../../format';
 import { useCan, useSession } from '../../session/session';
 import { usePageCrumb } from '../../shell/crumbs';
+import { CourseStudentsTab } from '../access/CourseStudentsTab';
 import { ConfirmAction, CourseStatusCell } from './CourseBits';
 import { CourseCertificateTab } from './CourseCertificateTab';
 import { CourseContentTab, LESSON_PARAM } from './CourseContentTab';
@@ -33,7 +34,7 @@ import { CourseDataTab } from './CourseDataTab';
 import { CourseEbooksTab } from './CourseEbooksTab';
 import { useCourseError } from './errors';
 
-const TABS = ['dados', 'conteudo', 'ebooks', 'certificado'] as const;
+const TABS = ['dados', 'conteudo', 'ebooks', 'certificado', 'alunos'] as const;
 type TabId = (typeof TABS)[number];
 const TAB_PARAM = 'aba';
 
@@ -98,8 +99,12 @@ function CourseEditor({ course }: { course: CourseDetail }) {
   // "Excluir" só sem vínculos (spec 009): com alunos, o caminho é arquivar; a API confere o resto
   const canDelete = can('course.delete') && course.studentCount === 0;
 
-  // vincular ebooks é de quem tem `ebook.link`; sem a ação, a aba nem aparece
-  const tabs = TABS.filter((item) => item !== 'ebooks' || can('ebook.link'));
+  // vincular ebooks é de quem tem `ebook.link`, e ver os alunos, de quem tem `progress.view`;
+  // sem a ação, a aba nem aparece
+  const tabs = TABS.filter(
+    (item) =>
+      (item !== 'ebooks' || can('ebook.link')) && (item !== 'alunos' || can('progress.view')),
+  );
   const requested = params.get(TAB_PARAM);
   // endereço com a aula aberta cai na aba do conteúdo
   const tab: TabId =
@@ -217,8 +222,10 @@ function CourseEditor({ course }: { course: CourseDetail }) {
         <CourseContentTab course={course} canPublish={canPublish} />
       ) : tab === 'ebooks' ? (
         <CourseEbooksTab course={course} />
-      ) : (
+      ) : tab === 'certificado' ? (
         <CourseCertificateTab course={course} />
+      ) : (
+        <CourseStudentsTab course={course} />
       )}
 
       {confirm === 'publish' ? (
