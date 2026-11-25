@@ -13,7 +13,7 @@ lá.
 | Sites | `https://edu-admin.opencode.tmsoft.com.br` e `https://classroom.opencode.tmsoft.com.br` |
 | Pasta no servidor | `/opt/nuva-edu` |
 | Projeto Compose | `nuva-edu` |
-| Perfis | nenhum (sem `traefik`, sem `mailpit`) |
+| Perfis | `mailpit` (até haver SMTP real de teste); nunca `traefik` nem `oauth-mock` |
 | Imagens | Docker Hub, `tmsoftbrasil/nuva-edu-*`, etiqueta do commit (`sha-<7>`) |
 | Postgres | só na rede interna; nenhuma porta publicada |
 
@@ -50,6 +50,10 @@ Conteúdo do `/opt/nuva-edu/.env.local`:
 
 ```dotenv
 POSTGRES_PASSWORD=<senha forte, só deste ambiente>
+SESSION_SECRET=<saída de openssl rand -base64 48>
+ADMIN_EMAIL=<e-mail do admin inicial>
+ADMIN_PASSWORD=<senha do admin inicial>
+SMTP_FROM=nuva-edu <no-reply@opencode.tmsoft.com.br>
 NUVA_DOMAIN=opencode.tmsoft.com.br
 TRAEFIK_NETWORK=network_public
 TRAEFIK_NETWORK_EXTERNAL=true
@@ -66,10 +70,47 @@ NUVA_POSTGRES_PUBLISH=false
 - `NUVA_IMAGE_TAG` só vale para comandos manuais; o deploy passa a etiqueta pedida por cima.
 - `NUVA_POSTGRES_PUBLISH=false` registra a intenção. O deploy não usa o
   `docker-compose.dev.yml`, então o banco não publica porta de nenhum jeito.
-- Não ponha `NUVA_DEPLOY_SSH_*`, `COMPOSE_PROFILES`, `COMPOSE_FILE`, `COMPOSE_PROJECT_NAME` nem
-  `PORT`: o script recusa.
-- Os segredos das próximas fases (`SESSION_SECRET`, `ADMIN_EMAIL`, `ADMIN_PASSWORD` e os demais
-  de "Segredos exigidos", na spec 031) entram aqui antes do primeiro deploy da fase que os exige.
+- `SMTP_FROM` é opcional: sem ela vale a do `.env` (`no-reply@localhost`).
+- Não ponha `NUVA_DEPLOY_SSH_*`, `COMPOSE_PROFILES`, `COMPOSE_FILE`, `COMPOSE_PROJECT_NAME`,
+  `PORT`, `NUVA_OAUTH_MOCK_URL` nem `NUVA_OAUTH_MOCK_INTERNAL_URL`: o script recusa, mesmo com
+  valor vazio. O provedor OAuth simulado é só de desenvolvimento.
+- Os segredos das próximas fases (os demais de "Segredos exigidos", na spec 031) entram aqui
+  antes do primeiro deploy da fase que os exige.
+
+### Segredos da Fase 1 (feito pelo humano)
+
+Desde a Fase 1 o Compose exige `SESSION_SECRET` (nas duas APIs) e `ADMIN_EMAIL` e
+`ADMIN_PASSWORD` (na `admin-api`). O `pnpm deploy:test` confere, antes de enviar qualquer coisa,
+que os três estão no `.env.local` do servidor e não estão vazios, e que o `SESSION_SECRET` tem
+ao menos 32 caracteres. Só a presença e o tamanho são conferidos: o valor não sai do servidor e
+não aparece na saída. Faltando algum, para com código 15 e uma linha
+`PROBLEMA: <NOME> precisa estar definida` para cada um.
+
+1. **`SESSION_SECRET`**: gere um valor novo, só deste ambiente, e não o reuse do `.env.local`
+   local:
+
+   ```bash
+   openssl rand -base64 48
+   ```
+
+2. **`ADMIN_EMAIL`**: o e-mail do admin inicial, que nasce na primeira subida da `admin-api`
+   (spec 007, "Admin inicial"). Use uma caixa que você lê; enquanto o servidor usa o Mailpit, os
+   e-mails ficam na tela dele (abaixo), não chegam à caixa.
+3. **`ADMIN_PASSWORD`**: uma senha forte, só deste ambiente. É com ela que você entra em
+   `https://edu-admin.opencode.tmsoft.com.br`.
+4. No servidor, acrescente as três linhas ao fim do `/opt/nuva-edu/.env.local`, com um editor
+   (ex.: `nano`), sem recriar o arquivo e mantendo o modo 600. Confira só os nomes, sem mostrar
+   os valores:
+
+   ```bash
+   grep -oE '^(SESSION_SECRET|ADMIN_EMAIL|ADMIN_PASSWORD)=' /opt/nuva-edu/.env.local
+   ```
+
+5. Rode `pnpm deploy:test` desta máquina. No primeiro deploy da Fase 1 ele também pede a
+   migração do volume do banco (código 19): rode `pnpm deploy:test <etiqueta> --migrate-volume`
+   (veja "Migração do volume do banco").
+6. Entre no admin com `ADMIN_EMAIL` e `ADMIN_PASSWORD`. Conferido o banco, apague o volume antigo
+   (veja a mesma seção).
 
 ## Publicar
 
@@ -88,25 +129,28 @@ O que acontece, nesta ordem. Até o passo 3, nada muda no servidor.
 2. **Imagens.** `docker manifest inspect` em cada imagem da etiqueta. Faltando alguma, para (código
    12) sem conectar ao servidor.
 3. **Conferência no servidor, só leitura.** Pasta e `.env.local` existem; o `.env.local` tem o
-   que o ambiente de teste exige; a rede do Traefik existe; o volume do banco, se existir, é do
-   projeto `nuva-edu`; e não há migração de volume pendente (veja "Migração do volume do banco").
-   Do `.env.local` o script lê apenas variáveis não secretas de uma
-   lista fixa; da senha, só confere que existe.
+   que o ambiente de teste exige, inclusive os segredos da Fase 1; a rede do Traefik existe; a
+   porta da tela do Mailpit não é usada por contêiner de outro projeto; o volume do banco, se
+   existir, é do projeto `nuva-edu`; e não há migração de volume pendente (veja "Migração do
+   volume do banco"). Do `.env.local` o script lê apenas variáveis não secretas de uma lista
+   fixa; das senhas e segredos, só confere que existem.
 4. **Envio.** Um `tar` pela conexão SSH, só com estes arquivos:
    `docker-compose.yml`, `.env` e o `docker-compose.yml` de `database/postgres`, `proxy/traefik`,
    `mail/mailpit` e de cada app. Nenhum código-fonte: as imagens já trazem o código, as
-   migrations e a configuração do lighttpd. Os composes do Traefik e do Mailpit vão porque o
-   `include:` da raiz os exige; os serviços deles ficam em perfis que o deploy não ativa.
+   migrations e a configuração do lighttpd. Os composes do Traefik, do Mailpit e do provedor
+   OAuth simulado vão porque o `include:` da raiz os exige; o Traefik e o simulador ficam em
+   perfis que o deploy não ativa.
 5. **Publicação.** No servidor, sempre com
-   `docker compose -p nuva-edu -f docker-compose.yml --env-file .env --env-file .env.local`:
-   `pull` das imagens, a cópia do volume do banco (só com `--migrate-volume` e quando necessária) e
-   `up -d --no-build --wait` (até 120 s). O `migrate` roda até o fim antes
+   `docker compose -p nuva-edu -f docker-compose.yml --env-file .env --env-file .env.local
+   --profile mailpit`: `pull` das imagens, a cópia do volume do banco (só com `--migrate-volume`
+   e quando necessária) e `up -d --no-build --wait` (até 120 s). Com backend na lista, o
+   `mailpit` entra no `pull` e no `up`; com `--only` só de sites, ele não é tocado. O `migrate` roda até o fim antes
    das APIs e do worker. `--no-build` garante que nada é construído no servidor, embora os
    composes declarem `build:`.
 6. **Conferência pública.** Desta máquina, por HTTPS e validando o certificado: `/healthz` dos
    dois hosts (respondido pelas APIs) e `/config.json` dos dois sites. Na primeira publicação o
    certificado leva alguns segundos; o script tenta por cerca de um minuto.
-7. **Resumo:** serviços, imagens, etiqueta e URLs.
+7. **Resumo:** serviços, imagens, etiqueta, URLs e o comando do túnel para o Mailpit.
 
 Rodar de novo com a mesma etiqueta é seguro: o Compose só recria o contêiner cuja imagem ou
 configuração mudou, e o `migrate`, se rodar outra vez, não reaplica migration já aplicada. Em falha, o script mostra o estado e os logs dos serviços e sai com erro.
@@ -180,8 +224,8 @@ usa os perfis `traefik` nem `backup`.
 | 12 | Imagem da etiqueta não existe no Docker Hub (nada foi feito no servidor) |
 | 13 | Falha de SSH, ou servidor sem `docker compose` |
 | 14 | Falta a pasta ou o `.env.local` no servidor |
-| 15 | `.env.local` do servidor impróprio para o ambiente de teste |
-| 16 | Rede do Traefik ausente, ou volume do banco de outro projeto |
+| 15 | `.env.local` do servidor impróprio para o ambiente de teste (inclui segredo da Fase 1 ausente ou `NUVA_OAUTH_MOCK_*` presente) |
+| 16 | Rede do Traefik ausente, porta da tela do Mailpit usada por outro projeto, ou volume do banco de outro projeto |
 | 17 | `pull`, cópia do volume ou `up` falhou no servidor |
 | 18 | Serviços no ar, mas a URL pública não respondeu |
 | 19 | Migração do volume do banco necessária e `--migrate-volume` ausente (nada foi enviado) |
@@ -189,21 +233,40 @@ usa os perfis `traefik` nem `backup`.
 
 ## E-mail
 
-O ambiente de teste não tem Mailpit, e o `.env` versionado aponta `SMTP_HOST=mailpit`, um nome que
-não existe lá. Na Fase 0 isso não afeta nada: nenhum serviço abre conexão SMTP nem a exige para
-subir. Quando o envio de e-mail entrar (Fase 1, spec 024), sem SMTP configurado o worker só
-registra a falha de envio; para enviar de verdade, o humano põe no `.env.local` do servidor o
-SMTP de teste (`SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD`, `SMTP_FROM`).
+Até haver SMTP real de teste, o deploy sobe o Mailpit (perfil `mailpit`) junto com o backend, e
+o `.env` versionado já aponta `SMTP_HOST=mailpit` e `SMTP_PORT=1025`. Todo e-mail (confirmação
+de cadastro, redefinição de senha) fica preso nele; nada sai para a internet.
+
+A tela do Mailpit é publicada só em `127.0.0.1` do servidor, na porta `MAILPIT_UI_PORT` (padrão
+8025). Não há rota pública: abra por túnel SSH, desta máquina (o resumo do deploy imprime o
+comando com os seus dados):
+
+```bash
+ssh -N -L 8025:127.0.0.1:8025 -p <NUVA_DEPLOY_SSH_PORT> <NUVA_DEPLOY_SSH_USER>@<NUVA_DEPLOY_SSH_HOST>
+```
+
+e acesse `http://localhost:8025`. Encerre o túnel com Ctrl+C. Se a porta 8025 local estiver
+ocupada, troque só o primeiro número (ex.: `-L 18025:127.0.0.1:8025` e `http://localhost:18025`).
+
+Se outro projeto do servidor já publica a porta 8025, o deploy para na conferência (código 16).
+Escolha outra porta livre e acrescente `MAILPIT_UI_PORT=<porta>` ao `.env.local` do servidor; o
+túnel passa a usá-la. A conferência só enxerga portas publicadas por contêiner; um processo fora
+do Docker na mesma porta faz o `up` falhar (código 17), com a mensagem do Docker.
+
+Quando houver SMTP real de teste (credencial do humano), o humano põe no `.env.local` do
+servidor `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD` e `SMTP_FROM`, e o perfil
+`mailpit` sai do deploy (spec 031, "Ambientes"), numa tarefa própria.
 
 ## Desfazer
 
 No servidor, pelo humano, em `/opt/nuva-edu`:
 
 ```bash
-docker compose -p nuva-edu --env-file .env --env-file .env.local down
+docker compose -p nuva-edu --env-file .env --env-file .env.local --profile mailpit down
 ```
 
-- **Remove:** os contêineres do projeto (`nuva-edu-*`) e a rede `nuva-edu-internal`. Os sites
+- **Remove:** os contêineres do projeto (`nuva-edu-*`) e a rede `nuva-edu-internal`. O
+  `--profile mailpit` inclui o Mailpit, que está num perfil. Os sites
   saem do ar e o Traefik deixa de rotear os dois hosts.
 - **Preserva:** o volume do banco (todos os dados), as imagens baixadas, a pasta
   `/opt/nuva-edu` com o `.env.local`, a rede `network_public`, o Traefik, os certificados e tudo
@@ -212,5 +275,5 @@ docker compose -p nuva-edu --env-file .env --env-file .env.local down
 Um novo `pnpm deploy:test` recoloca tudo no ar com os mesmos dados.
 
 Apagar também os dados é irreversível e exige decisão explícita do humano:
-`docker compose -p nuva-edu --env-file .env --env-file .env.local down --volumes`. Não use
+`docker compose -p nuva-edu --env-file .env --env-file .env.local --profile mailpit down --volumes`. Não use
 `docker volume prune` nem `docker system prune` nesse servidor: atingem os outros projetos.

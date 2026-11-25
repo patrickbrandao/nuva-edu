@@ -106,6 +106,7 @@ case "$1 $2" in
     [[ "$*" == *--format* ]] && echo "$VOLUME_OWNER"
     ;;
   'compose version') [[ "$*" == *--short* ]] && echo 5.6.0 ;;
+  'ps --filter') [ -n "\${PS_PROJECTS:-}" ] && printf '%s\\n' \${PS_PROJECTS} ;;
   'version --format') echo 29.9.0 ;;
 esac
 exit 0
@@ -234,7 +235,7 @@ test('--only publica só o pedido e não exige as imagens dos sites', () => {
   assert.equal(result.status, 0, result.output);
   assert.equal(calls(result, 'docker manifest').length, 3);
   const deploy = readFileSync(join(result.dir, 'ssh.stdin.3'), 'utf8');
-  assert.match(deploy, /^SERVICES='admin-api classroom-api worker'$/m);
+  assert.match(deploy, /^SERVICES='admin-api classroom-api worker mailpit'$/m);
   assert.match(deploy, /^export NUVA_IMAGE_TAG='main'$/m);
   assert.deepEqual(
     calls(result, 'curl').map((line) => line.split(' ').at(-1)),
@@ -313,12 +314,25 @@ test('--dry-run mostra arquivos e comandos remotos sem conectar', () => {
   assert.match(result.stdout, /tar -xf - --no-same-owner -C \/opt\/nuva-edu/);
   assert.match(
     result.stdout,
-    /docker compose -p nuva-edu -f docker-compose\.yml --env-file \.env --env-file \.env\.local "\$@"/,
+    /docker compose -p nuva-edu -f docker-compose\.yml --env-file \.env --env-file \.env\.local \\\n {4}--profile mailpit "\$@"/,
   );
   assert.match(result.stdout, /compose pull --quiet --include-deps \$SERVICES/);
   assert.match(result.stdout, /compose up -d --no-build --wait --wait-timeout 120 \$SERVICES/);
   assert.match(result.stdout, /^export NUVA_IMAGE_TAG='sha-abc1234'$/m);
-  assert.doesNotMatch(result.stdout, /--profile|docker-compose\.dev\.yml|--build\b/);
+  // O único perfil é o do Mailpit (spec 031, "Ambientes").
+  assert.doesNotMatch(result.stdout, /--profile (?!mailpit\b)|docker-compose\.dev\.yml|--build\b/);
+  assert.match(
+    result.stdout,
+    /^SERVICES='admin-api classroom-api worker admin classroom mailpit'$/m,
+  );
+  assert.match(result.stdout, /^E-mail: perfil mailpit, serviço mailpit/m);
+  assert.match(
+    result.stdout,
+    /^Segredos conferidos no \.env\.local do servidor \(só a presença\): SESSION_SECRET, ADMIN_EMAIL, ADMIN_PASSWORD$/m,
+  );
+  for (const name of ['SESSION_SECRET', 'ADMIN_EMAIL', 'ADMIN_PASSWORD']) {
+    assert.match(result.stdout, new RegExp(`^REQUIRED_SECRETS='.*\\b${name}\\b.*'$`, 'm'), name);
+  }
   assert.doesNotMatch(
     result.stdout,
     /system prune|docker (stop|restart|rm|kill)|network (rm|create|connect|disconnect)|volume (rm|prune)|down\b/,
@@ -385,8 +399,8 @@ test('deploy completo: três conexões, só os arquivos da lista e nunca o .env.
     (line) => / compose -p /.test(line) && !/ config /.test(line),
   );
   const prefix =
-    'docker compose -p nuva-edu -f docker-compose.yml --env-file .env --env-file .env.local ';
-  const all = 'admin-api classroom-api worker admin classroom';
+    'docker compose -p nuva-edu -f docker-compose.yml --env-file .env --env-file .env.local --profile mailpit ';
+  const all = 'admin-api classroom-api worker admin classroom mailpit';
   assert.deepEqual(compose.slice(0, 2), [
     `${prefix}pull --quiet --include-deps ${all}`,
     `${prefix}up -d --no-build --wait --wait-timeout 120 ${all}`,
@@ -394,7 +408,7 @@ test('deploy completo: três conexões, só os arquivos da lista e nunca o .env.
   for (const line of calls(result, 'docker')) {
     assert.doesNotMatch(
       line,
-      /prune|--profile| stop| restart| rm | down|network (rm|create|connect)/,
+      /prune|--profile (?!mailpit )| stop| restart| rm | down|network (rm|create|connect)/,
     );
   }
 
@@ -408,7 +422,12 @@ test('deploy completo: três conexões, só os arquivos da lista e nunca o .env.
     ],
   );
   assert.match(result.stdout, /etiqueta publicada: sha-abc1234/);
+  assert.match(
+    result.stdout,
+    /Mailpit: ssh -N -L 8025:127\.0\.0\.1:8025 -p 2222 deploy@teste\.exemplo\.invalid/,
+  );
   assert.ok(!result.output.includes(SECRET), 'o segredo do .env.local apareceu na saída');
+  assert.ok(!result.output.includes('admin@escola.test'), 'o ADMIN_EMAIL apareceu na saída');
 
   // Idempotente: a segunda execução repete os mesmos comandos e termina igual.
   const again = run(['sha-abc1234', '--dir', remote], { dir, env: { SSH_EXEC: '1' } });
@@ -451,6 +470,97 @@ test('a conferência remota recusa .env.local impróprio e volume de outro proje
   assert.equal(own.status, 0, own.output);
 });
 
+test('a conferência remota exige os segredos da Fase 1 sem ler nem imprimir os valores', () => {
+  const attempt = (envLocal) => {
+    const dir = sandbox();
+    const remote = join(dir, 'remote');
+    mkdirSync(remote);
+    writeFileSync(join(remote, '.env.local'), envLocal);
+    return run(['main', '--dir', remote], { dir, env: { SSH_EXEC: '1' } });
+  };
+  const without = (names) =>
+    TEST_ENV_LOCAL.split('\n')
+      .filter((line) => !names.some((name) => line.startsWith(`${name}=`)))
+      .join('\n');
+
+  const names = ['SESSION_SECRET', 'ADMIN_EMAIL', 'ADMIN_PASSWORD'];
+  const none = attempt(without(names));
+  assert.equal(none.status, 15, none.output);
+  for (const name of names) {
+    assert.match(none.stderr, new RegExp(`PROBLEMA: ${name} precisa estar definida`), name);
+    assert.ok(none.stderr.includes(`${name}=<`), `instrução sem ${name}`);
+  }
+  assert.equal(calls(none, 'ssh').length, 1);
+  assert.deepEqual(readdirSync(join(none.dir, 'remote')), ['.env.local']);
+  assert.ok(!none.output.includes(SECRET));
+
+  for (const name of names) {
+    const one = attempt(without([name]));
+    assert.equal(one.status, 15, `${name}: ${one.output}`);
+    assert.match(one.stderr, new RegExp(`PROBLEMA: ${name} precisa estar definida`));
+    for (const other of names.filter((n) => n !== name)) {
+      assert.doesNotMatch(one.stderr, new RegExp(`PROBLEMA: ${other}`), `${name} -> ${other}`);
+    }
+    assert.ok(!one.output.includes(SECRET));
+    assert.ok(!one.output.includes('admin@escola.test'));
+  }
+
+  // Linha presente e vazia conta como ausente.
+  const empty = attempt(without(['ADMIN_PASSWORD']).concat('ADMIN_PASSWORD=\n'));
+  assert.equal(empty.status, 15);
+  assert.match(empty.stderr, /PROBLEMA: ADMIN_PASSWORD precisa estar definida/);
+
+  const short = attempt(
+    TEST_ENV_LOCAL.replace(`SESSION_SECRET=${SECRET}-${SECRET}`, 'SESSION_SECRET=curto-demais'),
+  );
+  assert.equal(short.status, 15);
+  assert.match(short.stderr, /PROBLEMA: SESSION_SECRET precisa ter no mínimo 32 caracteres/);
+  assert.ok(!short.output.includes('curto-demais'));
+
+  // A conferência remota nunca imprime valor: só nomes.
+  const preflight = readFileSync(join(none.dir, 'ssh.stdin.1'), 'utf8');
+  assert.doesNotMatch(preflight, /echo[^\n]*\$\(val (SESSION_SECRET|ADMIN_EMAIL|ADMIN_PASSWORD)/);
+});
+
+test('o .env.local do servidor não pode ligar o provedor OAuth simulado', () => {
+  for (const name of ['NUVA_OAUTH_MOCK_URL', 'NUVA_OAUTH_MOCK_INTERNAL_URL']) {
+    for (const value of ['', 'http://oauth-mock:8080']) {
+      const dir = sandbox();
+      const remote = join(dir, 'remote');
+      mkdirSync(remote);
+      writeFileSync(join(remote, '.env.local'), `${TEST_ENV_LOCAL}${name}=${value}\n`);
+      const result = run(['main', '--dir', remote], { dir, env: { SSH_EXEC: '1' } });
+      assert.equal(result.status, 15, `${name}=${value}`);
+      assert.match(result.stderr, new RegExp(`PROBLEMA: ${name} não pode estar no \\.env\\.local`));
+      assert.equal(calls(result, 'ssh').length, 1);
+    }
+  }
+});
+
+test('o Mailpit sobe só com backend e para se outro projeto usa a porta da tela', () => {
+  const sites = run(['main', '--only', 'admin,classroom', '--dry-run']);
+  assert.equal(sites.status, 0, sites.output);
+  assert.match(sites.stdout, /^SERVICES='admin classroom'$/m);
+  assert.match(sites.stdout, /^E-mail: sem backend na lista, o mailpit não é atualizado$/m);
+
+  const conflict = remoteRun(['sha-abc1234'], { PS_PROJECTS: 'outro-projeto' });
+  assert.equal(conflict.status, 16, conflict.output);
+  assert.match(
+    conflict.stderr,
+    /PROBLEMA: a porta 8025 \(tela do mailpit\) já é usada pelo projeto outro-projeto/,
+  );
+  assert.match(conflict.stderr, /MAILPIT_UI_PORT/);
+  assert.equal(calls(conflict, 'ssh').length, 1);
+
+  const own = remoteRun(['sha-abc1234'], { PS_PROJECTS: 'nuva-edu' });
+  assert.equal(own.status, 0, own.output);
+  assert.ok(
+    calls(own, 'docker').includes(
+      `docker ps --filter publish=8025 --format {{ index .Labels "com.docker.compose.project" }}`,
+    ),
+  );
+});
+
 // --- a configuração que o servidor resolveria ---------------------------------------------------
 
 const hasCompose = spawnSync('docker', ['compose', 'version'], { stdio: 'ignore' }).status === 0;
@@ -468,7 +578,7 @@ test('no servidor, o compose resolve hosts, rede externa, TLS e nenhuma porta pu
   writeFileSync(join(dir, '.env.local'), TEST_ENV_LOCAL);
   const clean = Object.fromEntries(
     Object.entries(process.env).filter(
-      ([name]) => !/^(POSTGRES_|NUVA_|TRAEFIK_|SMTP_|COMPOSE_)/.test(name),
+      ([name]) => !/^(POSTGRES_|NUVA_|TRAEFIK_|SMTP_|COMPOSE_|MAILPIT_|SESSION_|ADMIN_)/.test(name),
     ),
   );
   const result = spawnSync(
@@ -524,6 +634,27 @@ test('no servidor, o compose resolve hosts, rede externa, TLS e nenhuma porta pu
     assert.equal(labels[`traefik.http.routers.${router}.tls.certresolver`], 'letsencrypt');
     assert.ok(Object.keys(services[name].networks).includes('public'));
   }
+  // Com o perfil do deploy, o Mailpit entra e só publica a tela em 127.0.0.1.
+  const withMail = spawnSync(
+    'docker',
+    [
+      'compose',
+      ...['-p', 'nuva-edu', '-f', 'docker-compose.yml'],
+      ...['--env-file', '.env', '--env-file', '.env.local', '--profile', 'mailpit'],
+      ...['config', '--format', 'json'],
+    ],
+    { cwd: dir, encoding: 'utf8', env: { ...clean, NUVA_IMAGE_TAG: 'sha-abc1234' } },
+  );
+  assert.equal(withMail.status, 0, withMail.stderr);
+  const mail = JSON.parse(withMail.stdout).services.mailpit;
+  assert.ok(mail, 'mailpit fora do config com o perfil');
+  assert.deepEqual(
+    mail.ports.map((port) => [port.host_ip, port.published, port.target]),
+    [['127.0.0.1', '8025', 8025]],
+  );
+  assert.deepEqual(Object.keys(mail.networks), ['internal']);
+  assert.equal(services.worker.environment.SMTP_HOST, 'mailpit');
+
   const stream = 'traefik.http.routers.nuva-edu-classroom-stream';
   assert.equal(services['classroom-api'].labels[`${stream}.tls.certresolver`], 'letsencrypt');
   assert.equal(services['classroom-api'].labels[`${stream}.entrypoints`], 'websecure');
@@ -581,10 +712,10 @@ test('com --migrate-volume, copia antes do up, só do projeto, sem apagar o anti
   const prefix =
     'docker compose -p nuva-edu -f docker-compose.yml --env-file .env --env-file .env.local';
   const docker = calls(result, 'docker');
-  const pull = docker.findIndex((line) => line.startsWith(`${prefix} pull `));
+  const pull = docker.findIndex((line) => line.startsWith(`${prefix} --profile mailpit pull `));
   const stop = docker.indexOf(`${prefix} stop postgres`);
   const copy = docker.findIndex((line) => line.startsWith(`${prefix} run --rm --no-deps `));
-  const up = docker.findIndex((line) => line.startsWith(`${prefix} up -d `));
+  const up = docker.findIndex((line) => line.startsWith(`${prefix} --profile mailpit up -d `));
   assert.ok(pull >= 0 && pull < stop && stop < copy && copy < up, docker.join('\n'));
   assert.equal(readFileSync(join(result.dir, 'volumes', 'postgres-data'), 'utf8'), 'nuva-edu');
   assert.equal(

@@ -2,8 +2,10 @@
 # pnpm deploy:test [etiqueta] — publica o nuva-edu no servidor de testes (spec 031).
 #
 # Roda na máquina do desenvolvedor, com o SSH dele. No servidor só age sobre o projeto Compose
-# `nuva-edu`, dentro de NUVA_DEPLOY_DIR; não cria nem altera o `.env.local` de lá, não usa os
-# perfis `traefik` e `mailpit` e não toca em contêiner, rede ou volume de outro projeto.
+# `nuva-edu`, dentro de NUVA_DEPLOY_DIR; não cria nem altera o `.env.local` de lá, não usa o
+# perfil `traefik` e não toca em contêiner, rede ou volume de outro projeto. Com backend, sobe
+# também o `mailpit` (perfil `mailpit`), que recebe o e-mail até haver SMTP real (spec 031,
+# "Ambientes"); a tela dele fica em 127.0.0.1 no servidor, só por túnel SSH.
 # Passo a passo, códigos de saída e como desfazer: docs/ambiente-de-teste.md.
 #
 # Compatível com o bash 3.2 do macOS.
@@ -16,12 +18,18 @@ readonly ALL_SERVICES='admin-api classroom-api worker admin classroom'
 # (database/postgres/docker-compose.yml), não fixado aqui. Spec 031, "Volumes".
 readonly LEGACY_POSTGRES_VOLUME='postgres-data'
 readonly WAIT_SECONDS=120
+# Perfil e serviço do e-mail de teste (spec 031, "Ambientes": Mailpit até haver SMTP real).
+readonly MAIL_PROFILE='mailpit'
+readonly MAIL_SERVICE='mailpit'
+# Segredos que o Compose exige desde a Fase 1 (spec 031, "Segredos exigidos"). A conferência
+# remota só verifica que existem; o valor nunca sai do servidor.
+readonly REQUIRED_SECRETS='SESSION_SECRET ADMIN_EMAIL ADMIN_PASSWORD'
 
 # Tudo o que vai para o servidor. Só arquivos Compose e o `.env` versionado: as imagens já trazem
 # o código, as migrations e a configuração do lighttpd (nada de `proxy/lighttpd/` é montado).
 # Os composes do Traefik, do Mailpit e do provedor OAuth simulado vão porque o `include:` da raiz
-# os exige; os serviços deles ficam em perfis que este script nunca ativa (o `server.mjs` do
-# simulador não vai: só seria montado com o perfil `oauth-mock`).
+# os exige; o Traefik e o simulador ficam em perfis que este script nunca ativa (o `server.mjs`
+# do simulador não vai: só seria montado com o perfil `oauth-mock`).
 readonly DEPLOY_FILES='docker-compose.yml
 .env
 database/postgres/docker-compose.yml
@@ -160,6 +168,10 @@ if has_service admin-api || has_service classroom-api || has_service worker; the
   BACKEND=true
   IMAGES='admin-api'
 fi
+# O que o `pull` e o `up` recebem: os serviços pedidos e, com backend, o Mailpit, para onde o
+# worker manda o e-mail (SMTP_HOST=mailpit, do .env).
+UP_SERVICES="$SERVICES"
+if $BACKEND; then UP_SERVICES="$SERVICES $MAIL_SERVICE"; fi
 for service in $SERVICES; do
   case " $IMAGES " in
     *" $service "*) ;;
@@ -290,7 +302,7 @@ fi
 # --- comandos remotos ------------------------------------------------------------------------
 
 # Conferência no servidor: só leitura. Do .env.local sai apenas o valor de variáveis não
-# secretas de uma lista fixa; da senha, só se existe.
+# secretas de uma lista fixa; das senhas e segredos, só se existem (nada é impresso).
 preflight_script() {
   cat <<EOF
 # nuva-deploy: conferência (só leitura)
@@ -300,6 +312,8 @@ POSTGRES_VOLUME='$POSTGRES_VOLUME'
 LEGACY_POSTGRES_VOLUME='$LEGACY_POSTGRES_VOLUME'
 NEEDS_DB='$BACKEND'
 MIGRATE_VOLUME='$MIGRATE_VOLUME'
+REQUIRED_SECRETS='$REQUIRED_SECRETS'
+MAIL_SERVICE='$MAIL_SERVICE'
 EOF
   cat <<'EOF'
 set -u
@@ -319,6 +333,14 @@ problem() {
 }
 expect() { [ "$(val "$1")" = "$2" ] || problem "$1 precisa ser '$2'"; }
 [ -n "$(val POSTGRES_PASSWORD)" ] || problem 'POSTGRES_PASSWORD precisa estar definida'
+for name in $REQUIRED_SECRETS; do
+  [ -n "$(val "$name")" ] || problem "$name precisa estar definida (segredo exigido desde a Fase 1)"
+done
+session_secret="$(val SESSION_SECRET)"
+if [ -n "$session_secret" ] && [ "${#session_secret}" -lt 32 ]; then
+  problem 'SESSION_SECRET precisa ter no mínimo 32 caracteres'
+fi
+unset session_secret
 domain="$(val NUVA_DOMAIN)"
 case "$domain" in
   '' | localhost) problem 'NUVA_DOMAIN precisa ser o domínio do ambiente de teste' ;;
@@ -332,7 +354,8 @@ expect NUVA_PUBLIC_SCHEME https
 if ! has NUVA_PUBLIC_PORT || [ -n "$(val NUVA_PUBLIC_PORT)" ]; then
   problem 'NUVA_PUBLIC_PORT precisa existir e ficar vazia (NUVA_PUBLIC_PORT=)'
 fi
-for name in COMPOSE_PROFILES COMPOSE_FILE COMPOSE_PROJECT_NAME PORT; do
+for name in COMPOSE_PROFILES COMPOSE_FILE COMPOSE_PROJECT_NAME PORT NUVA_OAUTH_MOCK_URL \
+  NUVA_OAUTH_MOCK_INTERNAL_URL; do
   if has "$name"; then problem "$name não pode estar no .env.local do servidor"; fi
 done
 [ "$problems" -eq 0 ] || exit 44
@@ -340,6 +363,25 @@ docker network inspect "$network" >/dev/null 2>&1 || {
   echo "PROBLEMA: a rede $network não existe no servidor"
   exit 45
 }
+if [ "$NEEDS_DB" = true ]; then
+  mail_port="$(val MAILPIT_UI_PORT)"
+  mail_port="${mail_port:-8025}"
+  case "$mail_port" in
+    *[!0-9]*)
+      echo 'PROBLEMA: MAILPIT_UI_PORT precisa ser um número de porta'
+      exit 44
+      ;;
+  esac
+  # Outro contêiner, de outro projeto, já publica a porta da tela do Mailpit?
+  for owner in $(docker ps --filter "publish=$mail_port" \
+    --format '{{ index .Labels "com.docker.compose.project" }}' 2>/dev/null); do
+    if [ "$owner" != "$PROJECT" ]; then
+      echo "PROBLEMA: a porta $mail_port (tela do $MAIL_SERVICE) já é usada pelo projeto $owner"
+      exit 50
+    fi
+  done
+  echo "MAILPIT_PORT=$mail_port"
+fi
 volume_owner() {
   docker volume inspect "$1" --format '{{ index .Labels "com.docker.compose.project" }}' 2>/dev/null
 }
@@ -373,15 +415,16 @@ unpack_command() {
   printf 'tar -xf - --no-same-owner -C %s' "$DEPLOY_DIR"
 }
 
-# Publicação: só `docker compose -p nuva-edu`, com a lista explícita de serviços. Sem perfis,
-# sem docker-compose.dev.yml (o Postgres não publica porta) e sem build.
+# Publicação: só `docker compose -p nuva-edu`, com a lista explícita de serviços. Só o perfil
+# `mailpit` (que sobe apenas se o serviço estiver na lista), sem docker-compose.dev.yml (o
+# Postgres não publica porta) e sem build.
 deploy_script() {
   local LOG_SERVICES="\$SERVICES"
   if $BACKEND; then LOG_SERVICES="migrate \$SERVICES"; fi
   cat <<EOF
 # nuva-deploy: publicação
 DEPLOY_DIR='$DEPLOY_DIR'
-SERVICES='$SERVICES'
+SERVICES='$UP_SERVICES'
 export NUVA_IMAGE_TAG='$TAG'
 EOF
   cat <<EOF
@@ -389,7 +432,8 @@ set -euo pipefail
 unset COMPOSE_FILE COMPOSE_PROFILES COMPOSE_PROJECT_NAME
 cd "\$DEPLOY_DIR"
 compose() {
-  docker compose -p $PROJECT -f docker-compose.yml --env-file .env --env-file .env.local "\$@" </dev/null
+  docker compose -p $PROJECT -f docker-compose.yml --env-file .env --env-file .env.local \\
+    --profile $MAIL_PROFILE "\$@" </dev/null
 }
 # shellcheck disable=SC2086
 compose pull --quiet --include-deps \$SERVICES
@@ -426,6 +470,12 @@ if $DRY_RUN; then
   say "Servidor: $SSH_USER@$SSH_HOST porta $SSH_PORT, pasta $DEPLOY_DIR"
   say "Etiqueta: $TAG"
   say "Serviços: $SERVICES"
+  if $BACKEND; then
+    say "E-mail: perfil $MAIL_PROFILE, serviço $MAIL_SERVICE (tela em 127.0.0.1 no servidor, por túnel SSH)"
+  else
+    say "E-mail: sem backend na lista, o $MAIL_SERVICE não é atualizado"
+  fi
+  say "Segredos conferidos no .env.local do servidor (só a presença): ${REQUIRED_SECRETS// /, }"
   say "Volume do banco: $POSTGRES_VOLUME"
   if $MIGRATE_VOLUME; then
     say "Com --migrate-volume: copia $LEGACY_POSTGRES_VOLUME para $POSTGRES_VOLUME, se necessário."
@@ -457,6 +507,9 @@ Crie no servidor, uma única vez e à mão, $DEPLOY_DIR/.env.local (modo 600). O
 cria nem altera esse arquivo. Conteúdo esperado:
 
   POSTGRES_PASSWORD=<senha forte, só deste ambiente>
+  SESSION_SECRET=<saída de openssl rand -base64 48; no mínimo 32 caracteres>
+  ADMIN_EMAIL=<e-mail do admin inicial>
+  ADMIN_PASSWORD=<senha do admin inicial>
   NUVA_DOMAIN=opencode.tmsoft.com.br
   TRAEFIK_NETWORK=network_public
   TRAEFIK_NETWORK_EXTERNAL=true
@@ -467,7 +520,9 @@ cria nem altera esse arquivo. Conteúdo esperado:
   NUVA_IMAGE_TAG=main
   NUVA_POSTGRES_PUBLISH=false
 
-Sem NUVA_DEPLOY_SSH_*, COMPOSE_* nem PORT. Veja docs/ambiente-de-teste.md.
+Sem NUVA_DEPLOY_SSH_*, COMPOSE_*, PORT nem NUVA_OAUTH_MOCK_*. Linha que falta pode ser
+acrescentada no fim do arquivo, sem reescrevê-lo. Veja docs/ambiente-de-teste.md
+("No servidor" e "Segredos da Fase 1").
 EOF
 }
 
@@ -493,6 +548,10 @@ case "$preflight_status" in
     die "$E_REMOTE_INVALID" "o .env.local do servidor não serve ao ambiente de teste. Nada foi enviado."
     ;;
   45) die "$E_REMOTE_CONFLICT" 'a rede do Traefik não existe no servidor. Nada foi enviado.' ;;
+  50)
+    die "$E_REMOTE_CONFLICT" "a porta da tela do Mailpit já é usada por outro projeto no servidor.
+Nada foi enviado. Escolha uma porta livre em MAILPIT_UI_PORT no .env.local do servidor."
+    ;;
   46)
     die "$E_REMOTE_CONFLICT" "o volume $POSTGRES_VOLUME do servidor pertence a outro projeto.
 Nada foi enviado: subir o banco usaria os dados de terceiros. Leve ao humano."
@@ -533,7 +592,7 @@ COPYFILE_DISABLE=1 tar "${tar_args[@]}" -C "$ROOT" "${FILES[@]}" |
   die "$E_SSH" 'falha ao enviar os arquivos.'
 printf '  %s\n' "${FILES[@]}"
 
-step "Publicação: pull e up -d --wait de: $SERVICES"
+step "Publicação: pull e up -d --wait de: $UP_SERVICES"
 set +e
 deploy_script | ssh "${SSH_ARGS[@]}" bash -s
 deploy_status=$?
@@ -569,9 +628,14 @@ fi
 
 step 'Resumo'
 say "  etiqueta publicada: $TAG"
-say "  serviços: $SERVICES"
+say "  serviços: $UP_SERVICES"
 if [ "$SERVICES" != "$ALL_SERVICES" ]; then
   say '  deploy parcial: os serviços fora da lista não foram atualizados.'
+fi
+mail_port="$(remote_value MAILPIT_PORT)"
+if [[ "$mail_port" =~ ^[0-9]{1,5}$ ]]; then
+  say "  Mailpit: ssh -N -L $mail_port:127.0.0.1:$mail_port -p $SSH_PORT $SSH_USER@$SSH_HOST"
+  say "           e abra http://localhost:$mail_port"
 fi
 say "  https://$ADMIN_HOST"
 say "  https://$CLASSROOM_HOST"

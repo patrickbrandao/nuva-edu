@@ -7,6 +7,7 @@ Detalhe das decisões em `specs/decisions/`.
 
 ### Adicionado
 - e2e: fumaça do admin entra com o admin inicial (projeto `setup`) e confere a tela de entrada sem sessão (task 190).
+- infra: `pnpm deploy:test` sobe o Mailpit no servidor de testes e confere, sem ler os valores, `SESSION_SECRET`, `ADMIN_EMAIL` e `ADMIN_PASSWORD` no `.env.local` remoto; recusa `NUVA_OAUTH_MOCK_*` lá; passo a passo em `docs/ambiente-de-teste.md` (task 159).
 - core: `lockEmailTokens(trx, userId, purpose)` exportado, com a chave usada por `issueEmailToken` e `invalidateEmailTokens` (task 282).
 - worker: envio de e-mail usa o `lockEmailTokens` do núcleo; `jobDoneDays` e `jobFailedDays` obrigatórios no expurgo, sem prazos de reserva (task 283).
 - classroom-api: `createApiApp` sem o `cookieSecret` sem uso; `SESSION_SECRET` segue só no `createOAuth` (task 338).
