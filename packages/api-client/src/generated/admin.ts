@@ -553,7 +553,7 @@ export interface paths {
          *     `403`, e o `manager` que envia preço também.
          *
          *     - `slug` ausente: gerado do título. Repetido: `409` `slug_taken`.
-         *     - `ownerId` que não é `instructor`: `422` `owner_not_instructor`.
+         *     - `ownerId` que não é `instructor` (ou foi excluído): `422` `owner_invalid`.
          */
         post: operations["createCourse"];
         delete?: never;
@@ -593,8 +593,8 @@ export interface paths {
          *     `PATCH /courses/{id}/owner`.
          *
          *     - Curso alheio ao `instructor`: `404`. Slug repetido: `409` `slug_taken`.
-         *     - `paid` sem preço: `422` `price_required`. Capa que não é `product_cover` do próprio envio:
-         *       `422` `image_purpose_mismatch`.
+         *     - Publicado e `paid` sem preço: `422` `price_required`. Preço enviado para produto `open`: `422`
+         *       `price_not_allowed`. Capa que não é `product_cover`: `422` `cover_image_invalid`.
          */
         patch: operations["updateCourse"];
         trace?: never;
@@ -611,9 +611,10 @@ export interface paths {
         /**
          * Publicar
          * @description Publica o curso. Exige ao menos um módulo com uma aula publicada (`422`
-         *     `course_without_published_lesson`). O `instructor` só publica curso `open` de que é dono; curso
+         *     `course_has_no_published_lesson`). O `instructor` só publica curso `open` de que é dono; curso
          *     `paid` ou `private` dele responde `403` (o caminho é `request-review`). Limpa
-         *     `reviewRequestedAt`. Produto arquivado: `409` `product_archived`.
+         *     `reviewRequestedAt`. `paid` sem preço: `422` `price_required`. Produto arquivado: `422`
+         *     `product_archived`.
          */
         post: operations["publishCourse"];
         delete?: never;
@@ -657,7 +658,7 @@ export interface paths {
          * @description Só `admin` (`product.archive`). Equivale a despublicar em definitivo: grava `archivedAt` e
          *     some do classroom. É o caminho para produto com pedido, direito ou progresso, que ninguém
          *     exclui.
-         *     Já arquivado: `409` `product_archived`.
+         *     Já arquivado: devolve o produto como está, sem gravar.
          */
         post: operations["archiveCourse"];
         delete?: never;
@@ -677,7 +678,7 @@ export interface paths {
         put?: never;
         /**
          * Desarquivar
-         * @description Só `admin` (`product.archive`). Volta como `draft`. Não arquivado: `409` `product_not_archived`.
+         * @description Só `admin` (`product.archive`). Volta como `draft`. Não arquivado: devolve como está, sem gravar.
          */
         post: operations["unarchiveCourse"];
         delete?: never;
@@ -698,7 +699,7 @@ export interface paths {
         /**
          * Enviar para publicação
          * @description Grava `reviewRequestedAt` (auditoria `course.request_review`) para o curso e as aulas `draft`
-         *     dele; gerente ou admin publicam. Repetir não muda a data.
+         *     dele; gerente ou admin publicam. Repetir não muda a data. Arquivado: `422` `product_archived`.
          */
         post: operations["requestCourseReview"];
         /**
@@ -727,8 +728,8 @@ export interface paths {
         /**
          * Trocar o dono do curso
          * @description `manager` e `admin` (`specs/008-papeis-e-permissoes.md`). `ownerId: null` deixa o curso sem
-         *     dono, gerido só por gerente e admin. Usuário que não é `instructor`: `422`
-         *     `owner_not_instructor`.
+         *     dono, gerido só por gerente e admin. Usuário que não é `instructor` (ou foi excluído): `422`
+         *     `owner_invalid`.
          */
         patch: operations["setCourseOwner"];
         trace?: never;
@@ -744,7 +745,8 @@ export interface paths {
         put?: never;
         /**
          * Criar módulo
-         * @description Acrescenta um módulo ao fim do curso. Acima de 100 módulos: `422` `course_module_limit`.
+         * @description Acrescenta um módulo ao fim do curso. Acima de 100 módulos: `422` `catalog_limit_exceeded`
+         *     (`limit: modulesPerCourse`).
          */
         post: operations["createModule"];
         delete?: never;
@@ -811,7 +813,7 @@ export interface paths {
         /**
          * Criar aula
          * @description Acrescenta uma aula `draft` ao fim do módulo. Acima de 500 aulas no curso: `422`
-         *     `course_lesson_limit`. URL de vídeo fora das regras: `422` `content_url_invalid`.
+         *     `catalog_limit_exceeded` (`limit: lessonsPerCourse`). URL de vídeo fora das regras: `422` `content_url_invalid`.
          */
         post: operations["createLesson"];
         delete?: never;
@@ -962,8 +964,8 @@ export interface paths {
         put?: never;
         /**
          * Publicar
-         * @description Publica o ebook. Exige `fileUrl` válida (`422` `ebook_without_file`). Arquivado: `409`
-         *     `product_archived`.
+         * @description Publica o ebook. Exige `fileUrl` válida (`422` `ebook_file_required`). `paid` sem preço: `422`
+         *     `price_required`. Arquivado: `422` `product_archived`.
          */
         post: operations["publishEbook"];
         delete?: never;
@@ -1007,7 +1009,7 @@ export interface paths {
          * @description Só `admin` (`product.archive`). Equivale a despublicar em definitivo: grava `archivedAt` e
          *     some do classroom. É o caminho para produto com pedido, direito ou progresso, que ninguém
          *     exclui.
-         *     Já arquivado: `409` `product_archived`.
+         *     Já arquivado: devolve o produto como está, sem gravar.
          */
         post: operations["archiveEbook"];
         delete?: never;
@@ -1027,7 +1029,7 @@ export interface paths {
         put?: never;
         /**
          * Desarquivar
-         * @description Só `admin` (`product.archive`). Volta como `draft`. Não arquivado: `409` `product_not_archived`.
+         * @description Só `admin` (`product.archive`). Volta como `draft`. Não arquivado: devolve como está, sem gravar.
          */
         post: operations["unarchiveEbook"];
         delete?: never;
@@ -1050,6 +1052,7 @@ export interface paths {
          *     feito pelos itens do pacote). Para o `instructor`, a lista substitui só os vínculos com os
          *     próprios cursos e aulas; os demais ficam como estão, e alvo alheio responde `404`. A mudança
          *     enfileira o recálculo da cascata (`entitlement.recompute`, `specs/010-direitos-de-acesso.md`).
+         *     Até 500 vínculos; alvo inexistente: `422` `catalog_item_not_found`.
          */
         put: operations["setEbookTargets"];
         post?: never;
@@ -1124,8 +1127,8 @@ export interface paths {
         put?: never;
         /**
          * Publicar
-         * @description Publica o pacote. Exige ao menos um item (`422` `bundle_without_items`). Arquivado: `409`
-         *     `product_archived`.
+         * @description Publica o pacote. Exige ao menos um item (`422` `bundle_has_no_items`). `paid` sem preço: `422`
+         *     `price_required`. Arquivado: `422` `product_archived`.
          */
         post: operations["publishBundle"];
         delete?: never;
@@ -1169,7 +1172,7 @@ export interface paths {
          * @description Só `admin` (`product.archive`). Equivale a despublicar em definitivo: grava `archivedAt` e
          *     some do classroom. É o caminho para produto com pedido, direito ou progresso, que ninguém
          *     exclui.
-         *     Já arquivado: `409` `product_archived`.
+         *     Já arquivado: devolve o produto como está, sem gravar.
          */
         post: operations["archiveBundle"];
         delete?: never;
@@ -1189,7 +1192,7 @@ export interface paths {
         put?: never;
         /**
          * Desarquivar
-         * @description Só `admin` (`product.archive`). Volta como `draft`. Não arquivado: `409` `product_not_archived`.
+         * @description Só `admin` (`product.archive`). Volta como `draft`. Não arquivado: devolve como está, sem gravar.
          */
         post: operations["unarchiveBundle"];
         delete?: never;
@@ -1209,7 +1212,7 @@ export interface paths {
         /**
          * Definir os itens do pacote
          * @description Substitui a lista inteira, na ordem enviada: cursos e ebooks, nunca outro pacote. Produto
-         *     inexistente: `422` `bundle_item_invalid`. Em pacote já vendido, a mudança enfileira o recálculo
+         *     inexistente: `422` `catalog_item_not_found`; pacote na lista: `422` `bundle_in_bundle`. Em pacote já vendido, a mudança enfileira o recálculo
          *     da cascata de quem o tem (`specs/010-direitos-de-acesso.md`); o site confirma antes a remoção
          *     com
          *     o `studentCount`.
@@ -1634,9 +1637,8 @@ export interface paths {
         };
         /**
          * Palavras-chave e modelo inicial
-         * @description A lista fechada de palavras-chave (nome, descrição, valor de exemplo, se é obrigatória, se só
-         *     vale
-         *     em posição de texto) e o HTML do modelo inicial ("Começar do modelo").
+         * @description A lista fechada de palavras-chave (nome, como escrever, descrição, valor de exemplo no idioma e
+         *     no fuso da escola, se é obrigatória) e o HTML do modelo inicial ("Começar do modelo").
          */
         get: operations["getCertificateTemplateReference"];
         put?: never;
@@ -2909,41 +2911,51 @@ export interface components {
         CertificateTemplateProblem: {
             rule: components["schemas"]["CertificateTemplateProblemRule"];
             message: string;
-            /** @description `null` em problema do documento inteiro. */
-            line: number | null;
-            column: number | null;
+            /** @description Linha no HTML enviado, a partir de 1; problema do documento inteiro vem em 1:1. */
+            line: number;
+            column: number;
         };
         /**
          * @description `Problem` de `422` `certificate_template_invalid`, com a lista de problemas em
-         *     `details.problems`. Outro `422` da operação não traz `details`.
+         *     `details.problems`, na ordem em que foram encontrados e até 200 itens: com 200, pode haver
+         *     mais problemas além dos listados. Outro `422` da operação não traz `details`.
          */
         CertificateTemplateInvalidProblem: components["schemas"]["Problem"] & {
             details?: {
                 problems: components["schemas"]["CertificateTemplateProblem"][];
             };
         };
+        /**
+         * @description Palavra-chave do template (`specs/015-certificados.md`, "Template").
+         * @enum {string}
+         */
+        CertificateTemplateKeyName: "aluno.nome" | "curso.titulo" | "curso.carga_horaria" | "curso.instrutor" | "certificado.data_conclusao" | "certificado.data_conclusao_curta" | "certificado.data_emissao" | "certificado.codigo" | "certificado.url_validacao" | "certificado.qrcode" | "escola.nome" | "assinatura.nome" | "assinatura.cargo";
         CertificateTemplateKey: {
-            /** @example aluno.nome */
-            key: string;
+            key: components["schemas"]["CertificateTemplateKeyName"];
+            /**
+             * @description Como escrever no template.
+             * @example {{aluno.nome}}
+             */
+            placeholder: string;
             description: string;
-            /** @description Valor usado no PDF de exemplo. */
+            /**
+             * @description Valor usado no PDF de exemplo. Em `certificado.qrcode`, um texto que descreve o código QR,
+             *     não o SVG.
+             */
             example: string;
+            /** @description Sempre obrigatória (`aluno.nome`, `curso.titulo`, `certificado.codigo`). */
             required: boolean;
-            /** @description Só vale em posição de texto (`certificado.qrcode`). */
-            textOnly: boolean;
+            /**
+             * @description Verdadeiro nas que se alternam (`certificado.url_validacao` e `certificado.qrcode`): o
+             *     template precisa de ao menos uma delas.
+             */
+            requiredOneOf: boolean;
         };
         CertificateTemplateReference: {
+            /** @description As 13 palavras-chave, na ordem da spec. */
             keys: components["schemas"]["CertificateTemplateKey"][];
-            /**
-             * @description Grupo de que ao menos uma é obrigatória.
-             * @example [
-             *       "certificado.url_validacao",
-             *       "certificado.qrcode"
-             *     ]
-             */
-            requiredOneOf: string[];
-            /** @description O modelo inicial. */
-            starterHtml: string;
+            /** @description O modelo inicial, que passa na própria validação. */
+            modelHtml: string;
         };
         /** @enum {string} */
         CertificatePreviewStatus: "pending" | "ready" | "failed";
