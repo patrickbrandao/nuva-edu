@@ -1,12 +1,14 @@
 // Fumaça dos dois sites: abrem, mostram o que vem de `/api/v1/meta`, trocam de tema e cabem em
 // 360 px. Seletores só por papel e nome acessível: a casca dos sites troca de componentes sem
-// quebrar estes testes.
+// quebrar estes testes. O painel exige sessão (spec 006, "Sessão"): os testes dele usam a do
+// admin inicial, aberta pelo projeto `setup`.
 import { expect, type Locator, type Page, test } from '@playwright/test';
+import { ADMIN_STATE } from '../support/auth-state.ts';
 import { ADMIN_URL, CLASSROOM_URL } from '../support/env.ts';
 
 const SITES = [
-  { site: 'admin', url: ADMIN_URL, title: /Painel/ },
-  { site: 'classroom', url: CLASSROOM_URL, title: /Vitrine/ },
+  { site: 'admin', url: ADMIN_URL, title: /^Painel · /, storageState: ADMIN_STATE },
+  { site: 'classroom', url: CLASSROOM_URL, title: /Vitrine/, storageState: undefined },
 ] as const;
 
 /** Valores que nenhuma instalação tem: se aparecem na página, vieram da resposta da API. */
@@ -33,8 +35,12 @@ async function expectNoHorizontalScroll(page: Page): Promise<void> {
   expect(scroll, 'largura do conteúdo não passa da largura da janela').toBeLessThanOrEqual(client);
 }
 
-for (const { site, url, title } of SITES) {
+for (const { site, url, title, storageState } of SITES) {
   test.describe(`site ${site}`, () => {
+    if (storageState) {
+      test.use({ storageState });
+    }
+
     test('abre e mostra a escola e a versão que a API informa', async ({ page }) => {
       const metaResponse = page.waitForResponse(
         (r) => new URL(r.url()).pathname === '/api/v1/meta',
@@ -92,6 +98,40 @@ for (const { site, url, title } of SITES) {
     });
   });
 }
+
+test.describe('site admin sem sessão', () => {
+  test('chega à tela de entrada, com senha, provedores e "Esqueci a senha"', async ({ page }) => {
+    const meta = await (await page.request.get(`${ADMIN_URL}/api/v1/meta`)).json();
+    await page.goto(ADMIN_URL);
+    await expect(page).toHaveURL(/\/entrar(\?|$)/);
+    await expect(page).toHaveTitle(/^Entrar · /);
+    await expect(page.getByRole('heading', { level: 1, name: 'Entrar' })).toBeVisible();
+    await expect(page.getByLabel('E-mail')).toBeVisible();
+    await expect(page.getByLabel('Senha', { exact: true })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Mostrar senha' })).toBeVisible();
+    await expect(page.getByRole('link', { name: 'Esqueci a senha' })).toBeVisible();
+    for (const provider of meta.authProviders as string[]) {
+      const name = { google: 'Google', facebook: 'Facebook', apple: 'Apple' }[provider] ?? provider;
+      await expect(page.getByRole('button', { name: `Entrar com ${name}` })).toBeVisible();
+    }
+    await expect(page.getByRole('contentinfo')).toContainText(`Versão ${meta.version}`);
+  });
+});
+
+test.describe('site admin com sessão', () => {
+  test.use({ storageState: ADMIN_STATE });
+
+  test('mostra o menu do admin e o botão "Sair" no pé do menu', async ({ page }) => {
+    await page.setViewportSize({ width: 1280, height: 800 });
+    await page.goto(ADMIN_URL);
+    const menu = page.getByRole('navigation', { name: MENU });
+    await expect(menu).toBeVisible();
+    for (const item of ['Painel', 'Alunos', 'Equipe', 'Auditoria', 'Configurações']) {
+      await expect(menu.getByRole('link', { name: item, exact: true })).toBeVisible();
+    }
+    await expect(page.getByRole('button', { name: 'Sair' })).toBeVisible();
+  });
+});
 
 test('classroom a 360 px: o menu vira gaveta', async ({ page }) => {
   await page.setViewportSize({ width: 360, height: 740 });

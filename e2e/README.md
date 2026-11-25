@@ -22,4 +22,7 @@ ambiente. Quando algo continua fora do ar, o erro traz a URL que não respondeu 
 - Seletores por papel e nome acessível (`getByRole`, `getByLabel`), nunca por classe CSS.
 - O `/healthz` do worker não passa pelo proxy: o teste o consulta com `pnpm compose exec worker`
   e é pulado com `NUVA_E2E_COMPOSE=0`.
+- O painel exige sessão: o projeto `setup` (`tests/admin.setup.ts`) entra com o admin inicial,
+  lendo `ADMIN_EMAIL` e `ADMIN_PASSWORD` do ambiente ou do `.env.local` da raiz, e guarda a
+  sessão em `tmp/playwright/auth/`. Os valores nunca vão para log nem relatório.
 - Relatório e rastros em `tmp/playwright/` (fora do Git).

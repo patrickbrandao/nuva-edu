@@ -6,6 +6,7 @@ Detalhe das decisões em `specs/decisions/`.
 ## [Não lançado]
 
 ### Adicionado
+- e2e: fumaça do admin entra com o admin inicial (projeto `setup`) e confere a tela de entrada sem sessão (task 190).
 - core: `lockEmailTokens(trx, userId, purpose)` exportado, com a chave usada por `issueEmailToken` e `invalidateEmailTokens` (task 282).
 - worker: envio de e-mail usa o `lockEmailTokens` do núcleo; `jobDoneDays` e `jobFailedDays` obrigatórios no expurgo, sem prazos de reserva (task 283).
 - classroom-api: `createApiApp` sem o `cookieSecret` sem uso; `SESSION_SECRET` segue só no `createOAuth` (task 338).

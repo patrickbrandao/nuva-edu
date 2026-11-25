@@ -20,5 +20,9 @@ export default defineConfig({
     trace: 'retain-on-failure',
     screenshot: 'only-on-failure',
   },
-  projects: [{ name: 'chromium', use: { ...devices['Desktop Chrome'] } }],
+  projects: [
+    // Sessão do admin inicial, guardada para os testes do painel (tests/admin.setup.ts).
+    { name: 'setup', testMatch: /.*\.setup\.ts$/, use: { ...devices['Desktop Chrome'] } },
+    { name: 'chromium', dependencies: ['setup'], use: { ...devices['Desktop Chrome'] } },
+  ],
 });
