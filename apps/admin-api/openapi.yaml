@@ -3992,6 +3992,39 @@ paths:
           $ref: "#/components/responses/InternalError"
         "503":
           $ref: "#/components/responses/ServiceUnavailable"
+  /api/v1/certificates/{id}/pdf:
+    get:
+      operationId: getCertificatePdf
+      tags: [certificates]
+      summary: PDF do certificado
+      x-permission: progress.view
+      x-nuva-pending: true
+      description: |
+        O PDF que o aluno recebeu, para a equipe conferir. O `instructor` só nos próprios cursos (de
+        outro curso, `404`). Certificado revogado continua disponível à equipe. PDF ainda não gerado:
+        `409` `certificate_preparing`. Certificado inexistente, ou PDF apagado pela exclusão da conta
+        do titular: `404`. Leitura comum: não grava auditoria.
+      parameters:
+        - $ref: "#/components/parameters/IdPath"
+      responses:
+        "200":
+          $ref: "#/components/responses/Pdf"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
   /api/v1/courses/{id}/certificates/backfill:
     post:
       operationId: backfillCourseCertificates

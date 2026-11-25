@@ -133,7 +133,7 @@ Não há parâmetro de cabeçalho para o token. Como parâmetro obrigatório, o 
 | `/orders`, `/refunds`, `/coupons`, `/sales/export` | Vendas, estorno, cupons, CSV | [011](011-vendas-e-checkout.md) |
 | `/plans`, `/subscriptions` | Planos e assinaturas | [012](012-assinaturas.md) |
 | `/payments/provider` | Estado da integração de pagamento | [013](013-pagamentos-mercado-pago.md) |
-| `/progress`, `/certificates` | Progresso por aluno e curso, certificados | [014](014-aprendizado-e-progresso.md), [015](015-certificados.md) |
+| `/progress`, `/certificates` | Progresso por aluno e curso, certificados (lista, gestão e download do PDF pela equipe) | [014](014-aprendizado-e-progresso.md), [015](015-certificados.md) |
 | `/forum/*` | Categorias livres, moderação de tópicos e respostas | [017](017-forum.md) |
 | `/events` | Calendário | [018](018-calendario-e-eventos.md) |
 | `/gamification/*`, `/users/{id}/badges`, `/users/{id}/points/adjust` | Tabela de pontos, níveis, medalhas, concessão manual de medalha e ajuste manual de pontos (só admin) | [020](020-gamificacao.md) |

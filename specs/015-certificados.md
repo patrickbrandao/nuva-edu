@@ -25,6 +25,7 @@ Não há provas no MVP: a única regra é concluir todas as aulas ([014](014-apr
 - RF-10: O template é validado ao salvar (palavras-chave e higienização) e recusado com a lista de problemas; nunca é corrigido em silêncio.
 - RF-11: Quem edita o template pede um PDF de exemplo, com dados fictícios, antes de salvar.
 - RF-12: Aluno que concluiu um curso sem template efetivo vê o aviso "certificado ainda não liberado pelo instrutor"; quando o curso passa a ter template efetivo, quem já concluiu recebe o certificado.
+- RF-13: A equipe com acesso à lista de certificados baixa o PDF de cada um, para conferir o que o aluno recebeu.
 - RNF-01: Certificado disponível em até 60 s após a conclusão (p95), com template efetivo.
 - RNF-02: Página de validação em p95 < 300 ms.
 - RNF-03: PDF de uma página A4 paisagem, com no máximo 2 MiB; template de no máximo 768 KiB, com as imagens embutidas.
@@ -131,7 +132,7 @@ Só quem pediu vê o pedido e o PDF; de outro usuário, `404`. O pedido é apaga
 - Titular que excluiu a conta: mostra o código, o curso e a data, com o aviso "titular removeu a conta", sem o nome ([030](030-lgpd.md)).
 - Código inexistente: mostra "certificado não encontrado", com a mesma resposta e o mesmo tempo para qualquer código inválido.
 - A página não expõe e-mail, foto nem link para o perfil do aluno.
-- O PDF só é baixado pelo dono (logado) e pela equipe; a página pública não oferece o arquivo.
+- O PDF só é baixado pelo dono (logado, no classroom) e pela equipe (no admin, [Download pela equipe](#download-pela-equipe)); a página pública não oferece o arquivo.
 
 ### Estado do certificado para o aluno
 
@@ -153,6 +154,17 @@ Curso com certificado desabilitado não tem estado, e a página não menciona ce
 - Emissão manual: admin ou gerente emitem para um aluno que não concluiu pelo sistema (por exemplo, turma migrada), com motivo; marca `issued_manually`. Exige template efetivo (`422` `certificate_template_missing`).
 - Todas gravam auditoria ([028](028-auditoria.md)) e estão no MCP ([027](027-mcp.md)), assim como gravar e excluir template.
 
+### Download pela equipe
+
+Na lista de certificados do admin, cada certificado com PDF tem a ação "Baixar PDF" (`GET /certificates/{id}/pdf` na `admin-api`), para a equipe conferir o que o aluno recebeu.
+
+- Quem: quem vê a lista (`progress.view`): admin, gerente e o instrutor nos próprios cursos. Certificado de curso alheio responde `404` ao instrutor ([003](003-admin-api.md), "Alcance do instrutor").
+- O arquivo é o mesmo que o aluno baixa: `certificates.pdf`, sem nova renderização. Nome sugerido: `certificado-<código>.pdf`; a resposta não é guardada em cache.
+- Certificado revogado continua disponível à equipe (o aluno deixa de baixá-lo).
+- PDF ainda não gerado (`preparing`): `409` `certificate_preparing`, como no classroom. PDF apagado pela exclusão da conta do titular: `404`; a lista não oferece a ação.
+- É leitura comum do painel: não grava auditoria ([028](028-auditoria.md), "Fora de escopo"). O PDF traz só dados que a lista já mostra a quem tem `progress.view`.
+- Não entra no catálogo de ferramentas do MCP ([027](027-mcp.md)): a rota devolve um arquivo e existe só para o painel.
+
 ### Casos de erro
 
 | Situação | Resposta |
@@ -167,6 +179,8 @@ Curso com certificado desabilitado não tem estado, e a página não menciona ce
 | Falha ao gerar o PDF | a tarefa repete (até 5 vezes, [005](005-worker-e-fila.md)); o registro existe e a validação já funciona; o download mostra "em preparação" |
 | Mais de 30 validações por minuto do mesmo IP | `429` |
 | Emissão manual para quem já tem certificado do curso | `409` |
+| Equipe baixando PDF ainda não gerado | `409` `certificate_preparing` |
+| Instrutor baixando PDF de certificado de curso alheio | `404` |
 
 ## Interfaces e contratos
 
@@ -181,6 +195,7 @@ Curso com certificado desabilitado não tem estado, e a página não menciona ce
 `apps/admin-api/openapi.yaml`, sob `/api/v1`:
 
 - `GET /certificates` (filtros por curso, aluno, estado)
+- `GET /certificates/{id}/pdf`: o PDF, para a equipe
 - `POST /certificates` (emissão manual), `POST /certificates/{id}/revoke`, `POST /certificates/{id}/restore` (admin), `POST /certificates/{id}/reissue`
 - `PATCH /courses/{id}` com `certificate_enabled` e `certificate_hours`
 - `POST /courses/{id}/certificates/backfill`
@@ -190,7 +205,7 @@ Curso com certificado desabilitado não tem estado, e a página não menciona ce
 - `POST /certificate-templates/previews` (`202`), `GET /certificate-templates/previews/{id}`, `GET /certificate-templates/previews/{id}/pdf`
 - `GET|PUT /settings/certificates`: grava `certificate.signer_name` e `certificate.signer_role` ([031](031-infraestrutura-e-deploy.md), "Configurações da escola") e devolve também, só para leitura, `school.name`. `settings.manage` (admin).
 
-Permissões ([008](008-papeis-e-permissoes.md)): listar e ver, `progress.view` (instrutor só nos próprios cursos); emissão manual e reemissão, `certificate.issue`; revogar e desfazer, `certificate.revoke`; `PATCH /courses/{id}` e `backfill`, `course.edit`; template do curso, referência e exemplo, `certificate.template.edit` (instrutor só nos próprios cursos); padrão da escola, `settings.manage`.
+Permissões ([008](008-papeis-e-permissoes.md)): listar, ver e baixar o PDF, `progress.view` (instrutor só nos próprios cursos); emissão manual e reemissão, `certificate.issue`; revogar e desfazer, `certificate.revoke`; `PATCH /courses/{id}` e `backfill`, `course.edit`; template do curso, referência e exemplo, `certificate.template.edit` (instrutor só nos próprios cursos); padrão da escola, `settings.manage`.
 
 Tarefas da fila: `course.completed`, `certificate.render`, `certificate.backfill`, `certificate.preview` ([005](005-worker-e-fila.md)).
 
@@ -248,6 +263,7 @@ Retenção: certificados são permanentes enquanto a conta existir. Na exclusão
 - [ ] Código inexistente e código revogado mostram as mensagens próprias, sem dados além dos previstos.
 - [ ] Renomear o curso depois não altera o certificado emitido.
 - [ ] Aluno não baixa o PDF de outro aluno (`404`).
+- [ ] Gerente baixa, pelo admin, o PDF de um certificado emitido, sem registro novo na auditoria; o instrutor recebe `404` no de curso alheio.
 - [ ] 31ª validação no mesmo minuto responde `429`.
 - [ ] Curso com certificado desabilitado não emite.
 - [ ] Emissão manual, revogação e gravação de template aparecem na auditoria.
