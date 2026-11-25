@@ -1,8 +1,11 @@
 import type { ReactNode } from 'react';
 import type { RouteObject } from 'react-router';
+import { COURSES_PATH } from './api/courses';
 import { TERMS_PATH } from './api/terms';
 import { AuditEntryPage } from './pages/audit/AuditEntryPage';
 import { AUDIT_PATH, AuditPage } from './pages/audit/AuditPage';
+import { CourseEditorPage } from './pages/courses/CourseEditorPage';
+import { CoursesPage } from './pages/courses/CoursesPage';
 import { HomePage } from './pages/HomePage';
 import { LoginPage } from './pages/LoginPage';
 import { NotFoundPage } from './pages/NotFoundPage';
@@ -37,6 +40,10 @@ const PAGES: Partial<Record<MenuItemId, RouteObject[]>> = {
     { path: `${STUDENTS_PATH}/:id`, element: <UserDetailPage /> },
   ],
   team: [{ path: '/equipe', element: <TeamPage /> }],
+  courses: [
+    { path: COURSES_PATH, element: <CoursesPage /> },
+    { path: `${COURSES_PATH}/:id`, element: <CourseEditorPage /> },
+  ],
   audit: [
     { path: AUDIT_PATH, element: <AuditPage /> },
     { path: `${AUDIT_PATH}/:id`, element: <AuditEntryPage /> },

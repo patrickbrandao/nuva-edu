@@ -532,5 +532,308 @@
       "other": "Outros dados",
       "content": "Conteúdo"
     }
+  },
+  "courses": {
+    "subtitle": "Cursos do catálogo, com módulos e aulas.",
+    "loading": "Carregando os cursos…",
+    "errorTitle": "Não foi possível carregar os cursos",
+    "loadMoreError": "Não foi possível carregar mais cursos. Tente de novo.",
+    "empty": "Nenhum curso ainda",
+    "emptyText": "Crie o primeiro curso e monte os módulos e as aulas.",
+    "emptyFiltered": "Nenhum curso encontrado",
+    "emptyFilteredText": "Nenhum curso corresponde à busca e aos filtros.",
+    "awaitingReview": "Aguardando publicação",
+    "noOwner": "Sem dono",
+    "accessWithPrice": "{{mode}} · {{price}}",
+    "moduleCount_one": "{{count}} módulo",
+    "moduleCount_other": "{{count}} módulos",
+    "lessonCount_one": "{{count}} aula publicada",
+    "lessonCount_other": "{{count}} aulas publicadas",
+    "lessonTotal_one": "{{count}} aula",
+    "lessonTotal_other": "{{count}} aulas",
+    "counter": "{{length}}/{{max}}",
+    "deleting": "Excluindo…",
+    "status": {
+      "draft": "Rascunho",
+      "published": "Publicado",
+      "archived": "Arquivado"
+    },
+    "filters": {
+      "search": "Buscar por título ou resumo",
+      "searchPlaceholder": "Título ou resumo",
+      "searchButton": "Buscar",
+      "allStatuses": "Todas as situações",
+      "allAccessModes": "Todos os modos de acesso",
+      "statusLabel": "Situação: {{value}}",
+      "accessLabel": "Acesso: {{value}}",
+      "sortLabel": "Ordem: {{value}}",
+      "clear": "Limpar a busca e os filtros",
+      "status": {
+        "draft": "Rascunho",
+        "published": "Publicado",
+        "archived": "Arquivado"
+      }
+    },
+    "accessModes": {
+      "open": "Aberto",
+      "paid": "Pago",
+      "private": "Privado"
+    },
+    "accessModeHints": {
+      "open": "Qualquer usuário com conta acessa, sem compra.",
+      "paid": "Aparece na vitrine com preço; acessa quem tem direito ativo.",
+      "private": "Fora da vitrine; acessa só quem recebe o acesso da escola, por pacote ou por plano."
+    },
+    "levels": {
+      "none": "Sem nível",
+      "beginner": "Iniciante",
+      "intermediate": "Intermediário",
+      "advanced": "Avançado"
+    },
+    "sort": {
+      "-updatedAt": "Alteração mais recente",
+      "-createdAt": "Criação mais recente",
+      "title": "Título"
+    },
+    "columns": {
+      "title": "Curso",
+      "status": "Situação",
+      "access": "Acesso",
+      "owner": "Dono",
+      "content": "Conteúdo",
+      "updatedAt": "Alterado em"
+    },
+    "create": {
+      "open": "Novo curso",
+      "title": "Novo curso",
+      "description": "O curso nasce como rascunho e privado. Módulos, aulas, capa e os demais dados ficam no editor.",
+      "busy": "Criando…",
+      "submit": "Criar curso"
+    },
+    "fields": {
+      "title": "Título",
+      "slug": "Endereço (slug)",
+      "slugHint": "Parte final do endereço do curso no site do aluno. Minúsculas, números e hífens.",
+      "slugInvalid": "Use só minúsculas, números e hífens, sem hífen no começo ou no fim.",
+      "summary": "Resumo",
+      "summaryHint": "Frase curta que aparece na vitrine.",
+      "description": "Descrição",
+      "markdownHint": "Aceita Markdown: negrito, itálico, listas, links, código e citação.",
+      "level": "Nível",
+      "levelLabel": "Nível: {{value}}",
+      "accessMode": "Modo de acesso",
+      "accessModeLabel": "Modo de acesso: {{value}}",
+      "price": "Preço",
+      "priceIn": "Preço ({{currency}})",
+      "priceHint": "Exemplo: 49,90. Zero gera pedido gratuito.",
+      "priceInvalid": "Informe um valor como 49,90.",
+      "accessDays": "Dias de acesso",
+      "accessDaysHint": "Contados da confirmação do pagamento. Em branco, o acesso é vitalício.",
+      "accessDaysInvalid": "Informe um número inteiro de 1 a 36.500, ou deixe em branco."
+    },
+    "sortable": {
+      "instructions": "Para mover, aperte espaço. Use as setas para cima e para baixo e espaço de novo para soltar. Esc cancela.",
+      "roleDescription": "item reordenável",
+      "handle": "Mover {{label}}",
+      "pickedUp": "{{label}} pego, posição {{position}} de {{total}}.",
+      "movedTo": "{{label}} na posição {{position}} de {{total}}.",
+      "dropped": "{{label}} solto na posição {{position}} de {{total}}.",
+      "cancelled": "Movimento cancelado. {{label}} voltou à posição {{position}} de {{total}}."
+    },
+    "errors": {
+      "slug_taken": "Este endereço já é usado por outro curso.",
+      "price_required": "Curso pago precisa de preço. O preço é definido pelo administrador.",
+      "cover_image_invalid": "A imagem enviada não serve como capa. Envie a capa de novo.",
+      "owner_invalid": "O dono do curso precisa ser um instrutor.",
+      "course_has_no_published_lesson": "Para publicar, o curso precisa de ao menos um módulo com uma aula publicada.",
+      "product_archived": "O curso está arquivado. Desarquive para continuar.",
+      "product_has_links": "O curso tem pedido, acesso ou progresso de aluno e não pode ser excluído. Use arquivar.",
+      "module_not_empty": "O módulo ainda tem aulas. Exclua ou mova as aulas antes.",
+      "catalog_limit_exceeded": "O curso chegou ao limite de módulos ou de aulas.",
+      "catalog_limit_exceededMax": "O curso chegou ao limite: no máximo {{max}}.",
+      "price_not_allowed": "Só curso pago tem preço. Mude o modo de acesso para pago ou apague o preço.",
+      "content_url_invalid": "Endereço fora das regras: precisa começar com https://, sem usuário e senha, sem espaços e com até 2.000 caracteres.",
+      "order_mismatch": "A ordem enviada não confere com o que está gravado. O curso foi recarregado; tente de novo.",
+      "payload_too_large": "A imagem passa de 5 MB.",
+      "image_type_unsupported": "Use uma imagem JPEG, PNG ou WebP.",
+      "image_dimensions_exceeded": "A imagem é grande demais: até 8.000 px de lado e 40 megapixels.",
+      "image_too_heavy": "A imagem ficou pesada demais depois de processada. Envie uma mais simples ou menor.",
+      "image_processing_busy": "O processamento de imagens está ocupado. Tente de novo em instantes.",
+      "not_found": "Não encontrado. O item pode ter sido excluído.",
+      "validation_failed": "Confira os campos e tente de novo."
+    },
+    "editor": {
+      "loading": "Carregando o curso…",
+      "errorTitle": "Não foi possível carregar o curso",
+      "notFound": "Curso não encontrado",
+      "notFoundText": "O curso não existe, foi excluído ou não é seu.",
+      "backToList": "Voltar aos cursos",
+      "tabsLabel": "Seções do curso",
+      "tabs": {
+        "dados": "Dados",
+        "conteudo": "Módulos e aulas",
+        "certificado": "Certificado"
+      }
+    },
+    "data": {
+      "title": "Dados do curso",
+      "saved": "Dados do curso salvos.",
+      "showPreview": "Ver prévia da descrição",
+      "hidePreview": "Ocultar a prévia",
+      "preview": "Prévia da descrição",
+      "previewEmpty": "A descrição está em branco.",
+      "noPrice": "Sem preço definido",
+      "lifetime": "Vitalício",
+      "days_one": "{{count}} dia",
+      "days_other": "{{count}} dias",
+      "priceByAdmin": "O preço é definido pelo administrador.",
+      "accessByManager": "O modo de acesso é definido por gerente ou administrador; o preço, pelo administrador."
+    },
+    "cover": {
+      "title": "Capa",
+      "label": "Capa do curso",
+      "choose": "Escolher imagem",
+      "change": "Trocar imagem",
+      "remove": "Remover a capa",
+      "hint": "JPEG, PNG ou WebP, até 5 MB. Proporção 16:9; a vitrine corta o que sobrar.",
+      "alt": "Capa de {{title}}",
+      "none": "Sem capa",
+      "saved": "Capa salva.",
+      "removed": "Capa removida."
+    },
+    "certificate": {
+      "title": "Certificado",
+      "saved": "Certificado do curso salvo.",
+      "enabled": "Emitir certificado ao concluir o curso",
+      "enabledHint": "O certificado só é emitido quando há um template, do curso ou o padrão da escola.",
+      "hours": "Carga horária (horas)",
+      "hoursHint": "Em branco, a carga horária é calculada pela duração das aulas publicadas.",
+      "hoursInvalid": "Informe um número inteiro de 1 a 10.000, ou deixe em branco."
+    },
+    "review": {
+      "request": "Enviar para publicação",
+      "cancel": "Cancelar o pedido de publicação",
+      "requested": "Curso enviado para publicação.",
+      "cancelled": "Pedido de publicação cancelado.",
+      "error": "Não foi possível alterar o pedido de publicação",
+      "notice": "Pedido feito em {{date}}. Um gerente ou administrador publica o curso e as aulas em rascunho.",
+      "noticeStaff": "Pedido feito em {{date}}. Revise o curso e publique."
+    },
+    "publish": {
+      "open": "Publicar",
+      "title": "Publicar o curso?",
+      "text": "passa a aparecer no site do aluno, conforme o modo de acesso.",
+      "busy": "Publicando…",
+      "done": "Curso publicado."
+    },
+    "unpublish": {
+      "open": "Despublicar",
+      "title": "Despublicar o curso?",
+      "text_zero": "some da vitrine e da estante até voltar a ser publicado. Nenhum aluno tem acesso a ele hoje.",
+      "text_one": "some da vitrine e da estante até voltar a ser publicado. {{count}} aluno com acesso deixa de vê-lo; o acesso não é revogado.",
+      "text_other": "some da vitrine e da estante até voltar a ser publicado. {{count}} alunos com acesso deixam de vê-lo; os acessos não são revogados.",
+      "busy": "Despublicando…",
+      "done": "Curso despublicado."
+    },
+    "archive": {
+      "open": "Arquivar",
+      "title": "Arquivar o curso?",
+      "text_zero": "sai do site do aluno em definitivo, até ser desarquivado. Nenhum aluno tem acesso a ele hoje.",
+      "text_one": "sai do site do aluno em definitivo, até ser desarquivado. {{count}} aluno com acesso deixa de vê-lo.",
+      "text_other": "sai do site do aluno em definitivo, até ser desarquivado. {{count}} alunos com acesso deixam de vê-lo.",
+      "busy": "Arquivando…",
+      "done": "Curso arquivado.",
+      "noticeTitle": "Curso arquivado",
+      "notice": "Arquivado em {{date}}: está fora do site do aluno. Só o administrador desarquiva."
+    },
+    "unarchive": {
+      "open": "Desarquivar",
+      "title": "Desarquivar o curso?",
+      "text": "volta como rascunho e precisa ser publicado de novo.",
+      "busy": "Desarquivando…",
+      "done": "Curso desarquivado; voltou como rascunho."
+    },
+    "delete": {
+      "open": "Excluir",
+      "title": "Excluir o curso?",
+      "text": "é excluído com os módulos, as aulas, os links e o template de certificado. Não há como desfazer.",
+      "done": "Curso “{{title}}” excluído."
+    },
+    "modules": {
+      "title": "Módulos e aulas",
+      "list": "Módulos do curso",
+      "new": "Novo módulo",
+      "newTitle": "Novo módulo",
+      "create": "Criar módulo",
+      "created": "Módulo “{{title}}” criado.",
+      "name": "Nome do módulo",
+      "empty": "Nenhum módulo ainda",
+      "emptyText": "Crie o primeiro módulo e acrescente as aulas dele.",
+      "rename": "Renomear",
+      "renameOf": "Renomear o módulo {{title}}",
+      "renameTitle": "Renomear o módulo",
+      "renamed": "Módulo renomeado para “{{title}}”.",
+      "delete": "Excluir",
+      "deleteOf": "Excluir o módulo {{title}}",
+      "deleteTitle": "Excluir o módulo?",
+      "deleteText": "é excluído do curso. Não há como desfazer.",
+      "deleted": "Módulo “{{title}}” excluído.",
+      "reorderError": "Não foi possível gravar a ordem dos módulos"
+    },
+    "lessons": {
+      "listOf": "Aulas do módulo {{title}}",
+      "empty": "Nenhuma aula neste módulo.",
+      "new": "Nova aula",
+      "newIn": "Nova aula no módulo {{title}}",
+      "newTitle": "Nova aula",
+      "newDescription": "A aula entra como rascunho, ao fim do módulo “{{module}}”.",
+      "create": "Criar aula",
+      "created": "Aula “{{title}}” criada.",
+      "editTitle": "Editar a aula",
+      "saved": "Aula “{{title}}” salva.",
+      "loading": "Carregando a aula…",
+      "notFound": "Aula não encontrada. Ela pode ter sido excluída.",
+      "status": {
+        "draft": "Rascunho",
+        "published": "Publicada"
+      },
+      "sample": "Amostra grátis",
+      "sampleHint": "Libera a aula a qualquer usuário com conta, mesmo sem acesso ao curso.",
+      "publish": "Publicar",
+      "publishOf": "Publicar a aula {{title}}",
+      "published": "Aula “{{title}}” publicada.",
+      "publishError": "Não foi possível publicar a aula",
+      "unpublish": "Despublicar",
+      "unpublishOf": "Despublicar a aula {{title}}",
+      "unpublished": "Aula “{{title}}” despublicada.",
+      "unpublishError": "Não foi possível despublicar a aula",
+      "delete": "Excluir",
+      "deleteOf": "Excluir a aula {{title}}",
+      "deleteTitle": "Excluir a aula?",
+      "deleteText": "é excluída com os links de apoio. O progresso e as notas dos alunos ficam guardados.",
+      "deleted": "Aula “{{title}}” excluída.",
+      "reorderError": "Não foi possível gravar a ordem das aulas",
+      "videoUrl": "Endereço do vídeo",
+      "videoUrlHint": "Link do YouTube, Vimeo, Bunny, Panda ou de um arquivo .mp4 ou .webm. Outro endereço https vira o botão “Abrir vídeo”.",
+      "duration": "Duração",
+      "durationHint": "Em minutos e segundos (12:34) ou horas (1:05:30). O sistema não mede o vídeo.",
+      "durationInvalid": "Informe a duração como 12:34 ou 1:05:30, até 24 horas.",
+      "links": {
+        "title": "Links de apoio",
+        "hint": "Arquivos e páginas da aula, na ordem em que aparecem. Até {{max}}.",
+        "add": "Adicionar link",
+        "label": "Rótulo",
+        "url": "Endereço",
+        "kinds": {
+          "file": "Arquivo",
+          "page": "Página"
+        },
+        "kindLabel": "Tipo de {{name}}: {{value}}",
+        "remove": "Remover",
+        "removeOf": "Remover {{name}}",
+        "unnamed": "Link {{position}}",
+        "saveError": "A aula foi salva, mas os links não"
+      }
+    }
   }
 }

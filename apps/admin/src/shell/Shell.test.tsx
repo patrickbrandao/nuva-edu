@@ -37,18 +37,20 @@ describe('casca do admin', () => {
     const { router } = renderApp('/');
     await findMenu();
 
-    await user.click(screen.getByRole('link', { name: 'Cursos' }));
+    await user.click(screen.getByRole('link', { name: 'Chaves MCP' }));
 
-    expect(router.state.location.pathname).toBe('/cursos');
-    expect(screen.getByRole('heading', { level: 1, name: 'Cursos' })).toBeTruthy();
+    expect(router.state.location.pathname).toBe('/chaves-mcp');
+    expect(screen.getByRole('heading', { level: 1, name: 'Chaves MCP' })).toBeTruthy();
     expect(screen.getByText('Em construção')).toBeTruthy();
     expect(
-      screen.getByText('A tela “Cursos” ainda não está disponível nesta versão.'),
+      screen.getByText('A tela “Chaves MCP” ainda não está disponível nesta versão.'),
     ).toBeTruthy();
-    expect(screen.getByRole('link', { name: 'Cursos' }).getAttribute('aria-current')).toBe('page');
+    expect(screen.getByRole('link', { name: 'Chaves MCP' }).getAttribute('aria-current')).toBe(
+      'page',
+    );
 
     const crumbs = screen.getByRole('navigation', { name: 'Trilha de navegação' });
-    expect(within(crumbs).getByText('Cursos').getAttribute('aria-current')).toBe('page');
+    expect(within(crumbs).getByText('Chaves MCP').getAttribute('aria-current')).toBe('page');
     await user.click(within(crumbs).getByRole('link', { name: 'Painel' }));
     expect(router.state.location.pathname).toBe('/');
   });
@@ -139,7 +141,7 @@ describe('casca do admin', () => {
 
   it('o botão "Voltar ao painel" navega pelo roteador, sem recarregar a página', async () => {
     const user = userEvent.setup();
-    const { router } = renderApp('/cursos');
+    const { router } = renderApp('/chaves-mcp');
     await findMenu();
     let reloads = 0;
     const onClick = (event: MouseEvent) => {

@@ -74,7 +74,7 @@ export const PERMISSIONS = {
     'course.edit',
     'course.publish',
     'course.delete',
-    'course.delete_with_students',
+    'product.archive',
     'course.set_owner',
     'ebook_bundle.manage',
     'ebook.link',
