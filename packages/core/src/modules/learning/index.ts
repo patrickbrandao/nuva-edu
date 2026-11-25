@@ -1,4 +1,76 @@
-// Aprendizado e progresso (spec 014): progresso por aula, conclusão do curso e estante. Tarefa 413.
-// Ainda sem código: a tarefa do módulo acrescenta as exportações aqui.
+// Aprendizado e progresso (spec 014; tarefa 413): abrir a aula, gravar posição e conclusão,
+// progresso por módulo e curso, estante, "continuar", mapa de atividade e as leituras da equipe.
+// Escrita (`lesson_progress`, `activity_days`): classroom-api. O estado do certificado de cada
+// curso vem do módulo de certificados (015).
 
-export {};
+export {
+  COURSE_STUDENT_SORTS,
+  type CourseProgressSummary,
+  type CourseStudent,
+  type CourseStudentSort,
+  type CourseStudentsQuery,
+  getCourseProgressSummary,
+  getUserProgress,
+  type LearningRequest,
+  listCourseStudents,
+  type UserCourseProgress,
+} from './admin.ts';
+export {
+  COMPLETION_VIAS,
+  COURSE_PROGRESS_STATES,
+  type CompletionVia,
+  type CourseProgressState,
+  type LearningViewer,
+  type ProgressCounts,
+  type ProgressModule,
+  progressCounts,
+  resolveUserTimezone,
+} from './common.ts';
+export {
+  COURSE_COMPLETION_CHECK_BATCH_SIZE,
+  type CourseCompletion,
+  type EnqueueCourseCompletionsResult,
+  enqueueCourseCompletions,
+  getCourseCompletion,
+} from './completion.ts';
+export {
+  type CourseProgress,
+  courseCompletedKey,
+  getCourseLearningView,
+  getCourseProgress,
+  getLessonView,
+  type LearningCourseView,
+  type LearningCourseViewLesson,
+  type LearningCourseViewModule,
+  type LessonProgressResult,
+  type LessonUserState,
+  type LessonView,
+  POSITION_SLACK_SECONDS,
+  type SaveLessonProgressInput,
+  saveLessonProgress,
+} from './lessons.ts';
+export {
+  ACTIVITY_MAP_WEEKS,
+  type ActivityDay,
+  type ActivityMap,
+  activityLevel,
+  CONTINUE_WATCHING_LIMIT,
+  type ContinueItem,
+  getMyActivity,
+  getMyProgress,
+  listContinueWatching,
+  listMyCourses,
+  listMyEbooks,
+  type MyEbook,
+  type MyProgressCourse,
+  SHELF_FILTERS,
+  SHELF_SORTS,
+  type Shelf,
+  type ShelfAccessState,
+  type ShelfAction,
+  type ShelfCounts,
+  type ShelfCourse,
+  type ShelfFilter,
+  type ShelfQuery,
+  type ShelfSort,
+} from './shelf.ts';
