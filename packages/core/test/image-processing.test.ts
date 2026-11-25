@@ -242,17 +242,28 @@ describe('variantes do avatar', () => {
   });
 });
 
+describe('capa de produto (product_cover)', () => {
+  it('gera 480 e 1280 em 16:9', async () => {
+    const result = await processImage(await solid(2000, 2000, 'png'), 'product_cover');
+    expect(result.variants.map((v) => [v.width, v.height])).toEqual([
+      [480, 270],
+      [1280, 720],
+    ]);
+  });
+});
+
 describe('regras de envio e entrega', () => {
-  it('na Fase 1 o classroom aceita avatar de qualquer papel e o admin não aceita envio', () => {
+  it('o classroom aceita avatar de qualquer papel e o admin só a capa de produto da equipe', () => {
     for (const role of ['student', 'instructor', 'manager', 'admin']) {
       expect(canUploadImagePurpose('classroom', role, 'avatar')).toBe(true);
       expect(canUploadImagePurpose('admin', role, 'avatar')).toBe(false);
+      expect(canUploadImagePurpose('admin', role, 'product_cover')).toBe(role !== 'student');
     }
     expect(canUploadImagePurpose('classroom', 'student', 'profile_cover')).toBe(false);
     expect(canUploadImagePurpose('classroom', 'student', 'banana')).toBe(false);
     expect(canUploadImagePurpose('classroom', '', 'avatar')).toBe(false);
     expect(() => assertCanUploadImagePurpose('admin', 'admin', 'avatar')).toThrow(DomainError);
-    expect(Object.keys(IMAGE_VARIANT_SPECS)).toEqual(['avatar']);
+    expect(Object.keys(IMAGE_VARIANT_SPECS)).toEqual(['avatar', 'product_cover']);
   });
 
   it('finalidades, larguras de variante e limites', () => {
