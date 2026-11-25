@@ -45,6 +45,7 @@ Passos:
 | Cliente gerado | `cliente` | `check` de `packages/api-client` quando um `openapi.yaml` muda, ou quando o próprio gerado (ou o script que o gera) é mexido: o gerado tem de estar em dia com os contratos |
 | Banco | `banco` | Testes de banco alterados; migration alterada roda a suíte inteira de `database/postgres` |
 | Tipos do banco | `tipos-banco` | `db:types:check` de `packages/core` quando uma migration muda, ou quando os tipos gerados são mexidos: os tipos gerados têm de descrever o banco das migrations |
+| Licenças | `licencas` | `pnpm licenses:check` (o mesmo do fluxo `security`) quando muda `pnpm-lock.yaml`, `license-allowlist.json` ou `scripts/check-licenses.mjs`: toda dependência tem licença da `license-allowlist.json`. Saída 2 do script (nenhuma dependência instalada) conta como ambiente indisponível |
 
 Não roda build, e2e nem a suíte inteira.
 
@@ -147,6 +148,7 @@ Exemplo de resumo:
 – cliente      pulado (sem mudança)
 ✓ banco        0.9s
 – tipos-banco  pulado (sem mudança)
+– licencas     pulado (sem mudança)
 ```
 
 ## Dados
@@ -164,6 +166,7 @@ Exemplo de resumo:
 - [ ] Com um passo falhando, o `verify:quick` ainda roda os demais e sai com código 1.
 - [ ] O `verify:full` para no primeiro passo que falhar.
 - [ ] Alterar um `openapi.yaml` sem regenerar o cliente falha o passo `cliente`; alterar uma migration sem regenerar os tipos falha o `tipos-banco`.
+- [ ] Um `pnpm-lock.yaml` alterado com dependência de licença fora da `license-allowlist.json` falha o passo `licencas` do `verify:quick`; sem mudança no lockfile, na lista ou no script, o passo aparece como "pulado".
 - [ ] Um teste de `test/contract` alterado roda no passo `contrato`, não no `testes`; no completo, cada teste de contrato roda uma vez.
 - [ ] Um `docker-compose.yml` mal formatado falha o `lint` no rápido, no completo e no gancho de commit.
 - [ ] A segunda execução seguida do `verify:quick` não refaz o banco modelo; alterar uma migration refaz.
