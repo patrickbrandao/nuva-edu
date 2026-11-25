@@ -353,7 +353,7 @@ describe('curso com o estado do usuário (GET /courses/{slug})', () => {
       priceCents: 9900,
       lessonCount: 2,
       access: { allowed: false, reason: 'no_entitlement', expiresAt: null },
-      // Valores neutros até as tarefas 431 e 433.
+      // Quem não tem o curso vê o progresso zerado (spec 014); `certificate` vem na tarefa 433.
       progress: { completedLessons: 0, totalLessons: 2, percent: 0, state: 'not_started' },
       continueLessonId: null,
       certificate: null,
@@ -418,14 +418,10 @@ describe('aula (GET /lessons/{id})', () => {
       previousLessonId: null,
       nextLessonId: paidLesson,
       isLastLesson: false,
-      // Neutro até a tarefa 431.
-      userState: {
-        completedAt: null,
-        completedVia: null,
-        positionSeconds: null,
-        lastOpenedAt: null,
-      },
+      // A abertura cria a linha de progresso (spec 014; rotas em `learning.test.ts`).
+      userState: { completedAt: null, completedVia: null, positionSeconds: 0 },
     });
+    expect(reply.json().userState.lastOpenedAt).not.toBeNull();
     expect(reply.json()).not.toHaveProperty('access');
   });
 

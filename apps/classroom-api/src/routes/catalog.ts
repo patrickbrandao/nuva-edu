@@ -1,10 +1,10 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from '@nuva-edu/api-kit';
 import {
   type CatalogViewer,
-  getCourseView,
+  getCourseLearningView,
   getEbookDownload,
   getEbookView,
-  getLessonContent,
+  getLessonView,
   getShowcaseProduct,
   listMyEntitlements,
   listSampleLessons,
@@ -25,18 +25,13 @@ const PUBLIC_CACHE = 'public, no-cache';
 const PRIVATE_CACHE = 'private, no-cache';
 
 /** O usuário da sessão, com o papel conferido nesta requisição (`authenticateSession`). */
-function viewerOf(request: FastifyRequest): CatalogViewer {
+export function viewerOf(request: FastifyRequest): CatalogViewer {
   const { user } = requireSession(request);
   return { id: user.id, role: user.role };
 }
 
-function privateCache(reply: FastifyReply): void {
+export function privateCache(reply: FastifyReply): void {
   reply.header('Cache-Control', PRIVATE_CACHE);
-}
-
-/** Progresso neutro até o núcleo de aprendizado entrar na rota (tarefa 431). */
-function noProgress(totalLessons: number) {
-  return { completedLessons: 0, totalLessons, percent: 0, state: 'not_started' as const };
 }
 
 /**
@@ -61,43 +56,28 @@ export function registerCatalogRoutes(app: FastifyInstance, ctx: RouteContext): 
     return toWire(product);
   });
 
-  // `GET /courses/{slug}`: o programa com o estado de acesso. O contrato não tem
-  // `certificateEnabled`. Progresso, "Continuar" e certificado vêm com as tarefas 431 e 433;
-  // até lá saem neutros: nada concluído, sem aula para continuar, sem certificado.
+  // `GET /courses/{slug}`: o programa com o estado de acesso, o progresso por módulo e aula e a
+  // aula de "Continuar" (spec 014). O contrato não tem `certificateEnabled`; o estado do
+  // certificado é composto na tarefa 433 e até lá sai `null` (a página não menciona certificado).
   app.operation('getCourse', async (request, reply) => {
     const { slug } = paramsOf<{ slug: string }>(request);
-    const view = await getCourseView(db, viewerOf(request), slug);
+    const view = await getCourseLearningView(db, viewerOf(request), slug);
     const { certificateEnabled: _certificateEnabled, modules, ...course } = view;
     privateCache(reply);
     return toWire({
       ...course,
-      progress: noProgress(view.lessonCount),
-      continueLessonId: null,
       certificate: null,
-      modules: modules.map(({ lessonCount, lessons, ...module }) => ({
-        ...module,
-        progress: noProgress(lessonCount),
-        lessons: lessons.map((lesson) => ({ ...lesson, completed: false })),
-      })),
+      modules: modules.map(({ lessonCount: _lessonCount, ...module }) => module),
     });
   });
 
   // `GET /lessons/{id}`: sem acesso, o núcleo lança `403 access_denied` com `reason` e nenhum
-  // dado da aula. A abertura (`lastOpenedAt`) e o `userState` real entram com a tarefa 431.
+  // dado da aula. Abrir grava `lastOpenedAt` ("Continuar de onde parou") e devolve o `userState`.
   app.operation(
     'getLesson',
     async (request) => {
       const { id } = paramsOf<{ id: string }>(request);
-      const { access: _access, ...lesson } = await getLessonContent(db, viewerOf(request), id);
-      return toWire({
-        ...lesson,
-        userState: {
-          completedAt: null,
-          completedVia: null,
-          positionSeconds: null,
-          lastOpenedAt: null,
-        },
-      });
+      return toWire(await getLessonView(db, viewerOf(request), id));
     },
     { noStore: true },
   );
