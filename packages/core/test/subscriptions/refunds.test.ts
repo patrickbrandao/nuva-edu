@@ -142,6 +142,34 @@ function refundQueued(refundId: string) {
     .then((row) => row.n);
 }
 
+/** Pedidos de reembolso auditados contra o alvo (`order`/`subscription`). */
+function requestAuditCount(targetId: string) {
+  return db
+    .selectFrom('auditLog')
+    .select(sql<number>`count(*)::int`.as('n'))
+    .where('action', '=', 'refund.request')
+    .where('targetId', '=', targetId)
+    .executeTakeFirstOrThrow()
+    .then((row) => row.n);
+}
+
+function refundRowCount(column: 'orderId' | 'paymentId', value: string): Promise<number> {
+  if (column === 'orderId') {
+    return db
+      .selectFrom('refunds')
+      .select(sql<number>`count(*)::int`.as('n'))
+      .where('orderId', '=', value)
+      .executeTakeFirstOrThrow()
+      .then((row) => row.n);
+  }
+  return db
+    .selectFrom('refunds')
+    .select(sql<number>`count(*)::int`.as('n'))
+    .where('paymentId', '=', value)
+    .executeTakeFirstOrThrow()
+    .then((row) => row.n);
+}
+
 describe('reembolso de pedido', () => {
   it('pede o total, executa no provedor e revoga os direitos, deixando o pedido reembolsado', async () => {
     const subscriber = await makeSubscriber(db);
@@ -587,5 +615,146 @@ describe('reembolso de cobrança recorrente', () => {
     const list: RefundView[] = grouped.get(active.paymentId) ?? [];
     expect(list.map((entry) => entry.amountCents).sort()).toEqual([1_000, 2_000]);
     expect(await loadSubscriptionRefunds(db, [])).toEqual(new Map());
+  });
+});
+
+describe('idempotência do reembolso de pedido', () => {
+  const KEY = 'reembolso-de-teste-0001';
+
+  it('a mesma chave devolve o mesmo reembolso sem segunda linha, tarefa ou auditoria', async () => {
+    const subscriber = await makeSubscriber(db);
+    const paid = await paidOrder(subscriber);
+    const input = { orderId: paid.orderId, reason: 'Aluno desistiu', idempotencyKey: KEY };
+
+    const first = await requestOrderRefund(db, staffRequest(admin), input);
+    const replay = await requestOrderRefund(db, staffRequest(admin), input);
+
+    expect(replay).toEqual(first);
+    expect(replay.createdAt).toBeInstanceOf(Date);
+    expect(await refundRowCount('orderId', paid.orderId)).toBe(1);
+    expect(await refundQueued(first.id)).toBe(1);
+    expect(await requestAuditCount(paid.orderId)).toBe(1);
+  });
+
+  it('a mesma chave com outro motivo ou outros itens é 422 idempotency_key_reuse', async () => {
+    const subscriber = await makeSubscriber(db);
+    const paid = await paidOrder(subscriber, [4_900]);
+    const input = { orderId: paid.orderId, reason: 'Aluno desistiu', idempotencyKey: KEY };
+    const first = await requestOrderRefund(db, staffRequest(admin), input);
+
+    await expectError(
+      requestOrderRefund(db, staffRequest(admin), { ...input, reason: 'Outro motivo' }),
+      422,
+      'idempotency_key_reuse',
+    );
+    const [itemId] = await orderItemIds(paid.orderId);
+    await expectError(
+      requestOrderRefund(db, staffRequest(admin), {
+        ...input,
+        items: [{ orderItemId: itemId as string, amountCents: 1_000 }],
+      }),
+      422,
+      'idempotency_key_reuse',
+    );
+    expect(await refundRowCount('orderId', paid.orderId)).toBe(1);
+    expect(await refundQueued(first.id)).toBe(1);
+  });
+
+  it('a repetição devolve a resposta gravada mesmo depois de o estorno concluir', async () => {
+    const subscriber = await makeSubscriber(db);
+    const provider = makeProvider();
+    const paid = await paidOrder(subscriber);
+    const input = { orderId: paid.orderId, reason: 'Aluno desistiu', idempotencyKey: KEY };
+
+    const first = await requestOrderRefund(db, staffRequest(admin), input);
+    await executeRefund(db, provider, first.id);
+    expect(await orderStatus(paid.orderId)).toBe('refunded');
+
+    const replay = await requestOrderRefund(db, staffRequest(admin), input);
+    // A primeira resposta é a gravada: `requested`, como o cliente recebeu.
+    expect(replay).toMatchObject({ id: first.id, status: 'requested' });
+    expect(await orderStatus(paid.orderId)).toBe('refunded');
+    expect(await refundRowCount('orderId', paid.orderId)).toBe(1);
+  });
+
+  it('duas requisições concorrentes com a mesma chave criam um reembolso', async () => {
+    const subscriber = await makeSubscriber(db);
+    const paid = await paidOrder(subscriber);
+    const input = { orderId: paid.orderId, reason: 'Aluno desistiu', idempotencyKey: KEY };
+
+    const results = await Promise.all([
+      requestOrderRefund(db, staffRequest(admin), input),
+      requestOrderRefund(db, staffRequest(admin), input),
+    ]);
+    expect(new Set(results.map((refund) => refund.id)).size).toBe(1);
+    expect(await refundRowCount('orderId', paid.orderId)).toBe(1);
+    expect(await refundQueued(results[0]?.id as string)).toBe(1);
+    expect(await requestAuditCount(paid.orderId)).toBe(1);
+  });
+
+  it('sem chave, cada pedido é um reembolso novo', async () => {
+    const subscriber = await makeSubscriber(db);
+    const paid = await paidOrder(subscriber, [4_900]);
+    const [itemId] = await orderItemIds(paid.orderId);
+
+    const first = await requestOrderRefund(db, staffRequest(admin), {
+      orderId: paid.orderId,
+      reason: 'Primeira parte',
+      items: [{ orderItemId: itemId as string, amountCents: 1_000 }],
+    });
+    const second = await requestOrderRefund(db, staffRequest(admin), {
+      orderId: paid.orderId,
+      reason: 'Segunda parte',
+      items: [{ orderItemId: itemId as string, amountCents: 1_000 }],
+    });
+    expect(second.id).not.toBe(first.id);
+    expect(await refundRowCount('orderId', paid.orderId)).toBe(2);
+  });
+});
+
+describe('idempotência do reembolso de assinatura', () => {
+  const KEY = 'reembolso-de-teste-0002';
+
+  it('a mesma chave devolve o mesmo reembolso sem segundo estorno', async () => {
+    const active = await activeSubscription();
+    const input = {
+      subscriptionId: active.subscriptionId,
+      paymentId: active.paymentId,
+      reason: 'Cortesia parcial',
+      amountCents: 4_000,
+      idempotencyKey: KEY,
+    };
+
+    const first = await requestSubscriptionRefund(db, staffRequest(admin), input);
+    const replay = await requestSubscriptionRefund(db, staffRequest(admin), input);
+
+    expect(replay).toEqual(first);
+    expect(await refundRowCount('paymentId', active.paymentId)).toBe(1);
+    expect(await refundQueued(first.id)).toBe(1);
+    expect(await requestAuditCount(active.subscriptionId)).toBe(1);
+  });
+
+  it('a mesma chave com outro valor é 422 idempotency_key_reuse', async () => {
+    const active = await activeSubscription();
+    const input = {
+      subscriptionId: active.subscriptionId,
+      paymentId: active.paymentId,
+      reason: 'Cortesia parcial',
+      amountCents: 4_000,
+      idempotencyKey: KEY,
+    };
+    await requestSubscriptionRefund(db, staffRequest(admin), input);
+
+    await expectError(
+      requestSubscriptionRefund(db, staffRequest(admin), { ...input, amountCents: 5_000 }),
+      422,
+      'idempotency_key_reuse',
+    );
+    await expectError(
+      requestSubscriptionRefund(db, staffRequest(admin), { ...input, reason: 'Outro' }),
+      422,
+      'idempotency_key_reuse',
+    );
+    expect(await refundRowCount('paymentId', active.paymentId)).toBe(1);
   });
 });

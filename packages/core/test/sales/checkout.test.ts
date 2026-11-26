@@ -201,6 +201,171 @@ describe('fechamento do pedido', () => {
   });
 });
 
+describe('idempotência do fechamento', () => {
+  const KEY = 'checkout-de-teste-0001';
+
+  async function orderCount(): Promise<number> {
+    const rows = await db
+      .selectFrom('orders')
+      .select('id')
+      .where('userId', '=', student.id)
+      .execute();
+    return rows.length;
+  }
+
+  async function cartCount(): Promise<number> {
+    const rows = await db
+      .selectFrom('carts')
+      .innerJoin('cartItems', 'cartItems.cartId', 'carts.id')
+      .select('cartItems.id')
+      .where('carts.userId', '=', student.id)
+      .execute();
+    return rows.length;
+  }
+
+  it('a mesma chave devolve o mesmo pedido e não abre segundo checkout', async () => {
+    await withCourseInCart(4_900);
+    const input = {
+      userId: student.id,
+      provider,
+      currency: CURRENCY,
+      returnUrls: RETURN_URLS,
+      idempotencyKey: KEY,
+    };
+    const first = await createOrder(db, input);
+    const replay = await createOrder(db, input);
+
+    expect(replay.order.id).toBe(first.order.id);
+    expect(replay.checkoutUrl).toBe(first.checkoutUrl);
+    expect(replay.order.createdAt).toBeInstanceOf(Date);
+    expect(await orderCount()).toBe(1);
+    expect(await cartCount()).toBe(0);
+    const checkouts = await provider.findPaymentsByReference(
+      orderExternalReference(first.order.id),
+    );
+    expect(checkouts).toHaveLength(1);
+
+    const stored = await db
+      .selectFrom('idempotencyKeys')
+      .select(['scope', 'responseStatus', 'completedAt'])
+      .where('userId', '=', student.id)
+      .where('key', '=', KEY)
+      .executeTakeFirstOrThrow();
+    expect(stored).toMatchObject({ scope: 'order.create', responseStatus: 201 });
+    expect(stored.completedAt).not.toBeNull();
+  });
+
+  it('a repetição não mexe na cesta que mudou depois do primeiro pedido', async () => {
+    await withCourseInCart(4_900);
+    const first = await createOrder(db, {
+      userId: student.id,
+      provider,
+      currency: CURRENCY,
+      returnUrls: RETURN_URLS,
+      idempotencyKey: KEY,
+    });
+    await withCourseInCart(2_900);
+
+    const replay = await createOrder(db, {
+      userId: student.id,
+      provider,
+      currency: CURRENCY,
+      returnUrls: RETURN_URLS,
+      idempotencyKey: KEY,
+    });
+    expect(replay.order.id).toBe(first.order.id);
+    expect(await orderCount()).toBe(1);
+    expect(await cartCount()).toBe(1);
+    expect(
+      await provider.findPaymentsByReference(orderExternalReference(first.order.id)),
+    ).toHaveLength(1);
+  });
+
+  it('chave fora do contrato é 400 validation_failed', async () => {
+    await withCourseInCart();
+    await expectError(
+      createOrder(db, {
+        userId: student.id,
+        provider,
+        currency: CURRENCY,
+        returnUrls: RETURN_URLS,
+        idempotencyKey: 'curta',
+      }),
+      400,
+      'validation_failed',
+    );
+    expect(await orderCount()).toBe(0);
+    expect(await cartCount()).toBe(1);
+  });
+
+  it('chave com mais de 24 h pode fechar outra cesta', async () => {
+    await withCourseInCart(4_900);
+    const first = await createOrder(db, {
+      userId: student.id,
+      provider,
+      currency: CURRENCY,
+      returnUrls: RETURN_URLS,
+      idempotencyKey: KEY,
+    });
+    // A retenção é por `created_at`; antes do expurgo, a leitura da chave velha a libera.
+    await db
+      .updateTable('idempotencyKeys')
+      .set({ createdAt: new Date(Date.now() - 25 * 60 * 60 * 1000) })
+      .where('userId', '=', student.id)
+      .where('key', '=', KEY)
+      .execute();
+    await withCourseInCart(2_900);
+
+    const second = await createOrder(db, {
+      userId: student.id,
+      provider,
+      currency: CURRENCY,
+      returnUrls: RETURN_URLS,
+      idempotencyKey: KEY,
+    });
+    expect(second.order.id).not.toBe(first.order.id);
+    expect(await orderCount()).toBe(2);
+    expect(
+      await provider.findPaymentsByReference(orderExternalReference(second.order.id)),
+    ).toHaveLength(1);
+  });
+
+  it('provedor fora preserva o pedido draft e libera a chave', async () => {
+    await withCourseInCart();
+    provider.setUnavailable(true, ['createCheckout']);
+    const error = await createOrder(db, {
+      userId: student.id,
+      provider,
+      currency: CURRENCY,
+      returnUrls: RETURN_URLS,
+      idempotencyKey: KEY,
+    }).then(
+      () => undefined,
+      (caught: unknown) => caught,
+    );
+    expect(isProviderUnavailable(error)).toBe(true);
+    expect(await orderCount()).toBe(1);
+    expect(await cartCount()).toBe(1);
+    const keys = await db
+      .selectFrom('idempotencyKeys')
+      .select('key')
+      .where('userId', '=', student.id)
+      .execute();
+    expect(keys).toHaveLength(0);
+
+    provider.setUnavailable(false);
+    const retried = await createOrder(db, {
+      userId: student.id,
+      provider,
+      currency: CURRENCY,
+      returnUrls: RETURN_URLS,
+      idempotencyKey: KEY,
+    });
+    expect(retried.order.status).toBe('pending');
+    expect(await orderCount()).toBe(2);
+  });
+});
+
 describe('confirmação do pagamento', () => {
   it('marca o pedido pago, libera a cascata e é idempotente', async () => {
     const courseId = await withCourseInCart(4_900);
