@@ -59,6 +59,7 @@ const TYPE_GROUPS = {
   'account.password_changed': 'account',
   'account.role_changed': 'account',
   'account.deleted': 'account',
+  'account.email_undeliverable': 'account',
   'order.approved': 'purchase',
   'order.refunded': 'purchase',
   'subscription.renewed': 'purchase',

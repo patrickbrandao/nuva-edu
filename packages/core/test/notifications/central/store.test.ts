@@ -324,6 +324,24 @@ describe('createNotification e agrupamento (spec 024, "Central")', () => {
   });
 });
 
+it('avisa endereço indisponível só na central e preserva os outros tipos da conta', async () => {
+  await inRollback(db, async (trx) => {
+    const userId = await createUser(trx);
+    const input = { userId, type: 'account.email_undeliverable' as const };
+    const first = await createNotification(trx, input, { nextEventId: eventIds() });
+    const repeated = await createNotification(trx, input, { nextEventId: eventIds() });
+    expect(first?.notification.type).toBe(input.type);
+    expect(repeated?.notification).toMatchObject({ id: first?.notification.id, count: 2 });
+    expect(
+      await trx.selectFrom('emailOutbox').select('id').where('userId', '=', userId).execute(),
+    ).toEqual([]);
+    await expect(deliverNotification(trx, input)).rejects.toThrow(/enqueueEmail/);
+    await expect(createNotification(trx, { userId, type: 'account.exists' })).rejects.toThrow(
+      /plataforma/,
+    );
+  });
+});
+
 describe('deliverNotification (canais e preferências)', () => {
   it('grava na central e enfileira o e-mail conforme os padrões', async () => {
     await inRollback(db, async (trx) => {

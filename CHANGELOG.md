@@ -6,6 +6,7 @@ Detalhe das decisões em `specs/decisions/`.
 ## [Não lançado]
 
 ### Adicionado
+- core: aviso de e-mail indisponível é registrado apenas na central do titular, com contador e SSE (spec 024, task 732).
 - core: assinatura dos avisos do fake HTTP conferida com o relógio atual (spec 013, task 729).
 - specs: aviso exclusivo da central para e-mail indisponível após três recusas permanentes consecutivas (spec 024, task 731).
 - contratos: conferência estrita nas APIs de vendas, assinaturas, pagamentos e notificações com rotas prontas, com cliente regenerado e sem pendências (tasks 562 e 567).

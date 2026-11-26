@@ -57,7 +57,7 @@ export interface CreateNotificationOptions {
  * Aplica as mesmas regras de `notify` no momento da gravação (destinatário removido, suspenso,
  * autor da própria ação, equipe no grupo `staff`): devolve `null` quando o destinatário deixou de
  * poder receber. Exige transação aberta; lança `TypeError` para tipo desconhecido ou do grupo
- * `account`, que não tem canal plataforma.
+ * `account`, salvo o aviso de endereço indisponível.
  */
 export async function createNotification(
   trx: Database,
@@ -71,7 +71,10 @@ export async function createNotification(
   if (!isNotificationType(type)) {
     throw new TypeError(`Notificação de tipo desconhecido: ${String(type)}.`);
   }
-  if (!notificationGroupHasInApp(notificationTypeGroup(type))) {
+  if (
+    type !== 'account.email_undeliverable' &&
+    !notificationGroupHasInApp(notificationTypeGroup(type))
+  ) {
     throw new TypeError(
       `A notificação "${type}" não tem canal plataforma; use enqueueEmail para o grupo account.`,
     );
