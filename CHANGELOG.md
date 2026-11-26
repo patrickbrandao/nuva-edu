@@ -10,6 +10,7 @@ Detalhe das decisões em `specs/decisions/`.
 - classroom: a vitrine reutiliza a chave de idempotência ao reenviar o checkout de assinatura e gera outra quando o plano, o cupom ou a validação exige nova tentativa (spec 012, task 716).
 - admin-api: cobertura HTTP alinhada ao contrato para combinações inválidas de planos e itens duplicados (spec 012, task 722).
 - classroom-api: checkout de assinatura aceita `Idempotency-Key` e devolve o checkout original quando a mesma tentativa é reenviada (spec 012, task 715).
+- worker: o expurgo diário remove chaves financeiras com mais de 24 horas e registra quantas foram removidas (spec 033, task 720).
 - core: idempotência na criação de assinatura (`createSubscriptionCheckout` com `idempotencyKey` opcional e escopo `subscription.create`), devolvendo a primeira assinatura e `checkoutUrl` por 24 h sem segunda adesão no provedor, recusando plano ou cupom divergente com `422 idempotency_key_reuse` e liberando a chave sem criar assinatura quando o provedor está indisponível (specs 003 e 012; task 718).
 - contratos: `Idempotency-Key` declarada em `POST /api/v1/subscriptions` e exceção explícita de idempotência natural registrada para `POST /api/v1/users/{id}/entitlements` (specs 003, 004 e 012; task 713).
 - interface: cliente regenerado com cabeçalho `Idempotency-Key` em `POST /api/v1/subscriptions` (task 714).

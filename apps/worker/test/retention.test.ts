@@ -195,6 +195,35 @@ function fakeJob<T extends JobType>(type: T): JobOf<T> {
 const context = (): JobContext => ({ signal: new AbortController().signal });
 
 describe('retention.purge', () => {
+  it('expurga chaves financeiras de 25 h, inclusive reservas, e mantém as de 23 h', async () => {
+    const userId = await createUser();
+    const recentKey = randomUUID();
+    const oldKey = randomUUID();
+    const abandonedKey = randomUUID();
+    const base = { scope: 'order.create', userId, requestHash: hex64() };
+    await db
+      .insertInto('idempotencyKeys')
+      .values([
+        { ...base, key: recentKey, createdAt: ago(23 * HOUR), responseStatus: 201 },
+        { ...base, key: oldKey, createdAt: ago(25 * HOUR), responseStatus: 201 },
+        { ...base, key: abandonedKey, createdAt: ago(25 * HOUR) },
+      ])
+      .execute();
+
+    const { logger, lines } = captureLogger();
+    const handlers = createHandlers(handlerDependencies(db, logger, { retention: SETTINGS }));
+    await handlers['retention.purge'](fakeJob('retention.purge'), context());
+
+    const remaining = await db
+      .selectFrom('idempotencyKeys')
+      .select('key')
+      .where('userId', '=', userId)
+      .execute();
+    expect(remaining).toEqual([{ key: recentKey }]);
+    const report = lines.find((line) => line.msg === 'Expurgo diário executado');
+    expect(report?.deleted).toMatchObject({ idempotencyRecords: 2 });
+  });
+
   it('sessões: apaga a vencida e a sem uso há mais do prazo, mantém a ativa', async () => {
     const userId = await createUser();
     const expired = await insertSession(userId, {

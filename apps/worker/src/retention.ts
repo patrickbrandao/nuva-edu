@@ -4,6 +4,7 @@ import {
   purgeAudit,
   purgeCertificatePreviews,
   purgeCertificateTemplateVersions,
+  purgeIdempotencyKeys,
 } from '@nuva-edu/core';
 
 /** Linhas por lote do expurgo (spec 033, RNF-05): cada `DELETE` é uma transação curta. */
@@ -38,6 +39,7 @@ export interface RetentionReport {
   /** Versões de template sem uso com mais de 30 dias (spec 015). */
   certificateTemplateVersions: number;
   auditLog: number;
+  idempotencyRecords: number;
 }
 
 export interface RetentionOptions {
@@ -56,7 +58,7 @@ type BatchRule = (db: Database, limit: number) => Promise<number>;
 
 type BatchRuleName = Exclude<
   keyof RetentionReport,
-  'auditLog' | 'certificatePreviews' | 'certificateTemplateVersions'
+  'auditLog' | 'certificatePreviews' | 'certificateTemplateVersions' | 'idempotencyRecords'
 >;
 
 function rules(settings: RetentionSettings, now: Date): Record<BatchRuleName, BatchRule> {
@@ -232,8 +234,8 @@ export async function drainBatches(
 /**
  * Expurgo diário (`retention.purge`, spec 033): apaga o que passou do prazo, em lotes de 5.000,
  * cada um no próprio `DELETE`, sem transação longa (RNF-05). Apagar por prazo é idempotente:
- * repetir não apaga nada além do vencido. A auditoria vai por último, por `audit_log_purge`
- * com `NUVA_RETENTION_AUDIT_DAYS`.
+ * repetir não apaga nada além do vencido. A auditoria usa `audit_log_purge` com
+ * `NUVA_RETENTION_AUDIT_DAYS`. As chaves financeiras vencem após 24 horas.
  */
 export async function purgeRetention(
   db: Database,
@@ -254,5 +256,12 @@ export async function purgeRetention(
   const certificateTemplateVersions = await purgeCertificateTemplateVersions(db, purgeOptions);
   throwIfAborted(options.signal);
   const auditLog = await purgeAudit(db, settings.auditDays);
-  return { ...counts, certificatePreviews, certificateTemplateVersions, auditLog };
+  const idempotencyRecords = await purgeIdempotencyKeys(db, { ...purgeOptions, now });
+  return {
+    ...counts,
+    certificatePreviews,
+    certificateTemplateVersions,
+    auditLog,
+    idempotencyRecords,
+  };
 }
