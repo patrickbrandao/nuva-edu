@@ -18,6 +18,7 @@ import {
   assertTermsGate,
   type Config,
   createOAuth,
+  createPaymentProvider,
   createSettingsReader,
   type Database,
   databasePoolStats,
@@ -28,6 +29,8 @@ import {
   listenChannel,
   listSessions,
   type OAuth,
+  type PaymentProvider,
+  paymentUnavailable,
   type SettingsReader,
   USER_EVENTS_CHANNEL,
   type UserEventKind,
@@ -47,6 +50,7 @@ import { registerNotesRoutes } from './routes/notes.ts';
 import { registerNotificationRoutes } from './routes/notifications.ts';
 import { registerOAuthRoutes } from './routes/oauth.ts';
 import { registerStreamRoutes } from './routes/stream.ts';
+import { registerSubscriptionRoutes } from './routes/subscriptions.ts';
 import {
   createSessionAuthenticator,
   establishSession,
@@ -101,6 +105,12 @@ export interface ClassroomAppOptions {
    * com o `fetch` global. Os testes passam o do provedor falso (`createFakeOAuthProvider`).
    */
   oauth?: OAuth;
+  /**
+   * Porta de pagamento (spec 013, RF-01): a assinatura e o seu cancelamento passam por ela.
+   * Padrão: a da configuração (`NUVA_PAYMENT_PROVIDER`), resolvida na primeira assinatura. Os
+   * testes injetam o provedor `fake` com o próprio relógio.
+   */
+  paymentProvider?: PaymentProvider;
 }
 
 /** O fluxo SSE deste processo, para a subida, os testes e quem precisar derrubar conexões. */
@@ -271,6 +281,27 @@ export function buildClassroomApp(options: ClassroomAppOptions): FastifyInstance
   });
   registerStreamRoutes(app, { hub, isListening: () => pipeline.isListening() });
 
+  // A porta de pagamento só é montada quando a primeira assinatura precisa dela: a subida não
+  // depende do provedor (spec 013, RF-09). Configuração sem o adaptador do Mercado Pago responde
+  // `503 payment_provider_unavailable`, nunca `500`.
+  let payment: PaymentProvider | null = options.paymentProvider ?? null;
+  let paymentFailureLogged = false;
+  const paymentProvider = (): PaymentProvider => {
+    if (payment !== null) {
+      return payment;
+    }
+    try {
+      payment = createPaymentProvider(config);
+      return payment;
+    } catch (error) {
+      if (!paymentFailureLogged) {
+        paymentFailureLogged = true;
+        logger.warn({ err: error }, 'Provedor de pagamento indisponível');
+      }
+      throw paymentUnavailable();
+    }
+  };
+
   const routes: RouteContext = { config, db, hub, ttlDays };
   registerAuthRoutes(app, routes);
   registerOAuthRoutes(app, {
@@ -291,6 +322,7 @@ export function buildClassroomApp(options: ClassroomAppOptions): FastifyInstance
   registerAccountRoutes(app, routes);
   registerLegalRoutes(app, routes);
   registerCatalogRoutes(app, routes);
+  registerSubscriptionRoutes(app, { ...routes, paymentProvider });
   registerLearningRoutes(app, routes);
   registerNotesRoutes(app, routes);
   registerNotificationRoutes(app, routes);
