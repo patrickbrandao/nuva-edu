@@ -78,6 +78,7 @@ export * from './modules/entitlements/index.ts';
 export * from './modules/images/index.ts';
 export * from './modules/jobs/index.ts';
 export * from './modules/learning/index.ts';
+export * from './modules/markdown/index.ts';
 export * from './modules/notes/index.ts';
 export * from './modules/notifications/index.ts';
 export * from './modules/oauth/index.ts';
