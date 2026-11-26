@@ -125,56 +125,62 @@ describe('registro de tipos', () => {
     expect(cleanup).toMatchObject({ type: 'image.cleanup', maxAttempts: 5 });
   });
 
-  it('exige o manipulador de todos os tipos fora dos pendentes, suspension.expire e image.cleanup incluídos', () => {
+  it('exige o manipulador de todos os tipos do registro, os da Fase 2 incluídos', () => {
     expectTypeOf<keyof JobHandlers>().toEqualTypeOf<keyof typeof JOB_DEFINITIONS>();
     const noop = async (): Promise<void> => {};
     const base = {
       'example.echo': noop,
       'retention.purge': noop,
       'email.send': noop,
+      'entitlement.recompute': noop,
+      'course.completed': noop,
+      'course.completion_check': noop,
+      'certificate.render': noop,
+      'certificate.backfill': noop,
+      'certificate.preview': noop,
     };
     // @ts-expect-error falta o manipulador de `image.cleanup`.
     const withoutCleanup: JobHandlers = { ...base, 'suspension.expire': noop };
     // @ts-expect-error falta o manipulador de `suspension.expire`.
     const withoutExpire: JobHandlers = { ...base, 'image.cleanup': noop };
-    const complete: JobHandlers = {
+    const { 'course.completed': _completed, ...withoutCompleted } = {
       ...withoutCleanup,
       ...withoutExpire,
     };
-    const pending = new Set<string>(PENDING_HANDLER_JOB_TYPES);
-    expect(Object.keys(complete).sort()).toEqual(
-      Object.keys(JOB_DEFINITIONS)
-        .filter((type) => !pending.has(type))
-        .sort(),
-    );
-    // Pendente aceita manipulador, mas não o exige.
-    const withPending: JobHandlers = { ...complete, 'course.completed': noop };
-    expect(withPending['course.completed']).toBe(noop);
+    // @ts-expect-error falta o manipulador de `course.completed` (tarefa 416).
+    const missingPhase2: JobHandlers = withoutCompleted;
+    const { 'certificate.preview': _preview, ...withoutPreview } = {
+      ...withoutCleanup,
+      ...withoutExpire,
+    };
+    // @ts-expect-error falta o manipulador de `certificate.preview` (tarefa 416).
+    const missingPreview: JobHandlers = withoutPreview;
+    const complete: JobHandlers = { ...withoutCleanup, ...withoutExpire };
+    expect(Object.keys(complete).sort()).toEqual(Object.keys(JOB_DEFINITIONS).sort());
+    expect(Object.keys(missingPhase2)).not.toContain('course.completed');
+    expect(Object.keys(missingPreview)).not.toContain('certificate.preview');
   });
 });
 
 describe('tipos da Fase 2 (tarefa 405)', () => {
-  it('ficam pendentes até o worker ter o manipulador (tarefa 416)', () => {
-    expectTypeOf<PendingHandlerJobType>().toEqualTypeOf<
-      | 'entitlement.recompute'
-      | 'course.completed'
-      | 'course.completion_check'
-      | 'certificate.render'
-      | 'certificate.backfill'
-      | 'certificate.preview'
-    >();
+  it('nenhum tipo fica sem manipulador no worker (tarefa 416)', () => {
+    expectTypeOf<PendingHandlerJobType>().toEqualTypeOf<never>();
     expectTypeOf<
       (typeof PENDING_HANDLER_JOB_TYPES)[number]
     >().toEqualTypeOf<PendingHandlerJobType>();
-    for (const type of PENDING_HANDLER_JOB_TYPES) {
-      expect(isJobType(type)).toBe(true);
-    }
+    expect(PENDING_HANDLER_JOB_TYPES).toEqual([]);
   });
 
   it('seguem as tentativas da tabela da spec 005', () => {
-    const attempts = Object.fromEntries(
-      PENDING_HANDLER_JOB_TYPES.map((type) => [type, JOB_DEFINITIONS[type]]),
-    );
+    const phase2 = [
+      'entitlement.recompute',
+      'course.completed',
+      'course.completion_check',
+      'certificate.render',
+      'certificate.backfill',
+      'certificate.preview',
+    ] as const;
+    const attempts = Object.fromEntries(phase2.map((type) => [type, JOB_DEFINITIONS[type]]));
     expect(attempts).toEqual({
       'entitlement.recompute': { maxAttempts: 5, priority: 0 },
       'course.completed': { maxAttempts: 5, priority: 0 },

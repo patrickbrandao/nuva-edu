@@ -41,16 +41,6 @@ export interface EmailDataByType {
   'account.role_changed': { role: EmailUserRole };
   /** `endsAt` nulo: suspensão sem prazo. */
   'moderation.suspended': { kind: EmailSuspensionKind; endsAt: string | null };
-}
-
-/**
- * `data` dos tipos já no catálogo cujo modelo (assunto e textos) ainda não existe no worker,
- * como o `PendingHandlerJobType` da fila: `enqueueEmail` já os aceita, mas eles ficam fora de
- * `EmailDataByType`, `EmailType` e `EMAIL_TYPES`, que o worker percorre exigindo um modelo por
- * tipo. A linha de um tipo pendente que chegar ao worker falha como tipo desconhecido. Na
- * tarefa 416, com os modelos, estes tipos passam para `EmailDataByType` e esta lista fica vazia.
- */
-export interface PendingTemplateEmailDataByType {
   /** Acesso liberado (concessão manual na Fase 2). `expiresAt` nulo: acesso vitalício. */
   'access.granted': {
     productType: EmailProductType;
@@ -60,6 +50,16 @@ export interface PendingTemplateEmailDataByType {
   /** Certificado emitido (automático, manual ou retroativo); não sai na reemissão. */
   'certificate.issued': { courseTitle: string; code: string };
 }
+
+/**
+ * `data` dos tipos já no catálogo cujo modelo (assunto e textos) ainda não existe no worker,
+ * como o `PendingHandlerJobType` da fila: `enqueueEmail` já os aceita, mas eles ficam fora de
+ * `EmailDataByType`, `EmailType` e `EMAIL_TYPES`, que o worker percorre exigindo um modelo por
+ * tipo. A linha de um tipo pendente que chegar ao worker falha como tipo desconhecido. Tipo novo
+ * cujo modelo venha depois entra aqui até ele chegar. Hoje nenhum: o worker tem o modelo de
+ * todos (tarefa 416).
+ */
+export type PendingTemplateEmailDataByType = Record<never, never>;
 
 /** Tipos com modelo no worker: os que ele monta e envia. */
 export type EmailType = keyof EmailDataByType;
@@ -122,10 +122,8 @@ const EMAIL_TYPE_DEFINITIONS: { readonly [T in AnyEmailType]: EmailTypeDefinitio
 };
 
 /** Os tipos de `PendingTemplateEmailType`, para conferência em tempo de execução. */
-export const PENDING_TEMPLATE_EMAIL_TYPES = [
-  'access.granted',
-  'certificate.issued',
-] as const satisfies readonly PendingTemplateEmailType[];
+export const PENDING_TEMPLATE_EMAIL_TYPES =
+  [] as const satisfies readonly PendingTemplateEmailType[];
 
 const PENDING_TEMPLATE_SET: ReadonlySet<string> = new Set(PENDING_TEMPLATE_EMAIL_TYPES);
 
@@ -144,6 +142,8 @@ export const EMAIL_TYPES: { readonly [T in EmailType]: EmailTypeDefinition } = {
   'account.password_changed': EMAIL_TYPE_DEFINITIONS['account.password_changed'],
   'account.role_changed': EMAIL_TYPE_DEFINITIONS['account.role_changed'],
   'moderation.suspended': EMAIL_TYPE_DEFINITIONS['moderation.suspended'],
+  'access.granted': EMAIL_TYPE_DEFINITIONS['access.granted'],
+  'certificate.issued': EMAIL_TYPE_DEFINITIONS['certificate.issued'],
 };
 
 /** Tipo com modelo no worker. Tipo pendente (`PendingTemplateEmailType`) dá `false`. */

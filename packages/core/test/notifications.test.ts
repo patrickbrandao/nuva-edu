@@ -1,6 +1,7 @@
 import { sql } from 'kysely';
 import { afterAll, beforeAll, describe, expect, expectTypeOf, inject, it } from 'vitest';
 import {
+  type AnyEmailType,
   closeDatabase,
   consumeEmailToken,
   createDatabase,
@@ -89,8 +90,9 @@ async function rowsAsText(trx: Database, table: 'jobs' | 'email_outbox'): Promis
 }
 
 describe('tipos de e-mail', () => {
-  it('cataloga os oito tipos da Fase 1 com o propósito do token', () => {
+  it('cataloga os tipos das Fases 1 e 2 com o propósito do token', () => {
     expect(Object.keys(EMAIL_TYPES).sort()).toEqual([
+      'access.granted',
       'account.exists',
       'account.locked',
       'account.new_login',
@@ -98,6 +100,7 @@ describe('tipos de e-mail', () => {
       'account.password_reset',
       'account.role_changed',
       'account.verify_email',
+      'certificate.issued',
       'moderation.suspended',
     ]);
     expect(EMAIL_TYPES['account.verify_email'].tokenPurpose).toBe('verify');
@@ -177,20 +180,19 @@ describe('tipos de e-mail', () => {
   });
 });
 
-describe('tipos de e-mail da Fase 2 (pendentes de modelo no worker)', () => {
-  it('access.granted e certificate.issued ficam fora de EMAIL_TYPES até a tarefa 416', () => {
-    expectTypeOf<PendingTemplateEmailType>().toEqualTypeOf<
-      'access.granted' | 'certificate.issued'
-    >();
+describe('tipos de e-mail da Fase 2', () => {
+  it('access.granted e certificate.issued têm modelo no worker: nenhum fica pendente (tarefa 416)', () => {
+    expectTypeOf<PendingTemplateEmailType>().toEqualTypeOf<never>();
     expectTypeOf<
       (typeof PENDING_TEMPLATE_EMAIL_TYPES)[number]
     >().toEqualTypeOf<PendingTemplateEmailType>();
-    expectTypeOf<Extract<EmailType, PendingTemplateEmailType>>().toEqualTypeOf<never>();
-    for (const type of PENDING_TEMPLATE_EMAIL_TYPES) {
-      expect(isEmailType(type)).toBe(false);
+    expectTypeOf<AnyEmailType>().toEqualTypeOf<EmailType>();
+    expect(PENDING_TEMPLATE_EMAIL_TYPES).toEqual([]);
+    for (const type of ['access.granted', 'certificate.issued'] as const) {
+      expect(isEmailType(type)).toBe(true);
       expect(isAnyEmailType(type)).toBe(true);
-      expect(isPendingTemplateEmailType(type)).toBe(true);
-      expect(Object.hasOwn(EMAIL_TYPES, type)).toBe(false);
+      expect(isPendingTemplateEmailType(type)).toBe(false);
+      expect(EMAIL_TYPES[type]).toBe(emailTypeDefinition(type));
     }
     expect(isPendingTemplateEmailType('account.exists')).toBe(false);
     expect(isAnyEmailType('account.exists')).toBe(true);
@@ -241,7 +243,7 @@ describe('tipos de e-mail da Fase 2 (pendentes de modelo no worker)', () => {
     ];
     for (const [type, data] of cases) {
       expect(
-        () => parseEmailData(type as PendingTemplateEmailType, data),
+        () => parseEmailData(type as EmailType, data),
         `${type} ${JSON.stringify(data)}`,
       ).toThrow(EmailDataError);
     }

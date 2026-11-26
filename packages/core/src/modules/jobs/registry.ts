@@ -5,8 +5,8 @@ import type { JsonObject } from '../../db/generated/database.ts';
  * mapa, então enfileirar com payload errado não compila.
  *
  * Payload leva apenas identificadores; nunca senha, token ou CPF (spec 005).
- * Os nomes são os do catálogo da spec 005 e entram junto com a fase que os implementa; os da
- * Fase 2 (tarefa 405) estão em `PendingHandlerJobType` até o worker ter o manipulador (tarefa 416).
+ * Os nomes são os do catálogo da spec 005 e entram junto com a fase que os implementa; tipo cujo
+ * manipulador venha numa tarefa seguinte passa por `PendingHandlerJobType` até ele chegar.
  */
 export interface JobPayloads {
   /** Job de exemplo da Fase 0: o manipulador só registra a mensagem. Não é do catálogo da spec. */
@@ -93,25 +93,12 @@ export const JOB_DEFINITIONS: { readonly [T in JobType]: JobDefinition } = {
  * Tipos já no registro cujo manipulador ainda não existe no worker (chega em outra tarefa).
  * `JobHandlers` exige o manipulador dos demais; estes são opcionais. Tipo novo cujo manipulador
  * venha depois entra aqui até ele chegar; tarefa sem manipulador falha como erro comum e segue
- * as tentativas do tipo. Os da Fase 2 saem na tarefa 416.
+ * as tentativas do tipo. Hoje nenhum: o worker tem o manipulador de todos (tarefa 416).
  */
-export type PendingHandlerJobType =
-  | 'entitlement.recompute'
-  | 'course.completed'
-  | 'course.completion_check'
-  | 'certificate.render'
-  | 'certificate.backfill'
-  | 'certificate.preview';
+export type PendingHandlerJobType = never;
 
 /** Os mesmos tipos de `PendingHandlerJobType`, para conferência em tempo de execução. */
-export const PENDING_HANDLER_JOB_TYPES = [
-  'entitlement.recompute',
-  'course.completed',
-  'course.completion_check',
-  'certificate.render',
-  'certificate.backfill',
-  'certificate.preview',
-] as const satisfies readonly PendingHandlerJobType[];
+export const PENDING_HANDLER_JOB_TYPES = [] as const satisfies readonly PendingHandlerJobType[];
 
 export const JOB_STATUSES = ['queued', 'running', 'done', 'failed'] as const;
 export type JobStatus = (typeof JOB_STATUSES)[number];
