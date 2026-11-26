@@ -34,6 +34,19 @@ export const browser = {
       },
     };
   },
+  /** Entrega ao navegador, como download, um arquivo que veio pela API (com a sessão). */
+  saveFile(file: Blob, name: string): void {
+    const url = URL.createObjectURL(file);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = name;
+    link.rel = 'noopener';
+    document.body.append(link);
+    link.click();
+    link.remove();
+    // o navegador já tem o arquivo; o endereço temporário sai no próximo ciclo
+    window.setTimeout(() => URL.revokeObjectURL(url), 0);
+  },
 };
 
 /** Endereço absoluto `http` ou `https` (nada de `javascript:`, `data:` ou caminho relativo). */

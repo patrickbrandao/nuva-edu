@@ -1,4 +1,5 @@
 import type { RouteObject } from 'react-router';
+import { CERTIFICATES_PATH } from './certificates/certificates';
 import { ErrorPage } from './pages/ErrorPage';
 import { HomePage } from './pages/HomePage';
 import {
@@ -137,6 +138,20 @@ export const routes: RouteObject[] = [
         path: NOTES_PATH,
         handle: handle({ titleKey: 'menu.items.notes' }),
         lazy: async () => ({ Component: (await import('./pages/NotesPage')).NotesPage }),
+      },
+      {
+        path: CERTIFICATES_PATH,
+        handle: handle({ titleKey: 'pages.certificates' }),
+        lazy: async () => ({
+          Component: (await import('./pages/CertificateValidationPage')).CertificateValidationPage,
+        }),
+      },
+      {
+        path: `${CERTIFICATES_PATH}/:codigo`,
+        handle: handle({ titleKey: 'pages.certificates' }),
+        lazy: async () => ({
+          Component: (await import('./pages/CertificateValidationPage')).CertificateValidationPage,
+        }),
       },
       {
         path: '/meus-cursos/:slug',

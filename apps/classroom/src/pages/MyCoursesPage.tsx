@@ -11,13 +11,14 @@ import {
   PageTitle,
   ProductCardList,
 } from '@nuva-edu/ui';
-import { GraduationCap, LayoutGrid, List, SearchX } from 'lucide-react';
+import { Award, GraduationCap, LayoutGrid, List, SearchX } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useSearchParams } from 'react-router';
 import { describeError } from '../api/errors';
 import { SEARCH_MAX_LENGTH } from '../catalog/filters';
 import { formatDuration, useDateFormatter } from '../catalog/format';
+import { MY_CERTIFICATES_PATH } from '../certificates/certificates';
 import { SampleLessons } from '../learning/SampleLessons';
 import { ShelfCard, shelfActionPath } from '../learning/ShelfCard';
 import { type Shelf, type ShelfCourse, useShelf } from '../learning/shelf';
@@ -285,7 +286,7 @@ function ShelfContent() {
 /**
  * `/meus-cursos`: a estante do aluno (spec 014, RF-05), com contadores, filtros com contagem,
  * busca, ordenação, grade ou lista (lembrada no navegador), "Comece por aqui" e as aulas
- * liberadas. O estado do certificado de cada curso é da tarefa 454.
+ * liberadas, com o estado do certificado de cada curso e o acesso aos certificados (spec 015).
  */
 export function MyCoursesPage() {
   const { t } = useTranslation();
@@ -294,7 +295,12 @@ export function MyCoursesPage() {
     <RequireSession>
       {() => (
         <div className="mx-auto flex w-full max-w-6xl flex-col gap-6 px-4 py-8 sm:px-6">
-          <PageTitle>{t('menu.items.myCourses')}</PageTitle>
+          <div className="flex flex-wrap items-end justify-between gap-3">
+            <PageTitle>{t('menu.items.myCourses')}</PageTitle>
+            <AdminButton href={MY_CERTIFICATES_PATH} icon={<Award size={14} aria-hidden="true" />}>
+              {t('study.shelf.certificates')}
+            </AdminButton>
+          </div>
           <ShelfContent />
           <SampleLessons />
         </div>

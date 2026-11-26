@@ -16,12 +16,15 @@ import { ACTIVITY, MY_PROGRESS } from '../test/shelf';
 
 const PROGRESS = 'GET /api/v1/me/progress';
 const ACTIVITY_URL = 'GET /api/v1/me/activity';
+const CERTIFICATES = 'GET /api/v1/me/certificates';
+const NO_CERTIFICATES = { studentName: 'Ana Souza', items: [], awaitingTemplate: [] };
 const t = ptBR.study;
 const session = makeSession();
 const api = (progress: unknown = MY_PROGRESS, activity: unknown = ACTIVITY) =>
   apiRoutes({
     [PROGRESS]: () => jsonResponse(progress),
     [ACTIVITY_URL]: () => jsonResponse(activity),
+    [CERTIFICATES]: () => jsonResponse(NO_CERTIFICATES),
   });
 
 describe('/progresso', () => {
@@ -110,6 +113,7 @@ describe('/progresso', () => {
       apiRoutes({
         [PROGRESS]: () => jsonResponse(MY_PROGRESS),
         [ACTIVITY_URL]: () => (fail ? unavailableResponse() : jsonResponse(ACTIVITY)),
+        [CERTIFICATES]: () => jsonResponse(NO_CERTIFICATES),
       }),
       { session },
     );

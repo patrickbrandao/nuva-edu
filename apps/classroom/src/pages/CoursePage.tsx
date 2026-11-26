@@ -16,6 +16,7 @@ import { useTranslation } from 'react-i18next';
 import { useParams } from 'react-router';
 import { describeError } from '../api/errors';
 import { productPath, useDateFormatter } from '../catalog/format';
+import { CourseCertificate } from '../certificates/CourseCertificate';
 import { CourseProgram } from '../learning/CourseProgram';
 import { type CourseView, lessonPath } from '../learning/progress';
 import { useCourseView } from '../learning/queries';
@@ -109,6 +110,9 @@ function CourseBody({ course }: { course: CourseView }) {
 
         <div className="flex flex-col gap-4">
           <ProgressPanel course={course} />
+          {course.certificate ? (
+            <CourseCertificate certificate={course.certificate} title={course.title} />
+          ) : null}
         </div>
       </div>
     </article>
@@ -178,7 +182,7 @@ function CourseContent() {
 
 /**
  * `/meus-cursos/:slug`: o curso do aluno, com o programa em acordeão, o progresso por módulo e do
- * curso e o botão "Continuar" (spec 014). O bloco do certificado é da tarefa 454.
+ * curso, o botão "Continuar" (spec 014) e, com certificado habilitado, o estado dele (spec 015).
  */
 export function CoursePage() {
   return <RequireSession>{() => <CourseContent />}</RequireSession>;

@@ -123,9 +123,9 @@ describe('estante "Meus cursos"', () => {
       git.getByRole('link', { name: 'Renovar acesso: Git essencial' }).getAttribute('href'),
     ).toBe('/cursos/git-essencial');
 
-    // sem curso por começar em destaque e sem menção a certificado (tarefa 454)
+    // sem curso por começar em destaque; certificado desabilitado (`null`) não é mencionado
     expect(screen.queryByRole('region', { name: t.startHere.title })).toBeNull();
-    expect(screen.queryByText(/certificado/i)).toBeNull();
+    expect(within(await list()).queryByText(/certificado/i)).toBeNull();
     await waitFor(() =>
       expect(document.title).toBe(`${ptBR.menu.items.myCourses} · Escola Aurora`),
     );

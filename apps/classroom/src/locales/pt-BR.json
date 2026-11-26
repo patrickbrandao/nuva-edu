@@ -89,7 +89,8 @@
     "bundle": "Pacote",
     "ebook": "Ebook",
     "myCourse": "Curso",
-    "lesson": "Aula"
+    "lesson": "Aula",
+    "certificates": "Validar certificado"
   },
   "footer": {
     "source": "Código-fonte",
@@ -392,7 +393,8 @@
         "review": "Rever",
         "renew": "Renovar acesso"
       },
-      "actionOf": "{{action}}: {{title}}"
+      "actionOf": "{{action}}: {{title}}",
+      "certificates": "Meus certificados"
     },
     "ebooks": {
       "description": "Os ebooks a que você tem acesso, para baixar.",
@@ -548,6 +550,92 @@
         "search": "Buscar nas anotações",
         "searchPlaceholder": "Buscar no título e no texto",
         "clear": "Limpar filtros"
+      }
+    }
+  },
+  "certificates": {
+    "section": {
+      "title": "Certificados",
+      "lead": "Os certificados dos cursos que você concluiu, para baixar e compartilhar o código.",
+      "loading": "Carregando os seus certificados…",
+      "errorTitle": "Não foi possível carregar os seus certificados",
+      "list": "Meus certificados",
+      "emptyTitle": "Nenhum certificado ainda",
+      "emptyText": "Ao concluir todas as aulas de um curso com certificado, ele aparece aqui para baixar.",
+      "awaitingTitle": "Aguardando liberação",
+      "awaitingList": "Cursos concluídos aguardando o certificado",
+      "completedOn": "Concluído em {{date}}",
+      "issuedOn": "Emitido em {{date}}",
+      "revokedOn": "Revogado em {{date}}",
+      "code": "Código: {{code}}",
+      "validate": "Página de validação",
+      "validateOf": "Página de validação: {{title}}"
+    },
+    "hours_one": "{{count}} hora",
+    "hours_other": "{{count}} horas",
+    "state": {
+      "in_progress": "Certificado ao concluir o curso",
+      "awaiting_template": "O certificado ainda não foi liberado pelo instrutor. Você o receberá aqui e por e-mail assim que for liberado.",
+      "preparing": "Certificado em preparação",
+      "issued": "Certificado emitido",
+      "revoked": "Certificado revogado"
+    },
+    "badge": {
+      "preparing": "Em preparação",
+      "issued": "Emitido",
+      "revoked": "Revogado"
+    },
+    "name": {
+      "label": "Nome no certificado",
+      "next": "Nome que sairá nos próximos certificados",
+      "change": "Alterar",
+      "changeLabel": "Alterar o nome no certificado",
+      "dialogTitle": "Nome no certificado",
+      "dialogText": "Escreva o seu nome completo como deve sair nos próximos certificados. Certificados já emitidos não mudam.",
+      "field": "Nome completo",
+      "hint": "Deixe em branco para usar o seu nome de exibição.",
+      "save": "Salvar",
+      "saving": "Salvando…",
+      "saved": "Nome do certificado salvo.",
+      "errorTitle": "Não foi possível salvar o nome",
+      "tooLong": "Use no máximo {{max}} caracteres."
+    },
+    "download": {
+      "action": "Baixar certificado",
+      "actionOf": "Baixar certificado: {{title}}",
+      "downloading": "Baixando…",
+      "preparing": "O certificado ainda está em preparação. Tente de novo em instantes.",
+      "errorTitle": "Não foi possível baixar o certificado"
+    },
+    "verify": {
+      "description": "Confira a autenticidade de um certificado pelo código impresso nele.",
+      "lead": "Digite o código impresso no certificado para conferir a autenticidade.",
+      "form": "Validar um código",
+      "field": "Código do certificado",
+      "placeholder": "XXXX-XXXX-XXXX",
+      "hint": "Com ou sem hífens, em maiúsculas ou minúsculas.",
+      "submit": "Validar",
+      "required": "Digite o código do certificado.",
+      "result": "Resultado da validação",
+      "loading": "Validando o certificado…",
+      "errorTitle": "Não foi possível validar o certificado",
+      "validTitle": "Certificado válido",
+      "validText": "Este certificado é autêntico e foi emitido por {{school}}.",
+      "revokedTitle": "Certificado revogado",
+      "revokedText": "Este certificado foi revogado em {{date}} e não tem mais validade.",
+      "revokedTextNoDate": "Este certificado foi revogado e não tem mais validade.",
+      "removedTitle": "Titular removeu a conta",
+      "removedText": "O certificado foi emitido, mas o titular removeu a conta, e o nome não é mais exibido.",
+      "missingTitle": "Certificado não encontrado",
+      "missingText": "Nenhum certificado tem este código. Confira o código e tente de novo.",
+      "fields": {
+        "student": "Aluno",
+        "course": "Curso",
+        "hours": "Carga horária",
+        "completedAt": "Data de conclusão",
+        "issuedAt": "Data de emissão",
+        "school": "Escola",
+        "code": "Código"
       }
     }
   },

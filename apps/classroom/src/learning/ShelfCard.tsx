@@ -1,6 +1,7 @@
 import { AdminButton, ProductCard, type ProductCardLayout } from '@nuva-edu/ui';
 import { useTranslation } from 'react-i18next';
 import { productPath } from '../catalog/format';
+import { CertificateLine } from '../certificates/CourseCertificate';
 import { coursePath, lessonPath } from './progress';
 import type { ShelfCourse } from './shelf';
 
@@ -21,7 +22,7 @@ export function shelfActionPath(course: ShelfCourse): string {
 /**
  * Um curso da estante (spec 014): capa, nível, "X de Y aulas" com a barra, validade do acesso e a
  * ação. Acesso vencido leva o selo e mantém o progresso; a ação passa a ser "Renovar acesso", que
- * abre a página pública do curso.
+ * abre a página pública do curso. Com certificado habilitado, o estado dele (spec 015).
  */
 export function ShelfCard({ course, layout, formatDate }: ShelfCardProps) {
   const { t } = useTranslation();
@@ -44,7 +45,17 @@ export function ShelfCard({ course, layout, formatDate }: ShelfCardProps) {
       level={course.level ? t(`product.levels.${course.level}`) : undefined}
       badge={expired ? t('study.shelf.expired') : undefined}
       badgeTone="warning"
-      meta={validity}
+      meta={
+        course.certificate ? (
+          <>
+            {validity}
+            {validity ? <br /> : null}
+            <CertificateLine certificate={course.certificate} title={course.title} />
+          </>
+        ) : (
+          validity
+        )
+      }
       progress={{
         value: progress.percent,
         label: t('study.shelf.progressOf', { title: course.title }),

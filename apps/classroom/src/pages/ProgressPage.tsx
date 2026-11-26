@@ -13,6 +13,7 @@ import {
 import { TrendingUp } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { describeError } from '../api/errors';
+import { MyCertificates } from '../certificates/MyCertificates';
 import { coursePath } from '../learning/progress';
 import { type MyProgressCourse, useMyActivity, useMyProgress } from '../learning/shelf';
 import { usePageMeta } from '../lib/usePageMeta';
@@ -194,8 +195,8 @@ function Courses() {
 }
 
 /**
- * `/progresso`: "Meu progresso" (spec 014, RF-08), com a grade de aulas de cada curso iniciado e
- * o mapa de atividade dos últimos 12 meses.
+ * `/progresso`: "Meu progresso" (spec 014, RF-08), com a grade de aulas de cada curso iniciado, os
+ * certificados (spec 015) e o mapa de atividade dos últimos 12 meses.
  */
 export function ProgressPage() {
   const { t } = useTranslation();
@@ -206,6 +207,7 @@ export function ProgressPage() {
         <div className="mx-auto flex w-full max-w-6xl flex-col gap-8 px-4 py-8 sm:px-6">
           <PageTitle subtitle={t('study.progress.lead')}>{t('menu.items.progress')}</PageTitle>
           <Courses />
+          <MyCertificates />
           <Activity />
         </div>
       )}
