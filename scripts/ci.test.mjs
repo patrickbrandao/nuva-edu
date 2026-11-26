@@ -371,7 +371,7 @@ test('images: confere as plataformas e a versão do que foi publicado', () => {
   assert.match(published.run, /--pull always/);
 });
 
-test('imagens: o estágio final dos backends sai sem npm e o dos sites aplica o apk upgrade', () => {
+test('imagens: o estágio final dos backends sai sem npm e com apt-get upgrade, o dos sites com apk upgrade', () => {
   // O Trivy do fluxo `images` acusa o npm embutido em `node:slim` e os pacotes do Alpine
   // anteriores à imagem base (task 097).
   const runtimeOf = (app) => {
@@ -401,6 +401,18 @@ test('imagens: o estágio final dos backends sai sem npm e o dos sites aplica o 
     const users = lines.filter((line) => line.startsWith('USER '));
     assert.deepEqual(users, ['USER node'], app);
     assert.ok(lines.indexOf(remove) < lines.indexOf('USER node'), app);
+    // Correções do Debian da base a cada build (task 698): `apt-get upgrade` num único RUN, com a
+    // lista do apt atualizada antes (no worker, pelo `--with-deps` do Playwright) e apagada
+    // depois, também como root.
+    const upgrade = lines.find((line) =>
+      /^RUN .*apt-get upgrade -y --no-install-recommends /.test(line),
+    );
+    assert.ok(upgrade, `${app}: falta o apt-get upgrade`);
+    const at = upgrade.indexOf('apt-get upgrade');
+    const update = Math.max(upgrade.indexOf('apt-get update'), upgrade.indexOf('--with-deps'));
+    assert.ok(update !== -1 && update < at, `${app}: falta atualizar a lista do apt antes`);
+    assert.ok(upgrade.indexOf('rm -rf /var/lib/apt/lists/*') > at, `${app}: lista do apt fica`);
+    assert.ok(lines.indexOf(upgrade) < lines.indexOf('USER node'), app);
     assert.deepEqual(
       lines.filter((line) => line.startsWith('CMD ')),
       ['CMD ["node", "src/main.ts"]'],

@@ -48,6 +48,14 @@ FROM ${NODE_IMAGE} AS runtime
 # onde o Trivy acusa as vulnerabilidades da base.
 RUN rm -rf /usr/local/lib/node_modules/npm /usr/local/lib/node_modules/corepack \
       /usr/local/bin/npm /usr/local/bin/npx /usr/local/bin/corepack
+# Correções dos pacotes do Debian da base (`apt-get upgrade`), para o Trivy não acusar o que já
+# tem correção sem depender de a base ganhar digest novo; como no worker. A lista do `apt` sai no
+# mesmo passo.
+RUN export DEBIAN_FRONTEND=noninteractive \
+    && apt-get update \
+    && apt-get upgrade -y --no-install-recommends \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/* /var/cache/apt/* /var/log/apt /var/log/dpkg.log
 # PORT não é definida: dentro do contêiner a porta é sempre a padrão, 3000 (spec 031).
 ENV NODE_ENV=production
 COPY --from=build /app /app
