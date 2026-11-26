@@ -117,11 +117,11 @@ function LessonBody({ lesson }: { lesson: LessonView }) {
   // saem do próprio player
   const [startAt] = useState(() => readInstant(params) ?? lesson.userState.positionSeconds);
   const player = useRef<VideoPlayerHandle>(null);
-  const playerBox = useRef<HTMLDivElement>(null);
   const lastSeconds = useRef<number | null>(startAt);
-  // o instante de uma nota nova: o vídeo nativo diz a posição exata; os demais, a última informada
+  // o instante de uma nota nova: a posição que o player sabe agora (todos os provedores com API);
+  // sem ela (`link`, ou o provedor ainda não informou), a última conhecida
   const getVideoSeconds = (): number | null => {
-    const exact = playerBox.current?.querySelector('video')?.currentTime;
+    const exact = player.current?.getCurrentTime();
     return typeof exact === 'number' && Number.isFinite(exact) ? exact : lastSeconds.current;
   };
   const hasVideo = Boolean(lesson.videoUrl && lesson.videoProvider);
@@ -173,7 +173,7 @@ function LessonBody({ lesson }: { lesson: LessonView }) {
       </header>
 
       {lesson.videoUrl && lesson.videoProvider ? (
-        <div ref={playerBox} className="flex flex-col gap-5">
+        <div className="flex flex-col gap-5">
           <VideoPlayer
             ref={player}
             src={lesson.videoUrl}

@@ -1,10 +1,10 @@
-import { fireEvent, screen, waitFor, within } from '@testing-library/react';
+import { act, fireEvent, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import ptBR from '../locales/pt-BR.json';
 import { AUTOSAVE_MS } from '../notes/notes';
 import { expectNoAxeViolations } from '../test/axe';
-import { fakeLearning, LESSON_1, lessonUrl } from '../test/learning';
+import { fakeLearning, LESSON_1, lessonUrl, makeCourseView, makeLesson } from '../test/learning';
 import { fakeNotes, makeNote, NOTE_1, NOTE_2 } from '../test/notes';
 import {
   apiRoutes,
@@ -249,6 +249,40 @@ describe('aba "Minhas notas" da aula', () => {
     await user.click(second.getByRole('button', { name: t.delete.confirm }));
     await waitFor(() => expect(api.state.notes).toEqual([]));
     expect(await inMain().findByText(t.lesson.empty)).toBeTruthy();
+  });
+
+  it('em vídeo por iframe (Panda), a nota nova leva o instante atual do player, não o último envio', async () => {
+    const origin = 'https://player-vz-ded14ebd-85a.tv.pandavideo.com.br';
+    const lesson = makeLesson({ videoProvider: 'panda', videoUrl: `${origin}/embed/?v=3b101f05` });
+    lesson.userState.positionSeconds = 12;
+    const { user, calls } = await openNotes(
+      [],
+      {},
+      lessonUrl(LESSON_1),
+      fakeLearning(makeCourseView(), [lesson]).handlers,
+    );
+    const frame = document.querySelector('main iframe');
+    if (!(frame instanceof HTMLIFrameElement) || !frame.contentWindow)
+      throw new Error('sem iframe');
+    vi.spyOn(frame.contentWindow, 'postMessage').mockImplementation(() => {});
+    const fromPanda = (data: unknown) =>
+      act(() => {
+        window.dispatchEvent(
+          new MessageEvent('message', { data, origin, source: frame.contentWindow }),
+        );
+      });
+    fromPanda({ message: 'panda_ready' });
+    // antes de 15 s do último envio: o `onTime` não sai, mas o player já sabe a posição
+    fromPanda({ message: 'panda_timeupdate', currentTime: 47.6 });
+
+    await user.type(await newField(), 'No Panda');
+    await user.tab();
+    await waitFor(() => expect(writes(calls)).toHaveLength(1));
+    expect(writes(calls)[0]?.body).toEqual({
+      lessonId: LESSON_1,
+      body: 'No Panda',
+      videoSeconds: 47,
+    });
   });
 
   it('o endereço com ?t= abre o vídeo no instante da nota', async () => {

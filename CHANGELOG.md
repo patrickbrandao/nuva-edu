@@ -157,6 +157,7 @@ Detalhe das decisões em `specs/decisions/`.
 - admin-api: rotas do catálogo de cursos (009): lista, criação (slug gerado do título), edição, exclusão, publicação, arquivo, pedido de publicação e dono; módulos, aulas, ordem e links de apoio; `POST` e `DELETE /images` com `product_cover` (029). A edição sem `version` no contrato usa a versão lida na rota (task 420).
 
 ### Alterado
+- classroom: a nota nova da aula leva o instante de `getCurrentTime()` do player em todos os provedores com API (YouTube, Vimeo, Bunny, Panda e nativo), não mais a última posição do `onTime` (até 15 s atrás); a posição de abertura fica como reserva (task 697).
 - banco: migration 0013, `access_mode` de `courses`, `ebooks` e `bundles` passa a ter padrão `private` (era `open`); linhas existentes não mudam (task 642).
 - arquiteto: contrato da admin-api e specs 009, 015 e 028 alinhados ao núcleo: referência do template (`keys` com `placeholder` e `requiredOneOf`, `modelHtml`), problemas do 422 com linha e coluna sempre presentes e teto de 200, códigos de erro e limites do catálogo, ações de auditoria de ordem e de cancelamento do pedido de publicação; cliente regenerado (task 555).
 - arquiteto: critério de aceite da 030 alinhado à retenção dos certificados (o registro fica, sem nome e sem PDF); 015 e 030 registram que a exclusão da conta anula `pdf_rendered_at` junto com o PDF (task 530).
