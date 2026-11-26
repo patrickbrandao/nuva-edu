@@ -7,6 +7,7 @@ Detalhe das decisões em `specs/decisions/`.
 
 ### Adicionado
 - core: assinatura dos avisos do fake HTTP conferida com o relógio atual (spec 013, task 729).
+- specs: aviso exclusivo da central para e-mail indisponível após três recusas permanentes consecutivas (spec 024, task 731).
 - core: o registro da fila exige os manipuladores de pagamentos e pedidos já integrados ao worker (spec 005, task 566).
 - infra: desenvolvimento e e2e usam um simulador de pagamentos compartilhado, com controle publicado só em loopback (spec 013, task 565).
 - worker: os testes de certificados verificam a notificação gerada pela emissão e sua unicidade (spec 024, task 728).

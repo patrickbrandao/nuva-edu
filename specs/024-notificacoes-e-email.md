@@ -40,6 +40,7 @@ Vários recursos precisam avisar o usuário: resposta no fórum, compra aprovada
 | `staff` (só equipe) | `ticket.opened`, `ticket.user_reply`, `report.created`, `ops.job_failed` | sim | ligado |
 
 - A regra de quem deve receber cada tipo está na spec do recurso; aqui fica o transporte.
+- `account.email_undeliverable` é uma exceção do grupo `account`: aparece só na central do titular após três recusas permanentes consecutivas do endereço atual. A preferência do grupo e os demais avisos de conta seguem a tabela. O aviso não gera e-mail. A sequência é derivada do histórico recente de envios do endereço.
 - O worker confere, no momento do envio, se o destinatário ainda pode ver o alvo (por exemplo, perdeu o acesso ao curso); se não puder, descarta.
 - Ninguém é notificado das próprias ações. Usuário suspenso ou removido não recebe nada, exceto `moderation.suspended` e `account.deleted`. A regra vale para as notificações (tarefa `notify`); os e-mails do grupo `account` seguem a regra própria da seção abaixo.
 
