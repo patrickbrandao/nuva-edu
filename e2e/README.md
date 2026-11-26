@@ -41,6 +41,11 @@ ambiente. Quando algo continua fora do ar, o erro traz a URL que não respondeu 
     do gerente libera e avisa por e-mail.
   - `template-recusado.spec.ts`: template com `<script>` ou imagem externa recusado na tela, com a
     regra e a linha.
+  - `lcp-vitrine.spec.ts`: mede o LCP da vitrine com cursos publicados e capas reais
+    (`fixtures/capa.png`), em 4G simulada pelo CDP (`Network.emulateNetworkConditions`, perfil
+    "Regular 4G": 150 ms, 1,6 Mbps/750 Kbps, cache desligado) e `PerformanceObserver` de
+    `largest-contentful-paint` instalado antes dos scripts da página. Falha acima de 2,5 s
+    (spec 006, RNF-04) e informa o valor e o elemento no log.
   - O vídeo das aulas é `fixtures/aula.webm` (3 s, VP9), servido pelo próprio teste com
     `context.route` num host fictício (`support/fase2.ts`): nada sai para provedor de vídeo.
   - O texto do PDF é lido por `support/pdf.ts`, um leitor mínimo para o que o Chromium gera.
