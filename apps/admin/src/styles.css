@@ -63,3 +63,64 @@ body {
   white-space: pre-wrap;
   word-break: break-word;
 }
+
+/*
+ * Editor de código do template do certificado: números de linha à esquerda, texto sem quebra,
+ * rolagem nos dois sentidos. A calha acompanha a rolagem vertical do campo.
+ */
+.nuva-code {
+  display: flex;
+  height: 28rem;
+  overflow: hidden;
+  border: 1px solid var(--adm-line);
+  border-radius: var(--adm-r-ctl);
+  background: var(--adm-card);
+  box-shadow: var(--adm-shadow-ctl);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 13px;
+  line-height: 20px;
+}
+
+.nuva-code:focus-within {
+  border-color: var(--adm-focus);
+  outline: 2px solid var(--adm-focus);
+  outline-offset: -1px;
+}
+
+.nuva-code[data-invalid="true"] {
+  border-color: var(--adm-red);
+}
+
+.nuva-code__gutter {
+  flex: none;
+  min-width: 3.5em;
+  margin: 0;
+  padding: 8px 8px 8px 10px;
+  overflow: hidden;
+  border-right: 1px solid var(--adm-line);
+  background: var(--adm-bg);
+  color: var(--adm-ink-3);
+  font: inherit;
+  text-align: right;
+  user-select: none;
+}
+
+.nuva-code__input {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+  padding: 8px 10px;
+  overflow: auto;
+  border: 0;
+  outline: none;
+  background: transparent;
+  color: var(--adm-ink);
+  font: inherit;
+  white-space: pre;
+  resize: none;
+  tab-size: 2;
+}
+
+.nuva-code__count--over {
+  color: var(--adm-red);
+}

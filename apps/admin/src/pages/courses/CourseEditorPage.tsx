@@ -14,6 +14,7 @@ import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate, useParams, useSearchParams } from 'react-router';
 import { useAction } from '../../api/action';
+import { TEMPLATE_TAB } from '../../api/certificates';
 import { useApi } from '../../api/client';
 import {
   COURSES_PATH,
@@ -27,6 +28,7 @@ import { formatDateTime } from '../../format';
 import { useCan, useSession } from '../../session/session';
 import { usePageCrumb } from '../../shell/crumbs';
 import { CourseStudentsTab } from '../access/CourseStudentsTab';
+import { TemplateEditor } from '../certificates/template/TemplateEditor';
 import { ConfirmAction, CourseStatusCell } from './CourseBits';
 import { CourseCertificateTab } from './CourseCertificateTab';
 import { CourseContentTab, LESSON_PARAM } from './CourseContentTab';
@@ -35,7 +37,7 @@ import { CourseEbooksTab } from './CourseEbooksTab';
 import { CourseOwnerSection } from './CourseOwner';
 import { useCourseError } from './errors';
 
-const TABS = ['dados', 'conteudo', 'ebooks', 'certificado', 'alunos'] as const;
+const TABS = ['dados', 'conteudo', 'ebooks', 'certificado', TEMPLATE_TAB, 'alunos'] as const;
 type TabId = (typeof TABS)[number];
 const TAB_PARAM = 'aba';
 
@@ -100,11 +102,17 @@ function CourseEditor({ course }: { course: CourseDetail }) {
   // "Excluir" só sem vínculos (spec 009): com alunos, o caminho é arquivar; a API confere o resto
   const canDelete = can('course.delete') && course.studentCount === 0;
 
+  // o template do certificado é de `certificate.template.edit`, que o instrutor só tem nos
+  // próprios cursos (spec 015); a API recusa o resto de qualquer forma
+  const canEditTemplate =
+    can('certificate.template.edit') && (!instructor || course.owner?.id === session.user.id);
   // vincular ebooks é de quem tem `ebook.link`, e ver os alunos, de quem tem `progress.view`;
   // sem a ação, a aba nem aparece
   const tabs = TABS.filter(
     (item) =>
-      (item !== 'ebooks' || can('ebook.link')) && (item !== 'alunos' || can('progress.view')),
+      (item !== 'ebooks' || can('ebook.link')) &&
+      (item !== 'alunos' || can('progress.view')) &&
+      (item !== TEMPLATE_TAB || canEditTemplate),
   );
   const requested = params.get(TAB_PARAM);
   // endereço com a aula aberta cai na aba do conteúdo
@@ -228,6 +236,8 @@ function CourseEditor({ course }: { course: CourseDetail }) {
         <CourseEbooksTab course={course} />
       ) : tab === 'certificado' ? (
         <CourseCertificateTab course={course} />
+      ) : tab === TEMPLATE_TAB ? (
+        <TemplateEditor scope={{ kind: 'course', courseId: course.id }} />
       ) : (
         <CourseStudentsTab course={course} />
       )}

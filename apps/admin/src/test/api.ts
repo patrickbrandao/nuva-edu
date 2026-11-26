@@ -28,6 +28,7 @@ export const PERMISSIONS = {
     'badge.award',
     'ticket.handle',
     'progress.view',
+    'certificate.template.edit',
   ],
   manager: [
     'admin.access',
@@ -57,6 +58,7 @@ export const PERMISSIONS = {
     'ticket.handle',
     'progress.view',
     'certificate.issue',
+    'certificate.template.edit',
     'mcp_key.own',
   ],
   admin: [
@@ -99,6 +101,7 @@ export const PERMISSIONS = {
     'progress.view',
     'certificate.issue',
     'certificate.revoke',
+    'certificate.template.edit',
     'mcp_key.own',
     'mcp_key.manage_all',
     'audit.view',

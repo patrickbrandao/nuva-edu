@@ -694,6 +694,7 @@
         "conteudo": "Módulos e aulas",
         "ebooks": "Ebooks",
         "certificado": "Certificado",
+        "template": "Template do certificado",
         "alunos": "Alunos"
       }
     },
@@ -1371,6 +1372,129 @@
       "certificate_preparing": "O PDF ainda está em preparação.",
       "not_found": "Aluno, curso ou certificado não encontrado.",
       "validation_failed": "Confira os campos e tente de novo."
+    }
+  },
+  "certificateTemplate": {
+    "title": {
+      "course": "Template do certificado",
+      "school": "Template padrão do certificado"
+    },
+    "intro": {
+      "course": "O HTML do certificado deste curso, com as palavras-chave trocadas pelos dados do aluno e do curso na emissão. Vale só para este curso e tem prioridade sobre o padrão da escola.",
+      "school": "O HTML usado pelos cursos que não têm template próprio, com as palavras-chave trocadas pelos dados do aluno e do curso na emissão."
+    },
+    "loading": "Carregando o template do certificado…",
+    "errorTitle": "Não foi possível carregar o template do certificado",
+    "source": {
+      "course": "Template próprio do curso",
+      "school": "Template padrão da escola",
+      "none": "Sem template"
+    },
+    "sourceText": {
+      "course": {
+        "course": "Este curso emite o certificado com o template abaixo.",
+        "school": "Este curso não tem template próprio e emite o certificado com o padrão da escola. Salvar um template aqui o substitui só neste curso.",
+        "none": "Sem template, o certificado não é emitido: nem este curso nem a escola têm um. Quem concluir fica aguardando até haver um template."
+      },
+      "school": {
+        "course": "Os cursos sem template próprio usam este template.",
+        "school": "Os cursos sem template próprio emitem o certificado com este template.",
+        "none": "Não há template padrão: sem template, os cursos que não têm um próprio não emitem certificado."
+      }
+    },
+    "updatedBy": "Salvo por {{name}} em {{date}}.",
+    "updatedAt": "Salvo em {{date}}.",
+    "editor": {
+      "label": "HTML do template",
+      "hint": "Documento HTML completo ou um trecho. Sem JavaScript e sem endereços externos: imagens e fontes vão embutidas.",
+      "invalid": "O template tem problemas; veja a lista acima.",
+      "size": "{{size}} de {{max}} KiB",
+      "tooLarge": "O template passou do limite de {{max}} KiB e não será aceito. Reduza ou comprima as imagens embutidas."
+    },
+    "save": "Salvar template",
+    "saved": "Template do certificado salvo.",
+    "backfill": {
+      "title": "Certificados a caminho",
+      "text": "Os alunos que já concluíram vão receber o certificado."
+    },
+    "conflict": {
+      "title": "O template foi salvo por outra pessoa",
+      "text": "Alguém salvou o template enquanto você editava. Recarregue para ver a versão atual; as suas alterações não salvas serão descartadas.",
+      "reload": "Recarregar",
+      "reloading": "Recarregando…"
+    },
+    "problems": {
+      "title_one": "O template tem {{count}} problema",
+      "title_other": "O template tem {{count}} problemas",
+      "at": "Linha {{line}}, coluna {{column}}",
+      "more": "A lista mostra os primeiros {{count}} problemas; pode haver outros.",
+      "none": "O servidor recusou o template sem detalhar os problemas.",
+      "rules": {
+        "parse_error": "HTML ou CSS ilegível",
+        "too_large": "Template grande demais",
+        "element_not_allowed": "Elemento não permitido",
+        "attribute_not_allowed": "Atributo não permitido",
+        "url_not_allowed": "Endereço não permitido",
+        "css_not_allowed": "CSS não permitido",
+        "image_not_found": "Imagem não encontrada",
+        "unknown_key": "Palavra-chave desconhecida",
+        "unclosed_key": "Palavra-chave sem fechamento",
+        "key_in_attribute": "Palavra-chave fora de lugar",
+        "missing_required_key": "Falta palavra-chave obrigatória"
+      }
+    },
+    "model": {
+      "open": "Começar do modelo",
+      "title": "Trocar pelo modelo?",
+      "text": "O conteúdo do editor será substituído pelo modelo inicial. O que já está salvo só muda quando você salvar.",
+      "confirm": "Usar o modelo"
+    },
+    "image": {
+      "open": "Inserir imagem",
+      "type": "Use uma imagem PNG, JPEG, WebP ou GIF.",
+      "readFailed": "Não foi possível ler a imagem. Tente de novo.",
+      "tooLarge": "Com esta imagem, o template ficaria com {{size}} KiB, acima do limite de {{max}} KiB. Use uma imagem menor ou comprimida.",
+      "inserted": "Imagem {{name}} inserida no cursor."
+    },
+    "preview": {
+      "open": "Gerar PDF de exemplo",
+      "busy": "Gerando o exemplo…",
+      "pending": "Gerando o PDF de exemplo…",
+      "ready": "PDF de exemplo pronto",
+      "link": "Abrir o PDF de exemplo",
+      "failed": "Não foi possível gerar o PDF de exemplo",
+      "failedText": "A geração falhou. Confira o template e tente de novo.",
+      "errorTitle": "Não foi possível pedir o PDF de exemplo"
+    },
+    "delete": {
+      "open": "Excluir template",
+      "title": "Excluir o template?",
+      "text": {
+        "course": "O curso volta a usar o template padrão da escola; sem ele, as próximas conclusões ficam aguardando template. Os certificados já emitidos não mudam.",
+        "school": "Os cursos sem template próprio deixam de emitir certificado. Os certificados já emitidos não mudam."
+      },
+      "confirm": "Excluir",
+      "busy": "Excluindo…",
+      "done": "Template do certificado excluído."
+    },
+    "keys": {
+      "title": "Palavras-chave",
+      "text": "Escreva no template como aparecem aqui; cada uma é trocada pelo valor na emissão.",
+      "loading": "Carregando as palavras-chave…",
+      "errorTitle": "Não foi possível carregar as palavras-chave",
+      "required": "Obrigatória",
+      "requiredOneOf": "Ao menos uma destas",
+      "example": "Exemplo: {{value}}",
+      "copy": "Copiar",
+      "copied": "{{key}} copiada.",
+      "copyFailed": "Não foi possível copiar {{key}}."
+    },
+    "errors": {
+      "certificate_template_invalid": "O template tem problemas.",
+      "certificate_preview_not_ready": "O PDF de exemplo ainda não está pronto.",
+      "version_conflict": "O template foi salvo por outra pessoa enquanto você editava.",
+      "not_found": "Curso ou exemplo não encontrado.",
+      "validation_failed": "Confira o template e tente de novo."
     }
   }
 }
