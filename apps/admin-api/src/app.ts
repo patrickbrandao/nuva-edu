@@ -24,11 +24,15 @@ import { loadAdminContract } from './contract.ts';
 import { readServiceVersion } from './meta.ts';
 import { registerAuditRoutes } from './routes/audit.ts';
 import { registerAuthRoutes } from './routes/auth.ts';
+import { registerBrandingRoutes } from './routes/branding.ts';
 import { registerCertificateRoutes } from './routes/certificates.ts';
 import { registerCourseRoutes } from './routes/courses.ts';
+import { registerEmailOperationsRoutes } from './routes/email-operations.ts';
 import { registerEntitlementRoutes } from './routes/entitlements.ts';
 import { registerImageRoutes } from './routes/images.ts';
+import { registerNotificationRoutes } from './routes/notifications.ts';
 import { registerOAuthRoutes } from './routes/oauth.ts';
+import { registerOpsJobRoutes } from './routes/ops-jobs.ts';
 import { registerProductRoutes } from './routes/products.ts';
 import { registerProgressRoutes } from './routes/progress.ts';
 import { registerStreamRoutes } from './routes/stream.ts';
@@ -211,11 +215,12 @@ export function buildAdminApp(options: AdminAppOptions): FastifyInstance {
   // Um leitor por processo: o `/meta` não vai ao banco a cada requisição. Com o `logger`, valor
   // inválido gravado em `settings` gera aviso e vale o padrão (spec 003, "Meta").
   const settings = options.settings ?? createSettingsReader(db, { logger });
+  const version = options.version ?? readServiceVersion();
 
   // `GET /api/v1/meta`: dados públicos da instalação e da marca, sem sessão (spec 003, RF-09).
   registerMetaRoute(app, {
     config,
-    version: options.version ?? readServiceVersion(),
+    version,
     settings,
   });
   registerStreamRoutes(app, { hub, isListening: () => pipeline.isListening() });
@@ -241,5 +246,11 @@ export function buildAdminApp(options: AdminAppOptions): FastifyInstance {
   registerProgressRoutes(app, { db });
   // Certificados (spec 015): gestão, templates, exemplos e signatário.
   registerCertificateRoutes(app, { db, config, settings });
+  // Central da equipe e preferências por grupo (spec 024).
+  registerNotificationRoutes(app, { db });
+  // Operação da fila e da identidade da escola (specs 005, 024 e 033).
+  registerOpsJobRoutes(app, { db, config, version });
+  registerEmailOperationsRoutes(app, { db });
+  registerBrandingRoutes(app, { db, settings });
   return app;
 }
