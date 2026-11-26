@@ -1,70 +1,15 @@
 import { randomUUID } from 'node:crypto';
-import { crc32, deflateSync } from 'node:zlib';
 import { createImageProcessingLimiter } from '@nuva-edu/core';
 import { afterAll, describe, expect, it } from 'vitest';
 import { type Actor, callAs, createActor } from './actors.ts';
 import { createTestApp, type TestApp } from './helpers.ts';
+import { MULTIPART, multipart, png, type UploadOptions, uploadImage } from './image-fixtures.ts';
 
 const test: TestApp = createTestApp();
 afterAll(() => test.close());
 
-/** PNG em tons de cinza, todo preto. */
-function png(width: number, height: number): Buffer {
-  const chunk = (type: string, data: Buffer) => {
-    const length = Buffer.alloc(4);
-    length.writeUInt32BE(data.length);
-    const body = Buffer.concat([Buffer.from(type, 'ascii'), data]);
-    const crc = Buffer.alloc(4);
-    crc.writeUInt32BE(crc32(body));
-    return Buffer.concat([length, body, crc]);
-  };
-  const ihdr = Buffer.alloc(13);
-  ihdr.writeUInt32BE(width, 0);
-  ihdr.writeUInt32BE(height, 4);
-  ihdr.writeUInt8(8, 8); // 8 bits por amostra
-  ihdr.writeUInt8(0, 9); // tons de cinza
-  return Buffer.concat([
-    Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
-    chunk('IHDR', ihdr),
-    // Cada linha: o byte do filtro e um byte por pixel.
-    chunk('IDAT', deflateSync(Buffer.alloc((width + 1) * height))),
-    chunk('IEND', Buffer.alloc(0)),
-  ]);
-}
-
-const BOUNDARY = 'limite-de-teste';
-const MULTIPART = { 'content-type': `multipart/form-data; boundary=${BOUNDARY}` };
-
-function multipart(parts: Array<{ name: string; value: string | Buffer; filename?: string }>) {
-  const chunks: Buffer[] = [];
-  for (const part of parts) {
-    const disposition =
-      part.filename === undefined
-        ? `form-data; name="${part.name}"`
-        : `form-data; name="${part.name}"; filename="${part.filename}"\r\nContent-Type: image/png`;
-    chunks.push(Buffer.from(`--${BOUNDARY}\r\nContent-Disposition: ${disposition}\r\n\r\n`));
-    chunks.push(typeof part.value === 'string' ? Buffer.from(part.value) : part.value);
-    chunks.push(Buffer.from('\r\n'));
-  }
-  chunks.push(Buffer.from(`--${BOUNDARY}--\r\n`));
-  return Buffer.concat(chunks);
-}
-
-function upload(
-  as: Actor,
-  options: { file?: Buffer; purpose?: string; app?: TestApp; csrf?: null } = {},
-) {
-  return callAs(options.app ?? test, {
-    method: 'POST',
-    url: '/api/v1/images',
-    as,
-    headers: MULTIPART,
-    payload: multipart([
-      { name: 'purpose', value: options.purpose ?? 'product_cover' },
-      { name: 'file', value: options.file ?? png(32, 18), filename: 'capa.png' },
-    ]),
-    ...(options.csrf === null ? { csrf: null } : {}),
-  });
+function upload(as: Actor, options: UploadOptions = {}) {
+  return uploadImage(test, as, options);
 }
 
 describe('POST /api/v1/images (product_cover)', () => {
@@ -190,6 +135,62 @@ describe('POST /api/v1/images (product_cover)', () => {
       await holding;
     } finally {
       await busy.close();
+    }
+  });
+});
+
+describe('POST /api/v1/images (school_logo)', () => {
+  it('admin envia o logotipo retrato: 201 com as três variantes e a entrega de 256', async () => {
+    const admin = await createActor(test, 'admin');
+    const sent = await upload(admin, { purpose: 'school_logo', file: png(500, 5000) });
+    expect(sent.statusCode).toBe(201);
+    const image = sent.json();
+    expect(image).toMatchObject({ purpose: 'school_logo', width: 500, height: 5000 });
+    // Proporção original: o nome é o maior lado; em retrato, a altura é o nome.
+    expect(image.variants).toEqual([
+      { width: 64, height: 64, url: `/api/v1/images/${image.id}/64.webp` },
+      { width: 256, height: 256, url: `/api/v1/images/${image.id}/256.webp` },
+      { width: 512, height: 512, url: `/api/v1/images/${image.id}/512.webp` },
+    ]);
+
+    const delivered = await test.app.inject({ method: 'GET', url: image.variants[1].url });
+    expect(delivered.statusCode).toBe(200);
+    expect(delivered.headers['content-type']).toBe('image/webp');
+
+    // Variante de outra finalidade não existe para esta imagem.
+    const otherSize = await test.app.inject({
+      method: 'GET',
+      url: `/api/v1/images/${image.id}/480.webp`,
+    });
+    expect(otherSize.statusCode).toBe(404);
+  });
+
+  it('logotipo paisagem guarda a altura real em `height` (a largura é o nome)', async () => {
+    const admin = await createActor(test, 'admin');
+    const sent = await upload(admin, { purpose: 'school_logo', file: png(1000, 100) });
+    expect(sent.statusCode).toBe(201);
+    const image = sent.json();
+    expect(image).toMatchObject({ purpose: 'school_logo', width: 1000, height: 100 });
+    expect(image.variants).toEqual([
+      { width: 64, height: 6, url: `/api/v1/images/${image.id}/64.webp` },
+      { width: 256, height: 26, url: `/api/v1/images/${image.id}/256.webp` },
+      { width: 512, height: 51, url: `/api/v1/images/${image.id}/512.webp` },
+    ]);
+  });
+
+  it('manager e instructor recebem 403 permission_denied, sem gravar', async () => {
+    for (const role of ['manager', 'instructor'] as const) {
+      const actor = await createActor(test, role);
+      const denied = await upload(actor, { purpose: 'school_logo' });
+      expect(denied.statusCode).toBe(403);
+      expect(denied.json()).toMatchObject({ code: 'permission_denied' });
+
+      const stored = await test.db
+        .selectFrom('images')
+        .select('id')
+        .where('ownerUserId', '=', actor.id)
+        .execute();
+      expect(stored).toHaveLength(0);
     }
   });
 });

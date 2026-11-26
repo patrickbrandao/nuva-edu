@@ -18,8 +18,9 @@ import {
 import { requireSession, SITE } from '../session.ts';
 
 // Imagens no admin (spec 029): entrega pública das variantes e, desde a Fase 2, envio e
-// exclusão da capa de produto (`product_cover`, de `instructor`, `manager` e `admin`). Quem
-// decide a finalidade aceita pelo site e pelo papel é o núcleo (`uploadImage`).
+// exclusão da capa de produto (`product_cover`, de `instructor`, `manager` e `admin`); desde a
+// Fase 4, o logotipo da escola (`school_logo`, só do `admin`). Quem decide a finalidade aceita
+// pelo site e pelo papel é o núcleo (`uploadImage`).
 
 /**
  * Folga do corpo multipart além do arquivo (delimitadores, cabeçalhos das partes, `purpose`).
