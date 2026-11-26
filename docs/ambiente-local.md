@@ -18,6 +18,10 @@ pnpm dev:down                # derruba; os volumes ficam
 | http://oauth-mock.localhost:8080 | Provedor OAuth simulado (Google, Facebook e Apple), perfil `oauth-mock` |
 | `127.0.0.1:${NUVA_POSTGRES_PORT}` | PostgreSQL, para `pnpm db:migrate` e os testes (só no desenvolvimento; veja "Porta do PostgreSQL no hospedeiro") |
 
+`pnpm dev:up` sempre constrói as imagens (`--build`) e recria o que mudou: é o que aplica
+mudança de CSP (gerada no build) e de rótulo do proxy. O ambiente é único e compartilhado pelos
+testes; antes do e2e, rode-o no checkout principal para não testar imagem antiga.
+
 `pnpm compose <args>` é o `docker compose` com `--env-file .env --env-file .env.local`:
 
 ```bash
@@ -114,6 +118,15 @@ Todo contêiner (aplicações, `postgres`, `traefik`, `mailpit` e `oauth-mock`) 
 `ulimits.nofile` (65536 no `postgres`, no `traefik` e nas APIs; 4096 nos demais). O worker tem
 `/tmp` de 128 MB, para o perfil do Chromium do certificado. O teste
 `scripts/compose.test.mjs` confere isso lendo o `docker compose config`.
+
+Cada API tem dois roteadores no Traefik: o geral (`nuva-edu-admin-api`, `nuva-edu-classroom-api`;
+prioridade 20) e o do fluxo SSE (`nuva-edu-admin-stream`, `nuva-edu-classroom-stream`;
+prioridade 30, com `Host` e `Path` exatos em `/api/v1/stream`). O do fluxo não leva middleware
+nenhum: nada de compressão, buffering, cabeçalho ou limite de taxa, senão o evento chega
+atrasado ou a conexão cai. A API manda `X-Accel-Buffering: no` e `ping` a cada 25 s, e o
+navegador reconecta com `Last-Event-ID`. Os rótulos são conferidos por
+`scripts/compose.test.mjs`; o efeito real, por `e2e/fase2/csp-players.spec.ts` (players) e pelo
+e2e da Fase 4 (sino dos dois hosts).
 
 ## Volumes e a migração do nome
 
@@ -214,9 +227,11 @@ Cada `apps/<app>/Dockerfile` usa a raiz do repositório como contexto e tem trê
   script, porém, só vale depois de reconstruir as imagens dos dois sites (`pnpm dev:up`).
 - Sites: o `index.html` sai com `Content-Security-Policy` sem `unsafe-inline`. No build,
   `proxy/lighttpd/csp.mjs` lê o `dist/index.html` e grava `/etc/lighttpd/nuva-csp.conf` com o
-  hash do script inline do tema; a política só aceita a própria origem (API, SSE, imagens,
-  fontes, estilos) e `data:` em imagens. O script recebe o site: no admin fica só isso; no
-  classroom entram as origens dos players de vídeo (spec 009): a IFrame API do YouTube em
+  hash do script inline do tema; a política só aceita a própria origem (API, SSE, fontes,
+  estilos), `data:` e `blob:` em imagens e `https:` em `img-src`, para as imagens externas do
+  Markdown saneado (ADR 0027). O `https:` é só de imagem: `script-src`, `frame-src` e
+  `connect-src` continuam fechados, e `http` não entra. O script recebe o site: no admin fica só
+  isso; no classroom entram as origens dos players de vídeo (spec 009): a IFrame API do YouTube em
   `script-src`, os `iframe` de YouTube, Vimeo, Bunny e Panda em `frame-src`, o HLS da Bunny
   (`*.b-cdn.net`) em `connect-src`, `https:` e `blob:` em `media-src` e `blob:` em `worker-src`.
   A lista fica em `PLAYER_SOURCES`, conferida contra o player por `scripts/csp.test.mjs`. O servidor de desenvolvimento do Vite não envia esse

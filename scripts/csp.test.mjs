@@ -72,17 +72,17 @@ test('só os scripts inline entram, com o texto exato', () => {
   assert.deepEqual(inlineScripts('<script data-src="x">b()</script>'), ['b()']);
 });
 
-test('admin: o hash do script do tema entra em script-src, sem unsafe-inline, e nada externo', () => {
+test('admin: o hash do script do tema entra em script-src, sem unsafe-inline, e só imagem externa', () => {
   const policy = buildPolicy(html, 'admin');
   const directives = parsePolicy(policy);
   assert.equal(scriptHash(THEME_BOOT_SCRIPT), sha(THEME_BOOT_SCRIPT));
   assert.deepEqual(directives['script-src'], ["'self'", sha(THEME_BOOT_SCRIPT)]);
   assert.doesNotMatch(policy, /unsafe-inline|unsafe-eval/);
   assert.deepEqual(directives['default-src'], ["'none'"]);
-  // API e SSE na mesma origem; imagens da origem, `data:` e `blob:` (prévia do ImagePicker, só
-  // em img-src); fontes e estilos da origem.
+  // API e SSE na mesma origem; imagens da origem, `data:`, `blob:` (prévia do ImagePicker, só
+  // em img-src) e `https:` para as imagens do Markdown (ADR 0027); fontes e estilos da origem.
   assert.deepEqual(directives['connect-src'], ["'self'"]);
-  assert.deepEqual(directives['img-src'], ["'self'", 'data:', 'blob:']);
+  assert.deepEqual(directives['img-src'], ["'self'", 'data:', 'blob:', 'https:']);
   assert.deepEqual(directives['font-src'], ["'self'"]);
   assert.deepEqual(directives['style-src'], ["'self'"]);
   assert.deepEqual(directives['frame-ancestors'], ["'none'"]);
@@ -105,8 +105,54 @@ test('admin: o hash do script do tema entra em script-src, sem unsafe-inline, e 
     'frame-ancestors',
   ]);
   assert.equal(policy.match(/blob:/g).length, 1);
-  // Nada externo: nenhuma origem com esquema ou curinga.
-  assert.doesNotMatch(policy, /https?:|\*/);
+  // Nada externo de origem: nenhum host, curinga ou esquema fora do `https:` de img-src.
+  assert.doesNotMatch(policy, /\*|https?:\/\//);
+  assert.equal(policy.match(/https:/g).length, 1);
+});
+
+test('Markdown: `https:` só em img-src; script, frame e conexão seguem fechados', () => {
+  // Imagem do Markdown saneado (ADR 0027): URL absoluta `https`, de qualquer host, sem o servidor
+  // buscar nem regravar. A política aceita; quem recusa o resto é o saneador, não a CSP.
+  for (const site of SITES) {
+    const directives = parsePolicy(buildPolicy(html, site));
+    for (const image of [
+      'https://images.example.com/foto.png',
+      'https://cdn.example.org:8443/a/b.webp?w=800',
+      'https://user-images.githubusercontent.com/1/x.svg',
+    ]) {
+      assert.ok(allows(directives, 'img-src', image), `${site}: img-src recusa ${image}`);
+    }
+    // `http` (descartado pelo saneador) e esquemas de execução continuam fora.
+    for (const url of [
+      'http://images.example.com/foto.png',
+      'javascript:alert(1)',
+      'ftp://images.example.com/foto.png',
+    ]) {
+      assert.ok(!allows(directives, 'img-src', url), `${site}: img-src aceita ${url}`);
+    }
+    // O esquema `https:` abre só imagem (e mídia, no classroom, desde a Fase 2).
+    const open = Object.entries(directives)
+      .filter(([, sources]) => sources.includes('https:'))
+      .map(([directive]) => directive);
+    assert.deepEqual(open, site === 'admin' ? ['img-src'] : ['img-src', 'media-src'], site);
+    // A mesma URL externa não passa em script, estilo, fonte, conexão, frame, worker nem form.
+    for (const directive of [
+      'script-src',
+      'style-src',
+      'font-src',
+      'connect-src',
+      'frame-src',
+      'worker-src',
+      'manifest-src',
+      'form-action',
+      'base-uri',
+    ]) {
+      assert.ok(
+        !allows(directives, directive, 'https://images.example.com/foto.png'),
+        `${site}: ${directive} aceita imagem externa`,
+      );
+    }
+  }
 });
 
 test('script trocado muda o hash; script repetido não duplica', () => {
@@ -142,7 +188,7 @@ test('classroom: a política é a do admin mais as origens dos players, e nada a
     'default-src': ["'none'"],
     'script-src': ["'self'", 'https://www.youtube.com', sha(THEME_BOOT_SCRIPT)],
     'style-src': ["'self'"],
-    'img-src': ["'self'", 'data:', 'blob:'],
+    'img-src': ["'self'", 'data:', 'blob:', 'https:'],
     'font-src': ["'self'"],
     'connect-src': ["'self'", 'https://*.b-cdn.net'],
     'media-src': ["'self'", 'https:', 'blob:'],
@@ -169,12 +215,13 @@ test('classroom: a política é a do admin mais as origens dos players, e nada a
   const byName = (a, b) => a[0].localeCompare(b[0]);
   assert.deepEqual(difference.sort(byName), PLAYER_SOURCES.toSorted(byName));
   // Curinga só no rótulo inteiro do host e só onde o provedor usa subdomínio por conta; nunca `*`
-  // sozinho nem esquema aberto fora de media-src (`.mp4`/`.webm` de qualquer host, spec 009).
+  // sozinho nem esquema aberto fora de img-src (imagens do Markdown, ADR 0027) e media-src
+  // (`.mp4`/`.webm` de qualquer host, spec 009).
   for (const [directive, sources] of Object.entries(classroom)) {
     for (const source of sources) {
       assert.notEqual(source, '*', directive);
       assert.doesNotMatch(source, /^http:/, directive);
-      if (source === 'https:') assert.equal(directive, 'media-src');
+      if (source === 'https:') assert.ok(['img-src', 'media-src'].includes(directive), directive);
       if (source === 'blob:') assert.ok(['img-src', 'media-src', 'worker-src'].includes(directive));
       if (source === 'data:') assert.equal(directive, 'img-src');
     }
@@ -291,7 +338,9 @@ test('classroom: cada origem que o VideoPlayer usa passa na política; as vizinh
     assert.ok(!allows(directives, 'script-src', url), `script-src aceita ${url}`);
   }
   assert.ok(!allows(directives, 'connect-src', 'https://b-cdn.net/x.m3u8'));
-  assert.ok(!allows(directives, 'img-src', 'https://i.ytimg.com/vi/x/hq.jpg'));
+  // Imagem externa de qualquer `https` passa (Markdown, ADR 0027); `http` e outro esquema não.
+  assert.ok(allows(directives, 'img-src', 'https://i.ytimg.com/vi/x/hq.jpg'));
+  assert.ok(!allows(directives, 'img-src', 'http://i.ytimg.com/vi/x/hq.jpg'));
 
   // No admin, nada disso passa: sem frame-src nem worker-src, vale `default-src 'none'`.
   const admin = parsePolicy(buildPolicy(html, 'admin'));

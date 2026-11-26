@@ -9,6 +9,8 @@ import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { test } from 'node:test';
 
+import { lighttpdSnippet, SITES } from '../proxy/lighttpd/csp.mjs';
+
 const root = resolve(import.meta.dirname, '..');
 const confPath = resolve(root, 'proxy/lighttpd/lighttpd.conf');
 const conf = readFileSync(confPath, 'utf8');
@@ -174,34 +176,39 @@ test('o /config.json é o atalho para o arquivo gerado na subida, nas duas image
 });
 
 const docker = process.env.NUVA_TEST_DOCKER === '1';
-test('lighttpd -tt aceita a configuração (contêiner descartável)', {
+test('lighttpd -tt aceita a configuração e as políticas geradas (contêiner descartável)', {
   skip: docker ? false : 'lento: rode com NUVA_TEST_DOCKER=1',
 }, () => {
   const dir = mkdtempSync(join(tmpdir(), 'nuva-lighttpd-'));
   try {
-    writeFileSync(join(dir, 'nuva-csp.conf'), 'var.nuva_csp = "default-src \'none\'"\n');
     const image = readFileSync(resolve(root, 'apps/admin/Dockerfile'), 'utf8').match(
       /^ARG ALPINE_IMAGE=(\S+)$/m,
     )[1];
-    const result = spawnSync(
-      'docker',
-      [
-        'run',
-        '--rm',
-        '-v',
-        `${confPath}:/etc/lighttpd/lighttpd.conf:ro`,
-        '-v',
-        `${join(dir, 'nuva-csp.conf')}:/etc/lighttpd/nuva-csp.conf:ro`,
-        image,
-        'sh',
-        '-c',
-        'apk add --no-cache lighttpd >/dev/null && lighttpd -tt -f /etc/lighttpd/lighttpd.conf 2>&1',
-      ],
-      { encoding: 'utf8' },
-    );
-    assert.equal(result.status, 0, result.stdout + result.stderr);
-    // Chave desconhecida só gera aviso no `-tt`: aqui ela reprova.
-    assert.doesNotMatch(result.stdout + result.stderr, /WARNING|unknown config-key/);
+    // A política de verdade, como o build a gera para cada site: host, esquema e hash do script
+    // inline não podem quebrar a leitura do `var.nuva_csp`.
+    for (const site of SITES) {
+      const file = join(dir, `nuva-csp-${site}.conf`);
+      writeFileSync(file, lighttpdSnippet('<script>a()</script>', site));
+      const result = spawnSync(
+        'docker',
+        [
+          'run',
+          '--rm',
+          '-v',
+          `${confPath}:/etc/lighttpd/lighttpd.conf:ro`,
+          '-v',
+          `${file}:/etc/lighttpd/nuva-csp.conf:ro`,
+          image,
+          'sh',
+          '-c',
+          'apk add --no-cache lighttpd >/dev/null && lighttpd -tt -f /etc/lighttpd/lighttpd.conf 2>&1',
+        ],
+        { encoding: 'utf8' },
+      );
+      assert.equal(result.status, 0, `${site}: ${result.stdout}${result.stderr}`);
+      // Chave desconhecida só gera aviso no `-tt`: aqui ela reprova.
+      assert.doesNotMatch(result.stdout + result.stderr, /WARNING|unknown config-key/, site);
+    }
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }

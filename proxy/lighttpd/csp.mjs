@@ -4,8 +4,8 @@
 //   node proxy/lighttpd/csp.mjs admin apps/admin/dist/index.html > nuva-csp.conf
 //   node proxy/lighttpd/csp.mjs classroom apps/classroom/dist/index.html > nuva-csp.conf
 //
-// O primeiro argumento é o site: o admin só aceita a própria origem; o classroom soma as origens
-// dos players de vídeo (`PLAYER_SOURCES`, abaixo).
+// O primeiro argumento é o site: os dois aceitam imagens `https:` do Markdown saneado (ADR 0027);
+// o classroom soma as origens dos players de vídeo (`PLAYER_SOURCES`, abaixo).
 //
 // Roda no build da imagem, sobre o `index.html` que o Vite acabou de gerar: cada <script> inline
 // (hoje, o do tema: `THEME_BOOT_SCRIPT` de @nuva-edu/ui) entra na política pelo seu hash, e por
@@ -18,13 +18,17 @@ import { readFileSync } from 'node:fs';
  * Tudo o que os sites usam vem da própria origem: a API e o SSE (`connect-src`), as imagens
  * regravadas pela API (`img-src`, mais `data:` para ícones embutidos no CSS e `blob:` para a prévia
  * do `ImagePicker`, feita com `URL.createObjectURL` antes do envio), fontes e estilos.
- * Nada externo entra na base; o que não está listado cai em `default-src 'none'`.
+ *
+ * A única origem externa da base é `https:` em `img-src`: as imagens do Markdown saneado
+ * (ADR 0027) apontam para o host que o autor escreveu, e a exibição não as busca nem as regrava
+ * pelo servidor. É só imagem, e só `https`: `script-src`, `frame-src`, `connect-src` e o resto
+ * continuam fechados. O que não está listado cai em `default-src 'none'`.
  */
 const BASE_POLICY = [
   ['default-src', "'none'"],
   ['script-src', "'self'"],
   ['style-src', "'self'"],
-  ['img-src', "'self'", 'data:', 'blob:'],
+  ['img-src', "'self'", 'data:', 'blob:', 'https:'],
   ['font-src', "'self'"],
   ['connect-src', "'self'"],
   ['media-src', "'self'"],
