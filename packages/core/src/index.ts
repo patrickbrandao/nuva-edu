@@ -15,6 +15,15 @@ export {
 } from './config/config.ts';
 export { ConfigError, type ConfigIssue } from './config/env-reader.ts';
 export {
+  assertPaymentConfiguration,
+  type CreatePaymentProviderOptions,
+  configuredPaymentProviderName,
+  createPaymentProvider,
+  isPaymentTestMode,
+  type PaymentConfig,
+  paymentConfigurationIssues,
+} from './config/payment.ts';
+export {
   type ChannelListener,
   type ChannelListenerOptions,
   listenChannel,
@@ -82,6 +91,7 @@ export * from './modules/markdown/index.ts';
 export * from './modules/notes/index.ts';
 export * from './modules/notifications/index.ts';
 export * from './modules/oauth/index.ts';
+export * from './modules/payments/index.ts';
 export * from './modules/permissions/index.ts';
 export * from './modules/privacy/index.ts';
 export {

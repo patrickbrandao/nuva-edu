@@ -4,6 +4,7 @@ import { isIP } from 'node:net';
 import { LOG_LEVELS, type LogLevel } from '../logging/logger.ts';
 import { AUDIT_RETENTION_DEFAULT_DAYS, AUDIT_RETENTION_MIN_DAYS } from '../modules/audit/purge.ts';
 import { ConfigError, type Env, EnvReader } from './env-reader.ts';
+import type { PaymentConfig } from './payment.ts';
 
 /** Variáveis sem valor padrão, que cada serviço declara como obrigatórias conforme o que usa. */
 export type SecretVariable =
@@ -58,17 +59,7 @@ export interface Config {
     password: string | null;
     from: string;
   };
-  payment: {
-    provider: 'mercadopago';
-    mercadoPago: {
-      accessToken: string | null;
-      publicKey: string | null;
-      webhookSecret: string | null;
-    };
-    orderPendingMinutes: number;
-    orderBoletoDays: number;
-    subscriptionGraceDays: number;
-  };
+  payment: PaymentConfig;
   /**
    * Provedor não configurado vale `null` e fica desligado. Com o simulador ligado (`oauthMock`),
    * os três valem as credenciais fixas de teste (`OAUTH_MOCK_CLIENTS`).
@@ -211,7 +202,7 @@ export function loadConfig(options: LoadConfigOptions = {}): Config {
       from: reader.string('SMTP_FROM', `nuva-edu <no-reply@${domain}>`),
     },
     payment: {
-      provider: reader.oneOf('NUVA_PAYMENT_PROVIDER', 'mercadopago', ['mercadopago']),
+      provider: reader.oneOf('NUVA_PAYMENT_PROVIDER', 'mercadopago', ['mercadopago', 'fake']),
       mercadoPago: {
         accessToken: secret('MP_ACCESS_TOKEN'),
         publicKey: reader.optional('MP_PUBLIC_KEY'),
