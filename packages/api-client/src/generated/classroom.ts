@@ -1510,9 +1510,14 @@ export interface paths {
          *     Recusas, pelo `code`: `403 email_not_verified`; `404 not_found` (plano inexistente ou
          *     inativo — plano inativo não aceita assinatura nova); `409 billing_required`;
          *     `409 subscription_already_exists`; `422 coupon_invalid` (cupom inexistente, expirado,
-         *     esgotado, inativo ou sem `subscriptions` em `appliesTo`); `503
+         *     esgotado, inativo ou sem `subscriptions` em `appliesTo`); `422 idempotency_key_reuse`
+         *     (mesma `Idempotency-Key` enviada com `planId` ou `couponCode` diferente); `503
          *     payment_provider_unavailable` (provedor fora: nenhuma assinatura é criada e nada é
          *     cobrado; a mensagem é "pagamento indisponível, tente em instantes").
+         *
+         *     Aceita `Idempotency-Key` (`specs/004-classroom-api.md`): repetir com o mesmo `planId` e
+         *     `couponCode` em até 24 h devolve a mesma assinatura e o mesmo `checkoutUrl` (`201`), sem
+         *     segunda adesão no provedor.
          */
         post: operations["createSubscription"];
         delete?: never;
@@ -5906,7 +5911,10 @@ export interface operations {
     createSubscription: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /** @description Chave escolhida pelo cliente; a repetição devolve a primeira resposta por 24 h. */
+                "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
+            };
             path?: never;
             cookie?: never;
         };
