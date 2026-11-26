@@ -133,6 +133,7 @@ Expurgo diário às 03:30 (fuso da escola, `settings.timezone`), tarefa `retenti
 | Denúncias resolvidas, ações de moderação e suspensões | 2 anos (730 dias) | `NUVA_RETENTION_MODERATION_DAYS` |
 | Visualizações de case (`case_views`) | 90 dias | fixo |
 | Webhooks recebidos, inclusive `rejected` | 90 dias desde `received_at` | `NUVA_RETENTION_WEBHOOK_DAYS` |
+| Chaves de idempotência financeira (`idempotency_keys`), inclusive reservas sem resposta (`response_status` nulo) | 24 horas desde `created_at` ([003](003-admin-api.md), migration 0021) | fixo |
 | Auditoria | 2 anos (730 dias) | `NUVA_RETENTION_AUDIT_DAYS` |
 | Chaves MCP revogadas ou expiradas | 2 anos | acompanha a auditoria |
 | Exportações de dados (LGPD) | 24 horas | fixo |
@@ -196,7 +197,7 @@ Antes da versão 1.0 (Fase 7 do plano), um roteiro k6 simula 500 usuários simul
 - [ ] Requisição que o cliente fecha antes da resposta gera uma única linha de log, com `aborted: true`, e conta em `http_requests_total` com `status="499"`.
 - [ ] Parar o Postgres deixa `/readyz` em falha e `/healthz` em sucesso.
 - [ ] Um e-mail que falha no SMTP aparece na tela "Operação" e é reenviado pelo botão.
-- [ ] Após o expurgo, não restam sessões com mais de 30 dias sem uso nem tarefas concluídas com mais de 7 dias; notificações não lidas permanecem.
+- [ ] Após o expurgo, não restam sessões com mais de 30 dias sem uso, tarefas concluídas com mais de 7 dias nem chaves de idempotência financeira (`idempotency_keys`, inclusive reservas sem resposta) com mais de 24 horas; notificações não lidas permanecem.
 - [ ] Com 12 dias de backups, restam 7 diários e os semanais devidos.
 - [ ] `scripts/restore.sh` recusa um dump com soma de verificação divergente.
 - [ ] O fluxo `release` do CI falha se a restauração divergir do original.
