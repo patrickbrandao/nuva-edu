@@ -264,6 +264,7 @@ O script só age sobre o projeto Compose `nuva-edu`; qualquer outra ação no se
 | `NUVA_RETENTION_FISCAL_YEARS` | `5` | Registros de venda ([030](030-lgpd.md), [033](033-observabilidade-retencao-backup.md)) |
 | `NUVA_ENV` | `development` | `development`, `test` ou `production`; em `production` o admin é avisado se o pagamento estiver em modo de teste ([013](013-pagamentos-mercado-pago.md)) |
 | `NUVA_PAYMENT_PROVIDER` | `mercadopago` | Provedor de pagamento ativo ([013](013-pagamentos-mercado-pago.md)) |
+| `NUVA_PAYMENT_FAKE_URL` | vazio | Origem HTTP interna de um simulador de pagamentos compartilhado. Só aceita com `NUVA_PAYMENT_PROVIDER=fake` em desenvolvimento ou teste ([013](013-pagamentos-mercado-pago.md)) |
 | `NUVA_ORDER_PENDING_MINUTES`, `NUVA_ORDER_BOLETO_DAYS` | `30`, `3` | Prazo do pedido pendente: cartão e Pix; boleto ([011](011-vendas-e-checkout.md)) |
 | `NUVA_SUBSCRIPTION_GRACE_DAYS` | `3` | Carência da assinatura com cobrança recusada ([012](012-assinaturas.md)) |
 | `NUVA_WORKER_CONCURRENCY` | `10` | Tarefas simultâneas do worker ([005](005-worker-e-fila.md)) |

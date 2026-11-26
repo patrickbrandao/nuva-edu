@@ -130,6 +130,7 @@ A reconciliação usa o mesmo código de transição do webhook; a ordem de cheg
 - O admin vê, em Configurações, um indicador "Pagamentos em modo de teste" quando o token é de teste, e um aviso em vermelho se uma instalação com `NUVA_ENV=production` estiver com token de teste.
 - Em `dev`, o webhook não alcança `*.localhost`; a reconciliação cobre o caso, e há um comando de desenvolvimento que simula o aviso para um pedido.
 - A suíte automatizada usa o provedor `fake`; a integração real com o ambiente de teste do Mercado Pago é exercitada num teste e2e marcado, rodado só quando as credenciais de teste estão presentes.
+- Em testes com processos separados, `NUVA_PAYMENT_PROVIDER=fake` e `NUVA_PAYMENT_FAKE_URL` apontam APIs e worker para a mesma instância interna do simulador. Com a URL vazia, o fake funciona em memória para testes no mesmo processo. Em produção, tanto o fake quanto o endereço do simulador são recusados. A porta de controle do simulador é publicada somente no loopback de desenvolvimento e teste.
 
 ## Interfaces e contratos
 
