@@ -284,6 +284,10 @@ test('o proxy entrega /api, /mcp e /healthz às APIs e o resto aos sites', { ski
     label('classroom-api', 'classroom-stream', 'rule'),
     'Host(`aulas.escola.test`) && Path(`/api/v1/stream`)',
   );
+  assert.equal(
+    label('admin-api', 'admin-stream', 'rule'),
+    'Host(`painel.escola.test`) && Path(`/api/v1/stream`)',
+  );
   assert.equal(label('admin', 'admin', 'rule'), 'Host(`painel.escola.test`)');
   assert.equal(label('classroom', 'classroom', 'rule'), 'Host(`aulas.escola.test`)');
 
@@ -292,13 +296,20 @@ test('o proxy entrega /api, /mcp e /healthz às APIs e o resto aos sites', { ski
     Number(label('admin-api', 'admin-api', 'priority')) >
       Number(label('admin', 'admin', 'priority')),
   );
-  assert.ok(
-    Number(label('classroom-api', 'classroom-stream', 'priority')) >
-      Number(label('classroom-api', 'classroom-api', 'priority')),
-  );
+  for (const [service, stream, api] of [
+    ['admin-api', 'admin-stream', 'admin-api'],
+    ['classroom-api', 'classroom-stream', 'classroom-api'],
+  ]) {
+    assert.equal(label(service, stream, 'priority'), '30', stream);
+    assert.ok(
+      Number(label(service, stream, 'priority')) > Number(label(service, api, 'priority')),
+      `${stream} ganha de ${api}`,
+    );
+  }
 
   for (const [service, router] of [
     ['admin-api', 'admin-api'],
+    ['admin-api', 'admin-stream'],
     ['classroom-api', 'classroom-api'],
     ['classroom-api', 'classroom-stream'],
     ['admin', 'admin'],
@@ -319,6 +330,61 @@ test('o proxy entrega /api, /mcp e /healthz às APIs e o resto aos sites', { ski
   assert.equal(services.worker.labels, undefined);
 });
 
+test('os dois fluxos SSE têm roteador próprio, sem middleware, compressão ou buffer', {
+  skip,
+}, () => {
+  const { services } = config({
+    NUVA_ADMIN_HOST: 'painel.escola.test',
+    NUVA_CLASSROOM_HOST: 'aulas.escola.test',
+  });
+  const routers = [
+    ...new Set(
+      Object.values(services).flatMap((service) =>
+        Object.keys(service.labels ?? {})
+          .map((key) => /^traefik\.http\.routers\.(nuva-edu-[\w-]+)\./.exec(key)?.[1])
+          .filter(Boolean),
+      ),
+    ),
+  ].sort();
+  assert.deepEqual(routers, [
+    'nuva-edu-admin',
+    'nuva-edu-admin-api',
+    'nuva-edu-admin-stream',
+    'nuva-edu-classroom',
+    'nuva-edu-classroom-api',
+    'nuva-edu-classroom-stream',
+    'nuva-edu-oauth-mock',
+  ]);
+
+  for (const [service, name, host] of [
+    ['admin-api', 'nuva-edu-admin-stream', 'painel.escola.test'],
+    ['classroom-api', 'nuva-edu-classroom-stream', 'aulas.escola.test'],
+  ]) {
+    const labels = services[service].labels;
+    const prefix = `traefik.http.routers.${name}`;
+    // Regra exata: um host e um caminho, sem `PathPrefix` e sem pegar outras rotas da API.
+    assert.equal(labels[`${prefix}.rule`], `Host(\`${host}\`) && Path(\`/api/v1/stream\`)`, name);
+    assert.equal(labels[`${prefix}.priority`], '30', name);
+    assert.equal(labels[`${prefix}.service`], `nuva-edu-${service}`, name);
+    // Nada de middleware no fluxo: nem `compress`, nem `buffering`, nem limite, nem cabeçalho.
+    // É a regra da spec 031 para quem acrescentar middleware aos roteadores das APIs.
+    assert.deepEqual(
+      Object.keys(labels)
+        .filter((key) => key.startsWith(`${prefix}.`))
+        .sort(),
+      ['entrypoints', 'priority', 'rule', 'service'].map((key) => `${prefix}.${key}`),
+      name,
+    );
+  }
+
+  // Hoje nenhum roteador tem middleware nem tempo próprio; o fluxo fica de fora quando houver.
+  for (const [service, value] of Object.entries(services)) {
+    for (const key of Object.keys(value.labels ?? {})) {
+      assert.doesNotMatch(key, /\.middlewares$|timeout/i, `${service}: ${key}`);
+    }
+  }
+});
+
 test('rótulos de TLS só existem com TRAEFIK_CERTRESOLVER preenchido', { skip }, () => {
   const tlsLabels = (services) =>
     Object.values(services).flatMap((service) =>
@@ -330,6 +396,7 @@ test('rótulos de TLS só existem com TRAEFIK_CERTRESOLVER preenchido', { skip }
   const withTls = tlsLabels(config({ TRAEFIK_CERTRESOLVER: 'letsencrypt' }).services);
   assert.deepEqual(withTls.map(([key]) => key).sort(), [
     'traefik.http.routers.nuva-edu-admin-api.tls.certresolver',
+    'traefik.http.routers.nuva-edu-admin-stream.tls.certresolver',
     'traefik.http.routers.nuva-edu-admin.tls.certresolver',
     'traefik.http.routers.nuva-edu-classroom-api.tls.certresolver',
     'traefik.http.routers.nuva-edu-classroom-stream.tls.certresolver',

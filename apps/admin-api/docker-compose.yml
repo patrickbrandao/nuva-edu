@@ -126,5 +126,13 @@ services:
       - "traefik.http.routers.nuva-edu-admin-api.priority=20"
       - "traefik.http.routers.nuva-edu-admin-api.entrypoints=${TRAEFIK_ENTRYPOINTS:-web}"
       - "traefik.http.routers.nuva-edu-admin-api.service=nuva-edu-admin-api"
-      # TLS só com TRAEFIK_CERTRESOLVER preenchido; vazio, sai um rótulo neutro no lugar.
+      # SSE: roteador próprio e sem middleware algum, para que nada comprima nem segure a
+      # resposta (ADR 0028; regras iguais às do classroom). O caminho é exato e ganha da API pela
+      # prioridade; o `ping` de 25 s da API fica abaixo do tempo ocioso do proxy.
+      - "traefik.http.routers.nuva-edu-admin-stream.rule=Host(`${NUVA_ADMIN_HOST:-edu-admin.${NUVA_DOMAIN:-localhost}}`) && Path(`/api/v1/stream`)"
+      - "traefik.http.routers.nuva-edu-admin-stream.priority=30"
+      - "traefik.http.routers.nuva-edu-admin-stream.entrypoints=${TRAEFIK_ENTRYPOINTS:-web}"
+      - "traefik.http.routers.nuva-edu-admin-stream.service=nuva-edu-admin-api"
+      # TLS só com TRAEFIK_CERTRESOLVER preenchido; vazio, saem rótulos neutros no lugar.
       - "${TRAEFIK_CERTRESOLVER:+traefik.http.routers.nuva-edu-admin-api.tls.certresolver=}${TRAEFIK_CERTRESOLVER:-nuva-edu.admin-api.tls=off}"
+      - "${TRAEFIK_CERTRESOLVER:+traefik.http.routers.nuva-edu-admin-stream.tls.certresolver=}${TRAEFIK_CERTRESOLVER:-nuva-edu.admin-stream.tls=off}"

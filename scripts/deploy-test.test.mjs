@@ -655,9 +655,16 @@ test('no servidor, o compose resolve hosts, rede externa, TLS e nenhuma porta pu
   assert.deepEqual(Object.keys(mail.networks), ['internal']);
   assert.equal(services.worker.environment.SMTP_HOST, 'mailpit');
 
-  const stream = 'traefik.http.routers.nuva-edu-classroom-stream';
-  assert.equal(services['classroom-api'].labels[`${stream}.tls.certresolver`], 'letsencrypt');
-  assert.equal(services['classroom-api'].labels[`${stream}.entrypoints`], 'websecure');
+  for (const [name, router] of [
+    ['classroom-api', 'nuva-edu-classroom-stream'],
+    ['admin-api', 'nuva-edu-admin-stream'],
+  ]) {
+    assert.equal(
+      services[name].labels[`traefik.http.routers.${router}.tls.certresolver`],
+      'letsencrypt',
+    );
+    assert.equal(services[name].labels[`traefik.http.routers.${router}.entrypoints`], 'websecure');
+  }
 
   // URLs públicas sem porta e em https, nos sites (config.json) e nos backends.
   for (const name of ['admin', 'classroom', 'admin-api', 'classroom-api', 'worker']) {
