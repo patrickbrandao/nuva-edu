@@ -1,6 +1,8 @@
 import { ProductCard } from '@nuva-edu/ui';
 import { Lock } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
+import { AddToCart } from '../sales/AddToCart';
+import { useSession } from '../session/session';
 import { accessValidity, isFree, productPath, productTotals } from './format';
 import type { CatalogItem } from './queries';
 
@@ -19,11 +21,13 @@ interface CatalogCardProps {
 }
 
 /**
- * Um produto da vitrine. Na Fase 2 o produto `paid` mostra o preço e o bloqueio ("Acesso liberado
- * pela escola"), sem botão de compra nem cesta (spec 009, "Fora de escopo"; decisão P6).
+ * Um produto da vitrine. Produto `paid` mostra preço, bloqueio e validade; a quem está logado,
+ * também a ação de pôr na cesta (spec 011, Fase 3). Visitante segue para a página do produto, de
+ * onde a compra pede o login.
  */
 export function CatalogCard({ item, formatPrice, coverPriority = false }: CatalogCardProps) {
   const { t } = useTranslation();
+  const { session } = useSession();
   const free = isFree(item);
   const locked = item.accessMode === 'paid';
   return (
@@ -46,6 +50,17 @@ export function CatalogCard({ item, formatPrice, coverPriority = false }: Catalo
             {' · '}
             {accessValidity(t, item.accessDays)}
           </>
+        ) : undefined
+      }
+      action={
+        locked && session ? (
+          <AddToCart
+            productType={item.type}
+            productId={item.id}
+            title={item.title}
+            size="sm"
+            variant="default"
+          />
         ) : undefined
       }
     />

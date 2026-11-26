@@ -131,6 +131,11 @@ export const MY_COURSES_PATH = '/meus-cursos';
 export const MY_EBOOKS_PATH = '/meus-ebooks';
 export const PROGRESS_PATH = '/progresso';
 export const NOTES_PATH = '/anotacoes';
+/** Compra (spec 006, mapa de telas): cesta, checkout, retorno do pagamento e minhas compras. */
+export const CART_PATH = '/cesta';
+export const CHECKOUT_PATH = '/checkout';
+export const ORDER_PATH = '/pedidos';
+export const PURCHASES_PATH = '/conta/compras';
 
 /** Telas do menu que já foram construídas. */
 const BUILT_PAGES: readonly string[] = [
@@ -141,6 +146,8 @@ const BUILT_PAGES: readonly string[] = [
   MY_EBOOKS_PATH,
   PROGRESS_PATH,
   NOTES_PATH,
+  CART_PATH,
+  PURCHASES_PATH,
 ];
 
 /**

@@ -303,6 +303,8 @@ describe('casca do classroom', () => {
       '/meus-ebooks',
       '/anotacoes',
       '/progresso',
+      '/cesta',
+      '/conta/compras',
       '/conta',
     ]);
     for (const item of built) {

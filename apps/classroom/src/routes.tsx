@@ -4,13 +4,17 @@ import { ErrorPage } from './pages/ErrorPage';
 import { HomePage } from './pages/HomePage';
 import {
   ACCOUNT_PATH,
+  CART_PATH,
+  CHECKOUT_PATH,
   HOME_PATH,
   LOGIN_PATH,
   MY_COURSES_PATH,
   MY_EBOOKS_PATH,
   NOTES_PATH,
+  ORDER_PATH,
   PENDING_PAGES,
   PROGRESS_PATH,
+  PURCHASES_PATH,
   START_PATH,
 } from './shell/navigation';
 import { type RouteHandle, Shell } from './shell/Shell';
@@ -138,6 +142,28 @@ export const routes: RouteObject[] = [
         path: NOTES_PATH,
         handle: handle({ titleKey: 'menu.items.notes' }),
         lazy: async () => ({ Component: (await import('./pages/NotesPage')).NotesPage }),
+      },
+      {
+        path: CART_PATH,
+        handle: handle({ titleKey: 'sales.cart.title' }),
+        lazy: async () => ({ Component: (await import('./sales/CartPage')).CartPage }),
+      },
+      {
+        path: CHECKOUT_PATH,
+        handle: handle({ titleKey: 'sales.checkout.title' }),
+        lazy: async () => ({ Component: (await import('./sales/CheckoutPage')).CheckoutPage }),
+      },
+      {
+        path: `${ORDER_PATH}/:id`,
+        handle: handle({ titleKey: 'sales.order.title' }),
+        lazy: async () => ({ Component: (await import('./sales/OrderPage')).OrderPage }),
+      },
+      {
+        path: PURCHASES_PATH,
+        handle: handle({ titleKey: 'sales.orders.title' }),
+        lazy: async () => ({
+          Component: (await import('./sales/PurchasesPage')).PurchasesPage,
+        }),
       },
       {
         path: CERTIFICATES_PATH,

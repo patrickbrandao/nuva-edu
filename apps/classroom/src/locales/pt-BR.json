@@ -160,8 +160,8 @@
       "advanced": "Avançado"
     },
     "free": "Gratuito",
-    "locked": "Acesso liberado pela escola",
-    "lockedHint": "Este produto ainda não é vendido pelo site. A escola libera o acesso diretamente a cada aluno.",
+    "locked": "Conteúdo bloqueado",
+    "lockedHint": "Compre o produto para liberar o acesso. Quem já tem o direito entra pela conta.",
     "validity": {
       "lifetime": "Acesso vitalício",
       "days_one": "Acesso por {{count}} dia",
@@ -920,6 +920,261 @@
       "generic": "Não foi possível usar esta imagem. Tente outra.",
       "rateLimited": "Você enviou muitas imagens na última hora. Tente de novo mais tarde.",
       "rateLimitedFor": "Você enviou muitas imagens na última hora. Tente de novo em {{time}}."
+    }
+  },
+  "sales": {
+    "buy": {
+      "add": "Adicionar à cesta",
+      "addNamed": "Adicionar {{title}} à cesta",
+      "adding": "Adicionando…",
+      "done": "{{title}} foi para a sua cesta.",
+      "errorTitle": "Não foi possível acrescentar à cesta",
+      "errors": {
+        "inCart": "Este produto já está na sua cesta.",
+        "owned": "Você já tem acesso definitivo a este produto.",
+        "notSellable": "Este produto não está à venda agora.",
+        "full": "Sua cesta já tem 50 itens. Remova algum para acrescentar outro.",
+        "emailNotVerified": "Confirme seu e-mail para comprar."
+      }
+    },
+    "cart": {
+      "title": "Sua cesta",
+      "description": "Revise os itens da sua cesta, aplique um cupom e continue a compra.",
+      "subtitle_one": "{{count}} item na cesta",
+      "subtitle_other": "{{count}} itens na cesta",
+      "region": "Itens da cesta",
+      "remove": "Remover {{title}}",
+      "removeErrorTitle": "Não foi possível remover o item",
+      "includes": "Inclui",
+      "checkout": "Continuar a compra",
+      "checkoutBlocked": "Nenhum item da cesta pode ser comprado agora. Remova o que estiver indisponível para continuar.",
+      "loading": "Carregando a cesta…",
+      "errorTitle": "A cesta não carregou",
+      "errorText": "Não foi possível ler a sua cesta. Tente de novo em instantes.",
+      "emptyTitle": "Sua cesta está vazia",
+      "emptyText": "Escolha um curso, pacote ou ebook na vitrine.",
+      "emptyAction": "Ver a vitrine",
+      "notice": {
+        "bundle_item_owned": "Você já tem um dos itens deste pacote.",
+        "subscription_covered": "Este produto é coberto pela sua assinatura; a compra continua valendo depois dela.",
+        "time_limited_access": "Você já tem este produto por tempo limitado; a compra estende o acesso.",
+        "noPrice": "Este produto está sem preço no momento."
+      },
+      "unsellable": {
+        "unpublished": "Indisponível: o produto saiu do ar.",
+        "archived": "Indisponível: o produto foi arquivado.",
+        "not_paid": "Indisponível: o produto não está à venda."
+      },
+      "unlock": {
+        "via": "{{title}} (via {{via}})"
+      },
+      "coupon": {
+        "region": "Cupom de desconto",
+        "title": "Cupom",
+        "label": "Código do cupom",
+        "apply": "Aplicar",
+        "applying": "Aplicando…",
+        "remove": "Remover cupom",
+        "removing": "Removendo…",
+        "removeNamed": "Remover o cupom {{code}}",
+        "short": "Digite o código do cupom (pelo menos 3 caracteres).",
+        "invalid": "Este cupom não vale para a sua cesta.",
+        "percentOff": "{{percent}}% de desconto",
+        "invalidReason": {
+          "expired": "Este cupom venceu.",
+          "exhausted": "Este cupom esgotou.",
+          "inactive": "Este cupom foi desativado.",
+          "not_eligible": "Este cupom não vale para os itens da cesta."
+        }
+      },
+      "totals": {
+        "subtotal": "Subtotal",
+        "discount": "Desconto",
+        "total": "Total",
+        "region": "Totais da cesta"
+      }
+    },
+    "checkout": {
+      "title": "Finalizar a compra",
+      "description": "Informe os dados do comprador e finalize a compra.",
+      "subtitle": "Confira os itens e informe os dados do comprador.",
+      "loading": "Carregando o checkout…",
+      "errorTitle": "O checkout não carregou",
+      "emptyTitle": "Não há o que finalizar",
+      "emptyText": "Sua cesta está vazia. Escolha um produto para comprar.",
+      "emptyAction": "Ver a vitrine",
+      "summary": "Resumo da compra",
+      "itemsTitle": "Itens da compra",
+      "unsellable": "Indisponível agora",
+      "zeroTotal": "O total é zero: o pedido será concluído sem cobrança.",
+      "noSellable": "Nenhum item pode ser comprado agora.",
+      "backToCart": "Voltar à cesta",
+      "submit": "Finalizar e pagar",
+      "submitting": "Finalizando…",
+      "redirecting": "Pedido criado. Abrindo o pagamento…",
+      "redirectText": "Se a página de pagamento não abrir sozinha, use o botão abaixo.",
+      "redirectAction": "Abrir o pagamento",
+      "privacy": "Não pedimos dados de cartão: o pagamento acontece na página do provedor.",
+      "viewPending": "Ver meus pedidos",
+      "reviewCart": "Revisar a cesta",
+      "buyer": {
+        "legend": "Dados do comprador",
+        "fullName": "Nome completo",
+        "fullNameHint": "Como deve constar no comprovante.",
+        "taxIdType": "Tipo de documento",
+        "cpf": "CPF",
+        "cnpj": "CNPJ",
+        "taxId": "Documento",
+        "taxIdHint": "Só os números; a pontuação é removida."
+      },
+      "errors": {
+        "requiredName": "Informe o nome completo.",
+        "requiredTaxId": "Informe o CPF ou CNPJ.",
+        "billingRequired": "Informe nome e documento do comprador.",
+        "cartEmpty": "Sua cesta está vazia.",
+        "cartInvalid": "Um item deixou de estar disponível. Revise a cesta e tente de novo.",
+        "pendingLimit": "Você já tem 3 pedidos aguardando pagamento. Cancele um deles para continuar.",
+        "emailNotVerified": "Confirme seu e-mail antes de finalizar a compra.",
+        "couponInvalid": "O cupom deixou de valer. Revise a cesta.",
+        "providerUnavailable": "Pagamento indisponível, tente em instantes.",
+        "taxIdInvalid": "Documento inválido. Confira o CPF ou CNPJ."
+      },
+      "totals": {
+        "subtotal": "Subtotal",
+        "discount": "Desconto",
+        "total": "Total",
+        "region": "Totais do pedido"
+      }
+    },
+    "order": {
+      "title": "Pedido",
+      "description": "Estado do pedido e comprovante da compra.",
+      "number": "Pedido nº {{number}}",
+      "loading": "Carregando o pedido…",
+      "errorTitle": "O pedido não carregou",
+      "notFoundTitle": "Pedido não encontrado",
+      "notFoundText": "Este pedido não existe ou não é seu.",
+      "backToOrders": "Ver meus pedidos",
+      "goToPayment": "Voltar ao pagamento",
+      "goToCourses": "Ir para meus cursos",
+      "itemsTitle": "Itens do pedido",
+      "item": {
+        "discount": "Desconto de {{value}}",
+        "refunded": "Reembolsado: {{value}}"
+      },
+      "totals": {
+        "subtotal": "Subtotal",
+        "discount": "Desconto",
+        "total": "Total",
+        "refunded": "Reembolsado",
+        "region": "Totais do pedido"
+      },
+      "payment": {
+        "region": "Estado do pagamento",
+        "waiting": "Aguardando a confirmação do pagamento…",
+        "status": {
+          "pending": "Aguardando",
+          "approved": "Aprovado",
+          "rejected": "Recusado",
+          "canceled": "Cancelado",
+          "refunded": "Reembolsado",
+          "partially_refunded": "Parcialmente reembolsado",
+          "charged_back": "Contestado"
+        },
+        "pending": {
+          "title": "Aguardando pagamento",
+          "text": "Assim que o pagamento for confirmado, o acesso é liberado.",
+          "deadline": "Pague até {{when}}."
+        },
+        "paid": {
+          "title": "Pagamento confirmado",
+          "text": "Os itens deste pedido já estão liberados."
+        },
+        "partially_refunded": {
+          "title": "Parcialmente reembolsado",
+          "text": "Os itens não reembolsados continuam liberados."
+        },
+        "refunded": {
+          "title": "Pedido reembolsado",
+          "text": "O acesso dos itens deste pedido foi revogado."
+        },
+        "canceled": {
+          "title": "Pedido cancelado",
+          "text": "Nada foi cobrado. Você pode montar a cesta de novo."
+        },
+        "expired": {
+          "title": "Pedido expirado",
+          "text": "O prazo de pagamento terminou e nada foi cobrado."
+        },
+        "chargeback": {
+          "title": "Pagamento contestado",
+          "text": "O acesso foi revogado enquanto a contestação é analisada."
+        }
+      },
+      "details": {
+        "title": "Dados do pedido",
+        "number": "Número",
+        "createdAt": "Feito em",
+        "paidAt": "Pago em",
+        "expiresAt": "Pague até",
+        "buyer": "Comprador",
+        "coupon": "Cupom",
+        "provider": "Provedor",
+        "method": "Pagamento",
+        "paymentStatus": "Cobrança"
+      },
+      "cancel": {
+        "action": "Cancelar pedido",
+        "title": "Cancelar o pedido?",
+        "text": "O pagamento é encerrado e nada é cobrado. Esta ação não pode ser desfeita.",
+        "confirm": "Cancelar pedido",
+        "busy": "Cancelando…",
+        "done": "Pedido cancelado.",
+        "errorTitle": "Não foi possível cancelar",
+        "notCancelable": "Este pedido não pode mais ser cancelado."
+      }
+    },
+    "orders": {
+      "title": "Minhas compras",
+      "description": "Seus pedidos, estados e comprovantes.",
+      "subtitle": "Pedidos avulsos da sua conta.",
+      "loading": "Carregando os pedidos…",
+      "errorTitle": "Os pedidos não carregaram",
+      "emptyTitle": "Nenhum pedido ainda",
+      "emptyText": "Quando você comprar um curso, pacote ou ebook, o pedido aparece aqui.",
+      "emptyAction": "Ver a vitrine",
+      "itemCount_one": "{{count}} item",
+      "itemCount_other": "{{count}} itens",
+      "paidOn": "Pago em {{date}}",
+      "open": "Ver o pedido",
+      "loadMore": "Carregar mais",
+      "pendingLimit": "Você tem 3 pedidos aguardando pagamento. Cancele um deles para fazer outro.",
+      "filters": {
+        "label": "Filtrar por estado",
+        "all": "Todos"
+      },
+      "status": {
+        "pending": "Aguardando",
+        "paid": "Pago",
+        "partially_refunded": "Parcialmente reembolsado",
+        "refunded": "Reembolsado",
+        "canceled": "Cancelado",
+        "expired": "Expirado",
+        "chargeback": "Contestado"
+      },
+      "payment": {
+        "method": {
+          "card": "Cartão",
+          "pix": "Pix",
+          "boleto": "Boleto",
+          "other": "Outro"
+        },
+        "provider": {
+          "mercadopago": "Mercado Pago",
+          "fake": "Provedor de teste",
+          "none": "Sem cobrança"
+        }
+      }
     }
   },
   "construction": {

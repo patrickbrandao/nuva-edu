@@ -36,6 +36,7 @@ import {
   useProductAccess,
 } from '../catalog/queries';
 import { usePageMeta } from '../lib/usePageMeta';
+import { AddToCart } from '../sales/AddToCart';
 import { safeReturnTo, withReturnTo } from '../session/returnTo';
 import { useSession } from '../session/session';
 import { HOME_PATH, LOGIN_PATH } from '../shell/navigation';
@@ -133,9 +134,9 @@ interface AccessPanelProps {
 }
 
 /**
- * Preço e acesso. Fase 2 (spec 009, decisão P6): produto `paid` sem direito mostra o preço e o
- * bloqueio, com "Acesso liberado pela escola" e sem botão de compra; o gratuito leva ao login ou
- * ao conteúdo; quem já tem o acesso vê o caminho até ele.
+ * Preço e acesso. Produto `paid` sem direito mostra o preço, o bloqueio e a compra (spec 011,
+ * Fase 3: a cesta entra no lugar do antigo aviso "liberado pela escola"); o gratuito leva ao
+ * login ou ao conteúdo; quem já tem o acesso vê o caminho até ele.
  */
 function AccessPanel({ product, access, formatPrice }: AccessPanelProps) {
   const { t } = useTranslation();
@@ -194,6 +195,9 @@ function AccessPanel({ product, access, formatPrice }: AccessPanelProps) {
             </p>
             <p className="m-0 text-sm text-ink-2">{t('product.lockedHint')}</p>
             <p className="m-0 text-sm text-ink-3">{accessValidity(t, product.accessDays)}</p>
+            <span className="flex">
+              <AddToCart productType={product.type} productId={product.id} title={product.title} />
+            </span>
           </>
         ) : (
           <p className="m-0 text-sm text-ink-2">{t('product.access.openText')}</p>

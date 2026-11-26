@@ -46,7 +46,7 @@ describe('vitrine', () => {
     expect(await screen.findByRole('heading', { level: 1, name: META.schoolName })).toBeTruthy();
     expect((await list()).children).toHaveLength(3);
 
-    // curso pago: preço na moeda do /meta, bloqueio e validade, sem botão de compra (P6)
+    // curso pago: preço na moeda do /meta, bloqueio e validade; a cesta só aparece logado (Fase 3)
     const course = within(await card(COURSE_ITEM.title));
     expect(course.getByRole('link', { name: COURSE_ITEM.title }).getAttribute('href')).toBe(
       '/cursos/react-do-zero',
@@ -57,7 +57,9 @@ describe('vitrine', () => {
     expect(course.getByText('2 módulos')).toBeTruthy();
     expect(course.getByText('3 aulas')).toBeTruthy();
     expect(course.getByText('3 h 20 min')).toBeTruthy();
-    expect(course.getByText(/Acesso liberado pela escola · Acesso por 365 dias/)).toBeTruthy();
+    expect(
+      course.getByText(new RegExp(`${ptBR.product.locked} · Acesso por 365 dias`)),
+    ).toBeTruthy();
     expect(course.getByRole('presentation').getAttribute('src')).toBe(COURSE_ITEM.cover?.url);
 
     // ebook aberto: "Gratuito", sem bloqueio

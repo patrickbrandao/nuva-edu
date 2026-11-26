@@ -20,12 +20,6 @@ const title = (name: string) => screen.findByRole('heading', { level: 1, name })
 const accessPanel = () => within(screen.getByRole('region', { name: ptBR.product.access.title }));
 const content = (selector: string) =>
   document.head.querySelector(selector)?.getAttribute('content');
-/** Nada de compra nem de cesta no conteúdo da página (decisão P6; vendas só na Fase 3). */
-function expectNoPurchase(): void {
-  const main = within(screen.getByRole('main'));
-  expect(main.queryByRole('button', { name: /compr|cesta|carrinho|assin/i })).toBeNull();
-  expect(main.queryByRole('link', { name: /compr|cesta|carrinho|assin/i })).toBeNull();
-}
 
 describe('página do produto', () => {
   it('curso pago abre sem login, com descrição, programa, preço e bloqueio', async () => {
@@ -61,14 +55,15 @@ describe('página do produto', () => {
     await user.click(modules[1] as HTMLElement);
     expect(closed()).toBeNull();
 
-    // preço, bloqueio e validade; sem compra (P6)
+    // preço, bloqueio e validade; a compra entra pela cesta (Fase 3), pedindo login ao visitante
     const panel = accessPanel();
     expect(panel.getByText(/^R\$\s197,00$/)).toBeTruthy();
     expect(panel.getByText(ptBR.product.locked)).toBeTruthy();
     expect(panel.getByText('Acesso por 365 dias')).toBeTruthy();
-    expect(panel.queryByRole('link')).toBeNull();
+    expect(panel.getByRole('link', { name: ptBR.sales.buy.add }).getAttribute('href')).toBe(
+      '/entrar?destino=%2Fcursos%2Freact-do-zero',
+    );
     expect(panel.queryByRole('button')).toBeNull();
-    expectNoPurchase();
 
     // detalhes
     expect(screen.getByText('Bruno Lima')).toBeTruthy();
@@ -148,7 +143,11 @@ describe('página do produto', () => {
       expect(first.calls.some((call) => call.path === '/api/v1/courses/react-do-zero')).toBe(true),
     );
     expect(accessPanel().getByText(ptBR.product.locked)).toBeTruthy();
-    expect(accessPanel().queryByRole('link')).toBeNull();
+    expect(
+      accessPanel().getByRole('button', {
+        name: ptBR.sales.buy.addNamed.replace('{{title}}', COURSE.title),
+      }),
+    ).toBeTruthy();
     first.unmount();
 
     // rota de acesso ainda inexistente na API: vale o que é público
@@ -183,7 +182,9 @@ describe('página do produto', () => {
     expect(panel.getByText(/^R\$\s297,00$/)).toBeTruthy();
     expect(panel.getByText(ptBR.product.locked)).toBeTruthy();
     expect(panel.getByText(ptBR.product.validity.lifetime)).toBeTruthy();
-    expectNoPurchase();
+    expect(panel.getByRole('link', { name: ptBR.sales.buy.add }).getAttribute('href')).toBe(
+      '/entrar?destino=%2Fpacotes%2Ftrilha-front-end',
+    );
 
     // sem resumo, a descrição da página sai do tipo e do título
     await waitFor(() => expect(document.title).toBe(`${BUNDLE.title} · Escola Aurora`));
