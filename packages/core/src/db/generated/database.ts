@@ -549,6 +549,7 @@ export interface Orders {
   buyerName: string;
   buyerTaxId: string;
   buyerTaxIdType: string;
+  checkoutUrl: string | null;
   couponCode: string | null;
   couponId: string | null;
   createdAt: Generated<Timestamp>;
@@ -559,6 +560,7 @@ export interface Orders {
   number: Generated<Int8>;
   paidAt: Timestamp | null;
   provider: Generated<string>;
+  providerCheckoutId: string | null;
   status: Generated<string>;
   subtotalCents: Int8;
   totalCents: Int8;
