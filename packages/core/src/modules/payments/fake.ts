@@ -41,6 +41,7 @@ export type FakePaymentOperation =
   | 'getSubscription'
   | 'cancelSubscription'
   | 'refund'
+  | 'getRefundStatus'
   | 'parseWebhook';
 
 export interface FakePaymentProviderOptions {
@@ -303,6 +304,23 @@ export class FakePaymentProvider implements PaymentProvider {
       applyRefund(payment, amount);
     }
     return { providerRefundId, status: refund.status, amountCents: amount };
+  }
+
+  async getRefundStatus(
+    providerPaymentId: string,
+    providerRefundId: string,
+  ): Promise<ProviderRefund> {
+    this.#available('getRefundStatus');
+    this.#payment(providerPaymentId);
+    const refund = this.#refund(providerRefundId);
+    if (refund.paymentId !== providerPaymentId) {
+      throw paymentNotFound();
+    }
+    return {
+      providerRefundId: refund.providerRefundId,
+      status: refund.status,
+      amountCents: refund.amountCents,
+    };
   }
 
   /** Reembolso pendente concluído, como o worker descobre na reconciliação (spec 013). */

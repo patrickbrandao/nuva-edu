@@ -327,9 +327,9 @@ export async function getMyOrder(
     buyerTaxIdType: order.buyerTaxIdType as TaxIdType,
     buyerTaxId: order.buyerTaxId,
     provider: orderProvider(order.provider),
-    // O contrato prevê a URL enquanto `pending`; a coluna de persistência é a tarefa do `banco`
-    // que acompanha a 540. Aqui a URL é devolvida pelo fechamento (`OrderCheckout`).
-    checkoutUrl: null,
+    // Enquanto o pedido espera pagamento, a página mostra a URL que o provedor devolveu no
+    // fechamento. Depois da decisão ela não serve mais para pagar.
+    checkoutUrl: order.status === 'pending' ? order.checkoutUrl : null,
     createdAt: order.createdAt,
     paidAt: order.paidAt,
     expiresAt: order.expiresAt,

@@ -155,5 +155,10 @@ export interface PaymentProvider {
   cancelSubscription(providerSubscriptionId: string): Promise<PaymentProviderConfirmation>;
   /** `amountCents = null` estorna todo o saldo ainda não reembolsado. */
   refund(providerPaymentId: string, amountCents: number | null): Promise<ProviderRefund>;
+  /**
+   * Estado atual de um estorno já criado, para a reconciliação de reembolsos (spec 013). Não
+   * cria nem repete o estorno; `pending` continua e é consultado de novo na próxima janela.
+   */
+  getRefundStatus(providerPaymentId: string, providerRefundId: string): Promise<ProviderRefund>;
   parseWebhook(input: ParsePaymentWebhookInput): Promise<PaymentWebhookEvent>;
 }

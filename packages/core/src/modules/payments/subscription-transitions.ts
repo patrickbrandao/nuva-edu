@@ -107,6 +107,7 @@ interface SubscriptionTransitionRow {
   userId: string;
   status: string;
   couponId: string | null;
+  canceledAt: Date | null;
   currentPeriodStart: Date | null;
   currentPeriodEnd: Date | null;
   planTitle: string;
@@ -115,9 +116,10 @@ interface SubscriptionTransitionRow {
 
 /**
  * Aplica a transição da assinatura a partir da cobrança: grava `payments` e, na transação com
- * trava na assinatura, decide o novo estado. `approved` ativa (`pending`/`expired`/`suspended`)
- * ou renova (`active`/`past_due`), estendendo os direitos e, na ativação, contando o cupom uma
- * única vez. `rejected` leva a `active` para `past_due` com a carência; `canceled` não tem efeito;
+ * trava na assinatura, decide o novo estado. `approved` ativa (`pending`, `suspended` e `expired`
+ * vencida por prazo) ou renova (`active`/`past_due`), estendendo os direitos e, na ativação,
+ * contando o cupom uma única vez. `expired` cancelada pelo aluno antes da primeira cobrança não
+ * reativa. `rejected` leva a `active` para `past_due` com a carência; `canceled` não tem efeito;
  * `refunded`/`partially_refunded` e `charged_back` delegam ao módulo de reembolsos. Assinatura
  * inexistente é `404` (o webhook marca o evento como `ignored`).
  */
@@ -162,6 +164,7 @@ export async function applySubscriptionPayment(
         'subscriptions.userId as userId',
         'subscriptions.status as status',
         'subscriptions.couponId as couponId',
+        'subscriptions.canceledAt as canceledAt',
         'subscriptions.currentPeriodStart as currentPeriodStart',
         'subscriptions.currentPeriodEnd as currentPeriodEnd',
         'plans.title as planTitle',
@@ -178,10 +181,12 @@ export async function applySubscriptionPayment(
     let extended = 0;
 
     if (payment.status === 'approved') {
+      // `expired` só reativa quando veio do prazo de `pending`; o aluno que cancelou antes da
+      // primeira cobrança deixou `canceledAt`, e uma aprovação tardia não desfaz a decisão dele.
       const activation =
         previousStatus === 'pending' ||
-        previousStatus === 'expired' ||
-        previousStatus === 'suspended';
+        previousStatus === 'suspended' ||
+        (previousStatus === 'expired' && subscription.canceledAt === null);
       const renewal = previousStatus === 'active' || previousStatus === 'past_due';
       if (activation || renewal) {
         const paidAt = payment.paidAt ?? now;

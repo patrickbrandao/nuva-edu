@@ -434,6 +434,26 @@ export class MercadoPagoPaymentProvider implements PaymentProvider {
     };
   }
 
+  async getRefundStatus(
+    providerPaymentId: string,
+    providerRefundId: string,
+  ): Promise<ProviderRefund> {
+    const paymentId = requireText(providerPaymentId, 'providerPaymentId');
+    const refundId = requireText(providerRefundId, 'providerRefundId');
+    const refund = (await this.#call(() =>
+      new PaymentRefund(this.#config()).get({ payment_id: paymentId, refund_id: refundId }),
+    )) as RefundRecord;
+    const returnedId = textOrNull(refund.id);
+    if (returnedId === null) {
+      throw paymentUnavailable({ provider: 'mercadopago', reason: 'missing_refund_id' });
+    }
+    return {
+      providerRefundId: returnedId,
+      status: mapRefundStatus(refund.status),
+      amountCents: toCents(refund.amount),
+    };
+  }
+
   async parseWebhook(input: ParsePaymentWebhookInput): Promise<PaymentWebhookEvent> {
     const body =
       typeof input.rawBody === 'string'

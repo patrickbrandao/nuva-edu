@@ -27,9 +27,9 @@ import { ORDER_PENDING_LIMIT, type OrderCheckout, type TaxIdType } from './types
 //
 // O pedido (e a numeração) é criado antes da chamada ao provedor, para a cesta só ser esvaziada
 // depois do checkout criado. Provedor fora: o pedido fica `draft`, a cesta intacta e o erro 503
-// sobe para a API. A URL do checkout volta na resposta; guardá-la para a consulta posterior do
-// pedido depende das colunas `checkout_url` e `provider_checkout_id`, ainda ausentes do esquema
-// (tarefa do `banco`).
+// sobe para a API. A URL e o identificador devolvidos por `createCheckout` ficam no pedido
+// (`checkout_url`, `provider_checkout_id`), para a consulta posterior e o cancelamento não
+// chamarem o provedor de novo.
 
 export interface CreateOrderInput {
   userId: string;
@@ -93,16 +93,19 @@ export async function createOrder(db: Database, input: CreateOrderInput): Promis
   return db.transaction().execute(async (trx) => {
     await trx
       .updateTable('orders')
-      .set({ status: 'pending', expiresAt, provider: input.provider.name })
+      .set({
+        status: 'pending',
+        expiresAt,
+        provider: input.provider.name,
+        checkoutUrl: checkout.checkoutUrl,
+        providerCheckoutId: checkout.providerCheckoutId,
+      })
       .where('id', '=', prepared.orderId)
       .where('status', '=', 'draft')
       .execute();
     await clearCart(trx, input.userId);
     const order = await getMyOrder(trx, input.userId, prepared.orderId);
-    return {
-      order: { ...order, checkoutUrl: checkout.checkoutUrl },
-      checkoutUrl: checkout.checkoutUrl,
-    };
+    return { order, checkoutUrl: checkout.checkoutUrl };
   });
 }
 

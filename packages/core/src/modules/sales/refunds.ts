@@ -17,7 +17,7 @@ import { revokeOrderEntitlements } from '../entitlements/order.ts';
 import type { EntitlementRevokeReason } from '../entitlements/types.ts';
 import { enqueueRefundExecute } from '../jobs/sales.ts';
 import { notify } from '../notifications/central.ts';
-import type { PaymentProvider } from '../payments/types.ts';
+import type { PaymentProvider, ProviderRefund } from '../payments/types.ts';
 import {
   paymentNotRefundable,
   refundNotFound,
@@ -280,6 +280,64 @@ export async function executeRefund(
     .execute((trx) =>
       completeRefundInTransaction(trx, refund.id, result.providerRefundId, result.amountCents, now),
     );
+}
+
+/**
+ * Aplica o estado atual de um estorno já criado (`payment.reconcile_refunds`, spec 013).
+ * `approved` conclui o reembolso e os efeitos (revogação, pedido ou assinatura); `rejected` marca
+ * `failed`; `pending` não muda nada e é consultado de novo na próxima janela. Idempotente: só
+ * age sobre `requested`.
+ */
+export async function applyProviderRefundStatus(
+  db: Database,
+  refundId: string,
+  refund: ProviderRefund,
+  options: { now?: Date } = {},
+): Promise<RefundView> {
+  const now = options.now ?? new Date();
+  const row = await db
+    .selectFrom('refunds')
+    .select(['id', 'status', 'amountCents'])
+    .where('id', '=', refundId.toLowerCase())
+    .executeTakeFirst();
+  if (!row) throw refundNotFound();
+  if (row.status !== 'requested') return loadRefundView(db, row.id);
+  if (refund.status === 'rejected') {
+    await markFailed(db, row.id, 'O provedor recusou o estorno.', now);
+    return loadRefundView(db, row.id);
+  }
+  if (refund.status === 'pending') return loadRefundView(db, row.id);
+  return db
+    .transaction()
+    .execute((trx) =>
+      completeRefundInTransaction(
+        trx,
+        row.id,
+        refund.providerRefundId,
+        cents(row.amountCents),
+        now,
+      ),
+    );
+}
+
+/**
+ * Marca um reembolso `requested` como `failed` com o motivo dado (reconciliação quando o
+ * provedor não conhece mais o estorno). Não mexe em reembolso já concluído.
+ */
+export async function failRequestedRefund(
+  db: Database,
+  refundId: string,
+  message: string,
+  options: { now?: Date } = {},
+): Promise<void> {
+  const now = options.now ?? new Date();
+  const row = await db
+    .selectFrom('refunds')
+    .select(['id', 'status'])
+    .where('id', '=', refundId.toLowerCase())
+    .executeTakeFirst();
+  if (row?.status !== 'requested') return;
+  await markFailed(db, row.id, message, now);
 }
 
 /** Volta um reembolso `failed` para a fila (`POST /refunds/{id}/retry`), com os mesmos itens. */
@@ -594,13 +652,19 @@ async function applyOrderRefundEffect(
     items.length > 0 && items.every((item) => cents(item.refundedCents) >= cents(item.paidCents));
   const order = await trx
     .selectFrom('orders')
-    .select(['id', 'userId'])
+    .select(['id', 'userId', 'paidAt'])
     .where('id', '=', orderId)
     .executeTakeFirst();
   if (!order) return;
   await trx
     .updateTable('orders')
-    .set({ status: fullyRefunded ? 'refunded' : 'partially_refunded' })
+    .set({
+      status: fullyRefunded ? 'refunded' : 'partially_refunded',
+      // O estorno pode chegar antes da aprovação (webhook fora de ordem). O pedido passa a
+      // `refunded`/`partially_refunded`, e a restrição exige `paid_at` nesses estados.
+      paidAt: order.paidAt ?? now,
+      expiresAt: null,
+    })
     .where('id', '=', order.id)
     .execute();
   await notify(trx, 'order.refunded', order.userId, {
@@ -612,7 +676,6 @@ async function applyOrderRefundEffect(
       reason: refund.reason,
     },
   });
-  void now;
 }
 
 async function revokeRefundedOrderItems(

@@ -3,6 +3,7 @@ import { notFound } from '../../errors/domain-error.ts';
 import { recordAudit } from '../audit/record.ts';
 import { fulfillOrder } from '../entitlements/order.ts';
 import { incrementCouponUse } from '../sales/coupons.ts';
+import { applyChargeback, applyProviderPaymentRefund } from '../sales/refunds.ts';
 import { cents, isPaidOrderStatus, type OrderStatus } from '../sales/types.ts';
 import { invalidPaymentTransition, paymentAmountMismatch } from './errors.ts';
 import { parsePaymentExternalReference } from './references.ts';
@@ -106,7 +107,8 @@ export async function recordOrderPayment(
  * no pedido, decide o novo estado. `approved` marca `paid` (mesmo vindo de `expired` ou
  * `canceled`), conta o cupom uma única vez, concede a cascata e audita o pagamento tardio.
  * `pending` e `rejected` não mudam o pedido; `canceled` cancela o `pending` sem outro pagamento
- * aprovado. Pedido inexistente é `404` (o webhook marca o evento como `ignored`).
+ * aprovado; `refunded`/`partially_refunded` e `charged_back` delegam ao módulo de reembolsos,
+ * como a assinatura faz. Pedido inexistente é `404` (o webhook marca o evento como `ignored`).
  */
 export async function applyOrderPayment(
   db: Database,
@@ -121,13 +123,25 @@ export async function applyOrderPayment(
   // Sem pedido local a cobrança não tem dono: o webhook marca o evento como `ignored` pelo 404.
   const exists = await db
     .selectFrom('orders')
-    .select('id')
+    .select(['id', 'status'])
     .where('id', '=', reference.id)
     .executeTakeFirst();
   if (!exists) throw notFound('Pedido não encontrado.');
+  const initialStatus = exists.status as OrderStatus;
 
   const now = options.now ?? new Date();
-  await recordOrderPayment(db, provider, payment, { now });
+  const paymentId = await recordOrderPayment(db, provider, payment, { now });
+
+  // Reembolso e contestação são do módulo de reembolsos, que abre a própria transação e já tem o
+  // estado atualizado da cobrança em `payments`.
+  if (payment.status === 'refunded' || payment.status === 'partially_refunded') {
+    await applyProviderPaymentRefund(db, paymentId, { now });
+    return summarizeOrder(db, reference.id, initialStatus);
+  }
+  if (payment.status === 'charged_back') {
+    await applyChargeback(db, paymentId, { now });
+    return summarizeOrder(db, reference.id, initialStatus);
+  }
 
   return db.transaction().execute(async (trx) => {
     const order = await trx
@@ -142,16 +156,7 @@ export async function applyOrderPayment(
     let status = previousStatus;
     let granted = 0;
 
-    if (
-      isSettled(payment) &&
-      payment.status !== 'refunded' &&
-      payment.status !== 'partially_refunded'
-    ) {
-      // Só o `approved` chega aqui nesta tarefa; os reembolsos ficam para a 531.
-      if (payment.status === 'charged_back') {
-        // Contestação é do módulo de reembolsos (tarefa 531); aqui só a cobrança é registrada.
-        return { orderId: order.id, previousStatus, status, changed: false, granted: 0 };
-      }
+    if (isSettled(payment)) {
       const totalCents = cents(order.totalCents);
       if (payment.amountCents !== totalCents || payment.currency !== order.currency) {
         throw paymentAmountMismatch();
@@ -220,4 +225,24 @@ export async function applyOrderPayment(
       granted,
     };
   });
+}
+
+async function summarizeOrder(
+  db: Database,
+  orderId: string,
+  previousStatus: OrderStatus,
+): Promise<AppliedOrderPayment> {
+  const row = await db
+    .selectFrom('orders')
+    .select('status')
+    .where('id', '=', orderId)
+    .executeTakeFirst();
+  const status = (row?.status as OrderStatus | undefined) ?? previousStatus;
+  return {
+    orderId,
+    previousStatus,
+    status,
+    changed: status !== previousStatus,
+    granted: 0,
+  };
 }
