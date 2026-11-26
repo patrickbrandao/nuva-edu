@@ -17,8 +17,10 @@ import {
   imageDeliveryHeaders,
   imageEtagMatches,
   listImageVariants,
+  SCHOOL_LOGO_SETTING_KEY,
   uploadImage,
 } from '../src/index.ts';
+import { inRollback } from './notifications/central/helpers.ts';
 
 let db: Database;
 const LIMITS = { maxUploadMb: 5, uploadsPerHour: 30 };
@@ -65,14 +67,26 @@ async function png(width = 300, height = 200): Promise<Buffer> {
 }
 
 /** Imagem gravada direto no banco, com idade escolhida (para limite por hora e expurgo). */
-async function insertImage(ownerId: string, ageHours: number): Promise<string> {
+async function insertImage(
+  ownerId: string,
+  ageHours: number,
+  options: { purpose?: string; db?: Database } = {},
+): Promise<string> {
   const row = await sql<{ id: string }>`
     INSERT INTO images (owner_user_id, purpose, original_width, original_height, created_at)
-    VALUES (${ownerId}, 'avatar', 10, 10, now() - make_interval(secs => ${ageHours * 3600}))
-    RETURNING id`.execute(db);
+    VALUES (${ownerId}, ${options.purpose ?? 'avatar'}, 10, 10, now() - make_interval(secs => ${ageHours * 3600}))
+    RETURNING id`.execute(options.db ?? db);
   const id = row.rows[0]?.id;
   if (!id) throw new Error('imagem não criada');
   return id;
+}
+
+/** Grava (ou remove, com `null`) a referência do logotipo em `settings`. */
+async function setSchoolLogo(runner: Database, imageId: string | null): Promise<void> {
+  await sql`
+    INSERT INTO settings (key, value)
+    VALUES (${SCHOOL_LOGO_SETTING_KEY}, ${JSON.stringify(imageId)}::jsonb)
+    ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value`.execute(runner);
 }
 
 async function expectDomainError(
@@ -454,5 +468,56 @@ describe('exclusão e expurgo', () => {
     const left = await sql<{ id: string }>`
       SELECT id FROM images WHERE owner_user_id = ${user.id}`.execute(db);
     expect(left.rows.map((row) => row.id).sort()).toEqual([inUse, recent].sort());
+  });
+
+  it('logotipo em settings sobrevive ao expurgo e não é apagado como imagem solta', async () => {
+    const admin = await createUser('admin');
+    await inRollback(db, async (trx) => {
+      const logo = await insertImage(admin.id, 30, { purpose: 'school_logo', db: trx });
+      const orphan = await insertImage(admin.id, 30, { purpose: 'school_logo', db: trx });
+      const mine = new Set([logo, orphan]);
+      const only = (ids: string[]) => ids.filter((id) => mine.has(id));
+      const exists = async (id: string) => {
+        const rows = await sql<{ id: string }>`SELECT id FROM images WHERE id = ${id}`.execute(trx);
+        return rows.rows.length === 1;
+      };
+
+      await setSchoolLogo(trx, logo);
+      expect(only(await findOrphanImageIds(trx))).toEqual([orphan]);
+      await expectDomainError(
+        deleteUnreferencedImage(trx, { imageId: logo, userId: admin.id }),
+        409,
+        'image_in_use',
+      );
+
+      await deleteOrphanImages(trx, { limit: 10_000 });
+      expect(await exists(logo)).toBe(true);
+      expect(await exists(orphan)).toBe(false);
+    });
+  });
+
+  it('trocar ou remover o logotipo libera a imagem para a exclusão e para o expurgo', async () => {
+    const admin = await createUser('admin');
+    await inRollback(db, async (trx) => {
+      const first = await insertImage(admin.id, 30, { purpose: 'school_logo', db: trx });
+      const second = await insertImage(admin.id, 30, { purpose: 'school_logo', db: trx });
+      const exists = async (id: string) => {
+        const rows = await sql<{ id: string }>`SELECT id FROM images WHERE id = ${id}`.execute(trx);
+        return rows.rows.length === 1;
+      };
+
+      await setSchoolLogo(trx, first);
+      await setSchoolLogo(trx, second);
+      // O logotipo anterior, já sem referência, pode ser apagado por quem o enviou.
+      await deleteUnreferencedImage(trx, { imageId: first, userId: admin.id });
+      expect(await exists(first)).toBe(false);
+      expect(await exists(second)).toBe(true);
+
+      // Remover o logotipo (nulo) libera o atual, que o expurgo apaga.
+      await setSchoolLogo(trx, null);
+      expect(await findOrphanImageIds(trx)).toContain(second);
+      await deleteOrphanImages(trx, { limit: 10_000 });
+      expect(await exists(second)).toBe(false);
+    });
   });
 });

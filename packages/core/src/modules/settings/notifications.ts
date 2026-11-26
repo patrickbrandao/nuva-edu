@@ -1,6 +1,7 @@
 import type { Database } from '../../db/database.ts';
 import { validationFailed } from '../../errors/domain-error.ts';
 import { schoolLogoUrl } from '../images/image-url.ts';
+import { assertSchoolLogoImage } from '../images/store.ts';
 import { getSettings, type SettingsReadOptions, setSetting } from './settings.ts';
 
 // Identidade da escola nos e-mails de notificação (spec 024, "E-mail"): o admin edita nome,
@@ -60,8 +61,11 @@ export async function getNotificationBranding(
 /**
  * Grava a marca da escola e devolve o resultado. Nome, logotipo e cor passam por `setSetting`
  * (mesmas validações do `/meta`); o rodapé é conferido aqui. Valor inválido lança
- * `400 validation_failed` com o campo correspondente. Aceita transação; sem ela, abre uma.
- * Depois de confirmar, invalide o leitor com cache do processo (`SettingsReader.invalidate`).
+ * `400 validation_failed` com o campo correspondente. O logotipo, quando informado, precisa ser
+ * uma imagem existente, não oculta e de finalidade `school_logo`: outro valor é
+ * `422 image_purpose_mismatch` e nada é gravado (spec 029; spec 024, "E-mail"). Aceita
+ * transação; sem ela, abre uma. Depois de confirmar, invalide o leitor com cache do processo
+ * (`SettingsReader.invalidate`).
  */
 export async function setNotificationBranding(
   db: Database,
@@ -69,8 +73,11 @@ export async function setNotificationBranding(
 ): Promise<NotificationBranding> {
   const footer = normalizeFooter(input.footer);
   const run = async (trx: Database): Promise<NotificationBranding> => {
+    // Antes de qualquer gravação: logotipo inválido derruba a transação sem deixar nada.
+    const logoImageId =
+      input.logoImageId === null ? null : await assertSchoolLogoImage(trx, input.logoImageId);
     await setSetting(trx, 'school.name', input.schoolName);
-    await setSetting(trx, 'school.logo_image_id', input.logoImageId);
+    await setSetting(trx, 'school.logo_image_id', logoImageId);
     await setSetting(trx, 'school.accent_color', input.accentColor);
     if (footer === null) {
       await trx.deleteFrom('settings').where('key', '=', NOTIFICATION_EMAIL_FOOTER_KEY).execute();

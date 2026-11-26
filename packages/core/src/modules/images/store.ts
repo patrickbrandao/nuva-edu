@@ -4,7 +4,7 @@
 
 import { type Expression, type SqlBool, sql } from 'kysely';
 import type { Database } from '../../db/database.ts';
-import { notFound, rateLimited } from '../../errors/domain-error.ts';
+import { businessRule, notFound, rateLimited } from '../../errors/domain-error.ts';
 import { imagePath, isImageId } from './image-url.ts';
 import { type ImageProcessingLimiter, imageProcessingLimiter } from './limiter.ts';
 import { processImage } from './processing.ts';
@@ -284,9 +284,16 @@ export function imageEtagMatches(ifNoneMatch: string | undefined, etag: string):
 }
 
 /**
- * Condição "a imagem tem referência" (spec 029, "Expurgo"): `profiles.avatar_image_id` e, na
- * Fase 2, a capa de `courses`, `ebooks` e `bundles`. As finalidades novas acrescentam aqui as
- * colunas das tabelas donas.
+ * Chave de `settings` com o logotipo da escola (spec 031, "Configurações da escola"). A
+ * referência não tem chave estrangeira e entra na condição de `isReferenced`.
+ */
+export const SCHOOL_LOGO_SETTING_KEY = 'school.logo_image_id';
+
+/**
+ * Condição "a imagem tem referência" (spec 029, "Expurgo"): `profiles.avatar_image_id`, a capa de
+ * `courses`, `ebooks` e `bundles` e, sem chave estrangeira, `settings` `school.logo_image_id`
+ * (valor JSONB com o UUID em texto). As finalidades novas acrescentam aqui as colunas das tabelas
+ * donas.
  */
 function isReferenced(imageIdColumn: Expression<string>): Expression<SqlBool> {
   return sql<SqlBool>`(
@@ -294,12 +301,47 @@ function isReferenced(imageIdColumn: Expression<string>): Expression<SqlBool> {
     OR EXISTS (SELECT 1 FROM courses WHERE courses.cover_image_id = ${imageIdColumn})
     OR EXISTS (SELECT 1 FROM ebooks WHERE ebooks.cover_image_id = ${imageIdColumn})
     OR EXISTS (SELECT 1 FROM bundles WHERE bundles.cover_image_id = ${imageIdColumn})
+    OR EXISTS (
+      SELECT 1 FROM settings
+      WHERE settings.key = ${sql.val(SCHOOL_LOGO_SETTING_KEY)}
+        AND settings.value = to_jsonb(${imageIdColumn}::text)
+    )
   )`;
 }
 
 /**
+ * Logotipo escolhido na identidade da escola (spec 029, "Fluxo de envio"; spec 024, "E-mail"):
+ * precisa ser uma imagem existente, não oculta e de finalidade `school_logo`. Qualquer outro
+ * valor, inclusive identificador que não é UUID, é `422 image_purpose_mismatch`. Devolve o id
+ * normalizado para `school.logo_image_id`.
+ *
+ * `FOR SHARE` segura a linha até o fim da transação: o `DELETE` da imagem
+ * (`deleteUnreferencedImage`) espera a referência ser gravada e, depois disso, vê a imagem em uso
+ * em vez de apagá-la.
+ */
+export async function assertSchoolLogoImage(db: Database, imageId: string): Promise<string> {
+  const image = isImageId(imageId)
+    ? await db
+        .selectFrom('images')
+        .select('id')
+        .where('id', '=', imageId.toLowerCase())
+        .where('purpose', '=', 'school_logo')
+        .where('hiddenAt', 'is', null)
+        .forShare()
+        .executeTakeFirst()
+    : undefined;
+  if (!image) {
+    throw businessRule(
+      'image_purpose_mismatch',
+      'O logotipo precisa ser uma imagem existente, não oculta e enviada com a finalidade school_logo.',
+    );
+  }
+  return image.id;
+}
+
+/**
  * `DELETE /api/v1/images/{image_id}`: só quem enviou e só sem referência. De outro usuário ou
- * inexistente: `404`; em uso: `409` `image_in_use`.
+ * inexistente: `404`; em uso: `409` `image_in_use`. Aceita transação; sem ela, abre uma.
  */
 export async function deleteUnreferencedImage(
   db: Database,
@@ -309,8 +351,9 @@ export async function deleteUnreferencedImage(
     throw notFound('Imagem não encontrada.');
   }
   const imageId = input.imageId.toLowerCase();
-  await db.transaction().execute(async (trx) => {
-    // FOR UPDATE espera quem esteja gravando uma referência (a chave estrangeira trava a linha).
+  const run = async (trx: Database): Promise<void> => {
+    // FOR UPDATE espera quem esteja gravando uma referência (a chave estrangeira ou o
+    // `FOR SHARE` do logotipo travam a linha).
     const image = await trx
       .selectFrom('images')
       .select('id')
@@ -328,7 +371,12 @@ export async function deleteUnreferencedImage(
       throw imageInUse();
     }
     await trx.deleteFrom('images').where('id', '=', imageId).execute();
-  });
+  };
+  if (db.isTransaction) {
+    await run(db);
+    return;
+  }
+  await db.transaction().execute(run);
 }
 
 export interface OrphanImageOptions {
