@@ -70,3 +70,29 @@ export function auditOf(test: TestApp, targetId: string, action: string) {
     .where('action', '=', action)
     .execute();
 }
+
+const CATALOG_TABLES = ['courses', 'modules', 'lessons', 'ebooks', 'bundles'] as const;
+type CatalogTable = (typeof CATALOG_TABLES)[number];
+
+/**
+ * `version` gravada do item do catálogo de `/api/v1/{tabela}/{id}`, lida do banco; item
+ * inexistente, `1`. É a que o site traria da última resposta.
+ */
+export async function catalogVersion(test: TestApp, url: string): Promise<number> {
+  const [, , , table, id] = url.split('/');
+  if (!CATALOG_TABLES.includes(table as CatalogTable) || id === undefined) {
+    throw new Error(`URL fora do catálogo: ${url}`);
+  }
+  const row = await test.db
+    .selectFrom(table as CatalogTable)
+    .select('version')
+    .where('id', '=', id)
+    .executeTakeFirst();
+  return row?.version ?? 1;
+}
+
+/** `PATCH` de edição do catálogo com a `version` atual do item no corpo. */
+export async function editAs(test: TestApp, options: CallOptions & { payload: object }) {
+  const version = await catalogVersion(test, options.url);
+  return callAs(test, { ...options, method: 'PATCH', payload: { ...options.payload, version } });
+}

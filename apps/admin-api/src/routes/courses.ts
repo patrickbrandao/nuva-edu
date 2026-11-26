@@ -3,6 +3,7 @@ import {
   type AdminCourseDetail,
   type AdminCourseModule,
   type AdminCourseSummary,
+  type AdminEbookRef,
   type AdminLessonDetail,
   type AdminLessonSummary,
   archiveCourse,
@@ -37,7 +38,6 @@ import {
   iso,
   isoOrNull,
   pick,
-  withCurrentVersion,
 } from './catalog-common.ts';
 
 // Cursos, módulos, aulas e links de apoio (spec 009; 008, "Regra do instrutor"). O tratador de
@@ -46,8 +46,9 @@ import {
 // regras do núcleo, que também gravam a negação e a auditoria de cada escrita (spec 028).
 //
 // As regras de escrita devolvem a linha gravada; a resposta é sempre a leitura do editor
-// (`getAdminCourse`, `getAdminModule`, `getAdminLesson`), montada campo a campo: a `version` que o núcleo traz não
-// está nos esquemas `CourseDetail`, `CourseModule` e `LessonDetail` e não sai na resposta.
+// (`getAdminCourse`, `getAdminModule`, `getAdminLesson`), montada campo a campo, com a `version`
+// da edição. A `version` do corpo (obrigatória nos `PATCH`, opcional nas trocas de lista e no
+// dono) vai ao núcleo como veio: diferente da gravada é `409` `version_conflict`, sem gravar.
 
 export interface CourseRoutesOptions {
   db: Database;
@@ -93,12 +94,13 @@ function lessonSummaryBody(lesson: AdminLessonSummary) {
 }
 
 /** `CourseModule` do contrato. */
-function moduleBody(module: Omit<AdminCourseModule, 'version'>) {
+function moduleBody(module: AdminCourseModule) {
   return {
     id: module.id,
     courseId: module.courseId,
     title: module.title,
     position: module.position,
+    version: module.version,
     lessons: module.lessons.map(lessonSummaryBody),
     createdAt: iso(module.createdAt),
     updatedAt: iso(module.updatedAt),
@@ -112,9 +114,16 @@ export function courseDetailBody(course: AdminCourseDetail) {
     description: course.description,
     certificateEnabled: course.certificateEnabled,
     certificateHours: course.certificateHours,
+    version: course.version,
     studentCount: course.studentCount,
     modules: course.modules.map(moduleBody),
+    ebooks: course.ebooks.map(ebookRefBody),
   };
+}
+
+/** `EbookRef` do contrato. */
+function ebookRefBody(ebook: AdminEbookRef) {
+  return { id: ebook.id, slug: ebook.slug, title: ebook.title, status: ebook.status };
 }
 
 /** `LessonDetail` do contrato. */
@@ -132,6 +141,7 @@ export function lessonDetailBody(lesson: AdminLessonDetail) {
     videoProvider: lesson.videoProvider,
     durationSeconds: lesson.durationSeconds,
     position: lesson.position,
+    version: lesson.version,
     links: lesson.links.map((link) => ({
       id: link.id,
       label: link.label,
@@ -139,12 +149,7 @@ export function lessonDetailBody(lesson: AdminLessonDetail) {
       kind: link.kind,
       position: link.position,
     })),
-    ebooks: lesson.ebooks.map((ebook) => ({
-      id: ebook.id,
-      slug: ebook.slug,
-      title: ebook.title,
-      status: ebook.status,
-    })),
+    ebooks: lesson.ebooks.map(ebookRefBody),
     createdAt: iso(lesson.createdAt),
     updatedAt: iso(lesson.updatedAt),
   };
@@ -208,11 +213,8 @@ export function registerCourseRoutes(app: FastifyInstance, options: CourseRoutes
   app.operation('updateCourse', async (request) => {
     const { id } = request.params as IdParams;
     const actor = catalogRequest(request);
-    const fields = pick(request.body as Record<string, unknown>, COURSE_FIELDS);
-    await withCurrentVersion(
-      async () => (await getAdminCourse(db, actor, id)).version,
-      (version) => updateCourse(db, actor, id, { ...fields, version }),
-    );
+    const body = request.body as Record<string, unknown>;
+    await updateCourse(db, actor, id, { ...pick(body, COURSE_FIELDS), version: body.version });
     return courseDetailBody(await getAdminCourse(db, actor, id));
   });
 
@@ -244,8 +246,8 @@ export function registerCourseRoutes(app: FastifyInstance, options: CourseRoutes
   app.operation('setCourseOwner', async (request) => {
     const { id } = request.params as IdParams;
     const actor = catalogRequest(request);
-    const { ownerId } = request.body as { ownerId: string | null };
-    const course = await setCourseOwner(db, actor, id, { ownerId });
+    const { ownerId, version } = request.body as { ownerId: string | null; version?: number };
+    const course = await setCourseOwner(db, actor, id, { ownerId, version });
     return courseDetailBody(await getAdminCourse(db, actor, course.id));
   });
 
@@ -268,11 +270,8 @@ export function registerCourseRoutes(app: FastifyInstance, options: CourseRoutes
   app.operation('updateModule', async (request) => {
     const { id } = request.params as IdParams;
     const actor = catalogRequest(request);
-    const { title } = request.body as { title: string };
-    await withCurrentVersion(
-      async () => (await getAdminModule(db, actor, id)).version,
-      (version) => updateModule(db, actor, id, { title, version }),
-    );
+    const { title, version } = request.body as { title: string; version: number };
+    await updateModule(db, actor, id, { title, version });
     return moduleBody(await getAdminModule(db, actor, id));
   });
 
@@ -312,11 +311,8 @@ export function registerCourseRoutes(app: FastifyInstance, options: CourseRoutes
   app.operation('updateLesson', async (request) => {
     const { id } = request.params as IdParams;
     const actor = catalogRequest(request);
-    const fields = pick(request.body as Record<string, unknown>, LESSON_FIELDS);
-    await withCurrentVersion(
-      async () => (await getAdminLesson(db, actor, id)).version,
-      (version) => updateLesson(db, actor, id, { ...fields, version }),
-    );
+    const body = request.body as Record<string, unknown>;
+    await updateLesson(db, actor, id, { ...pick(body, LESSON_FIELDS), version: body.version });
     return lessonDetailBody(await getAdminLesson(db, actor, id));
   });
 
@@ -330,11 +326,13 @@ export function registerCourseRoutes(app: FastifyInstance, options: CourseRoutes
   app.operation('setLessonLinks', async (request) => {
     const { id } = request.params as IdParams;
     const actor = catalogRequest(request);
-    const { links } = request.body as {
+    const { links, version } = request.body as {
       links: Array<{ label: string; url: string | null; kind: string }>;
+      version?: number;
     };
     await setLessonLinks(db, actor, id, {
       links: links.map((link) => ({ label: link.label, url: link.url, kind: link.kind })),
+      version,
     });
     return lessonDetailBody(await getAdminLesson(db, actor, id));
   });

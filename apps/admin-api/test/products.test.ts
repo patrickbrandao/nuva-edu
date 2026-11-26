@@ -1,7 +1,15 @@
 import { randomUUID } from 'node:crypto';
 import { catalogSlugFromTitle } from '@nuva-edu/core';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { type Actor, auditOf, type CallOptions, callAs, createActor, deniedBy } from './actors.ts';
+import {
+  type Actor,
+  auditOf,
+  type CallOptions,
+  callAs,
+  createActor,
+  deniedBy,
+  editAs,
+} from './actors.ts';
 import { createTestApp, type TestApp } from './helpers.ts';
 
 const test: TestApp = createTestApp();
@@ -22,6 +30,8 @@ beforeAll(async () => {
 });
 
 const call = (options: CallOptions) => callAs(test, options);
+/** `PATCH` com a `version` atual do item (a da última resposta, no site). */
+const edit = (options: CallOptions & { payload: object }) => editAs(test, options);
 
 /** Título único: o slug gerado dele não repete no banco compartilhado. */
 const uniqueTitle = (prefix: string) => `${prefix} ${randomUUID()}`;
@@ -79,6 +89,15 @@ async function recomputes(productId: string): Promise<number> {
 
 const post = (url: string, as: Actor) => call({ method: 'POST', url, as });
 
+/** `PUT /ebooks/{id}/targets`; a `version` é opcional. */
+const put = (ebookId: string, as: Actor, targets: object[], version?: number) =>
+  call({
+    method: 'PUT',
+    url: `/api/v1/ebooks/${ebookId}/targets`,
+    as,
+    payload: version === undefined ? { targets } : { targets, version },
+  });
+
 describe('ebooks: criar, ler e listar', () => {
   it('gerente cria: rascunho, slug gerado do título, com auditoria; o instrutor lê e não cria', async () => {
     const title = uniqueTitle('Guia de Edição');
@@ -111,10 +130,10 @@ describe('ebooks: criar, ler e listar', () => {
       priceCents: null,
       publishedAt: null,
       archivedAt: null,
+      version: 1,
       targets: [],
       studentCount: 0,
     });
-    expect(ebook).not.toHaveProperty('version');
     expect(await auditOf(test, ebook.id, 'ebook.create')).toHaveLength(1);
 
     const read = await call({ method: 'GET', url: `/api/v1/ebooks/${ebook.id}`, as: instructor });
@@ -192,16 +211,24 @@ describe('ebooks: criar, ler e listar', () => {
 });
 
 describe('ebooks: editar, publicar, arquivar e excluir', () => {
-  it('PATCH altera só os campos enviados, sem version no corpo; preço é só do admin', async () => {
+  it('PATCH altera só os campos enviados, com a version; preço é só do admin', async () => {
     const ebook = await newEbook(manager, { summary: 'Antes', pages: 10 });
     const patch = (as: Actor, payload: object) =>
-      call({ method: 'PATCH', url: `/api/v1/ebooks/${ebook.id}`, as, payload });
+      edit({ method: 'PATCH', url: `/api/v1/ebooks/${ebook.id}`, as, payload });
 
-    const renamed = await patch(manager, { title: 'Depois', pages: null });
+    const renamed = await call({
+      method: 'PATCH',
+      url: `/api/v1/ebooks/${ebook.id}`,
+      as: manager,
+      payload: { title: 'Depois', pages: null, version: ebook.version },
+    });
     expect(renamed.statusCode).toBe(200);
-    expect(renamed.json()).toMatchObject({ title: 'Depois', summary: 'Antes', pages: null });
-    expect(renamed.json()).not.toHaveProperty('version');
-    // Duas edições seguidas, sem `version`: a rota lê a versão atual a cada uma.
+    expect(renamed.json()).toMatchObject({
+      title: 'Depois',
+      summary: 'Antes',
+      pages: null,
+      version: ebook.version + 1,
+    });
     expect((await patch(manager, { summary: null })).json()).toMatchObject({ summary: null });
     expect(await auditOf(test, ebook.id, 'ebook.update')).toHaveLength(2);
 
@@ -214,7 +241,7 @@ describe('ebooks: editar, publicar, arquivar e excluir', () => {
 
     expect((await patch(instructor, { title: 'Meu' })).statusCode).toBe(403);
     expect((await patch(manager, {})).statusCode).toBe(400);
-    const missing = await call({
+    const missing = await edit({
       method: 'PATCH',
       url: `/api/v1/ebooks/${randomUUID()}`,
       as: manager,
@@ -230,13 +257,13 @@ describe('ebooks: editar, publicar, arquivar e excluir', () => {
     expect(noFile.statusCode).toBe(422);
     expect(noFile.json()).toMatchObject({ code: 'ebook_file_required' });
 
-    await call({ method: 'PATCH', url, as: manager, payload: { fileUrl: FILE_URL } });
-    await call({ method: 'PATCH', url, as: manager, payload: { accessMode: 'paid' } });
+    await edit({ method: 'PATCH', url, as: manager, payload: { fileUrl: FILE_URL } });
+    await edit({ method: 'PATCH', url, as: manager, payload: { accessMode: 'paid' } });
     const noPrice = await post(`${url}/publish`, manager);
     expect(noPrice.statusCode).toBe(422);
     expect(noPrice.json()).toMatchObject({ code: 'price_required' });
 
-    await call({ method: 'PATCH', url, as: admin, payload: { priceCents: 1000 } });
+    await edit({ method: 'PATCH', url, as: admin, payload: { priceCents: 1000 } });
     const published = await post(`${url}/publish`, manager);
     expect(published.statusCode).toBe(200);
     expect(published.json()).toMatchObject({ status: 'published' });
@@ -301,9 +328,6 @@ describe('ebooks: editar, publicar, arquivar e excluir', () => {
 });
 
 describe('PUT /api/v1/ebooks/{id}/targets', () => {
-  const put = (ebookId: string, as: Actor, targets: object[]) =>
-    call({ method: 'PUT', url: `/api/v1/ebooks/${ebookId}/targets`, as, payload: { targets } });
-
   it('gerente vincula a curso e aula, com o recálculo do curso na fila e a auditoria', async () => {
     const ebook = await newEbook(manager);
     const { course, lesson } = await courseWithLesson(instructor);
@@ -314,7 +338,7 @@ describe('PUT /api/v1/ebooks/{id}/targets', () => {
       { targetType: 'lesson', targetId: lesson.id },
     ]);
     expect(response.statusCode).toBe(200);
-    expect(response.json()).not.toHaveProperty('version');
+    expect(response.json().version).toBe(ebook.version + 1);
     expect(response.json().targets).toEqual([
       { targetType: 'course', targetId: other.id, title: other.title, course: null },
       {
@@ -424,6 +448,175 @@ describe('PUT /api/v1/ebooks/{id}/targets', () => {
   });
 });
 
+describe('PUT e DELETE /api/v1/ebooks/{id}/targets/{targetType}/{targetId}', () => {
+  const link = (method: 'PUT' | 'DELETE', ebookId: string, as: Actor, type: string, id: string) =>
+    call({ method, url: `/api/v1/ebooks/${ebookId}/targets/${type}/${id}`, as });
+
+  it('vincula e desvincula um alvo só, idempotente, sem tocar nos outros vínculos', async () => {
+    const ebook = await newEbook(manager);
+    const kept = await newCourse(manager);
+    const { course, lesson } = await courseWithLesson(instructor);
+    expect(
+      (await put(ebook.id, manager, [{ targetType: 'course', targetId: kept.id }])).statusCode,
+    ).toBe(200);
+    const before = await recomputes(course.id);
+
+    const added = await link('PUT', ebook.id, instructor, 'course', course.id);
+    expect(added.statusCode).toBe(204);
+    expect(added.body).toBe('');
+    expect(await recomputes(course.id)).toBe(before + 1);
+    // De novo: nada grava, nada audita, nada recalcula.
+    expect((await link('PUT', ebook.id, instructor, 'course', course.id)).statusCode).toBe(204);
+    expect(await recomputes(course.id)).toBe(before + 1);
+    expect((await link('PUT', ebook.id, instructor, 'lesson', lesson.id)).statusCode).toBe(204);
+
+    const detail = await call({ method: 'GET', url: `/api/v1/ebooks/${ebook.id}`, as: manager });
+    expect(detail.json().version).toBe(ebook.version + 3);
+    expect(detail.json().targets.map(targetOf)).toEqual(
+      expect.arrayContaining([
+        { targetType: 'course', targetId: kept.id },
+        { targetType: 'course', targetId: course.id },
+        { targetType: 'lesson', targetId: lesson.id },
+      ]),
+    );
+    expect(detail.json().targets).toHaveLength(3);
+    // O curso mostra o ebook vinculado a ele.
+    const courseDetail = await call({
+      method: 'GET',
+      url: `/api/v1/courses/${course.id}`,
+      as: instructor,
+    });
+    expect(courseDetail.json().ebooks).toEqual([
+      { id: ebook.id, slug: ebook.slug, title: ebook.title, status: 'draft' },
+    ]);
+
+    const removed = await link('DELETE', ebook.id, instructor, 'course', course.id);
+    expect(removed.statusCode).toBe(204);
+    expect((await link('DELETE', ebook.id, instructor, 'course', course.id)).statusCode).toBe(204);
+    const audits = await auditOf(test, ebook.id, 'ebook.set_targets');
+    // A troca da lista, dois vínculos acrescentados e um removido; as repetições não gravam.
+    expect(audits).toHaveLength(4);
+    expect(
+      (await call({ method: 'GET', url: `/api/v1/courses/${course.id}`, as: instructor })).json()
+        .ebooks,
+    ).toEqual([]);
+    const after = await call({ method: 'GET', url: `/api/v1/ebooks/${ebook.id}`, as: manager });
+    expect(after.json().targets.map(targetOf)).toEqual(
+      expect.arrayContaining([
+        { targetType: 'course', targetId: kept.id },
+        { targetType: 'lesson', targetId: lesson.id },
+      ]),
+    );
+    expect(after.json().targets).toHaveLength(2);
+  });
+
+  it('alvo alheio ao instrutor: 404; alvo inexistente: 422; tipo bundle: 400; aluno: 403', async () => {
+    const ebook = await newEbook(manager);
+    const theirs = await courseWithLesson(otherInstructor);
+    const bundle = await newBundle(manager);
+    for (const method of ['PUT', 'DELETE'] as const) {
+      for (const [type, id] of [
+        ['course', theirs.course.id],
+        ['lesson', theirs.lesson.id],
+      ] as const) {
+        const refused = await link(method, ebook.id, instructor, type, id);
+        expect(`${method} ${type} ${refused.statusCode}`).toBe(`${method} ${type} 404`);
+      }
+      for (const type of ['course', 'lesson']) {
+        const missing = await link(method, ebook.id, manager, type, randomUUID());
+        expect(`${method} ${type} ${missing.statusCode}`).toBe(`${method} ${type} 422`);
+        expect(missing.json()).toMatchObject({ code: 'catalog_item_not_found' });
+      }
+      expect((await link(method, ebook.id, manager, 'bundle', bundle.id)).statusCode).toBe(400);
+      expect(
+        (await link(method, randomUUID(), manager, 'course', theirs.course.id)).statusCode,
+      ).toBe(404);
+      const student = await createActor(test, 'student');
+      expect((await link(method, ebook.id, student, 'course', theirs.course.id)).statusCode).toBe(
+        403,
+      );
+    }
+    const detail = await call({ method: 'GET', url: `/api/v1/ebooks/${ebook.id}`, as: manager });
+    expect(detail.json()).toMatchObject({ version: ebook.version, targets: [] });
+    expect(await auditOf(test, ebook.id, 'ebook.set_targets')).toHaveLength(0);
+  });
+});
+
+describe('version da edição de ebooks e pacotes: 409 com a antiga, 400 sem ela', () => {
+  it('PATCH de ebook e pacote: version antiga é 409 version_conflict e nada é gravado', async () => {
+    for (const [kind, product] of [
+      ['ebooks', await newEbook(manager)],
+      ['bundles', await newBundle(manager)],
+    ] as const) {
+      const url = `/api/v1/${kind}/${product.id}`;
+      const first = await edit({ method: 'PATCH', url, as: manager, payload: { title: 'Antes' } });
+      expect(first.json().version).toBe(product.version + 1);
+      const stale = await call({
+        method: 'PATCH',
+        url,
+        as: manager,
+        payload: { title: 'Perdida', version: product.version },
+      });
+      expect(`${url} ${stale.statusCode}`).toBe(`${url} 409`);
+      expect(stale.json()).toMatchObject({ code: 'version_conflict' });
+      const noVersion = await call({ method: 'PATCH', url, as: manager, payload: { title: 'X' } });
+      expect(`${url} ${noVersion.statusCode}`).toBe(`${url} 400`);
+      const onlyVersion = await edit({ method: 'PATCH', url, as: manager, payload: {} });
+      expect(`${url} ${onlyVersion.statusCode}`).toBe(`${url} 400`);
+      const read = await call({ method: 'GET', url, as: manager });
+      expect(read.json()).toMatchObject({ title: 'Antes', version: product.version + 1 });
+      const action = kind === 'ebooks' ? 'ebook.update' : 'bundle.update';
+      expect(await auditOf(test, product.id, action)).toHaveLength(1);
+    }
+  });
+
+  it('PUT dos vínculos do ebook e dos itens do pacote: version antiga é 409 sem gravar', async () => {
+    const ebook = await newEbook(manager);
+    const course = await newCourse(manager);
+    const linked = await put(
+      ebook.id,
+      manager,
+      [{ targetType: 'course', targetId: course.id }],
+      ebook.version,
+    );
+    expect(linked.statusCode).toBe(200);
+    const staleTargets = await put(ebook.id, manager, [], ebook.version);
+    expect(staleTargets.statusCode).toBe(409);
+    expect(staleTargets.json()).toMatchObject({ code: 'version_conflict' });
+    const keptTargets = await call({
+      method: 'GET',
+      url: `/api/v1/ebooks/${ebook.id}`,
+      as: manager,
+    });
+    expect(keptTargets.json().targets.map(targetOf)).toEqual([
+      { targetType: 'course', targetId: course.id },
+    ]);
+    expect(await auditOf(test, ebook.id, 'ebook.set_targets')).toHaveLength(1);
+
+    const bundle = await newBundle(manager);
+    const items = (list: object[], version: number) =>
+      call({
+        method: 'PUT',
+        url: `/api/v1/bundles/${bundle.id}/items`,
+        as: manager,
+        payload: { items: list, version },
+      });
+    const filled = await items([{ productType: 'course', productId: course.id }], bundle.version);
+    expect(filled.statusCode).toBe(200);
+    expect(filled.json().version).toBe(bundle.version + 1);
+    const staleItems = await items([], bundle.version);
+    expect(staleItems.statusCode).toBe(409);
+    expect(staleItems.json()).toMatchObject({ code: 'version_conflict' });
+    const keptItems = await call({
+      method: 'GET',
+      url: `/api/v1/bundles/${bundle.id}`,
+      as: manager,
+    });
+    expect(keptItems.json()).toMatchObject({ itemCount: 1, version: bundle.version + 1 });
+    expect(await auditOf(test, bundle.id, 'bundle.set_items')).toHaveLength(1);
+  });
+});
+
 const targetOf = (target: { targetType: string; targetId: string }) => ({
   targetType: target.targetType,
   targetId: target.targetId,
@@ -450,11 +643,11 @@ describe('pacotes: criar, ler, listar e editar', () => {
       cover: null,
       priceCents: null,
       itemCount: 0,
+      version: 1,
       items: [],
       itemsPriceCents: 0,
       studentCount: 0,
     });
-    expect(bundle).not.toHaveProperty('version');
     expect(await auditOf(test, bundle.id, 'bundle.create')).toHaveLength(1);
 
     const read = await call({ method: 'GET', url: `/api/v1/bundles/${bundle.id}`, as: manager });
@@ -489,10 +682,10 @@ describe('pacotes: criar, ler, listar e editar', () => {
     ).toBe(404);
   });
 
-  it('PATCH altera só os campos enviados, sem version no corpo; preço é só do admin', async () => {
+  it('PATCH altera só os campos enviados, com a version; preço é só do admin', async () => {
     const bundle = await newBundle(manager, { summary: 'Antes' });
     const patch = (as: Actor, payload: object) =>
-      call({ method: 'PATCH', url: `/api/v1/bundles/${bundle.id}`, as, payload });
+      edit({ method: 'PATCH', url: `/api/v1/bundles/${bundle.id}`, as, payload });
 
     const renamed = await patch(manager, { title: 'Depois' });
     expect(renamed.statusCode).toBe(200);
@@ -516,8 +709,8 @@ describe('PUT /api/v1/bundles/{id}/items', () => {
     const course = await newCourse(manager);
     const ebook = await newEbook(manager);
     const url = `/api/v1/ebooks/${ebook.id}`;
-    await call({ method: 'PATCH', url, as: manager, payload: { accessMode: 'paid' } });
-    await call({ method: 'PATCH', url, as: admin, payload: { priceCents: 2500 } });
+    await edit({ method: 'PATCH', url, as: manager, payload: { accessMode: 'paid' } });
+    await edit({ method: 'PATCH', url, as: admin, payload: { priceCents: 2500 } });
     await grant('bundle', bundle.id);
 
     const response = await put(bundle.id, manager, [
@@ -525,7 +718,7 @@ describe('PUT /api/v1/bundles/{id}/items', () => {
       { productType: 'course', productId: course.id },
     ]);
     expect(response.statusCode).toBe(200);
-    expect(response.json()).not.toHaveProperty('version');
+    expect(response.json().version).toBe(bundle.version + 1);
     expect(response.json()).toMatchObject({ itemCount: 2, itemsPriceCents: 2500, studentCount: 1 });
     expect(response.json().items).toEqual([
       {
@@ -571,7 +764,7 @@ describe('PUT /api/v1/bundles/{id}/items', () => {
     expect(await recomputes(bundle.id)).toBe(2);
   });
 
-  it('pacote contendo pacote: 422; item inexistente: 422; repetido e fora do contrato: 400', async () => {
+  it('id de pacote como curso ou ebook e item inexistente: 422; pacote, repetido e fora do contrato: 400', async () => {
     const bundle = await newBundle(manager);
     const inner = await newBundle(manager);
     const course = await newCourse(manager);
@@ -677,11 +870,9 @@ describe('respostas conferem com o contrato', () => {
   it('nenhuma chamada deste arquivo gerou resposta fora do esquema', () => {
     const errors = test.lines.filter((line) => line.level === 'error');
     expect(errors).toEqual([]);
-    // Status que a rota devolve e o contrato ainda não declara (tarefa 660, do arquiteto): o
-    // cliente recebe o erro certo e a base só avisa. Qualquer outro aviso é divergência nova.
     const undeclared = test.lines
       .filter((line) => String(line.msg ?? '').includes('contrato não declara'))
       .map((line) => `${line.operation} ${line.status}`);
-    expect([...new Set(undeclared)]).toEqual(['setEbookTargets 422']);
+    expect(undeclared).toEqual([]);
   });
 });

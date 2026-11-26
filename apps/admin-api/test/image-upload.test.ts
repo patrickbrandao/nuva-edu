@@ -109,7 +109,7 @@ describe('POST /api/v1/images (product_cover)', () => {
       method: 'PATCH',
       url: `/api/v1/courses/${course.json().id}`,
       as: instructor,
-      payload: { coverImageId: null },
+      payload: { coverImageId: null, version: course.json().version },
     });
     expect(cleared.statusCode).toBe(200);
     expect(cleared.json().cover).toBeNull();

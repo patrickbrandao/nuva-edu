@@ -1,7 +1,16 @@
 import { randomUUID } from 'node:crypto';
 import { catalogSlugFromTitle } from '@nuva-edu/core';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { type Actor, auditOf, type CallOptions, callAs, createActor, deniedBy } from './actors.ts';
+import {
+  type Actor,
+  auditOf,
+  type CallOptions,
+  callAs,
+  catalogVersion,
+  createActor,
+  deniedBy,
+  editAs,
+} from './actors.ts';
 import { createTestApp, type TestApp } from './helpers.ts';
 
 const test: TestApp = createTestApp();
@@ -22,6 +31,8 @@ beforeAll(async () => {
 });
 
 const call = (options: CallOptions) => callAs(test, options);
+/** `PATCH` com a `version` atual do item (a da última resposta, no site). */
+const edit = (options: CallOptions & { payload: object }) => editAs(test, options);
 
 /** Título único: o slug gerado dele não repete no banco compartilhado. */
 const uniqueTitle = (prefix = 'Curso') => `${prefix} ${randomUUID()}`;
@@ -79,7 +90,7 @@ async function publishableCourse(as: Actor, extra: object = {}) {
     as.role === 'instructor' ? await openCourseOf(as, extra) : await newCourse(as, extra);
   const module = await newModule(as, course.id);
   const lesson = await newLesson(as, module.id);
-  const published = await call({
+  const published = await edit({
     method: 'PATCH',
     url: `/api/v1/lessons/${lesson.id}`,
     as,
@@ -117,8 +128,9 @@ describe('POST e GET /api/v1/courses', () => {
       lessonCount: 0,
       studentCount: 0,
       modules: [],
+      ebooks: [],
+      version: 1,
     });
-    expect(course).not.toHaveProperty('version');
     expect(await auditOf(test, course.id, 'course.create')).toHaveLength(1);
 
     const read = await call({ method: 'GET', url: `/api/v1/courses/${course.id}`, as: instructor });
@@ -254,13 +266,18 @@ describe('POST e GET /api/v1/courses', () => {
 });
 
 describe('PATCH /api/v1/courses/{id} e a regra do instrutor', () => {
-  it('altera só os campos enviados, sem version no corpo, e grava a auditoria', async () => {
+  it('altera só os campos enviados, com a version da última resposta, e grava a auditoria', async () => {
     const course = await newCourse(instructor, { summary: 'Antes' });
     const response = await call({
       method: 'PATCH',
       url: `/api/v1/courses/${course.id}`,
       as: instructor,
-      payload: { title: 'Título novo', certificateEnabled: false, certificateHours: 12 },
+      payload: {
+        title: 'Título novo',
+        certificateEnabled: false,
+        certificateHours: 12,
+        version: course.version,
+      },
     });
     expect(response.statusCode).toBe(200);
     expect(response.json()).toMatchObject({
@@ -270,15 +287,16 @@ describe('PATCH /api/v1/courses/{id} e a regra do instrutor', () => {
       slug: course.slug,
       certificateEnabled: false,
       certificateHours: 12,
+      version: course.version + 1,
     });
     expect(await auditOf(test, course.id, 'course.update')).toHaveLength(1);
 
-    // Duas edições seguidas: a rota lê a versão atual a cada uma.
+    // A edição seguinte leva a `version` da resposta anterior.
     const again = await call({
       method: 'PATCH',
       url: `/api/v1/courses/${course.id}`,
       as: instructor,
-      payload: { summary: null },
+      payload: { summary: null, version: response.json().version },
     });
     expect(again.statusCode).toBe(200);
     expect(again.json()).toMatchObject({ title: 'Título novo', summary: null });
@@ -288,7 +306,11 @@ describe('PATCH /api/v1/courses/{id} e a regra do instrutor', () => {
     const { course, module, lesson } = await publishableCourse(otherInstructor);
     const attempts: Array<Pick<CallOptions, 'method' | 'url' | 'payload'>> = [
       { method: 'GET', url: `/api/v1/courses/${course.id}` },
-      { method: 'PATCH', url: `/api/v1/courses/${course.id}`, payload: { title: 'Meu' } },
+      {
+        method: 'PATCH',
+        url: `/api/v1/courses/${course.id}`,
+        payload: { title: 'Meu', version: course.version },
+      },
       { method: 'DELETE', url: `/api/v1/courses/${course.id}` },
       { method: 'POST', url: `/api/v1/courses/${course.id}/publish` },
       { method: 'POST', url: `/api/v1/courses/${course.id}/unpublish` },
@@ -300,7 +322,11 @@ describe('PATCH /api/v1/courses/{id} e a regra do instrutor', () => {
         url: `/api/v1/courses/${course.id}/modules/order`,
         payload: { moduleIds: [module.id] },
       },
-      { method: 'PATCH', url: `/api/v1/modules/${module.id}`, payload: { title: 'M' } },
+      {
+        method: 'PATCH',
+        url: `/api/v1/modules/${module.id}`,
+        payload: { title: 'M', version: module.version },
+      },
       { method: 'DELETE', url: `/api/v1/modules/${module.id}` },
       { method: 'POST', url: `/api/v1/modules/${module.id}/lessons`, payload: { title: 'A' } },
       {
@@ -309,7 +335,14 @@ describe('PATCH /api/v1/courses/{id} e a regra do instrutor', () => {
         payload: { lessonIds: [lesson.id] },
       },
       { method: 'GET', url: `/api/v1/lessons/${lesson.id}` },
-      { method: 'PATCH', url: `/api/v1/lessons/${lesson.id}`, payload: { title: 'A' } },
+      {
+        method: 'PATCH',
+        url: `/api/v1/lessons/${lesson.id}`,
+        payload: {
+          title: 'A',
+          version: await catalogVersion(test, `/api/v1/lessons/${lesson.id}`),
+        },
+      },
       { method: 'DELETE', url: `/api/v1/lessons/${lesson.id}` },
       { method: 'PUT', url: `/api/v1/lessons/${lesson.id}/links`, payload: { links: [] } },
     ];
@@ -329,7 +362,7 @@ describe('PATCH /api/v1/courses/{id} e a regra do instrutor', () => {
     const owner = await createActor(test, 'instructor');
     const course = await newCourse(owner);
     expect(course).toMatchObject({ accessMode: 'private', priceCents: null });
-    const access = await call({
+    const access = await edit({
       method: 'PATCH',
       url: `/api/v1/courses/${course.id}`,
       as: owner,
@@ -341,7 +374,7 @@ describe('PATCH /api/v1/courses/{id} e a regra do instrutor', () => {
 
     // A permissão do campo vem antes da regra do valor: em curso `open`, que não tem preço,
     // o instrutor que envia `priceCents` recebe 403; o admin, que tem a permissão, 422.
-    const opened = await call({
+    const opened = await edit({
       method: 'PATCH',
       url: `/api/v1/courses/${course.id}`,
       as: manager,
@@ -349,7 +382,7 @@ describe('PATCH /api/v1/courses/{id} e a regra do instrutor', () => {
     });
     expect(opened.statusCode).toBe(200);
     expect(opened.json()).toMatchObject({ accessMode: 'open' });
-    const ownerOpenPrice = await call({
+    const ownerOpenPrice = await edit({
       method: 'PATCH',
       url: `/api/v1/courses/${course.id}`,
       as: owner,
@@ -368,7 +401,7 @@ describe('PATCH /api/v1/courses/{id} e a regra do instrutor', () => {
     expect(createPrice.statusCode).toBe(403);
     expect(createPrice.json()).toMatchObject({ code: 'permission_denied' });
     expect(await deniedBy(test, owner.id)).toHaveLength(3);
-    const openPrice = await call({
+    const openPrice = await edit({
       method: 'PATCH',
       url: `/api/v1/courses/${course.id}`,
       as: admin,
@@ -378,7 +411,7 @@ describe('PATCH /api/v1/courses/{id} e a regra do instrutor', () => {
     expect(openPrice.json()).toMatchObject({ code: 'price_not_allowed' });
 
     // O gerente define o modo, mas não o preço; o admin, os dois.
-    const managerAccess = await call({
+    const managerAccess = await edit({
       method: 'PATCH',
       url: `/api/v1/courses/${course.id}`,
       as: manager,
@@ -386,7 +419,7 @@ describe('PATCH /api/v1/courses/{id} e a regra do instrutor', () => {
     });
     expect(managerAccess.statusCode).toBe(200);
     expect(managerAccess.json()).toMatchObject({ accessMode: 'paid', accessDays: 365 });
-    const price = await call({
+    const price = await edit({
       method: 'PATCH',
       url: `/api/v1/courses/${course.id}`,
       as: owner,
@@ -396,21 +429,21 @@ describe('PATCH /api/v1/courses/{id} e a regra do instrutor', () => {
     expect(price.json()).toMatchObject({ code: 'permission_denied' });
     expect(await deniedBy(test, owner.id)).toHaveLength(4);
     // O título segue editável pelo dono.
-    const title = await call({
+    const title = await edit({
       method: 'PATCH',
       url: `/api/v1/courses/${course.id}`,
       as: owner,
       payload: { title: 'Outro título', priceCents: null },
     });
     expect(title.statusCode).toBe(200);
-    const managerPrice = await call({
+    const managerPrice = await edit({
       method: 'PATCH',
       url: `/api/v1/courses/${course.id}`,
       as: manager,
       payload: { priceCents: 9900 },
     });
     expect(managerPrice.statusCode).toBe(403);
-    const adminPrice = await call({
+    const adminPrice = await edit({
       method: 'PATCH',
       url: `/api/v1/courses/${course.id}`,
       as: admin,
@@ -422,7 +455,7 @@ describe('PATCH /api/v1/courses/{id} e a regra do instrutor', () => {
 
   it('capa que não existe: 422 cover_image_invalid; curso inexistente: 404', async () => {
     const course = await newCourse(manager);
-    const cover = await call({
+    const cover = await edit({
       method: 'PATCH',
       url: `/api/v1/courses/${course.id}`,
       as: manager,
@@ -431,7 +464,7 @@ describe('PATCH /api/v1/courses/{id} e a regra do instrutor', () => {
     expect(cover.statusCode).toBe(422);
     expect(cover.json()).toMatchObject({ code: 'cover_image_invalid' });
 
-    const missing = await call({
+    const missing = await edit({
       method: 'PATCH',
       url: `/api/v1/courses/${randomUUID()}`,
       as: manager,
@@ -454,7 +487,7 @@ describe('publicação, pedido de publicação, arquivo e dono', () => {
 
     const module = await newModule(instructor, course.id);
     const lesson = await newLesson(instructor, module.id, { durationSeconds: 600 });
-    await call({
+    await edit({
       method: 'PATCH',
       url: `/api/v1/lessons/${lesson.id}`,
       as: instructor,
@@ -485,7 +518,7 @@ describe('publicação, pedido de publicação, arquivo e dono', () => {
 
   it('curso pago: o instrutor não publica (403) e pede a publicação; sem preço: 422', async () => {
     const { course } = await publishableCourse(instructor);
-    const paid = await call({
+    const paid = await edit({
       method: 'PATCH',
       url: `/api/v1/courses/${course.id}`,
       as: manager,
@@ -675,13 +708,13 @@ describe('módulos', () => {
       courseId: course.id,
       title: 'Primeiro',
       position: 0,
+      version: 1,
       lessons: [],
     });
-    expect(first).not.toHaveProperty('version');
     const second = await newModule(instructor, course.id, 'Segundo');
     await newLesson(instructor, second.id, { title: 'Aula do segundo' });
 
-    const renamed = await call({
+    const renamed = await edit({
       method: 'PATCH',
       url: `/api/v1/modules/${second.id}`,
       as: instructor,
@@ -694,14 +727,15 @@ describe('módulos', () => {
       lessons: [{ title: 'Aula do segundo', status: 'draft' }],
     });
     expect(await auditOf(test, second.id, 'module.update')).toHaveLength(1);
-    // De novo, sem `version` no corpo.
+    // De novo, com a `version` da resposta anterior.
     const renamedAgain = await call({
       method: 'PATCH',
       url: `/api/v1/modules/${second.id}`,
       as: instructor,
-      payload: { title: 'Segundo' },
+      payload: { title: 'Segundo', version: renamed.json().version },
     });
     expect(renamedAgain.statusCode).toBe(200);
+    expect(renamedAgain.json().version).toBe(renamed.json().version + 1);
 
     const reordered = await call({
       method: 'PUT',
@@ -743,7 +777,11 @@ describe('módulos', () => {
     expect(detail.json().modules.map((item: { id: string }) => item.id)).toEqual([second.id]);
 
     for (const attempt of [
-      { method: 'PATCH', url: `/api/v1/modules/${randomUUID()}`, payload: { title: 'X' } },
+      {
+        method: 'PATCH',
+        url: `/api/v1/modules/${randomUUID()}`,
+        payload: { title: 'X', version: 1 },
+      },
       { method: 'DELETE', url: `/api/v1/modules/${randomUUID()}` },
     ] as const) {
       expect((await call({ ...attempt, as: manager })).statusCode).toBe(404);
@@ -772,10 +810,10 @@ describe('aulas e links de apoio', () => {
       videoProvider: 'youtube',
       durationSeconds: 300,
       position: 0,
+      version: 1,
       links: [],
       ebooks: [],
     });
-    expect(created).not.toHaveProperty('version');
     expect(await auditOf(test, created.id, 'lesson.create')).toHaveLength(1);
 
     const read = await call({
@@ -786,7 +824,7 @@ describe('aulas e links de apoio', () => {
     expect(read.statusCode).toBe(200);
     expect(read.json()).toEqual(created);
 
-    const updated = await call({
+    const updated = await edit({
       method: 'PATCH',
       url: `/api/v1/lessons/${created.id}`,
       as: instructor,
@@ -811,7 +849,7 @@ describe('aulas e links de apoio', () => {
       durationSeconds: 0,
     });
 
-    const sample = await call({
+    const sample = await edit({
       method: 'PATCH',
       url: `/api/v1/lessons/${created.id}`,
       as: manager,
@@ -853,7 +891,7 @@ describe('aulas e links de apoio', () => {
       });
     }
     const lesson = await newLesson(instructor, module.id);
-    const patched = await call({
+    const patched = await edit({
       method: 'PATCH',
       url: `/api/v1/lessons/${lesson.id}`,
       as: instructor,
@@ -872,7 +910,7 @@ describe('aulas e links de apoio', () => {
     expect(course).toMatchObject({ accessMode: 'private' });
     const module = await newModule(instructor, course.id);
     const lesson = await newLesson(instructor, module.id);
-    const response = await call({
+    const response = await edit({
       method: 'PATCH',
       url: `/api/v1/lessons/${lesson.id}`,
       as: instructor,
@@ -945,7 +983,7 @@ describe('aulas e links de apoio', () => {
       courseId: course.id,
       lessons: [{ id: two.id, moduleId: second.id, position: 0 }],
     });
-    expect(movedIn.json()).not.toHaveProperty('version');
+    expect(movedIn.json().version).toEqual(expect.any(Number));
     const source = await call({
       method: 'GET',
       url: `/api/v1/courses/${course.id}`,
@@ -1059,6 +1097,108 @@ describe('aulas e links de apoio', () => {
     });
     expect(cleared.statusCode).toBe(200);
     expect(cleared.json().links).toEqual([]);
+  });
+});
+
+describe('version da edição: 409 com a antiga, 400 sem ela', () => {
+  it('curso, módulo e aula: version antiga é 409 version_conflict e nada é gravado', async () => {
+    const course = await newCourse(manager);
+    const module = await newModule(manager, course.id, 'Original');
+    const lesson = await newLesson(manager, module.id, { title: 'Original' });
+    const items = [
+      { url: `/api/v1/courses/${course.id}`, stale: course.version, audit: 'course.update' },
+      { url: `/api/v1/modules/${module.id}`, stale: module.version, audit: 'module.update' },
+      { url: `/api/v1/lessons/${lesson.id}`, stale: lesson.version, audit: 'lesson.update' },
+    ];
+    for (const item of items) {
+      // Outra pessoa grava antes: a `version` que se tinha fica antiga.
+      const first = await edit({
+        method: 'PATCH',
+        url: item.url,
+        as: manager,
+        payload: { title: 'Antes' },
+      });
+      expect(first.statusCode).toBe(200);
+      expect(first.json().version).toBe(item.stale + 1);
+
+      const stale = await call({
+        method: 'PATCH',
+        url: item.url,
+        as: manager,
+        payload: { title: 'Perdida', version: item.stale },
+      });
+      expect(`${item.url} ${stale.statusCode}`).toBe(`${item.url} 409`);
+      expect(stale.json()).toMatchObject({ code: 'version_conflict' });
+      expect(await auditOf(test, item.url.split('/')[4] as string, item.audit)).toHaveLength(1);
+
+      const noVersion = await call({
+        method: 'PATCH',
+        url: item.url,
+        as: manager,
+        payload: { title: 'Sem versão' },
+      });
+      expect(`${item.url} ${noVersion.statusCode}`).toBe(`${item.url} 400`);
+      expect(noVersion.json()).toMatchObject({ code: 'validation_failed' });
+    }
+    const detail = await call({ method: 'GET', url: `/api/v1/courses/${course.id}`, as: manager });
+    expect(detail.json()).toMatchObject({
+      title: 'Antes',
+      version: course.version + 1,
+      modules: [{ id: module.id, title: 'Antes', lessons: [{ id: lesson.id, title: 'Antes' }] }],
+    });
+
+    // Corpo só com a `version`: 400 no curso e na aula (ao menos um campo além dela).
+    for (const url of [`/api/v1/courses/${course.id}`, `/api/v1/lessons/${lesson.id}`]) {
+      const empty = await edit({ method: 'PATCH', url, as: manager, payload: {} });
+      expect(`${url} ${empty.statusCode}`).toBe(`${url} 400`);
+    }
+  });
+
+  it('links da aula e dono do curso: version opcional; enviada e antiga, 409 sem gravar', async () => {
+    const course = await newCourse(manager);
+    const module = await newModule(manager, course.id);
+    const lesson = await newLesson(manager, module.id);
+    const links = [{ label: 'Slides', url: 'https://exemplo.com/slides.pdf', kind: 'file' }];
+
+    const fresh = await call({
+      method: 'PUT',
+      url: `/api/v1/lessons/${lesson.id}/links`,
+      as: manager,
+      payload: { links, version: lesson.version },
+    });
+    expect(fresh.statusCode).toBe(200);
+    expect(fresh.json().version).toBe(lesson.version + 1);
+    const staleLinks = await call({
+      method: 'PUT',
+      url: `/api/v1/lessons/${lesson.id}/links`,
+      as: manager,
+      payload: { links: [], version: lesson.version },
+    });
+    expect(staleLinks.statusCode).toBe(409);
+    expect(staleLinks.json()).toMatchObject({ code: 'version_conflict' });
+    expect(await auditOf(test, lesson.id, 'lesson.set_links')).toHaveLength(1);
+    const read = await call({ method: 'GET', url: `/api/v1/lessons/${lesson.id}`, as: manager });
+    expect(read.json().links).toHaveLength(1);
+
+    const owner = await call({
+      method: 'PATCH',
+      url: `/api/v1/courses/${course.id}/owner`,
+      as: manager,
+      payload: { ownerId: instructor.id, version: course.version },
+    });
+    expect(owner.statusCode).toBe(200);
+    expect(owner.json().version).toBe(course.version + 1);
+    const staleOwner = await call({
+      method: 'PATCH',
+      url: `/api/v1/courses/${course.id}/owner`,
+      as: manager,
+      payload: { ownerId: otherInstructor.id, version: course.version },
+    });
+    expect(staleOwner.statusCode).toBe(409);
+    expect(staleOwner.json()).toMatchObject({ code: 'version_conflict' });
+    expect(await auditOf(test, course.id, 'course.set_owner')).toHaveLength(1);
+    const kept = await call({ method: 'GET', url: `/api/v1/courses/${course.id}`, as: manager });
+    expect(kept.json()).toMatchObject({ owner: { id: instructor.id } });
   });
 });
 

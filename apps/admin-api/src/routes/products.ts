@@ -13,15 +13,16 @@ import {
   deleteEbook,
   getAdminBundle,
   getAdminEbook,
+  linkEbookTarget,
   listAdminBundles,
   listAdminEbooks,
-  listCatalogEbookTargets,
   publishBundle,
   publishEbook,
   setBundleItems,
   setEbookTargets,
   unarchiveBundle,
   unarchiveEbook,
+  unlinkEbookTarget,
   unpublishBundle,
   unpublishEbook,
   updateBundle,
@@ -34,7 +35,6 @@ import {
   iso,
   isoOrNull,
   pick,
-  withCurrentVersion,
 } from './catalog-common.ts';
 
 // Ebooks, pacotes, itens do pacote e vínculos do ebook (spec 009; 008, "Regra do instrutor"). O
@@ -44,8 +44,8 @@ import {
 // muda de composição (spec 010).
 //
 // Como nas rotas de curso, a resposta é sempre a leitura do editor (`getAdminEbook`,
-// `getAdminBundle`), montada campo a campo: a `version` do núcleo não está em `EbookDetail` nem
-// em `BundleDetail` e não sai na resposta.
+// `getAdminBundle`), montada campo a campo, com a `version` da edição; a `version` do corpo
+// (obrigatória nos `PATCH`, opcional nas trocas de lista) vai ao núcleo como veio.
 
 export interface ProductRoutesOptions {
   db: Database;
@@ -91,6 +91,7 @@ function ebookDetailBody(ebook: AdminEbookDetail) {
     ...ebookSummaryBody(ebook),
     description: ebook.description,
     fileUrl: ebook.fileUrl,
+    version: ebook.version,
     targets: ebook.targets.map((target) => ({
       targetType: target.targetType,
       targetId: target.targetId,
@@ -118,6 +119,7 @@ function bundleDetailBody(bundle: AdminBundleDetail) {
   return {
     ...bundleSummaryBody(bundle),
     description: bundle.description,
+    version: bundle.version,
     items: bundle.items.map((item) => ({
       productType: item.productType,
       productId: item.productId,
@@ -194,11 +196,8 @@ export function registerProductRoutes(app: FastifyInstance, options: ProductRout
   app.operation('updateEbook', async (request) => {
     const { id } = request.params as IdParams;
     const actor = catalogRequest(request);
-    const fields = pick(request.body as Record<string, unknown>, EBOOK_FIELDS);
-    await withCurrentVersion(
-      async () => (await getAdminEbook(db, actor, id)).version,
-      (version) => updateEbook(db, actor, id, { ...fields, version }),
-    );
+    const body = request.body as Record<string, unknown>;
+    await updateEbook(db, actor, id, { ...pick(body, EBOOK_FIELDS), version: body.version });
     return ebookDetailBody(await getAdminEbook(db, actor, id));
   });
 
@@ -225,36 +224,38 @@ export function registerProductRoutes(app: FastifyInstance, options: ProductRout
   }
 
   // `PUT /api/v1/ebooks/{id}/targets` (`ebook.link`): troca os vínculos a cursos e aulas. O
-  // contrato só aceita `course` e `lesson` e diz que o vínculo a pacote não é tocado por aqui;
-  // `setEbookTargets` do núcleo troca a lista inteira de quem alcança tudo (gerente e admin),
-  // pacotes inclusive. Por isso a rota repete na lista os vínculos `bundle` que o ebook já tem
-  // (o instrutor não os alcança: nada é repetido). A `version` lida antes amarra a leitura à
-  // gravação: vínculo mudado no meio é `version_conflict`, e a rota lê de novo e repete.
+  // núcleo preserva os vínculos `bundle` (que aparecem em `targets` da resposta) e, para o
+  // instrutor, os de cursos alheios; `bundle` no corpo já é `400` pelo contrato.
   app.operation('setEbookTargets', async (request) => {
     const { id } = request.params as IdParams;
     const actor = catalogRequest(request);
-    const { targets } = request.body as {
+    const { targets, version } = request.body as {
       targets: Array<{ targetType: 'course' | 'lesson'; targetId: string }>;
+      version?: number;
     };
-    await withCurrentVersion(
-      async () => (await getAdminEbook(db, actor, id)).version,
-      async (version) => {
-        const current = await listCatalogEbookTargets(db, actor, id.toLowerCase());
-        const kept = current.filter((target) => target.targetType === 'bundle');
-        return setEbookTargets(db, actor, id, {
-          targets: [
-            ...targets.map((target) => ({
-              targetType: target.targetType,
-              targetId: target.targetId,
-            })),
-            ...kept,
-          ],
-          version,
-        });
-      },
-    );
+    await setEbookTargets(db, actor, id, {
+      targets: targets.map((target) => ({
+        targetType: target.targetType,
+        targetId: target.targetId,
+      })),
+      version,
+    });
     return ebookDetailBody(await getAdminEbook(db, actor, id));
   });
+
+  // `PUT` e `DELETE /api/v1/ebooks/{id}/targets/{targetType}/{targetId}` (`ebook.link`): um
+  // vínculo só, sem `version` e sem tocar nos outros; idempotentes (`204` em ambos os casos).
+  const ebookLinkChanges = { linkEbookTarget, unlinkEbookTarget } as const;
+  for (const [operationId, change] of Object.entries(ebookLinkChanges)) {
+    app.operation(operationId, async (request, reply) => {
+      const { id, targetType, targetId } = request.params as IdParams & {
+        targetType: 'course' | 'lesson';
+        targetId: string;
+      };
+      await change(db, catalogRequest(request), id, { targetType, targetId });
+      return reply.status(204).send();
+    });
+  }
 
   // Pacotes.
 
@@ -286,11 +287,8 @@ export function registerProductRoutes(app: FastifyInstance, options: ProductRout
   app.operation('updateBundle', async (request) => {
     const { id } = request.params as IdParams;
     const actor = catalogRequest(request);
-    const fields = pick(request.body as Record<string, unknown>, BUNDLE_FIELDS);
-    await withCurrentVersion(
-      async () => (await getAdminBundle(db, actor, id)).version,
-      (version) => updateBundle(db, actor, id, { ...fields, version }),
-    );
+    const body = request.body as Record<string, unknown>;
+    await updateBundle(db, actor, id, { ...pick(body, BUNDLE_FIELDS), version: body.version });
     return bundleDetailBody(await getAdminBundle(db, actor, id));
   });
 
@@ -315,17 +313,19 @@ export function registerProductRoutes(app: FastifyInstance, options: ProductRout
     });
   }
 
-  // `PUT /api/v1/bundles/{id}/items`: troca a lista inteira, na ordem enviada. A `version` é
-  // opcional no núcleo e o contrato não a traz: vale a última gravação. Mudança de composição
-  // enfileira o `entitlement.recompute` do pacote na transação da escrita.
+  // `PUT /api/v1/bundles/{id}/items`: troca a lista inteira, na ordem enviada. `version`
+  // opcional: enviada e diferente da gravada, `409`. Mudança de composição enfileira o
+  // `entitlement.recompute` do pacote na transação da escrita.
   app.operation('setBundleItems', async (request) => {
     const { id } = request.params as IdParams;
     const actor = catalogRequest(request);
-    const { items } = request.body as {
+    const { items, version } = request.body as {
       items: Array<{ productType: string; productId: string }>;
+      version?: number;
     };
     await setBundleItems(db, actor, id, {
       items: items.map((item) => ({ productType: item.productType, productId: item.productId })),
+      version,
     });
     return bundleDetailBody(await getAdminBundle(db, actor, id));
   });

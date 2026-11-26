@@ -1,9 +1,9 @@
 import type { FastifyRequest } from '@nuva-edu/api-kit';
-import { type CatalogCover, type CatalogRequest, isDomainError } from '@nuva-edu/core';
+import type { CatalogCover, CatalogRequest } from '@nuva-edu/core';
 import { managementRequest } from '../session.ts';
 
-// O que as rotas do catálogo (spec 009) compartilham: quem pede, datas, capa e a `version` da
-// edição.
+// O que as rotas do catálogo (spec 009) compartilham: quem pede, datas, capa e os campos do
+// corpo.
 
 export const iso = (value: Date): string => value.toISOString();
 export const isoOrNull = (value: Date | null): string | null =>
@@ -35,28 +35,4 @@ export function pick<K extends string>(
     }
   }
   return out;
-}
-
-const VERSION_ATTEMPTS = 3;
-
-/**
- * Edição cujo corpo, no contrato, não traz `version`: a rota lê a versão atual e a entrega ao
- * núcleo, que a exige. Vale a última gravação; se outra gravação entrar entre a leitura e a
- * escrita (`409` `version_conflict`), lê de novo e repete, até três vezes.
- */
-export async function withCurrentVersion<T>(
-  readVersion: () => Promise<number>,
-  write: (version: number) => Promise<T>,
-): Promise<T> {
-  for (let attempt = 1; ; attempt += 1) {
-    const version = await readVersion();
-    try {
-      return await write(version);
-    } catch (error) {
-      const conflict = isDomainError(error) && error.code === 'version_conflict';
-      if (!conflict || attempt >= VERSION_ATTEMPTS) {
-        throw error;
-      }
-    }
-  }
 }
