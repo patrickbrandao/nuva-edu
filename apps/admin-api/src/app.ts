@@ -36,8 +36,10 @@ import { registerImageRoutes } from './routes/images.ts';
 import { registerNotificationRoutes } from './routes/notifications.ts';
 import { registerOAuthRoutes } from './routes/oauth.ts';
 import { registerOpsJobRoutes } from './routes/ops-jobs.ts';
+import { registerPaymentRoutes } from './routes/payments.ts';
 import { registerProductRoutes } from './routes/products.ts';
 import { registerProgressRoutes } from './routes/progress.ts';
+import { registerSalesRoutes } from './routes/sales.ts';
 import { registerStreamRoutes } from './routes/stream.ts';
 import { registerSubscriptionRoutes } from './routes/subscriptions.ts';
 import { registerTermsRoutes } from './routes/terms.ts';
@@ -271,6 +273,10 @@ export function buildAdminApp(options: AdminAppOptions): FastifyInstance {
   registerProgressRoutes(app, { db });
   // Planos e assinaturas (spec 012): planos, consulta, cancelamento e reembolso de cobrança.
   registerSubscriptionRoutes(app, { db, provider: paymentProvider });
+  // Vendas e checkout (spec 011): pedidos, detalhe, CSV, reembolsos e cupons.
+  registerSalesRoutes(app, { db });
+  // Pagamentos e webhooks (spec 013): cobranças, avisos com falha/rejeitados e estado do provedor.
+  registerPaymentRoutes(app, { db, config });
   // Certificados (spec 015): gestão, templates, exemplos e signatário.
   registerCertificateRoutes(app, { db, config, settings });
   // Central da equipe e preferências por grupo (spec 024).
