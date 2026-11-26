@@ -105,6 +105,7 @@ export {
   type EbookFieldsInput,
   type EbookTargetInput,
   type EbookTargetType,
+  type EbookWritableTargetType,
   findCatalogBundle,
   findCatalogEbook,
   linkEbookTarget,

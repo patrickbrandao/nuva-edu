@@ -17,6 +17,7 @@ import {
   DomainError,
   findCatalogEbook,
   getAdminCourse,
+  getAdminEbook,
   getAdminLesson,
   getAdminModule,
   linkEbookTarget,
@@ -799,5 +800,115 @@ describe('vínculo de um ebook só (linkEbookTarget e unlinkEbookTarget)', () =>
     const total = await sql<{ n: number }>`
       SELECT count(*)::int AS n FROM product_ebooks WHERE ebook_id = ${ebook.id}`.execute(db);
     expect(total.rows[0]?.n).toBe(CATALOG_LIMITS.targetsPerEbook);
+  });
+});
+
+describe('troca dos vínculos do ebook (setEbookTargets) preserva o vínculo bundle', () => {
+  /** Grava o vínculo `bundle` direto na tabela: ele só nasce de carga (spec 009). */
+  async function linkBundleDirectly(ebookId: string, bundleId: string): Promise<void> {
+    await db
+      .insertInto('productEbooks')
+      .values({ ebookId, targetType: 'bundle', targetId: bundleId })
+      .execute();
+  }
+
+  async function countLinks(ebookId: string): Promise<number> {
+    const total = await sql<{ n: number }>`
+      SELECT count(*)::int AS n FROM product_ebooks WHERE ebook_id = ${ebookId}`.execute(db);
+    return total.rows[0]?.n ?? 0;
+  }
+
+  it('gerente troca por []: o vínculo bundle fica, sem recálculo do pacote nem contagem', async () => {
+    const { course, lesson } = await courseWithLesson(instructor);
+    const bundle = await createBundle(db, manager, { slug: slug(), title: 'Pacote' });
+    const ebook = await createEbook(db, manager, { slug: slug(), title: 'Com pacote' });
+    await linkBundleDirectly(ebook.id, bundle.id);
+    const kept = await setEbookTargets(db, manager, ebook.id, {
+      targets: [
+        { targetType: 'course', targetId: course.id },
+        { targetType: 'lesson', targetId: lesson.id },
+      ],
+    });
+    expect(kept.map((target) => target.targetType).sort()).toEqual(['bundle', 'course', 'lesson']);
+    const version = (await ebookVersion(ebook.id)) as number;
+
+    const left = await setEbookTargets(db, manager, ebook.id, { targets: [] });
+    expect(left).toEqual([{ targetType: 'bundle', targetId: bundle.id }]);
+    expect(await recomputesFor(bundle.id)).toBe(0);
+    expect(await ebookVersion(ebook.id)).toBe(version + 1);
+    expect((await auditOf(ebook.id)).at(-1)).toEqual({
+      action: 'ebook.set_targets',
+      outcome: 'ok',
+      details: { added: 0, removed: 2 },
+    });
+    // Repetir [] não muda nada: o bundle não conta como removido.
+    await setEbookTargets(db, admin, ebook.id, { targets: [], version: version + 1 });
+    expect(await ebookVersion(ebook.id)).toBe(version + 1);
+    expect((await auditOf(ebook.id)).at(-1)?.details).toEqual({ added: 0, removed: 0 });
+    expect(await recomputesFor(bundle.id)).toBe(0);
+    // A leitura continua mostrando o vínculo a quem alcança tudo.
+    expect((await getAdminEbook(db, manager, ebook.id)).targets).toEqual([
+      expect.objectContaining({ targetType: 'bundle', targetId: bundle.id, title: 'Pacote' }),
+    ]);
+    expect(await listCatalogEbookTargets(db, instructor, ebook.id)).toEqual([]);
+  });
+
+  it('o limite conta os vínculos que a troca não alcança (bundle e cursos alheios)', async () => {
+    const mine = await courseWithLesson(instructor);
+    const other = await courseWithLesson(otherInstructor);
+    const bundle = await createBundle(db, manager, { slug: slug(), title: 'Pacote' });
+    const max = CATALOG_LIMITS.targetsPerEbook;
+
+    // Gerente: 1 bundle + 500 aulas pedidas passa do limite, mesmo com a lista no máximo.
+    const lessons = await sql<{ id: string }>`
+      INSERT INTO lessons (module_id, title, position)
+      SELECT ${other.module.id}::uuid, 'Aula ' || n, 1000 + n FROM generate_series(1, ${max}) AS n
+      RETURNING id`.execute(db);
+    const full = await createEbook(db, manager, { slug: slug(), title: 'Cheio' });
+    await linkBundleDirectly(full.id, bundle.id);
+    const all = lessons.rows.map((row) => ({ targetType: 'lesson', targetId: row.id }));
+    const error = await expectError(
+      setEbookTargets(db, manager, full.id, { targets: all }),
+      422,
+      'catalog_limit_exceeded',
+    );
+    expect(error.extras).toEqual({ limit: 'targetsPerEbook', max });
+    expect(await countLinks(full.id)).toBe(1);
+    await setEbookTargets(db, manager, full.id, { targets: all.slice(1) });
+    expect(await countLinks(full.id)).toBe(max);
+    // Trocar uma aula por outra mantém o total no limite.
+    await setEbookTargets(db, manager, full.id, { targets: all.slice(0, -1) });
+    expect(await countLinks(full.id)).toBe(max);
+
+    // Instrutor: os vínculos alheios ocupam vagas que ele não vê.
+    const ebook = await createEbook(db, manager, { slug: slug(), title: 'Do instrutor' });
+    await linkBundleDirectly(ebook.id, bundle.id);
+    await setEbookTargets(db, manager, ebook.id, { targets: all.slice(0, max - 2) });
+    expect(await countLinks(ebook.id)).toBe(max - 1);
+    await setEbookTargets(db, instructor, ebook.id, {
+      targets: [{ targetType: 'course', targetId: mine.course.id }],
+    });
+    await expectError(
+      setEbookTargets(db, instructor, ebook.id, {
+        targets: [
+          { targetType: 'course', targetId: mine.course.id },
+          { targetType: 'lesson', targetId: mine.lesson.id },
+        ],
+      }),
+      422,
+      'catalog_limit_exceeded',
+    );
+    await expectError(
+      linkEbookTarget(db, instructor, ebook.id, { targetType: 'lesson', targetId: mine.lesson.id }),
+      422,
+      'catalog_limit_exceeded',
+    );
+    // Trocar o curso pela aula cabe; a lista vazia libera a vaga.
+    await setEbookTargets(db, instructor, ebook.id, {
+      targets: [{ targetType: 'lesson', targetId: mine.lesson.id }],
+    });
+    expect(await countLinks(ebook.id)).toBe(max);
+    expect(await setEbookTargets(db, instructor, ebook.id, { targets: [] })).toEqual([]);
+    expect(await countLinks(ebook.id)).toBe(max - 1);
   });
 });

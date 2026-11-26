@@ -15,7 +15,6 @@ import {
   assertVersion,
   auditCommercialChange,
   bundlesContaining,
-  CatalogDenied,
   type CatalogRequest,
   type CommercialInput,
   type CommercialState,
@@ -91,8 +90,16 @@ export interface CatalogBundleItem {
   position: number;
 }
 
+/** Os tipos de vínculo do ebook que a leitura devolve (o `bundle` só nasce de carga direta). */
 export const EBOOK_TARGET_TYPES = ['course', 'lesson', 'bundle'] as const;
 export type EbookTargetType = (typeof EBOOK_TARGET_TYPES)[number];
+
+/**
+ * Os alvos que a escrita de vínculos do ebook aceita (`setEbookTargets`, `linkEbookTarget`): só
+ * curso e aula. O vínculo `bundle` existente é preservado, nunca criado nem removido por elas.
+ */
+export const EBOOK_SINGLE_TARGET_TYPES = ['course', 'lesson'] as const;
+export type EbookWritableTargetType = (typeof EBOOK_SINGLE_TARGET_TYPES)[number];
 
 export interface CatalogEbookTarget {
   targetType: EbookTargetType;
@@ -708,8 +715,9 @@ async function existingIds(
 
 /**
  * `PUT /bundles/{id}/items` (`ebook_bundle.manage`): troca a lista inteira de itens (cursos e
- * ebooks), na ordem dada. Pacote dentro de pacote: `422` `bundle_in_bundle`; item inexistente:
- * `422` `catalog_item_not_found` com o índice; item repetido: `400`. Até 200 itens. Pacote
+ * ebooks), na ordem dada. `productType` fora de `course` | `ebook` (inclusive `bundle`) e item
+ * repetido: `400` `validation_failed`; item inexistente: `422` `catalog_item_not_found` com o
+ * índice. Até 200 itens. Pacote
  * publicado não fica vazio (`422` `bundle_has_no_items`). Mudança de composição enfileira
  * `entitlement.recompute` do pacote na mesma transação (só a ordem, não). `version` opcional é
  * o do pacote, que avança. Grava `bundle.set_items`.
@@ -728,9 +736,6 @@ export async function setBundleItems(
     const items = list.map((item, index) => {
       const path = `body.items[${index}]`;
       const value = readObject(errors, item, path);
-      if (value.productType === 'bundle') {
-        throw catalogRule('bundle_in_bundle', 'Pacote não contém outro pacote.');
-      }
       return {
         productType: readEnum(errors, value.productType, `${path}.productType`, [
           'course',
@@ -880,12 +885,17 @@ function reachable(request: CatalogRequest, target: ResolvedTarget | undefined):
 }
 
 /**
- * `PUT /ebooks/{id}/targets` (`ebook.link`): troca os vínculos do ebook a cursos, aulas e
- * pacotes. O instrutor só alcança os próprios cursos e aulas: alvo alheio ou inexistente é
- * `404`, vínculo a pacote é `403` (`ebook_bundle.manage`), e os vínculos que ele não alcança
- * ficam como estão. Para gerente e admin, alvo inexistente é `422` `catalog_item_not_found`.
- * Cada vínculo que entra ou sai enfileira `entitlement.recompute` do pai (aula: o curso dela).
- * Grava `ebook.set_targets`. Devolve os vínculos que quem pede alcança.
+ * `PUT /ebooks/{id}/targets` (`ebook.link`): troca os vínculos do ebook a cursos e aulas (spec
+ * 009, "Vínculo `bundle` no admin"). `targetType` fora de `course` | `lesson` (inclusive
+ * `bundle`) é `400` `validation_failed`, para qualquer papel. Os vínculos `bundle` do ebook nunca
+ * são removidos, criados nem contados em `added`/`removed`, e não recalculam o pacote. Gerente e
+ * admin trocam o conjunto dos vínculos `course` e `lesson`, e alvo inexistente é `422`
+ * `catalog_item_not_found`; o instrutor troca só os dos próprios cursos e aulas (alvo alheio ou
+ * inexistente é `404`), e os que ele não alcança ficam como estão. O limite `targetsPerEbook`
+ * conta todos os vínculos do ebook depois da gravação, inclusive os que a troca não alcança:
+ * acima dele, `422` `catalog_limit_exceeded`. Cada vínculo que entra ou sai enfileira
+ * `entitlement.recompute` do pai (aula: o curso dela). Grava `ebook.set_targets`. Devolve os
+ * vínculos que quem pede alcança.
  */
 export async function setEbookTargets(
   db: Database,
@@ -906,7 +916,12 @@ export async function setEbookTargets(
       const path = `body.targets[${index}]`;
       const value = readObject(errors, item, path);
       return {
-        targetType: readEnum(errors, value.targetType, `${path}.targetType`, EBOOK_TARGET_TYPES),
+        targetType: readEnum(
+          errors,
+          value.targetType,
+          `${path}.targetType`,
+          EBOOK_SINGLE_TARGET_TYPES,
+        ),
         targetId: readId(errors, value.targetId, `${path}.targetId`),
       };
     });
@@ -915,17 +930,10 @@ export async function setEbookTargets(
       if (keys.indexOf(key) !== index) errors.add(`body.targets[${index}]`, 'Vínculo repetido.');
     });
     errors.throwIfAny();
-    if (wanted.length > CATALOG_LIMITS.targetsPerEbook) {
-      throw catalogLimitExceeded(
-        'targetsPerEbook',
-        `O ebook aceita até ${CATALOG_LIMITS.targetsPerEbook} vínculos.`,
-      );
-    }
+    // Tudo o que se pede fica vinculado: acima do limite já não cabe, sem olhar o banco.
+    if (wanted.length > CATALOG_LIMITS.targetsPerEbook) throw targetsLimitExceeded();
     assertVersion(ebook.version, version);
     const fullScope = permissionScope(request.actor, 'ebook.link') === 'all';
-    if (!fullScope && wanted.some((item) => item.targetType === 'bundle')) {
-      throw new CatalogDenied('ebook_bundle.manage', 'ebook.set_targets', target);
-    }
     const resolvedWanted = await resolveTargets(trx, wanted);
     const missing = wanted.flatMap((item, index) =>
       resolvedWanted.has(`${item.targetType}:${item.targetId}`)
@@ -947,8 +955,9 @@ export async function setEbookTargets(
       .where('ebookId', '=', id)
       .execute()) as CatalogEbookTarget[];
     const resolvedCurrent = await resolveTargets(trx, current);
+    // O vínculo `bundle` nunca entra no conjunto gerido (`reachable` já o tira do instrutor).
     const managed = fullScope
-      ? current
+      ? current.filter((item) => item.targetType !== 'bundle')
       : current.filter((item) =>
           reachable(request, resolvedCurrent.get(`${item.targetType}:${item.targetId}`)),
         );
@@ -958,6 +967,9 @@ export async function setEbookTargets(
     );
     const currentKeys = new Set(current.map((item) => `${item.targetType}:${item.targetId}`));
     const added = wanted.filter((item) => !currentKeys.has(`${item.targetType}:${item.targetId}`));
+    if (current.length - removed.length + added.length > CATALOG_LIMITS.targetsPerEbook) {
+      throw targetsLimitExceeded();
+    }
     for (const item of removed) {
       await trx
         .deleteFrom('productEbooks')
@@ -995,8 +1007,13 @@ export async function setEbookTargets(
   });
 }
 
-/** Os alvos que os vínculos de um ebook só aceitam (o pacote usa `bundle_items`). */
-export const EBOOK_SINGLE_TARGET_TYPES = ['course', 'lesson'] as const;
+/** O ebook passaria de `targetsPerEbook` vínculos, contados todos os tipos. */
+function targetsLimitExceeded() {
+  return catalogLimitExceeded(
+    'targetsPerEbook',
+    `O ebook aceita até ${CATALOG_LIMITS.targetsPerEbook} vínculos.`,
+  );
+}
 
 export interface EbookTargetInput {
   /** `course` ou `lesson`. */
@@ -1094,12 +1111,7 @@ export async function linkEbookTarget(
       .select(sql<number>`count(*)::int`.as('count'))
       .where('ebookId', '=', id)
       .executeTakeFirstOrThrow();
-    if (total.count >= CATALOG_LIMITS.targetsPerEbook) {
-      throw catalogLimitExceeded(
-        'targetsPerEbook',
-        `O ebook aceita até ${CATALOG_LIMITS.targetsPerEbook} vínculos.`,
-      );
-    }
+    if (total.count >= CATALOG_LIMITS.targetsPerEbook) throw targetsLimitExceeded();
     await trx
       .insertInto('productEbooks')
       .values({ ebookId: id, ...link })

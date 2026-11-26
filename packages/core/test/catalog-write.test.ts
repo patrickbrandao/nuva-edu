@@ -877,13 +877,20 @@ describe('ebooks', () => {
       404,
       'not_found',
     );
-    await expectError(
-      setEbookTargets(db, instructor, ebook.id, {
-        targets: [{ targetType: 'bundle', targetId: bundle.id }],
-      }),
-      403,
-      'permission_denied',
-    );
+    // `bundle` na lista é 400 para qualquer papel (spec 009, "Vínculo `bundle` no admin").
+    for (const actor of [instructor, manager, admin]) {
+      const invalid = await expectError(
+        setEbookTargets(db, actor, ebook.id, {
+          targets: [
+            { targetType: 'course', targetId: mine.course.id },
+            { targetType: 'bundle', targetId: bundle.id },
+          ],
+        }),
+        400,
+        'validation_failed',
+      );
+      expect(invalid.errors?.map((item) => item.path)).toEqual(['body.targets[1].targetType']);
+    }
     await expectError(
       setEbookTargets(db, manager, ebook.id, {
         targets: [{ targetType: 'lesson', targetId: randomUUID() }],
@@ -903,16 +910,16 @@ describe('ebooks', () => {
     );
     // O instrutor limpa os dele; o vínculo alheio fica.
     expect(await setEbookTargets(db, instructor, ebook.id, { targets: [] })).toEqual([]);
+    // O vínculo `bundle` só nasce de carga direta e a troca nunca o alcança.
+    await db
+      .insertInto('productEbooks')
+      .values({ ebookId: ebook.id, targetType: 'bundle', targetId: bundle.id })
+      .execute();
     const left = await setEbookTargets(db, manager, ebook.id, {
-      targets: [
-        { targetType: 'course', targetId: other.course.id },
-        { targetType: 'bundle', targetId: bundle.id },
-      ],
+      targets: [{ targetType: 'course', targetId: other.course.id }],
     });
     expect(left.map((target) => target.targetType).sort()).toEqual(['bundle', 'course']);
-    expect(await jobsFor('entitlement.recompute', 'productId', bundle.id)).toBeGreaterThanOrEqual(
-      1,
-    );
+    expect(await jobsFor('entitlement.recompute', 'productId', bundle.id)).toBe(0);
     await expectError(
       setEbookTargets(db, student, ebook.id, { targets: [] }),
       403,
@@ -931,19 +938,34 @@ describe('ebooks', () => {
 });
 
 describe('pacotes', () => {
-  it('itens: pacote em pacote é 422, alvo inexistente é 422, mudança recalcula', async () => {
+  it('itens: pacote em pacote é 400, alvo inexistente é 422, mudança recalcula', async () => {
     const course = await createCourse(db, manager, { slug: slug(), title: 'C' });
     const ebook = await createEbook(db, manager, { slug: slug(), title: 'E' });
     const bundle = await createBundle(db, manager, { slug: slug(), title: 'Pacote' });
     const other = await createBundle(db, manager, { slug: slug(), title: 'Outro' });
     await expectError(publishBundle(db, manager, bundle.id), 422, 'bundle_has_no_items');
-    await expectError(
+    const nested = await expectError(
       setBundleItems(db, manager, bundle.id, {
-        items: [{ productType: 'bundle', productId: other.id }],
+        items: [
+          { productType: 'course', productId: course.id },
+          { productType: 'bundle', productId: other.id },
+        ],
       }),
-      422,
-      'bundle_in_bundle',
+      400,
+      'validation_failed',
     );
+    expect(nested.errors?.map((item) => item.path)).toEqual(['body.items[1].productType']);
+    // Id de pacote enviado como curso ou ebook não existe na tabela do tipo.
+    for (const productType of ['course', 'ebook']) {
+      const disguised = await expectError(
+        setBundleItems(db, manager, bundle.id, {
+          items: [{ productType, productId: other.id }],
+        }),
+        422,
+        'catalog_item_not_found',
+      );
+      expect(disguised.errors?.[0]?.path).toBe('body.items[0].productId');
+    }
     const missing = await expectError(
       setBundleItems(db, manager, bundle.id, {
         items: [
