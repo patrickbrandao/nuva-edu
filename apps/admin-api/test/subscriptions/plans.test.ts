@@ -204,11 +204,10 @@ describe('criação e leitura de planos', () => {
       as: admin,
       payload: planPayload({ includesPrivate: true }),
     });
-    // O núcleo recusa `includesPrivate` sem `includesAll` como campo inválido (`400`), não como
-    // `422 plan_invalid` do texto do contrato: divergência relatada à tarefa do núcleo.
-    expect(privateOnly.statusCode).toBe(400);
+    expect(privateOnly.statusCode).toBe(422);
+    expect(privateOnly.json()).toMatchObject({ code: 'plan_invalid' });
     expect(privateOnly.json().errors).toContainEqual(
-      expect.objectContaining({ path: 'includesPrivate' }),
+      expect.objectContaining({ path: 'body.includesPrivate' }),
     );
 
     const allWithItems = await call({
@@ -221,9 +220,7 @@ describe('criação e leitura de planos', () => {
       }),
     });
     expect(allWithItems.statusCode).toBe(422);
-    // O núcleo classifica a lista no plano "tudo" como `plan_item_invalid`; o texto do contrato
-    // cita `plan_invalid`. Os dois são `422`; a divergência de `code` vai no relatório.
-    expect(allWithItems.json()).toMatchObject({ code: 'plan_item_invalid' });
+    expect(allWithItems.json()).toMatchObject({ code: 'plan_invalid' });
 
     const ghostItem = await call({
       method: 'POST',
@@ -348,7 +345,7 @@ describe('edição do plano e itens', () => {
       payload: { items: [{ productType: 'course', productId: course.id }] },
     });
     expect(allItems.statusCode).toBe(422);
-    expect(allItems.json()).toMatchObject({ code: 'plan_item_invalid' });
+    expect(allItems.json()).toMatchObject({ code: 'plan_invalid' });
 
     const repeated = await call({
       method: 'PUT',
@@ -361,10 +358,16 @@ describe('edição do plano e itens', () => {
         ],
       },
     });
-    // O núcleo deduplica a lista repetida em vez de recusá-la (`422 plan_item_invalid` no texto
-    // do contrato): divergência relatada à tarefa do núcleo.
-    expect(repeated.statusCode).toBe(200);
-    expect(repeated.json().items).toHaveLength(1);
+    expect(repeated.statusCode).toBe(422);
+    expect(repeated.json()).toMatchObject({ code: 'plan_item_invalid' });
+
+    const unchanged = await call({
+      method: 'GET',
+      url: `/api/v1/plans/${plan.id}`,
+      as: admin,
+    });
+    expect(unchanged.statusCode).toBe(200);
+    expect(unchanged.json().items).toEqual([]);
 
     const ghost = await call({
       method: 'PUT',
