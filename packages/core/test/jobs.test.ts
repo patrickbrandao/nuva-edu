@@ -146,6 +146,12 @@ describe('registro de tipos', () => {
       'certificate.render': noop,
       'certificate.backfill': noop,
       'certificate.preview': noop,
+      'payment.webhook': noop,
+      'order.fulfill': noop,
+      'refund.execute': noop,
+      'payment.reconcile_orders': noop,
+      'payment.reconcile_subscriptions': noop,
+      'payment.reconcile_refunds': noop,
     };
     // @ts-expect-error falta o manipulador de `image.cleanup`.
     const withoutCleanup: JobHandlers = { ...base, 'suspension.expire': noop };
@@ -175,28 +181,12 @@ describe('registro de tipos', () => {
 });
 
 describe('tipos da Fase 2 (tarefa 405)', () => {
-  it('só a central de notificações e os tipos de vendas aguardam manipulador no worker', () => {
-    expectTypeOf<PendingHandlerJobType>().toEqualTypeOf<
-      | 'notify'
-      | 'payment.webhook'
-      | 'order.fulfill'
-      | 'refund.execute'
-      | 'payment.reconcile_orders'
-      | 'payment.reconcile_subscriptions'
-      | 'payment.reconcile_refunds'
-    >();
+  it('só a central de notificações aguarda manipulador no worker', () => {
+    expectTypeOf<PendingHandlerJobType>().toEqualTypeOf<'notify'>();
     expectTypeOf<
       (typeof PENDING_HANDLER_JOB_TYPES)[number]
     >().toEqualTypeOf<PendingHandlerJobType>();
-    expect([...PENDING_HANDLER_JOB_TYPES].sort()).toEqual([
-      'notify',
-      'order.fulfill',
-      'payment.reconcile_orders',
-      'payment.reconcile_refunds',
-      'payment.reconcile_subscriptions',
-      'payment.webhook',
-      'refund.execute',
-    ]);
+    expect(PENDING_HANDLER_JOB_TYPES).toEqual(['notify']);
   });
 
   it('os tipos de vendas e pagamentos seguem a tabela da spec 005', () => {

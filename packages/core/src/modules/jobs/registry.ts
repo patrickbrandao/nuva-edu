@@ -126,27 +126,13 @@ export const JOB_DEFINITIONS: { readonly [T in JobType]: JobDefinition } = {
  * Tipos já no registro cujo manipulador ainda não existe no worker (chega em outra tarefa).
  * `JobHandlers` exige o manipulador dos demais; estes são opcionais. Tipo novo cujo manipulador
  * venha depois entra aqui até ele chegar; tarefa sem manipulador falha como erro comum e segue
- * as tentativas do tipo. Hoje a central de notificações (`notify`) e os tipos de vendas e
- * pagamentos, que o worker recebe nas tarefas 542 e 557.
+ * as tentativas do tipo. A central de notificações (`notify`) aguarda a tarefa 586.
  */
-export type PendingHandlerJobType =
-  | 'notify'
-  | 'payment.webhook'
-  | 'order.fulfill'
-  | 'refund.execute'
-  | 'payment.reconcile_orders'
-  | 'payment.reconcile_subscriptions'
-  | 'payment.reconcile_refunds';
+export type PendingHandlerJobType = 'notify';
 
 /** Os mesmos tipos de `PendingHandlerJobType`, para conferência em tempo de execução. */
 export const PENDING_HANDLER_JOB_TYPES = [
   'notify',
-  'payment.webhook',
-  'order.fulfill',
-  'refund.execute',
-  'payment.reconcile_orders',
-  'payment.reconcile_subscriptions',
-  'payment.reconcile_refunds',
 ] as const satisfies readonly PendingHandlerJobType[];
 
 export const JOB_STATUSES = ['queued', 'running', 'done', 'failed'] as const;
