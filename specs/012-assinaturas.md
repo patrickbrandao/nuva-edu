@@ -57,6 +57,7 @@ Regras:
 - Trocar de plano no MVP = cancelar o atual e assinar outro; não há cálculo proporcional.
 - Assinatura `pending` sem pagamento em 30 min vira `expired`.
 - O aluno pode cancelar a própria assinatura `pending` antes dos 30 min: ela vira `expired` e o mesmo plano pode ser assinado de novo.
+- `POST /api/v1/subscriptions` aceita `Idempotency-Key` ([004](004-classroom-api.md)): repetir com o mesmo plano e cupom em até 24 h devolve a mesma assinatura e o mesmo `checkoutUrl`, sem segunda adesão no provedor; reutilizar a chave com corpo diferente responde `422` (`idempotency_key_reuse`).
 
 ### Ciclo de vida
 

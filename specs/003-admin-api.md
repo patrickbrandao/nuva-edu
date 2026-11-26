@@ -44,7 +44,7 @@ A `admin-api` é o backend do site de administração (`https://<NUVA_ADMIN_HOST
 | Paginação | Por cursor: `?limit=` (padrão 25, máximo 100) e `?cursor=`; resposta `{ items, nextCursor }`, com `nextCursor` nulo na última página. No contrato, o esquema comum `Page` traz só `nextCursor`; cada listagem o compõe com `allOf` e declara `items` (obrigatório, com o esquema dos itens) no próprio membro, para o cliente gerado tipar os itens. |
 | Ordenação e filtro | `?sort=campo` ou `-campo`; filtros como parâmetros nomeados, todos listados no contrato. |
 | Busca | `?q=` com busca textual simples (`ILIKE` com índice trigram) onde o contrato indicar. |
-| Idempotência | `POST` que cria cobrança, estorno ou concessão aceita `Idempotency-Key`; repetição devolve a primeira resposta por 24 h. |
+| Idempotência | `POST` que cria cobrança ou estorno aceita `Idempotency-Key` (8 a 128 caracteres; repetição com o mesmo corpo devolve a primeira resposta por 24 h, e mesma chave com corpo diferente responde `422 idempotency_key_reuse`). A concessão manual (`POST /api/v1/users/{id}/entitlements`) já é idempotente pela chave natural `(user_id, product_type, product_id, source = 'grant')` ([010](010-direitos-de-acesso.md)) e por isso não usa `Idempotency-Key`. |
 | Concorrência | Edição de recurso envia `version` (inteiro); divergência resulta em `409`. |
 | Rastreamento | Toda resposta traz `X-Request-Id`, presente também nos logs. |
 | IP do cliente | Derivado de `X-Forwarded-For` apenas quando o remetente está em `TRUSTED_PROXIES`. |
