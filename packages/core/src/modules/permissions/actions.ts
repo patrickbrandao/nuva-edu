@@ -32,6 +32,7 @@ export const ADMIN_ACTIONS = [
   // Acessos e vendas
   'entitlement.manage',
   'sales.view',
+  'sales.export',
   'order.refund',
   'subscription.cancel',
   'plan.manage',

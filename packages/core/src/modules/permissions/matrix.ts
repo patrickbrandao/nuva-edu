@@ -78,6 +78,8 @@ const ADMIN_MATRIX: Readonly<Record<AdminAction, readonly [Cell, Cell, Cell, Cel
   'announcement.publish': [N, O, A, A],
   'entitlement.manage': [N, N, A, A],
   'sales.view': [N, N, A, A],
+  // Exportação CSV de vendas: só `admin`; o gerente recebe `403` auditado (specs 008 e 011).
+  'sales.export': [N, N, N, A],
   'order.refund': [N, N, N, A],
   'subscription.cancel': [N, N, N, A],
   'plan.manage': [N, N, N, A],

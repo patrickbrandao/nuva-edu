@@ -60,6 +60,7 @@ const ADMIN: Record<string, [Mark, Mark, Mark, Mark]> = {
   'announcement.publish': ['—', '◐', '✓', '✓'],
   'entitlement.manage': ['—', '—', '✓', '✓'],
   'sales.view': ['—', '—', '✓', '✓'],
+  'sales.export': ['—', '—', '—', '✓'],
   'order.refund': ['—', '—', '—', '✓'],
   'subscription.cancel': ['—', '—', '—', '✓'],
   'plan.manage': ['—', '—', '—', '✓'],
@@ -104,10 +105,16 @@ const CLASSROOM: Record<string, [Mark, Mark, Mark, Mark, Mark]> = {
 const userOf = (role: Role, id = `id-${role}`): PermissionUser => ({ id, role });
 
 describe('identificadores das ações', () => {
-  it('são os 45 do admin e os 15 do classroom da spec, sem repetição', () => {
+  it('são os 46 do admin e os 15 do classroom da spec, sem repetição', () => {
     expect([...ADMIN_ACTIONS]).toEqual(Object.keys(ADMIN));
     expect([...CLASSROOM_ACTIONS]).toEqual(Object.keys(CLASSROOM));
-    expect(new Set(PERMISSION_ACTIONS).size).toBe(45 + 15);
+    expect(new Set(PERMISSION_ACTIONS).size).toBe(46 + 15);
+  });
+
+  it('sales.export fica entre sales.view e order.refund (spec 008)', () => {
+    const index = ADMIN_ACTIONS.indexOf('sales.export');
+    expect(ADMIN_ACTIONS[index - 1]).toBe('sales.view');
+    expect(ADMIN_ACTIONS[index + 1]).toBe('order.refund');
   });
 
   it('isPermissionAction reconhece só identificadores da matriz', () => {
@@ -154,6 +161,26 @@ describe('ações da Fase 2', () => {
       true,
     );
     expect(can(userOf('student'), 'certificate.template.edit')).toBe(false);
+  });
+});
+
+describe('exportação de vendas em CSV (specs 008 e 011)', () => {
+  it('só o admin tem sales.export; gerente e instrutor não', () => {
+    expect(ROLES.filter((role) => can(userOf(role), 'sales.export'))).toEqual(['admin']);
+    expect(can(userOf('manager'), 'sales.export')).toBe(false);
+    expect(can(userOf('instructor'), 'sales.export')).toBe(false);
+    expect(can(userOf('admin'), 'sales.export')).toBe(true);
+    expect(can(null, 'sales.export')).toBe(false);
+  });
+
+  it('o gerente recebe 403 na rota, com sales.export fora da lista dele', () => {
+    expect(() => assertCan(userOf('manager'), 'sales.export')).toThrow();
+    expect(permissionsFor('manager', 'admin')).not.toContain('sales.export');
+    expect(permissionsFor('admin', 'admin')).toContain('sales.export');
+  });
+
+  it('sales.view continua de gerente e admin', () => {
+    expect(ROLES.filter((role) => can(userOf(role), 'sales.view'))).toEqual(['manager', 'admin']);
   });
 });
 
