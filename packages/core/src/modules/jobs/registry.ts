@@ -1,4 +1,5 @@
 import type { JsonObject } from '../../db/generated/database.ts';
+import type { NotifyJobPayload } from './notifications.ts';
 
 /**
  * Registro dos tipos de tarefa: nome → formato do payload. O worker e as APIs compartilham este
@@ -18,6 +19,12 @@ export interface JobPayloads {
    * o id da linha: o token do link é criado pelo worker ao montar o e-mail (spec 007).
    */
   'email.send': { outboxId: string };
+  /**
+   * Cria a notificação da central e os e-mails de um destinatário (specs 005 e 024). Enfileirada
+   * só pela função `notify` do núcleo, uma por destinatário; o payload tipado está em
+   * `notifications.ts`. O manipulador chega com o worker da Fase 4 (tarefa 586).
+   */
+  notify: NotifyJobPayload;
   /**
    * Encerra as suspensões com prazo vencido (spec 026), a cada 15 min. Recorrente, sem
    * parâmetros: o manipulador chama `expireSuspensions`.
@@ -79,6 +86,7 @@ export const JOB_DEFINITIONS: { readonly [T in JobType]: JobDefinition } = {
     priority: 0,
     retryDelaysSeconds: EMAIL_SEND_RETRY_DELAYS_SECONDS,
   },
+  notify: { maxAttempts: 5, priority: 0 },
   'suspension.expire': { maxAttempts: 3, priority: 0 },
   'image.cleanup': { maxAttempts: 5, priority: 0 },
   'entitlement.recompute': { maxAttempts: 5, priority: 0 },
@@ -93,12 +101,14 @@ export const JOB_DEFINITIONS: { readonly [T in JobType]: JobDefinition } = {
  * Tipos já no registro cujo manipulador ainda não existe no worker (chega em outra tarefa).
  * `JobHandlers` exige o manipulador dos demais; estes são opcionais. Tipo novo cujo manipulador
  * venha depois entra aqui até ele chegar; tarefa sem manipulador falha como erro comum e segue
- * as tentativas do tipo. Hoje nenhum: o worker tem o manipulador de todos (tarefa 416).
+ * as tentativas do tipo.
  */
-export type PendingHandlerJobType = never;
+export type PendingHandlerJobType = 'notify';
 
 /** Os mesmos tipos de `PendingHandlerJobType`, para conferência em tempo de execução. */
-export const PENDING_HANDLER_JOB_TYPES = [] as const satisfies readonly PendingHandlerJobType[];
+export const PENDING_HANDLER_JOB_TYPES = [
+  'notify',
+] as const satisfies readonly PendingHandlerJobType[];
 
 export const JOB_STATUSES = ['queued', 'running', 'done', 'failed'] as const;
 export type JobStatus = (typeof JOB_STATUSES)[number];

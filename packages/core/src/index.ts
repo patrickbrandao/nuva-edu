@@ -86,6 +86,7 @@ export * from './modules/certificates/index.ts';
 export * from './modules/entitlements/index.ts';
 export * from './modules/images/index.ts';
 export * from './modules/jobs/index.ts';
+export * from './modules/jobs/notifications.ts';
 export * from './modules/learning/index.ts';
 export * from './modules/markdown/index.ts';
 export * from './modules/notes/index.ts';
@@ -94,6 +95,15 @@ export * from './modules/oauth/index.ts';
 export * from './modules/payments/index.ts';
 export * from './modules/permissions/index.ts';
 export * from './modules/privacy/index.ts';
+export {
+  getNotificationBranding,
+  NOTIFICATION_EMAIL_FOOTER_KEY,
+  NOTIFICATION_EMAIL_FOOTER_MAX_LENGTH,
+  type NotificationBranding,
+  type NotificationBrandingInput,
+  type NotificationBrandingOptions,
+  setNotificationBranding,
+} from './modules/settings/notifications.ts';
 export {
   CERTIFICATE_SIGNER_MAX_LENGTH,
   createSettingsReader,
@@ -114,6 +124,7 @@ export {
   SOURCE_CODE_URL_MAX_LENGTH,
   setSetting,
 } from './modules/settings/settings.ts';
+export * from './modules/stream/notifications.ts';
 export {
   isUserEventKind,
   nextUserEventId,

@@ -91,6 +91,7 @@ describe('registro de tipos', () => {
       'entitlement.recompute',
       'example.echo',
       'image.cleanup',
+      'notify',
       'retention.purge',
       'suspension.expire',
     ]);
@@ -98,7 +99,8 @@ describe('registro de tipos', () => {
     expect(isJobType('email.send')).toBe(true);
     expect(isJobType('suspension.expire')).toBe(true);
     expect(isJobType('image.cleanup')).toBe(true);
-    expect(isJobType('notify')).toBe(false);
+    expect(isJobType('notify')).toBe(true);
+    expect(isJobType('notify.unknown')).toBe(false);
     expect(isJobType('toString')).toBe(false);
   });
 
@@ -156,19 +158,23 @@ describe('registro de tipos', () => {
     // @ts-expect-error falta o manipulador de `certificate.preview` (tarefa 416).
     const missingPreview: JobHandlers = withoutPreview;
     const complete: JobHandlers = { ...withoutCleanup, ...withoutExpire };
-    expect(Object.keys(complete).sort()).toEqual(Object.keys(JOB_DEFINITIONS).sort());
+    expect(Object.keys(complete).sort()).toEqual(
+      Object.keys(JOB_DEFINITIONS)
+        .filter((type) => !(PENDING_HANDLER_JOB_TYPES as readonly string[]).includes(type))
+        .sort(),
+    );
     expect(Object.keys(missingPhase2)).not.toContain('course.completed');
     expect(Object.keys(missingPreview)).not.toContain('certificate.preview');
   });
 });
 
 describe('tipos da Fase 2 (tarefa 405)', () => {
-  it('nenhum tipo fica sem manipulador no worker (tarefa 416)', () => {
-    expectTypeOf<PendingHandlerJobType>().toEqualTypeOf<never>();
+  it('só `notify` fica sem manipulador no worker até a tarefa 586', () => {
+    expectTypeOf<PendingHandlerJobType>().toEqualTypeOf<'notify'>();
     expectTypeOf<
       (typeof PENDING_HANDLER_JOB_TYPES)[number]
     >().toEqualTypeOf<PendingHandlerJobType>();
-    expect(PENDING_HANDLER_JOB_TYPES).toEqual([]);
+    expect(PENDING_HANDLER_JOB_TYPES).toEqual(['notify']);
   });
 
   it('seguem as tentativas da tabela da spec 005', () => {
