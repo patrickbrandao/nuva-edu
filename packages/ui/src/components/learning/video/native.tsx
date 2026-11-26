@@ -70,6 +70,7 @@ export function NativeAdapter({
       seek: (seconds) => {
         video.currentTime = seconds;
       },
+      getCurrentTime: () => video.currentTime,
     };
     return () => {
       control.current = null;

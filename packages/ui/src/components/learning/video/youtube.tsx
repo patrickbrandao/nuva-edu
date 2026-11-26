@@ -115,7 +115,10 @@ export function YouTubeAdapter({
         player = new YT.Player(iframe, {
           events: {
             onReady: () => {
-              control.current = { seek: (seconds) => player?.seekTo(seconds, true) };
+              control.current = {
+                seek: (seconds) => player?.seekTo(seconds, true),
+                getCurrentTime: () => player?.getCurrentTime() ?? null,
+              };
             },
             onStateChange: ({ data }) => {
               if (data === YT_PLAYING) {

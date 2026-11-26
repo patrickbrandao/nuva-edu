@@ -108,7 +108,13 @@ export function BunnyAdapter({
         if (s.ready) return;
         s.ready = true;
         for (const name of BUNNY_EVENTS) send('addEventListener', name);
-        control.current = { seek: (seconds) => send('setCurrentTime', seconds) };
+        control.current = {
+          seek: (seconds) => {
+            s.seconds = seconds;
+            send('setCurrentTime', seconds);
+          },
+          getCurrentTime: () => s.seconds ?? null,
+        };
         const methods = Array.isArray(value?.methods) ? value.methods : [];
         if (methods.includes('getDuration')) send('getDuration');
         else resume(undefined);
@@ -173,7 +179,11 @@ export function PandaAdapter({
         if (s.ready) return;
         s.ready = true;
         control.current = {
-          seek: (seconds) => post({ type: 'currentTime', parameter: seconds }),
+          seek: (seconds) => {
+            s.seconds = seconds;
+            post({ type: 'currentTime', parameter: seconds });
+          },
+          getCurrentTime: () => s.seconds ?? null,
         };
         const position = resumePosition(startAt, durationHint);
         if (position > 0) post({ type: 'currentTime', parameter: position });
@@ -187,10 +197,12 @@ export function PandaAdapter({
         return;
       }
       case 'panda_pause':
-        events.pause(num(data.currentTime) ?? s.seconds);
+        s.seconds = num(data.currentTime) ?? s.seconds;
+        events.pause(s.seconds);
         return;
       case 'panda_ended':
-        events.pause(num(data.currentTime) ?? s.seconds);
+        s.seconds = num(data.currentTime) ?? s.seconds;
+        events.pause(s.seconds);
         events.ended();
         return;
       case 'panda_error':

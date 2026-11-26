@@ -27,23 +27,34 @@ export function VimeoAdapter({
     host.appendChild(iframe);
     let disposed = false;
     let player: import('@vimeo/player').default | null = null;
+    // a leitura da biblioteca é assíncrona: guarda a última posição dos eventos
+    let seconds: number | null = null;
+    const remember = (value: number | undefined) => {
+      if (typeof value === 'number' && Number.isFinite(value)) seconds = value;
+      return value;
+    };
 
     import('@vimeo/player')
       .then(({ default: Player }) => {
         if (disposed) return;
         const vimeo = new Player(iframe);
         player = vimeo;
-        vimeo.on('timeupdate', (data) => events.time(data.seconds));
-        vimeo.on('pause', (data) => events.pause(data.seconds));
+        vimeo.on('timeupdate', (data) => {
+          remember(data.seconds);
+          events.time(data.seconds);
+        });
+        vimeo.on('pause', (data) => events.pause(remember(data.seconds)));
         vimeo.on('ended', (data) => {
-          events.pause(data.seconds);
+          events.pause(remember(data.seconds));
           events.ended();
         });
         vimeo.on('error', (error) => events.error(`vimeo-${error?.name ?? 'error'}`));
         control.current = {
-          seek: (seconds) => {
-            vimeo.setCurrentTime(seconds).catch(() => {});
+          seek: (target) => {
+            seconds = target;
+            vimeo.setCurrentTime(target).catch(() => {});
           },
+          getCurrentTime: () => seconds,
         };
         return vimeo
           .ready()

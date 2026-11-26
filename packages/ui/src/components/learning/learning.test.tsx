@@ -317,6 +317,7 @@ describe('VideoPlayer: youtube', () => {
     await flush();
     const yt = FakeYouTube.last;
     if (!yt) throw new Error('player não criado');
+    expect(ref.current?.getCurrentTime()).toBeNull();
     act(() => yt.options.events.onReady?.());
     act(() => yt.options.events.onStateChange?.({ data: 1 }));
     for (let s = 1; s <= 16; s++) {
@@ -326,6 +327,8 @@ describe('VideoPlayer: youtube', () => {
       });
     }
     expect(onTime.mock.calls.map(([s]) => s)).toEqual([15]);
+    yt.time = 16.4;
+    expect(ref.current?.getCurrentTime()).toBe(16.4);
     yt.time = 20;
     act(() => yt.options.events.onStateChange?.({ data: 2 }));
     expect(onTime).toHaveBeenLastCalledWith(20);
@@ -365,6 +368,10 @@ describe('VideoPlayer: vimeo', () => {
     expect(player.element).toBe(frame(container));
     expect(frame(container).src).toBe('https://player.vimeo.com/video/76979871?dnt=1');
     expect(player.setCurrentTime).toHaveBeenCalledWith(120);
+    expect(ref.current?.getCurrentTime()).toBeNull();
+    act(() => player.emit('timeupdate', { seconds: 125.3, duration: 600, percent: 0.2 }));
+    expect(onTime).not.toHaveBeenCalled();
+    expect(ref.current?.getCurrentTime()).toBe(125.3);
     act(() => player.emit('pause', { seconds: 130.5, duration: 600, percent: 0.2 }));
     expect(onTime).toHaveBeenLastCalledWith(130);
     act(() => player.emit('ended', { seconds: 600, duration: 600, percent: 1 }));
@@ -373,6 +380,7 @@ describe('VideoPlayer: vimeo', () => {
     expect(onError).toHaveBeenCalledWith({ provider: 'vimeo', reason: 'vimeo-PrivacyError' });
     ref.current?.seek(10);
     expect(player.setCurrentTime).toHaveBeenLastCalledWith(10);
+    expect(ref.current?.getCurrentTime()).toBe(10);
     unmount();
     expect(player.destroy).toHaveBeenCalled();
   });
@@ -423,7 +431,10 @@ describe('VideoPlayer: bunny por postMessage', () => {
     fromFrame(iframe, bunny('getDuration', 300), BUNNY_ORIGIN);
     expect(sentBunny(post).at(-1)).toMatchObject({ method: 'setCurrentTime', value: 60 });
 
+    expect(ref.current?.getCurrentTime()).toBeNull();
     fromFrame(iframe, bunny('timeupdate', { seconds: 75.2, duration: 300 }), BUNNY_ORIGIN);
+    expect(onTime).not.toHaveBeenCalled();
+    expect(ref.current?.getCurrentTime()).toBe(75.2);
     fromFrame(iframe, bunny('pause'), BUNNY_ORIGIN);
     expect(onTime).toHaveBeenLastCalledWith(75);
     fromFrame(iframe, bunny('ended'), BUNNY_ORIGIN);
@@ -436,6 +447,7 @@ describe('VideoPlayer: bunny por postMessage', () => {
 
     ref.current?.seek(12);
     expect(sentBunny(post).at(-1)).toMatchObject({ method: 'setCurrentTime', value: 12 });
+    expect(ref.current?.getCurrentTime()).toBe(12);
   });
 
   it('ignora mensagens de outra origem ou de outra janela', () => {
@@ -499,15 +511,20 @@ describe('VideoPlayer: panda por postMessage', () => {
     const post = spyPost(iframe);
     fromFrame(iframe, { message: 'panda_ready' }, PANDA_ORIGIN);
     expect(post).toHaveBeenLastCalledWith({ type: 'currentTime', parameter: 30 }, PANDA_ORIGIN);
+    expect(ref.current?.getCurrentTime()).toBeNull();
     fromFrame(iframe, { message: 'panda_timeupdate', currentTime: 44.9, video: 'x' }, PANDA_ORIGIN);
+    expect(onTime).not.toHaveBeenCalled();
+    expect(ref.current?.getCurrentTime()).toBe(44.9);
     fromFrame(iframe, { message: 'panda_pause', currentTime: 45.1 }, PANDA_ORIGIN);
     expect(onTime).toHaveBeenLastCalledWith(45);
+    expect(ref.current?.getCurrentTime()).toBe(45.1);
     fromFrame(iframe, { message: 'panda_ended', currentTime: 600 }, PANDA_ORIGIN);
     expect(onEnded).toHaveBeenCalledTimes(1);
     fromFrame(iframe, { message: 'panda_error' }, PANDA_ORIGIN);
     expect(onError).toHaveBeenCalledWith({ provider: 'panda', reason: 'panda-media' });
     ref.current?.seek(5);
     expect(post).toHaveBeenLastCalledWith({ type: 'currentTime', parameter: 5 }, PANDA_ORIGIN);
+    expect(ref.current?.getCurrentTime()).toBe(5);
   });
 
   it('não retoma quando faltam menos de 10 s pela duração do autor', () => {
@@ -586,6 +603,24 @@ describe('VideoPlayer: file', () => {
     expect(onTime).toHaveBeenLastCalledWith(300);
   });
 
+  it('getCurrentTime lê o currentTime do <video>, sem esperar o onTime', () => {
+    const onTime = vi.fn();
+    const ref = createRef<VideoPlayerHandle>();
+    const { container } = render(
+      <VideoPlayer ref={ref} src={URLS.file} provider="file" labels={labels} onTime={onTime} />,
+    );
+    const media = videoOf(container);
+    expect(ref.current?.getCurrentTime()).toBe(0);
+    media.at(7.5);
+    fireEvent.timeUpdate(media.video);
+    expect(onTime).not.toHaveBeenCalled();
+    expect(ref.current?.getCurrentTime()).toBe(7.5);
+    media.at(9.25);
+    expect(ref.current?.getCurrentTime()).toBe(9.25);
+    ref.current?.seek(40);
+    expect(ref.current?.getCurrentTime()).toBe(40);
+  });
+
   it('mostra tela cheia e imagem sobre imagem quando o navegador permite', () => {
     Object.defineProperty(document, 'fullscreenEnabled', { configurable: true, value: true });
     Object.defineProperty(document, 'pictureInPictureEnabled', { configurable: true, value: true });
@@ -642,6 +677,14 @@ describe('VideoPlayer: link', () => {
     expect(container.querySelector('iframe, video')).toBeNull();
     await expectNoAxeViolations(container);
     expect(onEnded).not.toHaveBeenCalled();
+  });
+
+  it('getCurrentTime devolve null no link', () => {
+    const ref = createRef<VideoPlayerHandle>();
+    render(
+      <VideoPlayer ref={ref} src="https://example.com/aula" provider="link" labels={labels} />,
+    );
+    expect(ref.current?.getCurrentTime()).toBeNull();
   });
 
   it('URL insegura não vira link e chama onError', () => {

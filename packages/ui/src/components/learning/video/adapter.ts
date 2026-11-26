@@ -18,6 +18,8 @@ export interface AdapterEvents {
 
 export interface AdapterControl {
   seek(seconds: number): void;
+  /** Última posição que o adaptador conhece, em segundos; `null` enquanto o provedor não informou. */
+  getCurrentTime(): number | null;
 }
 
 export interface AdapterProps {

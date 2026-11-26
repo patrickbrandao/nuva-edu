@@ -13,13 +13,19 @@ import { YouTubeAdapter } from './video/youtube';
  * Player da página da aula (spec 014; ADR 0025). Um adaptador por `video_provider`, todos com
  * a mesma interface: posição inicial (`startAt`, com a regra dos 10 s finais), `onEnded`,
  * `onTime(seconds)` no máximo a cada 15 s e mais ao pausar, ao terminar e ao sair da página,
- * `seek(seconds)` pela `ref` e `onError` para o site mostrar "Abrir em nova aba".
+ * `seek(seconds)` e `getCurrentTime()` pela `ref` e `onError` para o site mostrar "Abrir em nova aba".
  * `link` (e URL que não bate com o provedor) vira o botão "Abrir vídeo", sem `onEnded`.
  */
 
 export interface VideoPlayerHandle {
   /** Leva o vídeo à posição, em segundos (ex.: a partir de uma nota com tempo). */
   seek(seconds: number): void;
+  /**
+   * Posição atual, em segundos: a do `<video>` no nativo e a última informada pelo provedor nos
+   * demais, sem a cadência de 15 s do `onTime` (ex.: o instante de uma nota de aula). `null`
+   * quando o provedor não informa (`link`) ou ainda não informou.
+   */
+  getCurrentTime(): number | null;
 }
 
 export interface VideoPlayerLabels extends NativeControlLabels {
@@ -101,6 +107,10 @@ function PlayerBody({
     () => ({
       seek: (seconds) => {
         if (Number.isFinite(seconds)) control.current?.seek(Math.max(0, seconds));
+      },
+      getCurrentTime: () => {
+        const seconds = control.current?.getCurrentTime() ?? null;
+        return seconds != null && Number.isFinite(seconds) && seconds >= 0 ? seconds : null;
       },
     }),
     [],
