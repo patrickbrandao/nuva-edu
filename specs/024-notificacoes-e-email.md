@@ -53,7 +53,7 @@ Vários recursos precisam avisar o usuário: resposta no fórum, compra aprovada
 
 - Transporte SMTP configurado por `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD`, `SMTP_FROM`. Porta 465: TLS desde a conexão; outra porta: `STARTTLS` obrigatório. A única exceção é `SMTP_HOST=mailpit` (o Mailpit do Compose), que dispensa TLS. Com `SMTP_USER` definido, `SMTP_PASSWORD` é obrigatório e a autenticação é feita; sem ele, não há autenticação. No desenvolvimento, Mailpit ([031](031-infraestrutura-e-deploy.md)).
 - Cada e-mail é uma linha em `email_outbox`, processada pela tarefa `email.send` ([005](005-worker-e-fila.md)). SMTP fora do ar não bloqueia nenhuma ação do usuário.
-- Modelos ficam no código do worker, em arquivos por tipo e por idioma; textos via arquivos de tradução. O admin edita apenas nome da escola, logotipo, cor e rodapé.
+- Modelos ficam no código do worker, em arquivos por tipo e por idioma; textos via arquivos de tradução. O admin edita apenas nome da escola, logotipo, cor e rodapé (`school.name`, `school.logo_image_id`, `school.accent_color` e `school.email_footer`; [031](031-infraestrutura-e-deploy.md), "Configurações da escola").
 - Links de confirmação e de redefinição expiram em 24 h ([007](007-contas-e-autenticacao.md)); o e-mail nunca contém a senha.
 
 ### E-mails do grupo `account` e da Fase 1
