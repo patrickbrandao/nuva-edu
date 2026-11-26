@@ -1334,7 +1334,6 @@ paths:
       operationId: listCatalog
       tags: [catalog]
       summary: Vitrine
-      x-nuva-pending: true
       description: |
         Cursos, pacotes e ebooks `published` com modo `open` ou `paid`, sem exigir login
         (`specs/009-catalogo-e-conteudo.md`, "Vitrine pública"). Produto `private` nunca aparece, nem na
@@ -1394,7 +1393,6 @@ paths:
       operationId: getCatalogProduct
       tags: [catalog]
       summary: Página do produto
-      x-nuva-pending: true
       description: |
         Descrição completa, programa (curso: módulos, títulos e durações das aulas publicadas), itens
         (pacote) ou dados do ebook, sem login e sem nenhuma URL de conteúdo. Produto `private`, em
@@ -1434,7 +1432,6 @@ paths:
       tags: [catalog]
       summary: Curso com o estado do usuário
       x-permission: course.view_program
-      x-nuva-pending: true
       description: |
         O programa com o estado de acesso do usuário (`specs/010-direitos-de-acesso.md`, "Verificação de
         acesso"), o progresso, a aula para "Continuar" e o estado do certificado. Sem acesso, o programa
@@ -1472,7 +1469,6 @@ paths:
       tags: [learning]
       summary: Aula
       x-permission: lesson.watch_open
-      x-nuva-pending: true
       description: |
         O conteúdo da aula (vídeo, descrição, links de apoio, ebooks vinculados), as vizinhas e o estado
         do usuário. Grava a abertura (`lastOpenedAt`, `specs/014-aprendizado-e-progresso.md`, "Continuar
@@ -1511,7 +1507,6 @@ paths:
       tags: [catalog]
       summary: Aulas liberadas
       x-permission: lesson.watch_sample
-      x-nuva-pending: true
       description: |
         Aulas amostra (`isSample`) de cursos publicados e não privados, para "Aulas liberadas". Por
         padrão, só as de cursos que o usuário não tem.
@@ -1552,7 +1547,6 @@ paths:
       tags: [catalog]
       summary: Ebook com o estado do usuário
       x-permission: course.view_program
-      x-nuva-pending: true
       description: |
         O ebook com o estado de acesso do usuário, sem a URL do arquivo (ela sai só em
         `GET /api/v1/ebooks/{id}/download`). `private` sem direito, rascunho ou inexistente: `404`.
@@ -1588,7 +1582,6 @@ paths:
       tags: [learning]
       summary: Link do arquivo do ebook
       x-permission: content.access_paid
-      x-nuva-pending: true
       description: |
         Devolve a URL externa do arquivo a quem tem acesso ao ebook (`specs/010-direitos-de-acesso.md`).
         Sem acesso: `403` `access_denied` com `reason`. O site abre a URL numa aba nova.
@@ -1626,7 +1619,6 @@ paths:
       tags: [learning]
       summary: O que o aluno tem
       x-permission: account.self_service
-      x-nuva-pending: true
       description: |
         Os direitos do usuário, com validade e origem, para "Minha assinatura" e a estante. Inclui os
         vencidos; não inclui os revogados.
@@ -1658,7 +1650,6 @@ paths:
       tags: [learning]
       summary: Estante "Meus cursos"
       x-permission: learning.track
-      x-nuva-pending: true
       description: |
         Todo curso a que o aluno tem direito ativo ou já teve (`access.state = expired`), mais os cursos
         `open` que ele abriu, com progresso, ação e estado do certificado
@@ -1712,7 +1703,6 @@ paths:
       tags: [learning]
       summary: '"Continue assistindo"'
       x-permission: learning.track
-      x-nuva-pending: true
       description: |
         Até 3 cursos em andamento, do mais recente ao mais antigo, com a aula de "Continuar".
       responses:
@@ -1743,7 +1733,6 @@ paths:
       tags: [learning]
       summary: Progresso no curso
       x-permission: learning.track
-      x-nuva-pending: true
       description: |
         Progresso por módulo e aula, sobre as aulas publicadas. `private` sem direito: `404`.
       parameters:
@@ -1778,7 +1767,6 @@ paths:
       tags: [learning]
       summary: Marcar conclusão e gravar a posição do vídeo
       x-permission: learning.track
-      x-nuva-pending: true
       description: |
         Grava só os campos enviados (`specs/014-aprendizado-e-progresso.md`). `completed: true` conclui
         (idempotente; `completedVia` diz se foi pelo botão ou pelo fim do vídeo); `false` desmarca.
@@ -1848,7 +1836,6 @@ paths:
       tags: [learning]
       summary: '"Meu progresso"'
       x-permission: learning.track
-      x-nuva-pending: true
       description: |
         Para cada curso iniciado, um quadrado por aula, agrupado por módulo, e o percentual.
       responses:
@@ -1879,7 +1866,6 @@ paths:
       tags: [learning]
       summary: Mapa de atividade
       x-permission: learning.track
-      x-nuva-pending: true
       description: |
         Últimas 53 semanas, dia a dia, no fuso do usuário (`school.timezone` até a Fase 6). Só os dias
         com atividade vêm em `days`; os demais contam zero. Na Fase 2 conta só aulas concluídas.
@@ -1911,7 +1897,6 @@ paths:
       tags: [learning]
       summary: '"Meus ebooks"'
       x-permission: learning.track
-      x-nuva-pending: true
       description: |
         Ebooks com direito ativo, com a validade; o download é `GET /api/v1/ebooks/{id}/download`.
       responses:
@@ -1942,7 +1927,6 @@ paths:
       tags: [notes]
       summary: Página "Anotações"
       x-permission: learning.track
-      x-nuva-pending: true
       description: |
         Todas as notas do próprio usuário, da alteração mais recente à mais antiga
         (`specs/016-anotacoes.md`). Busca textual no título e no corpo: `q` exige todas as palavras; só
@@ -2001,7 +1985,6 @@ paths:
       tags: [notes]
       summary: Criar nota
       x-permission: learning.track
-      x-nuva-pending: true
       description: |
         Nota de aula (com `lessonId`) ou avulsa (sem). Nota de aula exige acesso à aula no momento:
         `403` `access_denied` com `reason`; aula inexistente ou despublicada: `404`. Título sem os
@@ -2075,7 +2058,6 @@ paths:
       tags: [notes]
       summary: Uma nota
       x-permission: learning.track
-      x-nuva-pending: true
       description: "Nota de outro usuário ou inexistente: `404`."
       parameters:
         - $ref: "#/components/parameters/IdPath"
@@ -2108,7 +2090,6 @@ paths:
       tags: [notes]
       summary: Editar nota
       x-permission: learning.track
-      x-nuva-pending: true
       description: |
         Salvamento automático. `updatedAt` é o da versão que o cliente conhece; se a nota mudou em outro
         dispositivo: `409` `version_conflict` com a versão atual em `current`, mesmo que o pedido não
@@ -2185,7 +2166,6 @@ paths:
       tags: [notes]
       summary: Excluir nota
       x-permission: learning.track
-      x-nuva-pending: true
       description: "Definitivo, sem lixeira. Nota de outro usuário: `404`."
       security:
         - sessionCookie: []
@@ -2218,7 +2198,6 @@ paths:
       tags: [notes]
       summary: Notas da aula
       x-permission: learning.track
-      x-nuva-pending: true
       description: |
         As notas do usuário naquela aula, da mais antiga à mais recente, para a aba "Minhas notas".
         Sem paginação: são no máximo 100, o teto de notas por aula (`note_lesson_limit_reached` na
@@ -2256,7 +2235,6 @@ paths:
       tags: [certificates]
       summary: Meus certificados
       x-permission: learning.track
-      x-nuva-pending: true
       description: |
         Os certificados do aluno e, à parte, os cursos concluídos que aguardam template
         (`awaiting_template`), com o nome que sairá no certificado (`specs/015-certificados.md`).
@@ -2288,7 +2266,6 @@ paths:
       tags: [certificates]
       summary: PDF do certificado
       x-permission: learning.track
-      x-nuva-pending: true
       description: |
         Só o dono. Certificado de outro aluno ou inexistente: `404`. PDF ainda não gerado: `409`
         `certificate_preparing` ("em preparação").
@@ -2319,7 +2296,6 @@ paths:
       tags: [certificates]
       summary: Nome no certificado
       x-permission: account.self_service
-      x-nuva-pending: true
       description: |
         Grava `users.full_name`, o nome que sai nos próximos certificados, sem confirmação com prazo.
         `null` apaga, e vale o nome de exibição. Certificado já emitido não muda (a correção é a
@@ -2371,7 +2347,6 @@ paths:
       operationId: verifyCertificate
       tags: [certificates]
       summary: Validação pública
-      x-nuva-pending: true
       description: |
         Sem login (`specs/015-certificados.md`, "Validação pública"). Código com ou sem hífens, sem
         diferenciar maiúsculas. Código inexistente ou fora do formato: `404` `certificate_not_found`,
