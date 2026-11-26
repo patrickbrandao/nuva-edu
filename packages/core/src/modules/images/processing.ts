@@ -53,8 +53,12 @@ export function detectImageFormat(data: Uint8Array): ImageInputFormat | null {
 
 /** Uma variante pronta para gravar em `image_variants`. */
 export interface ProcessedImageVariant {
-  /** Largura, que é também o nome da variante na URL. */
+  /**
+   * Nome da variante na URL e valor de `image_variants.width`: a largura nas finalidades com
+   * corte e o maior lado nas de proporção original (numa variante retrato não é a largura real).
+   */
   width: number;
+  /** Altura real da variante. */
   height: number;
   /** `octet_length(data)`. */
   bytes: number;
@@ -84,16 +88,35 @@ function variantHeightFor(width: number, aspect: number): number {
   return Math.max(1, Math.round(width / aspect));
 }
 
+/**
+ * Dimensões de uma variante de proporção original (spec 029, "Variantes de proporção original"):
+ * o maior lado do arquivo gerado é o nome da variante e o outro sai da proporção, arredondado,
+ * de 1 até o nome.
+ */
+function originalVariantSize(
+  originalWidth: number,
+  originalHeight: number,
+  side: number,
+): { width: number; height: number } {
+  if (originalWidth >= originalHeight) {
+    const height = Math.min(side, Math.max(1, Math.round((side * originalHeight) / originalWidth)));
+    return { width: side, height };
+  }
+  const width = Math.min(side, Math.max(1, Math.round((side * originalWidth) / originalHeight)));
+  return { width, height: side };
+}
+
 function sha256Hex(data: Uint8Array): string {
   return createHash('sha256').update(data).digest('hex');
 }
 
 /**
  * Valida e processa um envio: confere tamanho, tipo pelo conteúdo e dimensões (antes de
- * decodificar os pixels), corta ao centro na proporção da finalidade, redimensiona para a
- * largura exata de cada variante (ampliando quando o original é menor), remove os metadados e
- * grava em WebP com qualidade 80, descendo de 10 em 10 até 50 enquanto a variante passar do
- * teto. Lança os `DomainError` da spec 029.
+ * decodificar os pixels), corta ao centro na proporção das finalidades com corte, redimensiona
+ * para o nome de cada variante — a largura exata nas de proporção fixa e o maior lado, sem corte,
+ * nas de proporção original —, remove os metadados e grava em WebP com qualidade 80, descendo de
+ * 10 em 10 até 50 enquanto a variante passar do teto. Amplia quando o original é menor. Lança os
+ * `DomainError` da spec 029.
  */
 export async function processImage(
   data: Uint8Array,
@@ -138,15 +161,25 @@ export async function processImage(
     throw imageDimensionsExceeded();
   }
   const swapped = (metadata.orientation ?? 1) >= 5;
+  const originalWidth = swapped ? height : width;
+  const originalHeight = swapped ? width : height;
 
-  // Todas as variantes têm a mesma proporção: decodifica uma vez, já na orientação do EXIF,
-  // corta ao centro e reduz (ou amplia) para a maior variante; as menores partem desses pixels.
-  const largestWidth = Math.max(...spec.widths);
+  // Nas finalidades com corte todas as variantes têm a mesma proporção; nas de proporção original
+  // cada uma mantém a proporção da entrada, com o maior lado igual ao nome.
+  const sizeOf = (side: number): { width: number; height: number } =>
+    spec.aspect === undefined
+      ? originalVariantSize(originalWidth, originalHeight, side)
+      : { width: side, height: variantHeightFor(side, spec.aspect) };
+
+  // Decodifica uma vez, já na orientação do EXIF, reduz (ou amplia) para a maior variante — com
+  // corte nas finalidades de proporção fixa — e as menores partem desses pixels.
+  const largestSide = Math.max(...spec.widths);
+  const largest = sizeOf(largestSide);
   let base: Sharp;
   try {
     const raw = await sharp(data, { ...input, autoOrient: true })
-      .resize(largestWidth, variantHeightFor(largestWidth, spec.aspect), {
-        fit: 'cover',
+      .resize(largest.width, largest.height, {
+        fit: spec.aspect === undefined ? 'fill' : 'cover',
         position: 'centre',
         withoutEnlargement: false,
       })
@@ -160,15 +193,15 @@ export async function processImage(
   }
 
   const variants: ProcessedImageVariant[] = [];
-  for (const variantWidth of spec.widths) {
-    const variantHeight = variantHeightFor(variantWidth, spec.aspect);
-    if (Math.max(variantWidth, variantHeight) > IMAGE_MAX_VARIANT_SIDE) {
+  for (const variantName of spec.widths) {
+    const size = sizeOf(variantName);
+    if (Math.max(size.width, size.height) > IMAGE_MAX_VARIANT_SIDE) {
       throw new TypeError('processImage: variante acima de 1600 px na configuração.');
     }
     const resized =
-      variantWidth === largestWidth
+      variantName === largestSide
         ? base.clone()
-        : base.clone().resize(variantWidth, variantHeight, { fit: 'fill' });
+        : base.clone().resize(size.width, size.height, { fit: 'fill' });
     let encoded: Buffer | undefined;
     let quality = 0;
     for (const candidate of IMAGE_WEBP_QUALITIES) {
@@ -184,8 +217,8 @@ export async function processImage(
       throw imageTooHeavy();
     }
     variants.push({
-      width: variantWidth,
-      height: variantHeight,
+      width: variantName,
+      height: size.height,
       bytes: encoded.length,
       sha256: sha256Hex(encoded),
       quality,
@@ -195,8 +228,8 @@ export async function processImage(
 
   return {
     format,
-    originalWidth: swapped ? height : width,
-    originalHeight: swapped ? width : height,
+    originalWidth,
+    originalHeight,
     variants,
   };
 }

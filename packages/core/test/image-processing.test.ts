@@ -50,6 +50,17 @@ async function expectDomainError(
   return domain;
 }
 
+/** Código do erro que `fn` lança, para conferir o `403 permission_denied` das regras. */
+function domainErrorCode(fn: () => void): string {
+  try {
+    fn();
+  } catch (error) {
+    expect(error).toBeInstanceOf(DomainError);
+    return (error as DomainError).code;
+  }
+  return 'sem-erro';
+}
+
 describe('detecção do tipo pelo conteúdo', () => {
   it('reconhece JPEG, PNG e WebP pela assinatura', async () => {
     expect(detectImageFormat(await solid(4, 4, 'jpeg'))).toBe('jpeg');
@@ -252,18 +263,114 @@ describe('capa de produto (product_cover)', () => {
   });
 });
 
+describe('variantes de proporção original', () => {
+  it('retrato 500×5000 no logotipo: maior lado é o nome e a largura sai arredondada', async () => {
+    const result = await processImage(await solid(500, 5000, 'png'), 'school_logo');
+    expect([result.originalWidth, result.originalHeight]).toEqual([500, 5000]);
+    expect(result.variants.map((v) => [v.width, v.height])).toEqual([
+      [64, 64],
+      [256, 256],
+      [512, 512],
+    ]);
+    // O nome é o maior lado: na variante retrato a largura real (não gravada) sai da proporção.
+    for (const variant of result.variants) {
+      const meta = await sharp(variant.data).metadata();
+      expect([meta.width, meta.height]).toEqual([
+        Math.round((variant.width * 500) / 5000),
+        variant.width,
+      ]);
+    }
+    expect(result.variants.map((v) => v.quality)).toEqual([80, 80, 80]);
+  });
+
+  it('paisagem 5000×500 no logotipo: a largura é o nome e a altura sai arredondada', async () => {
+    const result = await processImage(await solid(5000, 500, 'png'), 'school_logo');
+    expect(result.variants.map((v) => [v.width, v.height])).toEqual([
+      [64, 6],
+      [256, 26],
+      [512, 51],
+    ]);
+    for (const variant of result.variants) {
+      const meta = await sharp(variant.data).metadata();
+      expect([meta.width, meta.height]).toEqual([variant.width, variant.height]);
+    }
+  });
+
+  it('quadrada no logotipo: nome e altura iguais nos três tamanhos', async () => {
+    const result = await processImage(await solid(1000, 1000, 'png'), 'school_logo');
+    expect(result.variants.map((v) => [v.width, v.height])).toEqual([
+      [64, 64],
+      [256, 256],
+      [512, 512],
+    ]);
+    for (const variant of result.variants) {
+      const meta = await sharp(variant.data).metadata();
+      expect([meta.width, meta.height]).toEqual([variant.width, variant.height]);
+    }
+  });
+
+  it('amplia quando o original é menor que o nome da variante', async () => {
+    const result = await processImage(await solid(40, 30, 'png'), 'school_logo');
+    expect(result.variants.map((v) => [v.width, v.height])).toEqual([
+      [64, 48],
+      [256, 192],
+      [512, 384],
+    ]);
+  });
+
+  it('nenhum lado passa de 1600 px nem de 400 KB em imagem retrato', async () => {
+    const result = await processImage(await noise(1000, 3000), 'content_image');
+    expect(result.variants).toHaveLength(1);
+    const variant = result.variants[0];
+    expect([variant?.width, variant?.height]).toEqual([1600, 1600]);
+    const meta = await sharp(variant?.data).metadata();
+    expect([meta.width, meta.height]).toEqual([533, 1600]);
+    expect(Math.max(meta.width ?? 0, meta.height ?? 0)).toBeLessThanOrEqual(1600);
+    expect(variant?.bytes).toBeLessThanOrEqual(IMAGE_MAX_VARIANT_BYTES);
+    expect(variant?.quality).toBeGreaterThanOrEqual(50);
+  });
+});
+
 describe('regras de envio e entrega', () => {
-  it('o classroom aceita avatar de qualquer papel e o admin só a capa de produto da equipe', () => {
+  it('o classroom aceita avatar de qualquer papel; o admin aceita a capa da equipe e o logotipo só do admin', () => {
     for (const role of ['student', 'instructor', 'manager', 'admin']) {
       expect(canUploadImagePurpose('classroom', role, 'avatar')).toBe(true);
       expect(canUploadImagePurpose('admin', role, 'avatar')).toBe(false);
       expect(canUploadImagePurpose('admin', role, 'product_cover')).toBe(role !== 'student');
+      expect(canUploadImagePurpose('admin', role, 'school_logo')).toBe(role === 'admin');
+      expect(canUploadImagePurpose('classroom', role, 'school_logo')).toBe(false);
     }
     expect(canUploadImagePurpose('classroom', 'student', 'profile_cover')).toBe(false);
     expect(canUploadImagePurpose('classroom', 'student', 'banana')).toBe(false);
     expect(canUploadImagePurpose('classroom', '', 'avatar')).toBe(false);
     expect(() => assertCanUploadImagePurpose('admin', 'admin', 'avatar')).toThrow(DomainError);
-    expect(Object.keys(IMAGE_VARIANT_SPECS)).toEqual(['avatar', 'product_cover']);
+    for (const role of ['manager', 'instructor']) {
+      expect(domainErrorCode(() => assertCanUploadImagePurpose('admin', role, 'school_logo'))).toBe(
+        'permission_denied',
+      );
+    }
+    expect(Object.keys(IMAGE_VARIANT_SPECS)).toEqual([
+      'avatar',
+      'product_cover',
+      'case_image',
+      'content_image',
+      'school_logo',
+    ]);
+  });
+
+  it('case_image e content_image são processáveis, mas nenhum site aceita o envio', async () => {
+    expect(IMAGE_VARIANT_SPECS.case_image).toEqual({ widths: [480, 1600] });
+    expect(IMAGE_VARIANT_SPECS.content_image).toEqual({ widths: [1600] });
+    expect((await processImage(await solid(800, 600, 'png'), 'case_image')).variants).toHaveLength(
+      2,
+    );
+    for (const purpose of ['case_image', 'content_image'] as const) {
+      for (const site of ['classroom', 'admin'] as const) {
+        for (const role of ['student', 'instructor', 'manager', 'admin']) {
+          expect(canUploadImagePurpose(site, role, purpose)).toBe(false);
+        }
+      }
+    }
   });
 
   it('finalidades, larguras de variante e limites', () => {
@@ -275,7 +382,11 @@ describe('regras de envio e entrega', () => {
     expect(parseImageVariant('avatar', '480')).toBeNull();
     expect(parseImageVariant('avatar', '0256')).toBeNull();
     expect(parseImageVariant('avatar', '256.webp')).toBeNull();
-    expect(parseImageVariant('school_logo', '256')).toBeNull();
+    expect(parseImageVariant('school_logo', '256')).toBe(256);
+    expect(parseImageVariant('school_logo', 512)).toBe(512);
+    expect(parseImageVariant('school_logo', '480')).toBeNull();
+    expect(parseImageVariant('content_image', '1600')).toBe(1600);
+    expect(parseImageVariant('case_image', '1280')).toBeNull();
     expect(parseImageVariant('banana', '256')).toBeNull();
     expect(imageUploadMaxBytes(5)).toBe(5_242_880);
     expect(isImageRateLimited('student')).toBe(true);

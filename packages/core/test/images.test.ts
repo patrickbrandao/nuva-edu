@@ -157,6 +157,87 @@ describe('envio', () => {
     );
   });
 
+  it('logotipo retrato 500×5000 grava 64, 256 e 512 com o maior lado no nome', async () => {
+    const admin = await createUser('admin');
+    const result = await uploadImage(
+      db,
+      { uploader: admin, site: 'admin', purpose: 'school_logo', data: await png(500, 5000) },
+      { limits: LIMITS },
+    );
+    expect(result).toMatchObject({ purpose: 'school_logo', width: 500, height: 5000 });
+    expect(result.variants).toEqual([
+      { width: 64, height: 64, url: `/api/v1/images/${result.id}/64.webp` },
+      { width: 256, height: 256, url: `/api/v1/images/${result.id}/256.webp` },
+      { width: 512, height: 512, url: `/api/v1/images/${result.id}/512.webp` },
+    ]);
+
+    const rows = await sql<{ width: number; height: number; data: Buffer }>`
+      SELECT width, height, data FROM image_variants
+      WHERE image_id = ${result.id} ORDER BY width`.execute(db);
+    expect(rows.rows.map((row) => [row.width, row.height])).toEqual([
+      [64, 64],
+      [256, 256],
+      [512, 512],
+    ]);
+    // A largura real da variante retrato não é gravada: sai da proporção do original.
+    const real = await Promise.all(
+      rows.rows.map(async (row) => {
+        const meta = await sharp(row.data).metadata();
+        return [meta.width, meta.height];
+      }),
+    );
+    expect(real).toEqual([
+      [6, 64],
+      [26, 256],
+      [51, 512],
+    ]);
+
+    const largest = await getImageVariant(db, result.id, '512');
+    expect([largest.width, largest.height]).toEqual([512, 512]);
+    await expectDomainError(getImageVariant(db, result.id, '480'), 404, 'not_found');
+  });
+
+  it('school_logo por manager ou instructor é 403 permission_denied, sem gravar', async () => {
+    for (const role of ['manager', 'instructor']) {
+      const user = await createUser(role);
+      await expectDomainError(
+        uploadImage(
+          db,
+          { uploader: user, site: 'admin', purpose: 'school_logo', data: await png() },
+          { limits: LIMITS },
+        ),
+        403,
+        'permission_denied',
+      );
+    }
+    expect((await countMine()).images).toBe(0);
+  });
+
+  it('product_cover continua cortado em 16:9 com 480 e 1280', async () => {
+    const instructor = await createUser('instructor');
+    const result = await uploadImage(
+      db,
+      {
+        uploader: instructor,
+        site: 'admin',
+        purpose: 'product_cover',
+        data: await png(2000, 2000),
+      },
+      { limits: LIMITS },
+    );
+    expect(result.variants.map((variant) => [variant.width, variant.height])).toEqual([
+      [480, 270],
+      [1280, 720],
+    ]);
+    const rows = await sql<{ width: number; height: number }>`
+      SELECT width, height FROM image_variants
+      WHERE image_id = ${result.id} ORDER BY width`.execute(db);
+    expect(rows.rows.map((row) => [row.width, row.height])).toEqual([
+      [480, 270],
+      [1280, 720],
+    ]);
+  });
+
   it('recusa tamanho acima do limite com 413 e tipo errado com 415, sem gravar', async () => {
     const user = await createUser();
     await expectDomainError(

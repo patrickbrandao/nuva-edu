@@ -20,21 +20,33 @@ export const IMAGE_VARIANT_WIDTHS = [64, 256, 480, 512, 1280, 1600] as const;
 
 /** Como uma finalidade gera as variantes. */
 export interface ImageVariantSpec {
-  /** Larguras geradas, que são também o nome da variante na URL. */
+  /**
+   * Nomes das variantes na URL: a largura nas finalidades com corte e o maior lado nas de
+   * proporção original (spec 029, "Variantes de proporção original").
+   */
   widths: readonly number[];
-  /** Proporção largura/altura do corte central (a imagem é cortada e redimensionada). */
-  aspect: number;
+  /**
+   * Proporção largura/altura do corte central (a imagem é cortada e redimensionada). Ausente nas
+   * finalidades de proporção original, que não cortam.
+   */
+  aspect?: number;
 }
 
 /**
  * Finalidades implementadas e as variantes de cada uma (spec 029, "Finalidades e variantes").
- * Hoje existem `avatar` e `product_cover`; as demais entram com os recursos que as usam (e, nas de
- * proporção original, depois que o `arquiteto` fixar a regra em aberto na spec).
+ * `case_image` e `content_image` ficam processáveis, mas nenhum site aceita o envio delas por
+ * enquanto (ver `UPLOAD_RULES`).
  */
 export const IMAGE_VARIANT_SPECS: Readonly<Partial<Record<ImagePurpose, ImageVariantSpec>>> = {
   avatar: { widths: [64, 256], aspect: 1 },
   // Fase 2 (tarefa 410): capa de curso, ebook e pacote, 16:9.
   product_cover: { widths: [480, 1280], aspect: 16 / 9 },
+  // Fase 6 (spec 022): galeria dos cases, sem corte.
+  case_image: { widths: [480, 1600] },
+  // Sem uso no plano atual (spec 029); definida para um recurso futuro.
+  content_image: { widths: [1600] },
+  // Fase 4: identidade da escola, enviada só pelo `admin` (spec 029, "Fluxo de envio").
+  school_logo: { widths: [64, 256, 512] },
 };
 
 /** Site que recebe o envio: cada um aceita só as finalidades dele. */
@@ -45,11 +57,15 @@ type UploadRule = 'any' | readonly string[];
 
 /**
  * Finalidades aceitas por site e os papéis que podem enviá-las. O classroom aceita `avatar` de
- * qualquer usuário; o admin aceita `product_cover` de `instructor`, `manager` e `admin` (Fase 2).
+ * qualquer usuário; o admin aceita `product_cover` de `instructor`, `manager` e `admin` (Fase 2) e
+ * `school_logo` só de `admin` (Fase 4). `case_image` e `content_image` não entram em nenhum site.
  */
 const UPLOAD_RULES: Readonly<Record<ImageUploadSite, Partial<Record<ImagePurpose, UploadRule>>>> = {
   classroom: { avatar: 'any' },
-  admin: { product_cover: ['instructor', 'manager', 'admin'] },
+  admin: {
+    product_cover: ['instructor', 'manager', 'admin'],
+    school_logo: ['admin'],
+  },
 };
 
 /** RNF-02: maior lado aceito na entrada. */
@@ -105,8 +121,9 @@ export function isImageRateLimited(role: string): boolean {
 }
 
 /**
- * Largura da variante pedida na URL (`256` ou `"256"`), se a finalidade a gera; senão `null`
- * (a entrega devolve 404).
+ * Nome da variante pedida na URL (`256` ou `"256"`), se a finalidade a gera; senão `null` (a
+ * entrega devolve 404). O nome é a largura nas finalidades com corte e o maior lado nas de
+ * proporção original.
  */
 export function parseImageVariant(purpose: string, variant: string | number): number | null {
   const text = typeof variant === 'number' ? String(variant) : variant;
