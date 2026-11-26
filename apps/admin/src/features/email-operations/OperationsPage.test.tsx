@@ -222,6 +222,53 @@ describe('operação (/operacao)', () => {
   });
 });
 
+const NEW_LOGO_ID = '0193a5b2-0000-7000-8000-0000000000d4';
+
+/** Resposta de `POST /api/v1/images` com a finalidade `school_logo` (spec 029). */
+function schoolLogo(id = NEW_LOGO_ID) {
+  return {
+    id,
+    purpose: 'school_logo',
+    width: 1024,
+    height: 512,
+    variants: [
+      { width: 64, height: 32, url: `/api/v1/images/${id}/64.webp` },
+      { width: 256, height: 128, url: `/api/v1/images/${id}/256.webp` },
+      { width: 512, height: 256, url: `/api/v1/images/${id}/512.webp` },
+    ],
+  };
+}
+
+/** Recusas do envio do logotipo (spec 029) e o texto que a seção mostra. */
+const LOGO_REFUSALS = [
+  { status: 413, code: 'payload_too_large', text: 'A imagem passa de 5 MB.' },
+  { status: 415, code: 'image_type_unsupported', text: 'Use uma imagem JPEG, PNG ou WebP.' },
+  {
+    status: 422,
+    code: 'image_dimensions_exceeded',
+    text: 'A imagem é grande demais: até 8.000 px de lado e 40 megapixels.',
+  },
+  {
+    status: 422,
+    code: 'image_too_heavy',
+    text: 'A imagem ficou pesada demais depois de processada. Envie uma mais simples ou menor.',
+  },
+  {
+    status: 429,
+    code: 'rate_limited',
+    text: /Muitas requisições seguidas/,
+  },
+  {
+    status: 503,
+    code: 'image_processing_busy',
+    text: 'O processamento de imagens está ocupado. Tente de novo em instantes.',
+  },
+] as const;
+
+function logoFile() {
+  return new File(['logo'], 'logo.png', { type: 'image/png' });
+}
+
 describe('identidade da escola nos e-mails', () => {
   it('mostra e grava nome, cor, logotipo e rodapé, sem violações do axe', async () => {
     const user = userEvent.setup();
@@ -240,9 +287,7 @@ describe('identidade da escola nos e-mails', () => {
     expect(await screen.findByDisplayValue('Escola Aurora')).toBeTruthy();
     expect(screen.getByAltText('Logotipo de Escola Aurora')).toBeTruthy();
     expect(
-      screen.getByText(
-        'O envio do logotipo pela admin ainda não está disponível; o arquivo atual continua valendo.',
-      ),
+      screen.getByText('JPEG, PNG ou WebP, até 5 MB. Proporção original, sem corte.'),
     ).toBeTruthy();
     await expectNoAxeViolations();
 
@@ -278,5 +323,141 @@ describe('identidade da escola nos e-mails', () => {
     await user.type(screen.getByLabelText('Cor de destaque'), '#zzz');
     await user.click(screen.getByRole('button', { name: 'Salvar' }));
     expect(await screen.findByText('Valor fora do formato aceito.')).toBeTruthy();
+  });
+
+  it('envia o logotipo, mostra a variante de 256 e grava o identificador, sem violações do axe', async () => {
+    const user = userEvent.setup();
+    let purpose: FormDataEntryValue | null = null;
+    let saved: unknown = null;
+    const routes: Routes = {
+      ...defaultRoutes(),
+      'GET /api/v1/settings/branding': schoolBranding(),
+      'POST /api/v1/images': async (request: Request) => {
+        purpose = /name="purpose"\r\n\r\n([^\r\n]+)/.exec(await request.text())?.[1] ?? null;
+        return schoolLogo();
+      },
+      'PUT /api/v1/settings/branding': async (request: Request) => {
+        saved = await request.json();
+        return schoolBranding({ logoUrl: `/api/v1/images/${NEW_LOGO_ID}/256.webp` });
+      },
+    };
+    renderApp('/configuracoes', routes);
+    await screen.findByDisplayValue('Escola Aurora');
+
+    await user.upload(screen.getByTestId('image-picker-input'), logoFile());
+    await waitFor(() => expect(purpose).toBe('school_logo'));
+    // a prévia local (`blob:`) sai e fica a variante de 256 devolvida pelo envio
+    const logo = () => screen.getByRole('img', { name: 'Logotipo de Escola Aurora' });
+    await waitFor(() =>
+      expect(logo().getAttribute('src')).toBe(`/api/v1/images/${NEW_LOGO_ID}/256.webp`),
+    );
+    expect(
+      await screen.findByText('Logotipo enviado. Clique em Salvar para aplicar.'),
+    ).toBeTruthy();
+    await expectNoAxeViolations();
+
+    await user.click(screen.getByRole('button', { name: 'Salvar' }));
+    await waitFor(() =>
+      expect(saved).toEqual({
+        schoolName: 'Escola Aurora',
+        logoImageId: NEW_LOGO_ID,
+        accentColor: null,
+        footer: null,
+      }),
+    );
+    expect(await screen.findByText('Identidade da escola salva.')).toBeTruthy();
+    // a prévia continua a do logotipo gravado, sem recarregar a página
+    expect(logo().getAttribute('src')).toBe(`/api/v1/images/${NEW_LOGO_ID}/256.webp`);
+  });
+
+  it('remove o logotipo e grava logoImageId nulo', async () => {
+    const user = userEvent.setup();
+    let saved: unknown = null;
+    const routes: Routes = {
+      ...defaultRoutes(),
+      'GET /api/v1/settings/branding': schoolBranding(),
+      'PUT /api/v1/settings/branding': async (request: Request) => {
+        saved = await request.json();
+        return schoolBranding({ logoUrl: null });
+      },
+    };
+    renderApp('/configuracoes', routes);
+    await screen.findByDisplayValue('Escola Aurora');
+    expect(screen.getByAltText('Logotipo de Escola Aurora')).toBeTruthy();
+
+    await user.click(screen.getByRole('button', { name: 'Remover logotipo' }));
+    expect(screen.getByText('Sem logotipo')).toBeTruthy();
+
+    await user.click(screen.getByRole('button', { name: 'Salvar' }));
+    await waitFor(() =>
+      expect(saved).toEqual({
+        schoolName: 'Escola Aurora',
+        logoImageId: null,
+        accentColor: null,
+        footer: null,
+      }),
+    );
+    expect(await screen.findByText('Identidade da escola salva.')).toBeTruthy();
+    expect(screen.queryByRole('img', { name: 'Logotipo de Escola Aurora' })).toBeNull();
+  });
+
+  it.each(LOGO_REFUSALS)('mostra a recusa $code no envio do logotipo', async (refusal) => {
+    const user = userEvent.setup();
+    const routes: Routes = {
+      ...defaultRoutes(),
+      'GET /api/v1/settings/branding': schoolBranding(),
+      'POST /api/v1/images': problem(refusal.status, refusal.code),
+    };
+    renderApp('/configuracoes', routes);
+    await screen.findByDisplayValue('Escola Aurora');
+
+    await user.upload(screen.getByTestId('image-picker-input'), logoFile());
+    expect(await screen.findByText(refusal.text)).toBeTruthy();
+  });
+
+  it('uma recusa no envio não perde os outros campos do formulário', async () => {
+    const user = userEvent.setup();
+    const routes: Routes = {
+      ...defaultRoutes(),
+      'GET /api/v1/settings/branding': schoolBranding(),
+      'POST /api/v1/images': problem(413, 'payload_too_large'),
+    };
+    renderApp('/configuracoes', routes);
+    await screen.findByDisplayValue('Escola Aurora');
+
+    await user.clear(screen.getByDisplayValue('Escola Aurora'));
+    await user.type(screen.getByLabelText('Nome da escola'), 'Escola Nova');
+    await user.type(screen.getByLabelText('Rodapé'), 'Até logo!');
+    await user.upload(screen.getByTestId('image-picker-input'), logoFile());
+
+    expect(await screen.findByText('A imagem passa de 5 MB.')).toBeTruthy();
+    expect(screen.getByDisplayValue('Escola Nova')).toBeTruthy();
+    expect(screen.getByDisplayValue('Até logo!')).toBeTruthy();
+  });
+
+  it('mostra na seção a recusa de finalidade ao gravar a identidade', async () => {
+    const user = userEvent.setup();
+    const routes: Routes = {
+      ...defaultRoutes(),
+      'GET /api/v1/settings/branding': schoolBranding(),
+      'PUT /api/v1/settings/branding': problem(422, 'image_purpose_mismatch'),
+    };
+    renderApp('/configuracoes', routes);
+    await screen.findByDisplayValue('Escola Aurora');
+
+    await user.click(screen.getByRole('button', { name: 'Salvar' }));
+    expect(
+      await screen.findByText(
+        'Esta imagem não serve como logotipo. Envie outra ou remova o logotipo.',
+      ),
+    ).toBeTruthy();
+    // a recusa é da imagem, não dos outros campos
+    expect(screen.queryByText('Valor fora do formato aceito.')).toBeNull();
+
+    // removendo a imagem recusada, o aviso sai junto
+    await user.click(screen.getByRole('button', { name: 'Remover logotipo' }));
+    expect(
+      screen.queryByText('Esta imagem não serve como logotipo. Envie outra ou remova o logotipo.'),
+    ).toBeNull();
   });
 });

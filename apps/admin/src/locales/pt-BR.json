@@ -484,7 +484,15 @@
       "logo": "Logotipo",
       "logoAlt": "Logotipo de {{name}}",
       "noLogo": "Sem logotipo",
-      "logoReadOnly": "O envio do logotipo pela admin ainda não está disponível; o arquivo atual continua valendo.",
+      "logoChoose": "Escolher logotipo",
+      "logoChange": "Trocar logotipo",
+      "logoRemove": "Remover logotipo",
+      "logoHint": "JPEG, PNG ou WebP, até 5 MB. Proporção original, sem corte.",
+      "logoSending": "Enviando…",
+      "logoUploaded": "Logotipo enviado. Clique em Salvar para aplicar.",
+      "logoErrors": {
+        "purposeMismatch": "Esta imagem não serve como logotipo. Envie outra ou remova o logotipo."
+      },
       "footer": "Rodapé",
       "footerHint": "Texto livre ao pé do e-mail, com quebras de linha.",
       "footerCounter": "{{length}} de {{max}} caracteres",

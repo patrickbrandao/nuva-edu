@@ -6,6 +6,7 @@ Detalhe das decisões em `specs/decisions/`.
 ## [Não lançado]
 
 ### Adicionado
+- admin: envio do logotipo na identidade da escola (specs 024 e 029; task 708): a seção "E-mail" de `/configuracoes` troca o aviso de somente leitura pelo seletor de imagem, envia o arquivo por `POST /api/v1/images` com `purpose` `school_logo`, mostra a prévia da variante de 256 (ou 512) e leva o identificador no `saveBranding` existente; remover a imagem grava `logoImageId` nulo, a prévia acompanha a gravação sem recarregar, e `413`, `415`, `422`, `429` e `503` (tipo, tamanho, dimensão, peso, limite e processamento) aparecem na seção sem perder os outros campos.
 - contratos: `school_logo` no envio de imagens e na identidade da escola, com `422 image_purpose_mismatch` e a regra do maior lado nas variantes de proporção original (specs 024 e 029; task 705).
 - interface: cliente regenerado com o envio de `school_logo` (task 706).
 - banco: migration 0021 das chaves de idempotência financeira (spec 003, "Idempotência"; task 710): `idempotency_keys` guarda o escopo, o usuário, a chave enviada pelo cliente, a impressão digital da requisição e a primeira resposta (status e corpo) por 24 h, para que repetir `POST /orders`, o reembolso de pedido ou o de cobrança devolva o mesmo resultado em vez de estornar duas vezes; chave primária composta (`scope`, `user_id`, `key`), cascata do usuário com índice próprio, colunas de resposta nulas enquanto a operação não termina, expurgo por `created_at` e CHECKs de tamanho da chave, formato do escopo e faixa do status HTTP.
