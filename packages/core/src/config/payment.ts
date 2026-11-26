@@ -1,10 +1,13 @@
 import { FakePaymentProvider } from '../modules/payments/fake.ts';
+import { RemoteFakePaymentProvider } from '../modules/payments/fake-remote.ts';
+import { MercadoPagoPaymentProvider } from '../modules/payments/mercadopago/index.ts';
 import type { PaymentProvider, PaymentProviderName } from '../modules/payments/types.ts';
 import type { Config } from './config.ts';
 import { ConfigError, type ConfigIssue } from './env-reader.ts';
 
 export interface PaymentConfig {
   provider: PaymentProviderName;
+  fakeUrl: string | null;
   mercadoPago: {
     accessToken: string | null;
     publicKey: string | null;
@@ -48,24 +51,34 @@ export function assertPaymentConfiguration(config: Pick<Config, 'env' | 'payment
 }
 
 export interface CreatePaymentProviderOptions {
-  /** Injetado pela composição depois da tarefa 520; nenhum segredo sai da configuração. */
+  /** Permite injetar o adaptador em testes, inclusive no lugar do Mercado Pago real. */
   mercadoPago?: PaymentProvider;
   /** Permite compartilhar o estado do fake entre serviços no mesmo processo de teste. */
   fake?: FakePaymentProvider;
 }
 
 export function createPaymentProvider(
-  config: Pick<Config, 'env' | 'payment' | 'currency'>,
+  config: Pick<Config, 'env' | 'payment' | 'currency' | 'classroomUrl'>,
   options: CreatePaymentProviderOptions = {},
 ): PaymentProvider {
   assertPaymentConfiguration(config);
   if (config.payment.provider === 'fake') {
-    return options.fake ?? new FakePaymentProvider({ currency: config.currency });
+    if (options.fake !== undefined) return options.fake;
+    return config.payment.fakeUrl === null
+      ? new FakePaymentProvider({ currency: config.currency })
+      : new RemoteFakePaymentProvider(config.payment.fakeUrl, config.currency);
   }
-  if (options.mercadoPago === undefined) {
-    throw new Error('O adaptador mercadopago deve ser fornecido pela composição do serviço.');
+  if (options.mercadoPago !== undefined) return options.mercadoPago;
+  const { accessToken, webhookSecret } = config.payment.mercadoPago;
+  if (accessToken === null || webhookSecret === null) {
+    throw new TypeError('Configuração do provedor de pagamento incompleta.');
   }
-  return options.mercadoPago;
+  return new MercadoPagoPaymentProvider({
+    accessToken,
+    webhookSecret,
+    notificationUrl: `${config.classroomUrl}/api/v1/webhooks/mercadopago`,
+    planBackUrl: `${config.classroomUrl}/conta/compras`,
+  });
 }
 
 export function configuredPaymentProviderName(

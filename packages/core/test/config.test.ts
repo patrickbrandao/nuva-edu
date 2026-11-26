@@ -55,6 +55,7 @@ describe('loadConfig', () => {
       },
       payment: {
         provider: 'mercadopago',
+        fakeUrl: null,
         mercadoPago: { accessToken: null, publicKey: null, webhookSecret: null },
         orderPendingMinutes: 30,
         orderBoletoDays: 3,

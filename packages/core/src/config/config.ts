@@ -178,6 +178,14 @@ export function loadConfig(options: LoadConfigOptions = {}): Config {
 
   const env = reader.oneOf('NUVA_ENV', 'development', ['development', 'test', 'production']);
   const oauthMock = readOAuthMock(reader, env);
+  const paymentProvider = reader.oneOf('NUVA_PAYMENT_PROVIDER', 'mercadopago', [
+    'mercadopago',
+    'fake',
+  ]);
+  const paymentFakeUrl = reader.optional('NUVA_PAYMENT_FAKE_URL');
+  if (paymentFakeUrl !== null && (paymentProvider !== 'fake' || env === 'production')) {
+    reader.fail('NUVA_PAYMENT_FAKE_URL', 'só vale com provedor fake fora de produção');
+  }
 
   const config: Config = {
     env,
@@ -202,7 +210,11 @@ export function loadConfig(options: LoadConfigOptions = {}): Config {
       from: reader.string('SMTP_FROM', `nuva-edu <no-reply@${domain}>`),
     },
     payment: {
-      provider: reader.oneOf('NUVA_PAYMENT_PROVIDER', 'mercadopago', ['mercadopago', 'fake']),
+      provider: paymentProvider,
+      fakeUrl:
+        paymentFakeUrl === null
+          ? null
+          : readHttpUrl(reader, 'NUVA_PAYMENT_FAKE_URL', paymentFakeUrl),
       mercadoPago: {
         accessToken: secret('MP_ACCESS_TOKEN'),
         publicKey: reader.optional('MP_PUBLIC_KEY'),

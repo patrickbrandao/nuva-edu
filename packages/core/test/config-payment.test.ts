@@ -8,6 +8,7 @@ import {
   loadConfig,
   paymentConfigurationIssues,
 } from '../src/index.ts';
+import { MercadoPagoPaymentProvider } from '../src/modules/payments/mercadopago/index.ts';
 
 const database = { DATABASE_URL: 'postgres://nuva_edu:pw@db:5432/nuva_edu' };
 const mercadoPago = {
@@ -86,11 +87,28 @@ describe('configuração e seleção do PaymentProvider', () => {
     );
   });
 
-  it('a seleção do adaptador real é por injeção, sem implementação implícita no núcleo', () => {
+  it('monta o adaptador real com a configuração e aceita injeção nos testes', () => {
     const config = loadConfig({ env: { ...database, ...mercadoPago } });
     const adapter = new FakePaymentProvider();
     expect(createPaymentProvider(config, { mercadoPago: adapter })).toBe(adapter);
-    expect(() => createPaymentProvider(config)).toThrow(/adaptador mercadopago/);
+    expect(createPaymentProvider(config)).toBeInstanceOf(MercadoPagoPaymentProvider);
+  });
+
+  it('recusa a URL simulada fora da configuração fake de desenvolvimento ou teste', () => {
+    const url = 'http://payment-fake:8092';
+    const env = { NUVA_PAYMENT_FAKE_URL: url };
+    expect(paymentIssues(env).issues).toEqual(
+      expect.arrayContaining([expect.objectContaining({ variable: 'NUVA_PAYMENT_FAKE_URL' })]),
+    );
+    expect(
+      paymentIssues({ ...env, NUVA_ENV: 'production', NUVA_PAYMENT_PROVIDER: 'fake' }).issues,
+    ).toEqual(
+      expect.arrayContaining([expect.objectContaining({ variable: 'NUVA_PAYMENT_FAKE_URL' })]),
+    );
+    const config = loadConfig({ env: { ...database, ...env, NUVA_PAYMENT_PROVIDER: 'fake' } });
+    expect(config.payment.fakeUrl).toBe(url);
+    expect(createPaymentProvider(config).name).toBe('fake');
+    expect(createPaymentProvider(config)).not.toBeInstanceOf(FakePaymentProvider);
   });
 
   it('indica modo de teste pelo fake ou pelo prefixo TEST- do token, sem expor o token', () => {

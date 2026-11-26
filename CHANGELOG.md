@@ -7,6 +7,7 @@ Detalhe das decisões em `specs/decisions/`.
 
 ### Adicionado
 - classroom: o teste de navegação aguarda o menu e a trilha refletirem a rota exibida (spec 006, task 727).
+- core: a configuração seleciona o adaptador real de Mercado Pago e pode conectar APIs e worker ao mesmo simulador HTTP em desenvolvimento e teste (spec 013, task 725).
 - specs: configuração opcional para compartilhar o provedor fake entre as APIs e o worker em desenvolvimento e e2e (specs 013 e 031, task 726).
 - core: oito tentativas de webhook em falhas transitórias, três para credenciais inválidas e chave de estorno estável ao repetir a chamada ao provedor (specs 005 e 013, task 724).
 - specs: oito tentativas do webhook de pagamento em falhas transitórias e três com credenciais inválidas (specs 005 e 013, task 723).
