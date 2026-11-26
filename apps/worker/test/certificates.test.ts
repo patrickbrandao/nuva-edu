@@ -236,7 +236,7 @@ afterAll(async () => {
 });
 
 describe('course.completed', () => {
-  it('emite o certificado com o PDF do template em até 60 s, com o e-mail', {
+  it('emite o PDF em até 60 s e enfileira a notificação do certificado', {
     timeout: 90_000,
   }, async () => {
     const student = await makeUser('student', 'Ana <script>alert(1)</script> Souza');
@@ -263,14 +263,22 @@ describe('course.completed', () => {
     expect(read.text).toContain(`Código: ${formatted}`);
     expect(read.text).not.toContain('{{');
 
-    const emails = await db
-      .selectFrom('emailOutbox')
-      .select(['type', 'data'])
-      .where('userId', '=', student.id)
-      .where('type', '=', 'certificate.issued')
+    const notifications = await db
+      .selectFrom('jobs')
+      .select('payload')
+      .where('type', '=', 'notify')
+      .where('payload', '@>', JSON.stringify({ userId: student.id, type: 'certificate.issued' }))
       .execute();
-    expect(emails).toEqual([
-      { type: 'certificate.issued', data: { courseTitle: course.title, code: formatted } },
+    expect(notifications).toMatchObject([
+      {
+        payload: {
+          type: 'certificate.issued',
+          userId: student.id,
+          targetType: 'course',
+          targetId: course.id,
+          data: { courseTitle: course.title, code: formatted },
+        },
+      },
     ]);
   });
 
@@ -334,12 +342,13 @@ describe('course.completed', () => {
       .where('type', '=', 'certificate.render')
       .execute();
     expect(renders).toHaveLength(1);
-    const emails = await db
-      .selectFrom('emailOutbox')
+    const notifications = await db
+      .selectFrom('jobs')
       .select('id')
-      .where('userId', '=', student.id)
+      .where('type', '=', 'notify')
+      .where('payload', '@>', JSON.stringify({ userId: student.id, type: 'certificate.issued' }))
       .execute();
-    expect(emails).toHaveLength(1);
+    expect(notifications).toHaveLength(1);
   });
 
   it('despublicar a aula que faltava emite os certificados de quem chegou a 100%', {
