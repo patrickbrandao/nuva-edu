@@ -110,10 +110,11 @@ test('cada provedor monta o player sem violação de CSP no documento do classro
       // Todo pedido do documento a host externo (o iframe tem política própria e não entra aqui):
       // script da IFrame API de outro host, ou fetch a host fora da lista, teria de aparecer.
       const external: string[] = [];
+      const origin = new URL(CLASSROOM_URL).origin;
       const remember = (request: Request) => {
         if (request.frame() !== page.mainFrame()) return;
         const url = new URL(request.url());
-        if (url.origin === new URL(page.url()).origin) return;
+        if (url.origin === origin) return;
         if (url.hostname === new URL(item.url).hostname) return;
         external.push(`${request.resourceType()} ${request.url()}`);
       };
