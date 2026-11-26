@@ -78,7 +78,8 @@
       "mcpKeys": "Chaves MCP",
       "audit": "Auditoria",
       "operations": "Operação",
-      "settings": "Configurações"
+      "settings": "Configurações",
+      "exportSales": "Exportar vendas"
     }
   },
   "footer": {
@@ -1544,6 +1545,330 @@
       "version_conflict": "O template foi salvo por outra pessoa enquanto você editava.",
       "not_found": "Curso ou exemplo não encontrado.",
       "validation_failed": "Confira o template e tente de novo."
+    }
+  },
+  "sales": {
+    "subtitle": "Pedidos da escola, do mais novo para o mais antigo.",
+    "filters": {
+      "search": "Buscar por comprador",
+      "searchPlaceholder": "Nome ou e-mail",
+      "searchButton": "Buscar",
+      "from": "De",
+      "to": "Até",
+      "allStatuses": "Todos os estados",
+      "allProducts": "Todos os produtos",
+      "allCoupons": "Todos os cupons",
+      "statusLabel": "Estado: {{value}}",
+      "productLabel": "Produto: {{value}}",
+      "couponLabel": "Cupom: {{value}}",
+      "productOption": "{{type}} · {{title}}",
+      "clear": "Limpar filtros"
+    },
+    "productType": {
+      "course": "Curso",
+      "ebook": "Ebook",
+      "bundle": "Pacote"
+    },
+    "status": {
+      "draft": "Rascunho",
+      "pending": "Aguardando pagamento",
+      "paid": "Pago",
+      "partially_refunded": "Parcialmente reembolsado",
+      "refunded": "Reembolsado",
+      "canceled": "Cancelado",
+      "expired": "Expirado",
+      "chargeback": "Estorno do cartão"
+    },
+    "buyer": {
+      "taxIdType": {
+        "cpf": "CPF",
+        "cnpj": "CNPJ"
+      }
+    },
+    "totals": {
+      "subtotal": "Subtotal",
+      "discount": "Desconto",
+      "refunded": "Reembolsado",
+      "total": "Total",
+      "net": "Líquido"
+    },
+    "orders": {
+      "subtitle": "Pedidos da escola, com filtros por período, estado, produto, cupom e comprador.",
+      "loading": "Carregando os pedidos…",
+      "errorTitle": "Não foi possível carregar os pedidos",
+      "empty": "Nenhum pedido ainda",
+      "emptyText": "Quando alguém comprar, o pedido aparece aqui.",
+      "emptyFiltered": "Nenhum pedido com estes filtros",
+      "emptyFilteredText": "Ajuste o período ou os filtros para ver outros pedidos.",
+      "loadMoreError": "Não foi possível carregar mais pedidos.",
+      "number": "Pedido {{number}}",
+      "itemCount_other": "{{count}} itens",
+      "notFound": "Pedido não encontrado",
+      "notFoundText": "O pedido saiu da lista ou o endereço está errado.",
+      "backToList": "Voltar aos pedidos",
+      "detailLoading": "Carregando o pedido…",
+      "detailErrorTitle": "Não foi possível carregar o pedido",
+      "detailTitle": "Pedido {{number}}",
+      "detailSubtitle": "Criado em {{date}}",
+      "itemsSummary_other": "{{count}} itens no pedido",
+      "paidOn": "Pago em {{date}}",
+      "expiresOn": "Expira em {{date}}",
+      "coupon": "Cupom {{code}}",
+      "buyer": "Comprador",
+      "buyerName": "Nome",
+      "buyerEmail": "E-mail",
+      "buyerAccount": "Conta",
+      "openAccount": "Abrir a ficha do aluno",
+      "totalsTitle": "Totais do pedido",
+      "itemsTitle": "Itens",
+      "noItems": "O pedido não tem itens.",
+      "paymentsTitle": "Cobranças",
+      "noPayments": "Nenhuma cobrança registrada ainda.",
+      "refundsTitle": "Reembolsos",
+      "noRefunds": "Nenhum reembolso pedido.",
+      "columns": {
+        "number": "Pedido",
+        "buyer": "Comprador",
+        "status": "Estado",
+        "items": "Itens",
+        "total": "Total",
+        "createdAt": "Criado em"
+      },
+      "itemsColumns": {
+        "title": "Produto",
+        "unitPrice": "Preço",
+        "discount": "Desconto",
+        "paid": "Pago",
+        "refunded": "Reembolsado",
+        "none": "—"
+      },
+      "itemCount_one": "{{count}} item",
+      "itemsSummary_one": "{{count}} item no pedido"
+    },
+    "payments": {
+      "method": {
+        "none": "Sem cobrança",
+        "card": "Cartão",
+        "pix": "Pix",
+        "boleto": "Boleto",
+        "other": "Outro"
+      },
+      "provider": {
+        "mercadopago": "Mercado Pago",
+        "fake": "Simulado",
+        "none": "Sem provedor"
+      },
+      "status": {
+        "pending": "Pendente",
+        "approved": "Aprovada",
+        "rejected": "Recusada",
+        "canceled": "Cancelada",
+        "refunded": "Reembolsada",
+        "partially_refunded": "Parcialmente reembolsada",
+        "charged_back": "Estornada pelo cartão"
+      },
+      "rawStatus": "Estado no provedor: {{status}}"
+    },
+    "refunds": {
+      "open": "Pedir reembolso",
+      "confirm": "Reembolsar o pedido {{number}}? O acesso dos itens reembolsados é revogado.",
+      "submit": "Pedir reembolso",
+      "busy": "Pedindo…",
+      "warning": "O estorno é executado em segundo plano. Até a confirmação, o reembolso fica como solicitado.",
+      "scope": "O que reembolsar",
+      "whole": "O pedido inteiro",
+      "items": "Itens escolhidos",
+      "amount": "Valor de {{title}}",
+      "remaining": "Disponível: {{amount}}",
+      "reason": "Motivo",
+      "reasonHint": "Fica registrado no pedido e na auditoria.",
+      "noItem": "Escolha ao menos um item.",
+      "invalidAmount": "O valor de {{title}} precisa ser maior que zero e caber no disponível.",
+      "requested": "Reembolso de {{amount}} solicitado.",
+      "status": {
+        "requested": "Solicitado",
+        "done": "Concluído",
+        "failed": "Falhou"
+      },
+      "retry": "Tentar de novo",
+      "retryDone": "Reembolso reenviado.",
+      "retryFailed": "Não foi possível repetir o reembolso",
+      "error": "Falha do provedor: {{error}}"
+    },
+    "coupons": {
+      "subtitle": "Cupons de desconto para pedidos e assinaturas.",
+      "loading": "Carregando os cupons…",
+      "errorTitle": "Não foi possível carregar os cupons",
+      "empty": "Nenhum cupom ainda",
+      "emptyText": "Crie um cupom para oferecer desconto.",
+      "emptyFiltered": "Nenhum cupom com estes filtros",
+      "emptyFilteredText": "Ajuste a busca ou os filtros para ver outros cupons.",
+      "loadMoreError": "Não foi possível carregar mais cupons.",
+      "create": "Novo cupom",
+      "edit": "Editar cupom",
+      "editAction": "Editar",
+      "deactivate": "Desativar",
+      "activate": "Ativar",
+      "deactivated": "Cupom {{code}} desativado.",
+      "activated": "Cupom {{code}} ativado.",
+      "toggleFailed": "Não foi possível mudar a situação do cupom",
+      "deactivateTitle": "Desativar o cupom?",
+      "deactivateText": "O cupom deixa de valer em novas compras; os pedidos pagos continuam honrados. Não há exclusão.",
+      "created": "Cupom {{code}} criado.",
+      "updated": "Cupom {{code}} salvo.",
+      "discountPercent": "{{percent}}% de desconto",
+      "discountFixed": "{{amount}} de desconto",
+      "usesUnlimited": "{{count}} usos (ilimitado)",
+      "usesLimited": "{{count}} de {{max}} usos",
+      "perUser": "Até {{count}} por pessoa",
+      "validityAlways": "Sem prazo",
+      "validityOpen": "sem prazo",
+      "validityRange": "{{from}} a {{to}}",
+      "columns": {
+        "code": "Código",
+        "appliesTo": "Vale para",
+        "uses": "Usos",
+        "validity": "Validade",
+        "status": "Situação",
+        "actions": "Ações"
+      },
+      "filters": {
+        "search": "Buscar cupom",
+        "searchPlaceholder": "Código",
+        "allStatuses": "Todas as situações",
+        "active": "Ativo",
+        "inactive": "Inativo",
+        "allAppliesTo": "Todos os destinos",
+        "statusLabel": "Situação: {{value}}",
+        "appliesToLabel": "Vale para: {{value}}"
+      },
+      "kind": {
+        "percent": "Percentual",
+        "fixed": "Valor fixo"
+      },
+      "appliesTo": {
+        "orders": "Pedidos",
+        "subscriptions": "Assinaturas",
+        "both": "Pedidos e assinaturas"
+      },
+      "form": {
+        "text": "O código é único; o desconto vale no período e dentro dos limites escolhidos.",
+        "code": "Código",
+        "codeHint": "De 3 a 40 letras, números e hífen.",
+        "codeLength": "Use de {{min}} a {{max}} caracteres.",
+        "codePattern": "Use só letras, números e hífen.",
+        "kindLabel": "Tipo de desconto: {{value}}",
+        "percent": "Desconto (%)",
+        "percentHint": "De 1 a 100.",
+        "percentRange": "Informe um percentual inteiro de 1 a 100.",
+        "amount": "Desconto",
+        "amountHint": "Em reais, por exemplo 25,00.",
+        "amountPositive": "Informe um valor maior que zero.",
+        "appliesToLabel": "Vale para: {{value}}",
+        "startsAt": "Começa em",
+        "startsAtHint": "Em branco, vale desde já.",
+        "endsAt": "Termina em",
+        "endsAtHint": "Em branco, sem prazo para acabar.",
+        "endsAfterStart": "O fim precisa ser depois do começo.",
+        "maxUses": "Total de usos",
+        "maxUsesHint": "Em branco, ilimitado.",
+        "maxUsesInvalid": "Informe um número inteiro ou deixe em branco.",
+        "maxUsesPerUser": "Usos por pessoa",
+        "maxUsesPerUserHint": "Ao menos 1.",
+        "perUserInvalid": "Informe um número inteiro maior que zero.",
+        "products": "Produtos",
+        "productsHint": "Sem nenhum marcado, o cupom vale para todos os produtos.",
+        "noProducts": "Nenhum produto disponível para restringir.",
+        "active": "Cupom ativo"
+      }
+    },
+    "export": {
+      "open": "Exportar vendas",
+      "subtitle": "Baixe as vendas em CSV, com os filtros que quiser.",
+      "filteredHint": "O arquivo sai com os filtros escolhidos.",
+      "allHint": "Sem filtros, o arquivo traz todas as vendas.",
+      "download": "Baixar CSV",
+      "busy": "Gerando…",
+      "done": "Download iniciado.",
+      "format": "UTF-8 com BOM, separador ponto e vírgula e vírgula decimal.",
+      "columns": "Uma linha por item de pedido, com comprador, documento fiscal, produto, valores, cupom e cobrança."
+    },
+    "errors": {
+      "order_not_refundable": "Este pedido não está pago e não pode ser reembolsado.",
+      "refund_exceeds_paid": "O valor passa do que foi pago e ainda não foi reembolsado.",
+      "refund_not_retryable": "Este reembolso não pode ser repetido.",
+      "coupon_code_taken": "Já existe um cupom com este código.",
+      "coupon_invalid": "A combinação do cupom não é válida. Confira o desconto, o período e os limites.",
+      "not_found": "O registro não foi encontrado.",
+      "validation_failed": "Confira os campos e tente de novo."
+    }
+  },
+  "payments": {
+    "operations": "Fila, e-mails e avisos de pagamento da escola.",
+    "provider": {
+      "mercadopago": "Mercado Pago",
+      "fake": "Simulado"
+    },
+    "settings": {
+      "title": "Pagamento",
+      "text": "O provedor em uso e o estado da integração. Nenhum token, chave ou segredo aparece aqui.",
+      "loading": "Carregando o estado do pagamento…",
+      "errorTitle": "Não foi possível carregar o estado do pagamento",
+      "productionWarning": "Esta instalação está em produção e usa um token de teste: nenhuma cobrança é real.",
+      "testMode": "Pagamentos em modo de teste: as cobranças são simuladas.",
+      "provider": "Provedor",
+      "mode": "Modo",
+      "test": "Teste",
+      "live": "Produção",
+      "lastReconciliation": "Última reconciliação",
+      "never": "Ainda não houve",
+      "secrets": "As credenciais ficam nas variáveis de ambiente do servidor e nunca são exibidas."
+    },
+    "webhooks": {
+      "title": "Webhooks de pagamento",
+      "tabs": "Situação dos avisos",
+      "failedTab": "Com falha",
+      "rejectedTab": "Recusados",
+      "failedText": "Avisos que não puderam ser processados. Reprocessar enfileira o aviso de novo.",
+      "rejectedText": "Trilha de segurança das assinaturas recusadas, somente leitura. Estes avisos não são reprocessados.",
+      "loading": "Carregando os avisos…",
+      "errorTitle": "Não foi possível carregar os avisos",
+      "retry": "Reprocessar",
+      "retried": "Aviso enfileirado de novo.",
+      "retryFailed": "Não foi possível reprocessar o aviso",
+      "loadMoreError": "Não foi possível carregar mais avisos.",
+      "empty": "Nenhum aviso com falha",
+      "emptyText": "Quando um webhook falhar, ele aparece aqui.",
+      "emptyRejected": "Nenhum aviso recusado",
+      "emptyRejectedText": "Nenhuma assinatura foi recusada no período retido.",
+      "noEventId": "Sem identificador",
+      "noResource": "Sem recurso identificado",
+      "resource": "{{type}} {{id}}",
+      "resourceType": {
+        "payment": "Cobrança",
+        "subscription": "Assinatura"
+      },
+      "status": {
+        "received": "Recebido",
+        "rejected": "Recusado",
+        "processed": "Processado",
+        "ignored": "Ignorado",
+        "failed": "Falhou"
+      },
+      "columns": {
+        "event": "Evento",
+        "status": "Situação",
+        "attempts": "Tentativas",
+        "error": "Erro",
+        "receivedAt": "Recebido em",
+        "actions": "Ações",
+        "none": "—"
+      }
+    },
+    "errors": {
+      "webhook_event_not_retryable": "Este aviso não pode ser reprocessado.",
+      "not_found": "O aviso não foi encontrado.",
+      "validation_failed": "Confira os dados e tente de novo."
     }
   }
 }

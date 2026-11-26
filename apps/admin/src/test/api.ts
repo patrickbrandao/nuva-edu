@@ -87,6 +87,7 @@ export const PERMISSIONS = {
     'announcement.publish',
     'entitlement.manage',
     'sales.view',
+    'sales.export',
     'order.refund',
     'subscription.cancel',
     'plan.manage',

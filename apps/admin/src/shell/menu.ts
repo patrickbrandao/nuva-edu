@@ -4,6 +4,7 @@ import {
   BadgeCheck,
   BookOpen,
   CalendarDays,
+  Download,
   Flag,
   GraduationCap,
   KeyRound,
@@ -49,6 +50,7 @@ export type MenuItemId =
   | 'events'
   | 'news'
   | 'orders'
+  | 'exportSales'
   | 'subscriptions'
   | 'plans'
   | 'coupons'
@@ -120,6 +122,12 @@ export const MENU: readonly MenuGroup[] = [
     id: 'sales',
     items: [
       { id: 'orders', path: '/pedidos', icon: ShoppingCart, permission: 'sales.view' },
+      {
+        id: 'exportSales',
+        path: '/pedidos/exportar',
+        icon: Download,
+        permission: 'sales.export',
+      },
       { id: 'subscriptions', path: '/assinaturas', icon: Repeat, permission: 'sales.view' },
       { id: 'plans', path: '/planos', icon: Tags, permission: 'plan.manage' },
       { id: 'coupons', path: '/cupons', icon: TicketPercent, permission: 'coupon.manage' },
@@ -151,13 +159,14 @@ export const MENU: readonly MenuGroup[] = [
 
 export const MENU_ITEMS: readonly MenuItem[] = MENU.flatMap((group) => group.items);
 
-/** Item do menu a que um endereço pertence: o próprio caminho ou uma tela abaixo dele. */
+/** Item do menu a que um endereço pertence: o caminho mais longo que casa (o próprio ou uma tela abaixo). */
 export function menuItemForPath(pathname: string): MenuItem | undefined {
-  return MENU_ITEMS.find((item) =>
+  const matches = MENU_ITEMS.filter((item) =>
     item.path === HOME_PATH
       ? pathname === HOME_PATH
       : pathname === item.path || pathname.startsWith(`${item.path}/`),
   );
+  return matches.sort((a, b) => b.path.length - a.path.length)[0];
 }
 
 /** Grupos com só os itens que a lista de ações permite; grupo vazio some. */

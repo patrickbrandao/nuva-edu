@@ -17,7 +17,7 @@ describe('casca do admin', () => {
       const link = within(menu).getByRole('link', { name: ptBR.menu.items[item.id] });
       expect(link.getAttribute('href')).toBe(item.path);
     }
-    expect(MENU_ITEMS).toHaveLength(22);
+    expect(MENU_ITEMS).toHaveLength(23);
     expect(within(menu).getByRole('link', { name: 'Painel' }).getAttribute('aria-current')).toBe(
       'page',
     );

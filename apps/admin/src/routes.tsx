@@ -6,6 +6,13 @@ import { CERTIFICATES_PATH } from './api/certificates';
 import { COURSES_PATH } from './api/courses';
 import { BUNDLES_PATH, EBOOKS_PATH } from './api/products';
 import { TERMS_PATH } from './api/terms';
+import { OperationsPage } from './features/payments/OperationsPage';
+import { OPERATIONS_PATH } from './features/payments/queries';
+import { CouponsPage } from './features/sales/CouponsPage';
+import { ExportPage } from './features/sales/ExportPage';
+import { OrderDetailPage } from './features/sales/OrderDetailPage';
+import { OrdersPage } from './features/sales/OrdersPage';
+import { COUPONS_PATH, EXPORT_PATH } from './features/sales/queries';
 import { AuditEntryPage } from './pages/audit/AuditEntryPage';
 import { AUDIT_PATH, AuditPage } from './pages/audit/AuditPage';
 import { CertificatesPage } from './pages/certificates/CertificatesPage';
@@ -66,6 +73,13 @@ function guarded(id: MenuItemId, element: ReactNode): ReactNode {
 
 /** Telas já construídas, por item do menu. Item sem tela leva à página "em construção". */
 const PAGES: Partial<Record<MenuItemId, RouteObject[]>> = {
+  orders: [
+    { path: '/pedidos', element: <OrdersPage /> },
+    { path: '/pedidos/:id', element: <OrderDetailPage /> },
+  ],
+  exportSales: [{ path: EXPORT_PATH, element: <ExportPage /> }],
+  coupons: [{ path: COUPONS_PATH, element: <CouponsPage /> }],
+  operations: [{ path: OPERATIONS_PATH, element: <OperationsPage /> }],
   students: [
     { path: STUDENTS_PATH, element: <StudentsPage /> },
     { path: `${STUDENTS_PATH}/:id`, element: <UserDetailPage /> },
