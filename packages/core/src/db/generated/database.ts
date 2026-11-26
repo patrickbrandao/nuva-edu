@@ -77,6 +77,22 @@ export interface Bundles {
   version: Generated<number>;
 }
 
+export interface CartItems {
+  addedAt: Generated<Timestamp>;
+  cartId: string;
+  id: Generated<string>;
+  productId: string;
+  productType: string;
+}
+
+export interface Carts {
+  couponId: string | null;
+  createdAt: Generated<Timestamp>;
+  id: Generated<string>;
+  updatedAt: Generated<Timestamp>;
+  userId: string;
+}
+
 export interface CertificatePreviews {
   courseId: string | null;
   createdAt: Generated<Timestamp>;
@@ -131,6 +147,30 @@ export interface CertificateTemplateVersions {
   createdBy: string;
   html: string;
   id: Generated<string>;
+}
+
+export interface CouponProducts {
+  couponId: string;
+  productId: string;
+  productType: string;
+}
+
+export interface Coupons {
+  active: Generated<boolean>;
+  amountOffCents: Int8 | null;
+  appliesTo: Generated<string>;
+  code: string;
+  createdAt: Generated<Timestamp>;
+  createdBy: string;
+  endsAt: Timestamp | null;
+  id: Generated<string>;
+  kind: string;
+  maxUses: number | null;
+  maxUsesPerUser: Generated<number>;
+  percentOff: number | null;
+  startsAt: Timestamp | null;
+  updatedAt: Generated<Timestamp>;
+  usesCount: Generated<number>;
 }
 
 export interface Courses {
@@ -341,6 +381,57 @@ export interface OauthIdentities {
   userId: string;
 }
 
+export interface OrderItems {
+  accessDaysSnapshot: number | null;
+  discountCents: Generated<Int8>;
+  id: Generated<string>;
+  orderId: string;
+  paidCents: Int8;
+  productId: string;
+  productType: string;
+  refundedCents: Generated<Int8>;
+  titleSnapshot: string;
+  unitPriceCents: Int8;
+}
+
+export interface Orders {
+  buyerName: string;
+  buyerTaxId: string;
+  buyerTaxIdType: string;
+  couponCode: string | null;
+  couponId: string | null;
+  createdAt: Generated<Timestamp>;
+  currency: string;
+  discountCents: Generated<Int8>;
+  expiresAt: Timestamp | null;
+  id: Generated<string>;
+  number: Generated<Int8>;
+  paidAt: Timestamp | null;
+  provider: Generated<string>;
+  status: Generated<string>;
+  subtotalCents: Int8;
+  totalCents: Int8;
+  updatedAt: Generated<Timestamp>;
+  userId: string;
+}
+
+export interface Payments {
+  amountCents: Int8;
+  createdAt: Generated<Timestamp>;
+  currency: string;
+  id: Generated<string>;
+  method: string;
+  orderId: string | null;
+  paidAt: Timestamp | null;
+  provider: string;
+  providerPaymentId: string;
+  rawStatus: string;
+  refundedCents: Generated<Int8>;
+  status: string;
+  subscriptionId: string | null;
+  updatedAt: Generated<Timestamp>;
+}
+
 export interface ProductEbooks {
   createdAt: Generated<Timestamp>;
   ebookId: string;
@@ -353,6 +444,22 @@ export interface Profiles {
   createdAt: Generated<Timestamp>;
   updatedAt: Generated<Timestamp>;
   userId: string;
+}
+
+export interface Refunds {
+  amountCents: Int8;
+  createdAt: Generated<Timestamp>;
+  doneAt: Timestamp | null;
+  error: string | null;
+  id: Generated<string>;
+  items: Generated<Json>;
+  orderId: string | null;
+  paymentId: string;
+  providerRefundId: string | null;
+  reason: string;
+  requestedBy: string;
+  status: Generated<string>;
+  updatedAt: Generated<Timestamp>;
 }
 
 export interface Sessions {
@@ -438,15 +545,32 @@ export interface UserSuspensions {
   userId: string;
 }
 
+export interface WebhookEvents {
+  attempts: Generated<number>;
+  error: string | null;
+  eventId: string | null;
+  id: Generated<string>;
+  processedAt: Timestamp | null;
+  provider: string;
+  receivedAt: Generated<Timestamp>;
+  resourceId: string | null;
+  resourceType: string | null;
+  status: Generated<string>;
+}
+
 export interface DB {
   activityDays: ActivityDays;
   auditLog: AuditLog;
   bundleItems: BundleItems;
   bundles: Bundles;
+  cartItems: CartItems;
+  carts: Carts;
   certificatePreviews: CertificatePreviews;
   certificates: Certificates;
   certificateTemplates: CertificateTemplates;
   certificateTemplateVersions: CertificateTemplateVersions;
+  couponProducts: CouponProducts;
+  coupons: Coupons;
   courses: Courses;
   ebooks: Ebooks;
   emailOutbox: EmailOutbox;
@@ -462,8 +586,12 @@ export interface DB {
   modules: Modules;
   notes: Notes;
   oauthIdentities: OauthIdentities;
+  orderItems: OrderItems;
+  orders: Orders;
+  payments: Payments;
   productEbooks: ProductEbooks;
   profiles: Profiles;
+  refunds: Refunds;
   sessions: Sessions;
   settings: Settings;
   termsAcceptances: TermsAcceptances;
@@ -471,4 +599,5 @@ export interface DB {
   userDevices: UserDevices;
   users: Users;
   userSuspensions: UserSuspensions;
+  webhookEvents: WebhookEvents;
 }
