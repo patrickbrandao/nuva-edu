@@ -148,6 +148,31 @@ export {
   type SseEvent,
 } from './sse.ts';
 export {
+  createStreamHub,
+  type StreamHub,
+  type StreamHubOptions,
+} from './stream-hub.ts';
+export {
+  createUserEventPipeline,
+  type UserEventChannelHandlers,
+  type UserEventChannelListener,
+  type UserEventPipeline,
+  type UserEventPipelineOptions,
+} from './user-event-pipeline.ts';
+export {
+  OPEN_FRAME,
+  type ParsedUserStreamEvent,
+  PING_FRAME,
+  parseEventId,
+  parseUserStreamEventPayload,
+  type StreamEventBody,
+  toStreamEventBody,
+  type UserEventKinds,
+  type UserStreamEvent,
+  type UserStreamEventRejection,
+  userEventFrame,
+} from './user-events.ts';
+export {
   type ContractValidator,
   createContractValidator,
   type OperationValidator,
