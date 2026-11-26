@@ -126,6 +126,8 @@ export interface AdminCourseDetail extends AdminCourseSummary {
   /** Alunos com direito ativo ao curso. */
   studentCount: number;
   modules: AdminCourseModule[];
+  /** Os ebooks vinculados ao curso (alvo `course`), em qualquer estado, por título. */
+  ebooks: AdminEbookRef[];
 }
 
 export interface AdminEbookRef {
@@ -502,9 +504,31 @@ async function readCourseRow(
 }
 
 /**
+ * Os ebooks vinculados a um alvo, em qualquer estado, por título e id: uma consulta, sem leitura
+ * por ebook.
+ */
+async function loadLinkedEbooks(
+  db: Database,
+  targetType: 'course' | 'lesson',
+  targetId: string,
+): Promise<AdminEbookRef[]> {
+  const ebooks = await db
+    .selectFrom('productEbooks')
+    .innerJoin('ebooks', 'ebooks.id', 'productEbooks.ebookId')
+    .select(['ebooks.id', 'ebooks.slug', 'ebooks.title', 'ebooks.status'])
+    .where('productEbooks.targetType', '=', targetType)
+    .where('productEbooks.targetId', '=', targetId)
+    .orderBy('ebooks.title')
+    .orderBy('ebooks.id')
+    .execute();
+  return ebooks.map((ebook) => ({ ...ebook, status: ebook.status as PublicationStatus }));
+}
+
+/**
  * `GET /courses/{id}` (`course.edit`): o curso para o editor, com todos os módulos e aulas na
- * ordem (publicadas ou não) e o número de alunos com direito ativo. Curso alheio ao instrutor,
- * ou inexistente: `404`.
+ * ordem (publicadas ou não), os ebooks vinculados ao curso (alvo `course`; os das aulas vêm no
+ * detalhe de cada aula) e o número de alunos com direito ativo. Curso alheio ao instrutor, ou
+ * inexistente: `404`.
  */
 export async function getAdminCourse(
   db: Database,
@@ -522,6 +546,7 @@ export async function getAdminCourse(
     version: row.version,
     studentCount: await countActiveEntitlementHolders(db, 'course', row.id),
     modules,
+    ebooks: await loadLinkedEbooks(db, 'course', row.id),
   };
 }
 
@@ -592,15 +617,6 @@ export async function getAdminLesson(
   if (!row || (scope === 'own' && row.ownerId !== request.actor.id)) {
     throw notFound('Aula não encontrada.');
   }
-  const ebooks = await db
-    .selectFrom('productEbooks')
-    .innerJoin('ebooks', 'ebooks.id', 'productEbooks.ebookId')
-    .select(['ebooks.id', 'ebooks.slug', 'ebooks.title', 'ebooks.status'])
-    .where('productEbooks.targetType', '=', 'lesson')
-    .where('productEbooks.targetId', '=', id)
-    .orderBy('ebooks.title')
-    .orderBy('ebooks.id')
-    .execute();
   const { ownerId: _ownerId, ...lesson } = row;
   return {
     ...lesson,
@@ -608,7 +624,7 @@ export async function getAdminLesson(
     status: row.status as PublicationStatus,
     videoProvider: row.videoProvider as VideoProvider | null,
     links: await listCatalogLessonLinks(db, id),
-    ebooks: ebooks.map((ebook) => ({ ...ebook, status: ebook.status as PublicationStatus })),
+    ebooks: await loadLinkedEbooks(db, 'lesson', id),
   };
 }
 

@@ -15,10 +15,18 @@ import {
   createModule,
   type Database,
   DomainError,
+  findCatalogEbook,
+  getAdminCourse,
+  getAdminLesson,
   getAdminModule,
+  linkEbookTarget,
+  listCatalogEbookTargets,
   publishCourse,
+  publishEbook,
   type Role,
   reorderLessons,
+  setEbookTargets,
+  unlinkEbookTarget,
   updateBundle,
   updateCourse,
   updateEbook,
@@ -27,7 +35,8 @@ import {
 
 // Regras de criação e edição do catálogo decididas na tarefa 620 (spec 009, "Criação e
 // edição"): mover aula entre módulos, slug gerado, modo inicial `private`, permissão antes da
-// regra, duração nula e leitura de módulo. Banco próprio deste arquivo.
+// regra, duração nula e leitura de módulo; e as de "Ebooks vinculados" (tarefa 641): ebooks no
+// detalhe do curso e vínculo de um ebook só. Banco próprio deste arquivo.
 
 let testDb: TestDatabase;
 let db: Database;
@@ -89,6 +98,25 @@ async function deniedFor(actorId: string, action: string): Promise<number> {
     SELECT count(*)::int AS n FROM audit_log
     WHERE actor_user_id = ${actorId} AND action = ${action} AND outcome = 'denied'`.execute(db);
   return result.rows[0]?.n ?? 0;
+}
+
+async function recomputesFor(productId: string): Promise<number> {
+  const result = await sql<{ n: number }>`
+    SELECT count(*)::int AS n FROM jobs
+    WHERE type = 'entitlement.recompute' AND payload->>'productId' = ${productId}`.execute(db);
+  return result.rows[0]?.n ?? 0;
+}
+
+async function ebookVersion(ebookId: string): Promise<number | undefined> {
+  return (await findCatalogEbook(db, ebookId))?.version;
+}
+
+/** Curso do dono com um módulo e uma aula. */
+async function courseWithLesson(owner: CatalogRequest, title = 'Curso com aula') {
+  const course = await createCourse(db, owner, { slug: slug(), title });
+  const module = await createModule(db, owner, course.id, { title: 'M' });
+  const lesson = await createLesson(db, owner, module.id, { title: 'A' });
+  return { course, module, lesson };
 }
 
 /** Aulas de um módulo, na ordem: título, posição e versão. */
@@ -567,5 +595,209 @@ describe('getAdminModule', () => {
     await expectError(getAdminModule(db, admin, randomUUID()), 404, 'not_found');
     await expectError(getAdminModule(db, admin, 'x'), 404, 'not_found');
     await expectError(getAdminModule(db, student, second.id), 403, 'permission_denied');
+  });
+});
+
+describe('ebooks vinculados ao curso (getAdminCourse)', () => {
+  it('traz os ebooks do curso em qualquer estado, por título, e não os das aulas', async () => {
+    const { course, lesson } = await courseWithLesson(instructor);
+    const zeta = await createEbook(db, manager, { slug: slug(), title: 'Zeta' });
+    const alfa = await createEbook(db, manager, {
+      slug: slug(),
+      title: 'Alfa',
+      fileUrl: 'https://arquivos.exemplo.test/alfa.pdf',
+    });
+    await publishEbook(db, manager, alfa.id);
+    const ofLesson = await createEbook(db, manager, { slug: slug(), title: 'Da aula' });
+    const unrelated = await createEbook(db, manager, { slug: slug(), title: 'Solto' });
+    await linkEbookTarget(db, manager, zeta.id, { targetType: 'course', targetId: course.id });
+    await linkEbookTarget(db, manager, alfa.id, { targetType: 'course', targetId: course.id });
+    await linkEbookTarget(db, manager, ofLesson.id, { targetType: 'lesson', targetId: lesson.id });
+
+    const detail = await getAdminCourse(db, instructor, course.id);
+    expect(detail.ebooks).toEqual([
+      { id: alfa.id, slug: alfa.slug, title: 'Alfa', status: 'published' },
+      { id: zeta.id, slug: zeta.slug, title: 'Zeta', status: 'draft' },
+    ]);
+    expect((await getAdminLesson(db, instructor, lesson.id)).ebooks).toEqual([
+      { id: ofLesson.id, slug: ofLesson.slug, title: 'Da aula', status: 'draft' },
+    ]);
+    // Desvincular tira do detalhe; curso sem ebook traz a lista vazia.
+    await unlinkEbookTarget(db, manager, alfa.id, { targetType: 'course', targetId: course.id });
+    expect((await getAdminCourse(db, manager, course.id)).ebooks.map((e) => e.id)).toEqual([
+      zeta.id,
+    ]);
+    const empty = await createCourse(db, manager, { slug: slug(), title: 'Sem ebook' });
+    expect((await getAdminCourse(db, manager, empty.id)).ebooks).toEqual([]);
+    expect(unrelated.id).not.toBe(zeta.id);
+  });
+});
+
+describe('vínculo de um ebook só (linkEbookTarget e unlinkEbookTarget)', () => {
+  it('vincula e desvincula sem tocar nos outros vínculos; repetição não grava nem audita', async () => {
+    const { course, lesson } = await courseWithLesson(instructor);
+    const other = await courseWithLesson(otherInstructor);
+    const bundle = await createBundle(db, manager, { slug: slug(), title: 'Pacote' });
+    const ebook = await createEbook(db, manager, { slug: slug(), title: 'Ebook' });
+    await setEbookTargets(db, manager, ebook.id, {
+      targets: [{ targetType: 'course', targetId: other.course.id }],
+    });
+    // O vínculo `bundle` nasce só de carga direta no banco (spec 009, decisão da tarefa 660).
+    await db
+      .insertInto('productEbooks')
+      .values({ ebookId: ebook.id, targetType: 'bundle', targetId: bundle.id })
+      .execute();
+    const version = (await ebookVersion(ebook.id)) as number;
+    const auditBefore = (await auditOf(ebook.id)).length;
+
+    const toCourse = { targetType: 'course', targetId: course.id.toUpperCase() };
+    const toLesson = { targetType: 'lesson', targetId: lesson.id };
+    await expect(linkEbookTarget(db, manager, ebook.id, toCourse)).resolves.toBeUndefined();
+    await linkEbookTarget(db, manager, ebook.id, toLesson);
+    expect(await ebookVersion(ebook.id)).toBe(version + 2);
+    // Curso e aula recalculam o mesmo curso.
+    expect(await recomputesFor(course.id)).toBe(2);
+    const keys = async () =>
+      (await listCatalogEbookTargets(db, manager, ebook.id))
+        .map((target) => `${target.targetType}:${target.targetId}`)
+        .sort();
+    expect(await keys()).toEqual(
+      [
+        `bundle:${bundle.id}`,
+        `course:${course.id}`,
+        `course:${other.course.id}`,
+        `lesson:${lesson.id}`,
+      ].sort(),
+    );
+    const added = (await auditOf(ebook.id)).slice(auditBefore);
+    expect(added).toEqual([
+      {
+        action: 'ebook.set_targets',
+        outcome: 'ok',
+        details: { added: 1, removed: 0, target: { targetType: 'course', targetId: course.id } },
+      },
+      {
+        action: 'ebook.set_targets',
+        outcome: 'ok',
+        details: { added: 1, removed: 0, target: { targetType: 'lesson', targetId: lesson.id } },
+      },
+    ]);
+
+    // Repetir o vínculo: nada muda.
+    await linkEbookTarget(db, manager, ebook.id, toCourse);
+    await linkEbookTarget(db, manager, ebook.id, toLesson);
+    expect(await ebookVersion(ebook.id)).toBe(version + 2);
+    expect(await auditOf(ebook.id)).toHaveLength(auditBefore + 2);
+    expect(await recomputesFor(course.id)).toBe(2);
+
+    await unlinkEbookTarget(db, manager, ebook.id, toLesson);
+    expect(await ebookVersion(ebook.id)).toBe(version + 3);
+    expect(await recomputesFor(course.id)).toBe(3);
+    expect((await auditOf(ebook.id)).at(-1)).toEqual({
+      action: 'ebook.set_targets',
+      outcome: 'ok',
+      details: { added: 0, removed: 1, target: { targetType: 'lesson', targetId: lesson.id } },
+    });
+    // Desfazer o que não existe: nada muda.
+    await unlinkEbookTarget(db, manager, ebook.id, toLesson);
+    expect(await ebookVersion(ebook.id)).toBe(version + 3);
+    expect(await auditOf(ebook.id)).toHaveLength(auditBefore + 3);
+    expect(await keys()).toEqual(
+      [`bundle:${bundle.id}`, `course:${course.id}`, `course:${other.course.id}`].sort(),
+    );
+  });
+
+  it('instrutor: alvo próprio funciona, alheio é 404; alvo inexistente é 422', async () => {
+    const mine = await courseWithLesson(instructor);
+    const other = await courseWithLesson(otherInstructor);
+    const ebook = await createEbook(db, manager, { slug: slug(), title: 'Do instrutor' });
+    await linkEbookTarget(db, manager, ebook.id, {
+      targetType: 'course',
+      targetId: other.course.id,
+    });
+    await linkEbookTarget(db, instructor, ebook.id, {
+      targetType: 'course',
+      targetId: mine.course.id,
+    });
+    await linkEbookTarget(db, instructor, ebook.id, {
+      targetType: 'lesson',
+      targetId: mine.lesson.id,
+    });
+    for (const target of [
+      { targetType: 'course', targetId: other.course.id },
+      { targetType: 'lesson', targetId: other.lesson.id },
+    ]) {
+      await expectError(linkEbookTarget(db, instructor, ebook.id, target), 404, 'not_found');
+      await expectError(unlinkEbookTarget(db, instructor, ebook.id, target), 404, 'not_found');
+    }
+    // O vínculo alheio continua lá.
+    expect(await listCatalogEbookTargets(db, manager, ebook.id)).toHaveLength(3);
+    await unlinkEbookTarget(db, instructor, ebook.id, {
+      targetType: 'lesson',
+      targetId: mine.lesson.id,
+    });
+    expect(await listCatalogEbookTargets(db, instructor, ebook.id)).toEqual([
+      { targetType: 'course', targetId: mine.course.id },
+    ]);
+
+    for (const actor of [manager, instructor]) {
+      for (const targetType of ['course', 'lesson']) {
+        const missing = { targetType, targetId: randomUUID() };
+        const error = await expectError(
+          linkEbookTarget(db, actor, ebook.id, missing),
+          422,
+          'catalog_item_not_found',
+        );
+        expect(error.errors?.map((item) => item.path)).toEqual(['path.targetId']);
+        await expectError(
+          unlinkEbookTarget(db, actor, ebook.id, missing),
+          422,
+          'catalog_item_not_found',
+        );
+      }
+    }
+    // Só curso e aula; identificadores fora do formato; ebook inexistente; sem a ação.
+    const target = { targetType: 'course', targetId: mine.course.id };
+    const invalid = await expectError(
+      linkEbookTarget(db, manager, ebook.id, { targetType: 'bundle', targetId: 'x' }),
+      400,
+      'validation_failed',
+    );
+    expect(invalid.errors?.map((item) => item.path)).toEqual(['path.targetType', 'path.targetId']);
+    await expectError(linkEbookTarget(db, manager, randomUUID(), target), 404, 'not_found');
+    await expectError(unlinkEbookTarget(db, manager, 'x', target), 404, 'not_found');
+    await expectError(linkEbookTarget(db, student, ebook.id, target), 403, 'permission_denied');
+    await expectError(unlinkEbookTarget(db, student, ebook.id, target), 403, 'permission_denied');
+    expect(await deniedFor(student.actor.id, 'ebook.set_targets')).toBe(2);
+  });
+
+  it('o 501º vínculo do ebook é 422 catalog_limit_exceeded (targetsPerEbook)', async () => {
+    const { course, lesson } = await courseWithLesson(instructor);
+    const ebook = await createEbook(db, manager, { slug: slug(), title: 'Cheio' });
+    await linkEbookTarget(db, manager, ebook.id, { targetType: 'course', targetId: course.id });
+    await db
+      .insertInto('productEbooks')
+      .values(
+        Array.from({ length: CATALOG_LIMITS.targetsPerEbook - 1 }, () => ({
+          ebookId: ebook.id,
+          targetType: 'lesson',
+          targetId: randomUUID(),
+        })),
+      )
+      .execute();
+    const toLesson = { targetType: 'lesson', targetId: lesson.id };
+    const error = await expectError(
+      linkEbookTarget(db, manager, ebook.id, toLesson),
+      422,
+      'catalog_limit_exceeded',
+    );
+    expect(error.extras).toEqual({ limit: 'targetsPerEbook', max: 500 });
+    // No limite, repetir um vínculo que já existe continua sem erro; desvincular abre a vaga.
+    await linkEbookTarget(db, manager, ebook.id, { targetType: 'course', targetId: course.id });
+    await unlinkEbookTarget(db, manager, ebook.id, { targetType: 'course', targetId: course.id });
+    await linkEbookTarget(db, manager, ebook.id, toLesson);
+    const total = await sql<{ n: number }>`
+      SELECT count(*)::int AS n FROM product_ebooks WHERE ebook_id = ${ebook.id}`.execute(db);
+    expect(total.rows[0]?.n).toBe(CATALOG_LIMITS.targetsPerEbook);
   });
 });

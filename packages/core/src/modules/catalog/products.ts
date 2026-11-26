@@ -994,3 +994,141 @@ export async function setEbookTargets(
     return listCatalogEbookTargets(trx, request, id);
   });
 }
+
+/** Os alvos que os vínculos de um ebook só aceitam (o pacote usa `bundle_items`). */
+export const EBOOK_SINGLE_TARGET_TYPES = ['course', 'lesson'] as const;
+
+export interface EbookTargetInput {
+  /** `course` ou `lesson`. */
+  targetType: unknown;
+  targetId: unknown;
+}
+
+/**
+ * Trava o ebook e resolve o alvo de um vínculo só (`ebook.link`). Ebook inexistente: `404`; alvo
+ * inexistente: `422` `catalog_item_not_found`; alvo de curso alheio ao instrutor: `404`.
+ */
+async function loadEbookLink(
+  trx: Database,
+  request: CatalogRequest,
+  ebookId: unknown,
+  input: EbookTargetInput,
+): Promise<{ ebookId: string; link: CatalogEbookTarget; linked: boolean }> {
+  const id = assertCatalogId(ebookId, 'Ebook');
+  requireCatalogAction(request, 'ebook.link', {
+    action: 'ebook.set_targets',
+    target: { type: 'ebook', id },
+  });
+  const errors = new FieldErrors();
+  const link: CatalogEbookTarget = {
+    targetType: readEnum(errors, input.targetType, 'path.targetType', EBOOK_SINGLE_TARGET_TYPES),
+    targetId: readId(errors, input.targetId, 'path.targetId'),
+  };
+  errors.throwIfAny();
+  const ebook = await findProduct(trx, 'ebook', id, { forUpdate: true });
+  if (!ebook) throw notFound('Ebook não encontrado.');
+  const resolved = (await resolveTargets(trx, [link])).get(`${link.targetType}:${link.targetId}`);
+  if (!resolved) {
+    throw catalogUnprocessable('catalog_item_not_found', 'Alvo do vínculo não existe.', [
+      { path: 'path.targetId', message: 'Alvo não encontrado.' },
+    ]);
+  }
+  if (!reachable(request, resolved)) throw notFound('Curso ou aula não encontrado.');
+  const existing = await trx
+    .selectFrom('productEbooks')
+    .select('ebookId')
+    .where('ebookId', '=', id)
+    .where('targetType', '=', link.targetType)
+    .where('targetId', '=', link.targetId)
+    .executeTakeFirst();
+  return { ebookId: id, link, linked: existing !== undefined };
+}
+
+/** O que toda mudança de um vínculo grava: `version` do ebook, recálculo do pai e auditoria. */
+async function afterEbookLinkChange(
+  trx: Database,
+  request: CatalogRequest,
+  ebookId: string,
+  link: CatalogEbookTarget,
+  change: 'added' | 'removed',
+): Promise<void> {
+  await trx
+    .updateTable('ebooks')
+    .set({ version: sql<number>`version + 1` })
+    .where('id', '=', ebookId)
+    .execute();
+  const parent = await recomputeParentOfTarget(trx, link);
+  if (parent) await enqueueRecomputes(trx, [parent]);
+  await catalogAudit(trx, request, {
+    action: 'ebook.set_targets',
+    targetType: 'ebook',
+    targetId: ebookId,
+    details: {
+      added: change === 'added' ? 1 : 0,
+      removed: change === 'removed' ? 1 : 0,
+      target: link,
+    },
+  });
+}
+
+/**
+ * `PUT /ebooks/{id}/targets/{targetType}/{targetId}` (`ebook.link`): vincula o ebook a um curso
+ * ou a uma aula, sem tocar nos outros vínculos (spec 009, "Ebooks vinculados"). Idempotente:
+ * vínculo que já existe não grava nem audita. Alvo inexistente: `422` `catalog_item_not_found`;
+ * alvo de curso alheio ao instrutor: `404`; o 501º vínculo do ebook: `422`
+ * `catalog_limit_exceeded` (`targetsPerEbook`). Avança o `version` do ebook, enfileira
+ * `entitlement.recompute` do curso (o da aula, em vínculo `lesson`) na mesma transação e grava
+ * `ebook.set_targets` com o vínculo acrescentado. Não recebe `version`.
+ */
+export async function linkEbookTarget(
+  db: Database,
+  request: CatalogRequest,
+  ebookId: unknown,
+  input: EbookTargetInput,
+): Promise<void> {
+  await catalogWrite(db, request, async (trx) => {
+    const { ebookId: id, link, linked } = await loadEbookLink(trx, request, ebookId, input);
+    if (linked) return;
+    const total = await trx
+      .selectFrom('productEbooks')
+      .select(sql<number>`count(*)::int`.as('count'))
+      .where('ebookId', '=', id)
+      .executeTakeFirstOrThrow();
+    if (total.count >= CATALOG_LIMITS.targetsPerEbook) {
+      throw catalogLimitExceeded(
+        'targetsPerEbook',
+        `O ebook aceita até ${CATALOG_LIMITS.targetsPerEbook} vínculos.`,
+      );
+    }
+    await trx
+      .insertInto('productEbooks')
+      .values({ ebookId: id, ...link })
+      .execute();
+    await afterEbookLinkChange(trx, request, id, link, 'added');
+  });
+}
+
+/**
+ * `DELETE /ebooks/{id}/targets/{targetType}/{targetId}` (`ebook.link`): desfaz um vínculo do
+ * ebook, sem tocar nos outros. Idempotente: vínculo que não existe não grava nem audita. Os
+ * mesmos erros de alvo de `linkEbookTarget`. Avança o `version` do ebook, enfileira o recálculo
+ * do curso e grava `ebook.set_targets` com o vínculo removido. Não recebe `version`.
+ */
+export async function unlinkEbookTarget(
+  db: Database,
+  request: CatalogRequest,
+  ebookId: unknown,
+  input: EbookTargetInput,
+): Promise<void> {
+  await catalogWrite(db, request, async (trx) => {
+    const { ebookId: id, link, linked } = await loadEbookLink(trx, request, ebookId, input);
+    if (!linked) return;
+    await trx
+      .deleteFrom('productEbooks')
+      .where('ebookId', '=', id)
+      .where('targetType', '=', link.targetType)
+      .where('targetId', '=', link.targetId)
+      .execute();
+    await afterEbookLinkChange(trx, request, id, link, 'removed');
+  });
+}
