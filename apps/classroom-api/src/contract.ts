@@ -30,4 +30,9 @@ export const CSRF_EXCEPTIONS: readonly string[] = [
   // (`security: []`), lê o corpo bruto com limite de 64 KB. É a rota
   // `POST /api/v1/webhooks/mercadopago`.
   'receiveMercadoPagoWebhook',
+  // Descadastro por token (spec 024, "Links com token"): link de um clique no cliente de e-mail,
+  // aberto sem sessão e sem token CSRF. Público (`security: []`), sem corpo; o token do caminho é
+  // a autenticação e o efeito é só desligar o e-mail de um grupo. É a rota
+  // `POST /api/v1/unsubscribe/{token}`.
+  'unsubscribe',
 ];
