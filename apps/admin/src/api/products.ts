@@ -9,6 +9,7 @@ import { useApi } from './client';
 export type ProductKind = 'ebook' | 'bundle';
 
 export type EbookSummary = AdminSchemas['EbookSummary'];
+export type EbookRef = AdminSchemas['EbookRef'];
 export type EbookDetail = AdminSchemas['EbookDetail'];
 export type EbookTarget = AdminSchemas['EbookTarget'];
 export type BundleSummary = AdminSchemas['BundleSummary'];
@@ -145,8 +146,11 @@ export async function deleteProduct(api: AdminClient, kind: ProductKind, id: str
   await api.DELETE(`/api/v1/${SEGMENT[kind]}/{id}`, { params: { path: { id } } });
 }
 
-/** Os vínculos que `PUT /ebooks/{id}/targets` aceita: curso e aula (pacote é item do pacote). */
-function linkTargets(ebook: EbookDetail): LinkTarget[] {
+/**
+ * Os vínculos que `PUT /ebooks/{id}/targets` aceita: curso e aula. Os `bundle` vêm na leitura,
+ * só para ver: o corpo não os aceita (`400`), e a API os preserva.
+ */
+export function linkTargets(ebook: EbookDetail): LinkTarget[] {
   return ebook.targets.flatMap((target) =>
     target.targetType === 'bundle'
       ? []
@@ -154,44 +158,55 @@ function linkTargets(ebook: EbookDetail): LinkTarget[] {
   );
 }
 
-const sameTarget = (a: LinkTarget, b: LinkTarget) =>
-  a.targetType === b.targetType && a.targetId === b.targetId;
-
-export function isLinkedTo(ebook: EbookDetail, target: LinkTarget): boolean {
-  return ebook.targets.some((item) => sameTarget(item as LinkTarget, target));
+/**
+ * Grava a lista de vínculos de curso e aula do ebook (`PUT /api/v1/ebooks/{id}/targets`), com o
+ * `version` do ebook na última resposta.
+ */
+export async function putEbookTargets(
+  api: AdminClient,
+  ebook: EbookDetail,
+  targets: readonly LinkTarget[],
+): Promise<EbookDetail> {
+  const { data } = await api.PUT('/api/v1/ebooks/{id}/targets', {
+    params: { path: { id: ebook.id } },
+    body: { targets: [...targets], version: ebook.version },
+  });
+  if (!data) throw new Error('PUT /api/v1/ebooks/{id}/targets respondeu sem corpo');
+  return data;
 }
 
 /**
- * Vincula ou desvincula um ebook de um curso ou de uma aula. O contrato substitui a lista
- * inteira de vínculos, então o ebook é lido de novo antes: para o instrutor a API devolve (e
- * substitui) só os vínculos com os próprios cursos e aulas.
+ * Vincula ou desvincula um ebook de um curso ou de uma aula, sem tocar nos outros vínculos
+ * (`PUT|DELETE /api/v1/ebooks/{id}/targets/{targetType}/{targetId}`, `204` sem corpo).
  */
 export async function setEbookLink(
   api: AdminClient,
   ebookId: string,
   target: LinkTarget,
   linked: boolean,
-): Promise<EbookDetail> {
-  const current = linkTargets(await fetchEbook(api, ebookId));
-  const others = current.filter((item) => !sameTarget(item, target));
-  const { data } = await api.PUT('/api/v1/ebooks/{id}/targets', {
-    params: { path: { id: ebookId } },
-    body: { targets: linked ? [...others, target] : others },
-  });
-  if (!data) throw new Error('PUT /api/v1/ebooks/{id}/targets respondeu sem corpo');
-  return data;
+): Promise<void> {
+  const params = {
+    path: { id: ebookId, targetType: target.targetType, targetId: target.targetId },
+  };
+  const path = '/api/v1/ebooks/{id}/targets/{targetType}/{targetId}';
+  if (linked) await api.PUT(path, { params });
+  else await api.DELETE(path, { params });
 }
 
-/** Grava a lista inteira de itens do pacote, na ordem (`PUT /api/v1/bundles/{id}/items`). */
+/**
+ * Grava a lista inteira de itens do pacote, na ordem (`PUT /api/v1/bundles/{id}/items`), com o
+ * `version` do pacote na última resposta.
+ */
 export async function putBundleItems(
   api: AdminClient,
-  bundleId: string,
+  bundle: BundleDetail,
   items: readonly BundleItemRef[],
 ): Promise<BundleDetail> {
   const { data } = await api.PUT('/api/v1/bundles/{id}/items', {
-    params: { path: { id: bundleId } },
+    params: { path: { id: bundle.id } },
     body: {
       items: items.map(({ productType, productId }) => ({ productType, productId })),
+      version: bundle.version,
     },
   });
   if (!data) throw new Error('PUT /api/v1/bundles/{id}/items respondeu sem corpo');

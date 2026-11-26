@@ -30,16 +30,18 @@ import {
   putBundleItems,
   useProductsList,
 } from '../../api/products';
-import { ConfirmAction, useSortableLabels } from '../courses/CourseBits';
+import { ConfirmAction, ConflictAlert, useSortableLabels } from '../courses/CourseBits';
 import { formatPrice } from '../courses/format';
+import { isVersionConflict } from '../courses/version';
 import { useProductError } from './errors';
 
 const itemKey = (item: BundleItemRef) => `${item.productType}:${item.productId}`;
 
 /**
  * Itens do pacote (spec 009, "Pacotes"): cursos e ebooks, na ordem em que aparecem. Cada mudança
- * grava a lista inteira (`PUT /api/v1/bundles/{id}/items`). Remover um item pede confirmação com
- * o número de alunos que têm o pacote, porque a cascata de acesso deles é recalculada.
+ * grava a lista inteira (`PUT /api/v1/bundles/{id}/items`), com o `version` do pacote. Remover um
+ * item pede confirmação com o número de alunos que têm o pacote, porque a cascata de acesso deles
+ * é recalculada. O `409` `version_conflict` avisa e oferece recarregar o pacote.
  */
 export function BundleItemsTab({ bundle }: { bundle: BundleDetail }) {
   const { t } = useTranslation();
@@ -51,21 +53,29 @@ export function BundleItemsTab({ bundle }: { bundle: BundleDetail }) {
   const labels = useSortableLabels();
   const [adding, setAdding] = useState(false);
   const [removing, setRemoving] = useState<BundleItem | null>(null);
-  const save = useAction((items: readonly BundleItemRef[]) =>
-    putBundleItems(api, bundle.id, items),
-  );
+  const [conflict, setConflict] = useState(false);
+  const save = useAction((items: readonly BundleItemRef[]) => putBundleItems(api, bundle, items));
+  const reload = async () => {
+    await queryClient.invalidateQueries({ queryKey: productsKeys.detail('bundle', bundle.id) });
+    setConflict(false);
+  };
   const currency = meta.data?.currency;
   const archived = bundle.archivedAt !== null;
   const full = bundle.items.length >= BUNDLE_ITEMS_MAX;
 
   const reorder = async (next: BundleItem[]) => {
     // a ordem nova aparece antes de a API confirmar; se ela recusar, o pacote é lido de novo
-    queryClient.setQueryData<BundleDetail>(productsKeys.detail('bundle', bundle.id), (current) =>
+    const key = productsKeys.detail('bundle', bundle.id);
+    queryClient.setQueryData<BundleDetail>(key, (current) =>
       current ? { ...current, items: next } : current,
     );
     const result = await save.run(next);
     if (result.ok) productChanged(queryClient, 'bundle', result.data);
-    else {
+    else if (isVersionConflict(result.error)) {
+      // outra pessoa mudou o pacote: volta a ordem gravada e espera o "Recarregar"
+      queryClient.setQueryData(key, bundle);
+      setConflict(true);
+    } else {
       toast.error(message(result.error), { title: t('products.items.reorderError') });
       void queryClient.invalidateQueries({ queryKey: productsKeys.detail('bundle', bundle.id) });
     }
@@ -123,6 +133,7 @@ export function BundleItemsTab({ bundle }: { bundle: BundleDetail }) {
         </AdminButton>
       }
     >
+      {conflict ? <ConflictAlert className="mb-4" onReload={reload} /> : null}
       <AdminDetails
         wrap
         className="mb-4"
@@ -173,11 +184,16 @@ export function BundleItemsTab({ bundle }: { bundle: BundleDetail }) {
           action={() =>
             putBundleItems(
               api,
-              bundle.id,
+              bundle,
               bundle.items.filter((item) => itemKey(item) !== itemKey(removing)),
             )
           }
           describeError={message}
+          onError={(error) =>
+            isVersionConflict(error)
+              ? setConflict(true)
+              : toast.error(message(error), { title: t('products.items.removeTitle') })
+          }
           onClose={() => setRemoving(null)}
           onDone={(result) => {
             productChanged(queryClient, 'bundle', result);
@@ -219,14 +235,14 @@ function AddItemDialog({ bundle, onClose }: { bundle: BundleDetail; onClose: () 
   const full = bundle.items.length >= BUNDLE_ITEMS_MAX;
 
   const add = useAction((item: BundleItemRef) =>
-    putBundleItems(api, bundle.id, [...bundle.items, item]),
+    putBundleItems(api, bundle, [...bundle.items, item]),
   );
   const onAdd = async (candidate: Candidate) => {
     const result = await add.run({ productType: type, productId: candidate.id });
     if (result.ok) {
       productChanged(queryClient, 'bundle', result.data);
       toast.success(t('products.items.added', { title: candidate.title }));
-    } else {
+    } else if (!isVersionConflict(result.error)) {
       toast.error(message(result.error), { title: t('products.items.addError') });
     }
   };
@@ -248,6 +264,17 @@ function AddItemDialog({ bundle, onClose }: { bundle: BundleDetail; onClose: () 
       dismissible={!add.busy}
       footer={<AdminButton onClick={onClose}>{t('products.items.addDone')}</AdminButton>}
     >
+      {isVersionConflict(add.error) ? (
+        <ConflictAlert
+          className="mb-3"
+          onReload={async () => {
+            await queryClient.invalidateQueries({
+              queryKey: productsKeys.detail('bundle', bundle.id),
+            });
+            add.reset();
+          }}
+        />
+      ) : null}
       <div className="mb-3 flex flex-wrap items-center gap-2">
         <AdminMenu
           options={typeOptions}

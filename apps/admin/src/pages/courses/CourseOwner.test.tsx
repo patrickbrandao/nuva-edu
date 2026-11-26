@@ -58,6 +58,38 @@ beforeEach(() => {
 afterEach(() => restoreLayout());
 
 describe('dono do curso no editor', () => {
+  it('conflito de edição na troca do dono: avisa, mantém a escolha e grava depois de recarregar', async () => {
+    const user = userEvent.setup();
+    const catalog = fakeCatalog({
+      role: 'manager',
+      courses: [courseDetail()],
+      instructors: [INSTRUCTOR, LIA],
+    });
+    renderApp(PATH, catalog.respond);
+    const section = await ownerSection();
+    await user.click(within(section).getByRole('button', { name: 'Trocar o dono' }));
+    const box = await screen.findByRole('dialog', { name: 'Dono do curso “Curso de Python”' });
+    await user.click(within(box).getByRole('button', { name: 'Deixar sem dono' }));
+    const stored = catalog.course(COURSE_ID);
+    if (stored) stored.version = 6;
+    await user.click(within(box).getByRole('button', { name: 'Salvar' }));
+
+    const title = await within(box).findByText('Este item foi alterado por outra pessoa');
+    const alert = title.closest('[role="alert"]') as HTMLElement;
+    await user.click(within(alert).getByRole('button', { name: 'Recarregar' }));
+    await waitFor(() => expect(within(box).queryByText(title.textContent ?? '')).toBeNull());
+    expect(within(box).getByRole('button', { name: 'Deixar sem dono' })).toHaveProperty(
+      'ariaPressed',
+      'true',
+    );
+    await user.click(within(box).getByRole('button', { name: 'Salvar' }));
+    expect(await screen.findByText('O curso ficou sem dono.')).toBeTruthy();
+    expect(catalog.bodies(OWNER_ROUTE)).toEqual([
+      { ownerId: null, version: 1 },
+      { ownerId: null, version: 6 },
+    ]);
+  });
+
   it('gerente troca o dono pela busca de instrutores e depois deixa o curso sem dono', async () => {
     const user = userEvent.setup();
     const catalog = fakeCatalog({
@@ -82,7 +114,7 @@ describe('dono do curso no editor', () => {
     await user.click(within(box).getByRole('button', { name: 'Salvar' }));
 
     expect(await screen.findByText('Dono do curso alterado para Lia Instrutora.')).toBeTruthy();
-    expect(catalog.bodies(OWNER_ROUTE)).toEqual([{ ownerId: LIA.id }]);
+    expect(catalog.bodies(OWNER_ROUTE)).toEqual([{ ownerId: LIA.id, version: 1 }]);
     const users = catalog.requests.filter((item) => item.path === '/api/v1/users');
     expect(users.at(-1)?.query.get('role')).toBe('instructor');
     expect(users.at(-1)?.query.get('q')).toBe('lia');
@@ -93,7 +125,7 @@ describe('dono do curso no editor', () => {
     await user.click(within(again).getByRole('button', { name: 'Deixar sem dono' }));
     await user.click(within(again).getByRole('button', { name: 'Salvar' }));
     expect(await screen.findByText('O curso ficou sem dono.')).toBeTruthy();
-    expect(catalog.bodies(OWNER_ROUTE)[1]).toEqual({ ownerId: null });
+    expect(catalog.bodies(OWNER_ROUTE)[1]).toEqual({ ownerId: null, version: 2 });
     expect(catalog.course(COURSE_ID)?.owner).toBeNull();
     await waitFor(() => expect(within(section).getByText('Sem dono')).toBeTruthy());
   });

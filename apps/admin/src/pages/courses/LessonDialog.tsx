@@ -17,12 +17,15 @@ import { useTranslation } from 'react-i18next';
 import { useAction } from '../../api/action';
 import { useApi } from '../../api/client';
 import {
+  coursesKeys,
   DESCRIPTION_MAX,
   DURATION_MAX_SECONDS,
+  freshLesson,
   LESSON_LINKS_MAX,
   type LessonDetail,
   type LessonLinkKind,
   LINK_KINDS,
+  lessonChanged,
   refreshCourse,
   TITLE_MAX,
   URL_MAX,
@@ -30,9 +33,10 @@ import {
 } from '../../api/courses';
 import { useCan } from '../../session/session';
 import { EbookLinker } from '../products/EbookLinker';
-import { useSortableLabels } from './CourseBits';
+import { ConflictAlert, useSortableLabels } from './CourseBits';
 import { useCourseError, useFieldRefusal } from './errors';
 import { formatDuration, isContentUrl, parseDuration } from './format';
+import { isVersionConflict, useEditedForm } from './version';
 
 interface LinkRow {
   key: string;
@@ -53,16 +57,18 @@ interface Props {
 
 /**
  * Aula (spec 009, RF-05 e RF-09): título, vídeo por link, duração, descrição em Markdown,
- * amostra grátis e links de apoio. Editar busca a aula (`GET /lessons/{id}`), que traz o vídeo e
- * os links; o curso só tem o resumo.
+ * amostra grátis e links de apoio. Editar busca a aula (`GET /lessons/{id}`), que traz o vídeo,
+ * os links, os ebooks e o `version`; o curso só tem o resumo. As escritas levam o `version` da
+ * última resposta da aula, e o `409` `version_conflict` avisa e oferece recarregar.
  */
 export function LessonDialog({ courseId, moduleId, moduleTitle, lessonId, onClose }: Props) {
   const { t } = useTranslation();
   const lesson = useLesson(lessonId);
   const message = useCourseError();
 
-  // o formulário nasce da resposta: com a aula no cache, espera a leitura nova terminar
-  if (lessonId && (!lesson.data || lesson.isFetching)) {
+  // o formulário nasce da resposta: com a aula no cache, espera a leitura nova terminar; as
+  // leituras seguintes (recarregar, vínculo de ebook) não tiram o formulário da tela
+  if (lessonId && (!lesson.data || !lesson.isFetchedAfterMount)) {
     const notFound = isApiError(lesson.error) && lesson.error.status === 404;
     return (
       <Dialog
@@ -102,6 +108,27 @@ interface FormProps {
   onClose: () => void;
 }
 
+interface LessonFormState {
+  title: string;
+  videoUrl: string;
+  duration: string;
+  description: string;
+  isSample: boolean;
+  links: LinkRow[];
+}
+
+function formOf(lesson: LessonDetail | null): LessonFormState {
+  return {
+    title: lesson?.title ?? '',
+    videoUrl: lesson?.videoUrl ?? '',
+    // `0` é "não informada": o campo abre vazio
+    duration: lesson?.durationSeconds ? formatDuration(lesson.durationSeconds) : '',
+    description: lesson?.description ?? '',
+    isSample: lesson?.isSample ?? false,
+    links: linkRows(lesson),
+  };
+}
+
 function linkRows(lesson: LessonDetail | null): LinkRow[] {
   return (lesson?.links ?? []).map((link) => ({
     key: link.id,
@@ -132,16 +159,31 @@ function LessonForm({ courseId, moduleId, moduleTitle, initial, onClose }: FormP
   const message = useCourseError();
   const labels = useSortableLabels();
   const can = useCan();
-  // depois de criada, a aula passa a ser editada: se só os links falharem, salvar de novo não a duplica
-  const [saved, setSaved] = useState<LessonDetail | null>(initial);
-  const [title, setTitle] = useState(initial?.title ?? '');
-  const [videoUrl, setVideoUrl] = useState(initial?.videoUrl ?? '');
-  const [duration, setDuration] = useState(formatDuration(initial?.durationSeconds));
-  const [description, setDescription] = useState(initial?.description ?? '');
-  const [isSample, setIsSample] = useState(initial?.isSample ?? false);
-  const [links, setLinks] = useState<LinkRow[]>(() => linkRows(initial));
+  // depois de criada, a aula passa a ser editada: se só os links falharem, salvar de novo não a
+  // duplica. A aula editada vem do cache (`initial`), que cada gravação e o "Recarregar" atualizam.
+  const [created, setCreated] = useState<LessonDetail | null>(null);
+  const saved = initial ?? created;
+  const [form, setForm] = useEditedForm(saved, formOf);
+  const { title, videoUrl, duration, description, isSample, links } = form;
+  const setField =
+    <K extends keyof LessonFormState>(key: K) =>
+    (value: LessonFormState[K]) =>
+      setForm((current) => ({ ...current, [key]: value }));
+  const setTitle = setField('title');
+  const setVideoUrl = setField('videoUrl');
+  const setDuration = setField('duration');
+  const setDescription = setField('description');
+  const setIsSample = setField('isSample');
+  const setLinks = (update: (rows: LinkRow[]) => LinkRow[]) =>
+    setForm((current) => ({ ...current, links: update(current.links) }));
   const [invalid, setInvalid] = useState<Map<string, string>>(new Map());
   const nextKey = useRef(0);
+
+  /** Guarda a resposta da aula: o próximo envio leva o `version` dela. */
+  const keep = (lesson: LessonDetail) => {
+    lessonChanged(queryClient, lesson);
+    if (!initial) setCreated(lesson);
+  };
 
   const saveLesson = useAction(async (durationSeconds: number | null): Promise<LessonDetail> => {
     const fields = {
@@ -159,14 +201,19 @@ function LessonForm({ courseId, moduleId, moduleTitle, initial, onClose }: FormP
       if (!data) throw new Error('POST /api/v1/modules/{id}/lessons respondeu sem corpo');
       return data;
     }
-    // só o que mudou: o corpo vazio é recusado pelo contrato (`minProperties: 1`)
+    // só o que mudou; a duração vazia (`null`) é a mesma coisa que `0`, "não informada"
     const body = Object.fromEntries(
-      Object.entries(fields).filter(([key, value]) => saved[key as keyof typeof fields] !== value),
+      Object.entries(fields).filter(([key, value]) =>
+        key === 'durationSeconds'
+          ? (durationSeconds ?? 0) !== saved.durationSeconds
+          : saved[key as keyof typeof fields] !== value,
+      ),
     ) as Partial<typeof fields>;
+    // nada mudou: o `PATCH` só com `version` é recusado (`minProperties: 2`)
     if (Object.keys(body).length === 0) return saved;
     const { data } = await api.PATCH('/api/v1/lessons/{id}', {
       params: { path: { id: saved.id } },
-      body,
+      body: { ...body, version: saved.version },
     });
     if (!data) throw new Error('PATCH /api/v1/lessons/{id} respondeu sem corpo');
     return data;
@@ -181,11 +228,23 @@ function LessonForm({ courseId, moduleId, moduleTitle, initial, onClose }: FormP
           url: link.url.trim(),
           kind: link.kind,
         })),
+        version: lesson.version,
       },
     });
     if (!data) throw new Error('PUT /api/v1/lessons/{id}/links respondeu sem corpo');
     return data;
   });
+
+  const conflict = isVersionConflict(saveLesson.error) || isVersionConflict(saveLinks.error);
+  /** Depois do conflito: a aula atual entra no formulário, sem apagar o que foi digitado. */
+  const reload = async () => {
+    if (saved) {
+      const fresh = await freshLesson(api, queryClient, saved.id);
+      if (!initial) setCreated(fresh);
+    }
+    saveLesson.reset();
+    saveLinks.reset();
+  };
 
   const lessonRefusal = useFieldRefusal(saveLesson.error);
   const linkRefused = new Set(
@@ -224,8 +283,8 @@ function LessonForm({ courseId, moduleId, moduleTitle, initial, onClose }: FormP
 
     const lessonResult = await saveLesson.run(seconds);
     if (!lessonResult.ok) return;
-    setSaved(lessonResult.data);
     let latest = lessonResult.data;
+    if (latest !== saved) keep(latest);
     if (!sameLinks(links, linkRows(latest))) {
       const linksResult = await saveLinks.run(latest);
       if (!linksResult.ok) {
@@ -233,7 +292,7 @@ function LessonForm({ courseId, moduleId, moduleTitle, initial, onClose }: FormP
         return;
       }
       latest = linksResult.data;
-      setSaved(latest);
+      keep(latest);
     }
     await refreshCourse(queryClient, courseId);
     toast.success(
@@ -261,8 +320,10 @@ function LessonForm({ courseId, moduleId, moduleTitle, initial, onClose }: FormP
 
   const linkName = (link: LinkRow) =>
     link.label.trim() || t('courses.lessons.links.unnamed', { position: links.indexOf(link) + 1 });
-  const generalLesson = lessonRefusal.general(['title', 'videoUrl', 'durationSeconds']);
+  const generalLesson =
+    !conflict && lessonRefusal.general(['title', 'videoUrl', 'durationSeconds']);
   const generalLinks =
+    !conflict &&
     Boolean(saveLinks.error) &&
     !links.some((_, index) =>
       ['label', 'url', 'kind'].some((field) => linkRefused.has(`links.${index}.${field}`)),
@@ -290,6 +351,7 @@ function LessonForm({ courseId, moduleId, moduleTitle, initial, onClose }: FormP
         </>
       }
     >
+      {conflict ? <ConflictAlert className="mb-4" onReload={reload} /> : null}
       {generalLesson ? (
         <Alert tone="error" className="mb-4">
           {message(saveLesson.error)}
@@ -360,7 +422,7 @@ function LessonForm({ courseId, moduleId, moduleTitle, initial, onClose }: FormP
               getId={(link) => link.key}
               getLabel={linkName}
               onReorder={(next) => {
-                setLinks(next);
+                setLinks(() => next);
                 setInvalid(new Map());
                 saveLinks.reset();
               }}
@@ -428,6 +490,10 @@ function LessonForm({ courseId, moduleId, moduleTitle, initial, onClose }: FormP
           <span className="text-sm text-ink-3">{t('products.links.lessonHint')}</span>
           <EbookLinker
             target={{ targetType: 'lesson', targetId: initial.id }}
+            linked={initial.ebooks}
+            onChanged={() =>
+              queryClient.invalidateQueries({ queryKey: coursesKeys.lesson(initial.id) })
+            }
             label={t('products.links.lessonList', { title: initial.title })}
           />
         </section>

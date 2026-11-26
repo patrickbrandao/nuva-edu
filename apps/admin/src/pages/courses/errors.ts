@@ -22,6 +22,7 @@ const KNOWN = [
   'image_too_heavy',
   'image_processing_busy',
   'not_found',
+  'version_conflict',
   'validation_failed',
 ] as const;
 type Known = (typeof KNOWN)[number];

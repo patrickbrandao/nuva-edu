@@ -14,7 +14,6 @@ const KNOWN = [
   'product_has_links',
   'ebook_file_required',
   'bundle_has_no_items',
-  'bundle_in_bundle',
   'catalog_item_not_found',
   'catalog_limit_exceeded',
   'version_conflict',

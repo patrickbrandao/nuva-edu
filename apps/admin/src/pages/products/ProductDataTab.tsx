@@ -31,12 +31,15 @@ import {
   type ProductDetail,
   type ProductKind,
   productChanged,
+  productsKeys,
 } from '../../api/products';
+import { ConflictAlert } from '../courses/CourseBits';
 import { formatPrice, isContentUrl, parsePrice, parseWhole, priceInput } from '../courses/format';
-
+import { isVersionConflict, useEditedForm } from '../courses/version';
 import { useProductError, useProductRefusal } from './errors';
 
-type ProductUpdate = AdminSchemas['EbookUpdate'];
+/** Os campos de `PATCH /ebooks/{id}` (os do pacote são parte deles); o `version` vem no envio. */
+type ProductUpdate = Omit<AdminSchemas['EbookUpdate'], 'version'>;
 
 const SLUG_PATTERN = /^[a-z0-9]+(-[a-z0-9]+)*$/;
 const ACCESS_DAYS_MAX = 36500;
@@ -81,8 +84,9 @@ interface Props {
 
 /**
  * Dados e capa de um ebook ou pacote (`PATCH /api/v1/ebooks/{id}`, `PATCH /api/v1/bundles/{id}`),
- * como no editor de curso: só os campos alterados são enviados, e os de acesso e de preço nem
- * aparecem para quem não tem a ação. O ebook tem a mais o autor, o arquivo e as páginas.
+ * como no editor de curso: só os campos alterados são enviados, com o `version` do produto, e os
+ * de acesso e de preço nem aparecem para quem não tem a ação. O ebook tem a mais o autor, o
+ * arquivo e as páginas. O `409` `version_conflict` avisa e oferece recarregar.
  */
 export function ProductDataTab({ kind, product, canSetAccess, canSetPrice }: Props) {
   const { t } = useTranslation();
@@ -92,7 +96,7 @@ export function ProductDataTab({ kind, product, canSetAccess, canSetPrice }: Pro
   const meta = useMeta();
   const message = useProductError();
   const ebook = isEbook(product) ? product : null;
-  const [form, setForm] = useState<FormState>(() => formOf(product));
+  const [form, setForm] = useEditedForm(product, formOf);
   const [invalid, setInvalid] = useState<Map<string, string>>(new Map());
   const [preview, setPreview] = useState(false);
   const set = <K extends keyof FormState>(key: K, value: FormState[K]) =>
@@ -100,10 +104,11 @@ export function ProductDataTab({ kind, product, canSetAccess, canSetPrice }: Pro
 
   const patch = async (body: ProductUpdate): Promise<ProductDetail> => {
     const params = { path: { id: product.id } };
+    const full = { ...body, version: product.version };
     const { data } =
       kind === 'ebook'
-        ? await api.PATCH('/api/v1/ebooks/{id}', { params, body })
-        : await api.PATCH('/api/v1/bundles/{id}', { params, body });
+        ? await api.PATCH('/api/v1/ebooks/{id}', { params, body: full })
+        : await api.PATCH('/api/v1/bundles/{id}', { params, body: full });
     if (!data) throw new Error('a edição respondeu sem corpo');
     return data;
   };
@@ -158,6 +163,8 @@ export function ProductDataTab({ kind, product, canSetAccess, canSetPrice }: Pro
   const refusal = useProductRefusal(save.error);
   const dirty = JSON.stringify(form) !== JSON.stringify(formOf(product));
   const fieldError = (field: string) => invalid.get(field) ?? refusal.of(field);
+  const reload = () =>
+    queryClient.invalidateQueries({ queryKey: productsKeys.detail(kind, product.id) });
 
   const onSubmit = async (event: FormEvent) => {
     event.preventDefault();
@@ -207,6 +214,15 @@ export function ProductDataTab({ kind, product, canSetAccess, canSetPrice }: Pro
   return (
     <>
       <AdminSection title={t('courses.cover.title')}>
+        {isVersionConflict(cover.error) ? (
+          <ConflictAlert
+            className="mb-4"
+            onReload={async () => {
+              await reload();
+              cover.reset();
+            }}
+          />
+        ) : null}
         <ImagePicker
           key={pickerKey}
           shape="wide"
@@ -223,7 +239,7 @@ export function ProductDataTab({ kind, product, canSetAccess, canSetPrice }: Pro
           currentUrl={product.cover?.url ?? null}
           placeholder={t('courses.cover.none')}
           busy={cover.busy}
-          error={cover.error ? message(cover.error) : undefined}
+          error={cover.error && !isVersionConflict(cover.error) ? message(cover.error) : undefined}
           onChange={(file) => {
             if (file) void changeCover(file);
           }}
@@ -232,7 +248,15 @@ export function ProductDataTab({ kind, product, canSetAccess, canSetPrice }: Pro
       </AdminSection>
 
       <AdminSection title={t(`products.${kind}.data.title`)}>
-        {refusal.general(known) ? (
+        {isVersionConflict(save.error) ? (
+          <ConflictAlert
+            className="mb-4"
+            onReload={async () => {
+              await reload();
+              save.reset();
+            }}
+          />
+        ) : refusal.general(known) ? (
           <Alert tone="error" className="mb-4">
             {message(save.error)}
           </Alert>

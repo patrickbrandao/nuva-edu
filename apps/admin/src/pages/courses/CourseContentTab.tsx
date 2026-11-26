@@ -21,15 +21,18 @@ import { useApi } from '../../api/client';
 import {
   type CourseDetail,
   type CourseModule,
+  freshLesson,
   type LessonSummary,
+  lessonChanged,
   refreshCourse,
   setModulesOrder,
   TITLE_MAX,
 } from '../../api/courses';
-import { ConfirmAction, useSortableLabels } from './CourseBits';
+import { ConfirmAction, ConflictAlert, useSortableLabels } from './CourseBits';
 import { useCourseError, useFieldRefusal } from './errors';
 import { formatDuration } from './format';
 import { LessonDialog } from './LessonDialog';
+import { isVersionConflict } from './version';
 
 /** Parâmetro do endereço com a aula aberta no diálogo (`/cursos/:id?aula=<id>`). */
 export const LESSON_PARAM = 'aula';
@@ -136,13 +139,17 @@ export function CourseContentTab({ course, canPublish }: Props) {
     }, t('courses.lessons.moveError'));
   };
 
+  // o resumo da aula não traz o `version`: a aula é lida antes; um conflito vira aviso e o
+  // curso é lido de novo, sem reenviar
   const setLessonStatus = (lesson: LessonSummary, status: LessonSummary['status']) =>
     void write(
       async () => {
-        await api.PATCH('/api/v1/lessons/{id}', {
+        const current = await freshLesson(api, queryClient, lesson.id);
+        const { data } = await api.PATCH('/api/v1/lessons/{id}', {
           params: { path: { id: lesson.id } },
-          body: { status },
+          body: { status, version: current.version },
         });
+        if (data) lessonChanged(queryClient, data);
         await refreshCourse(queryClient, course.id);
         toast.success(
           t(status === 'published' ? 'courses.lessons.published' : 'courses.lessons.unpublished', {
@@ -162,7 +169,8 @@ export function CourseContentTab({ course, canPublish }: Props) {
         {t(`courses.lessons.status.${lesson.status}`)}
       </AdminStatus>
       {lesson.isSample ? <AdminTag>{t('courses.lessons.sample')}</AdminTag> : null}
-      {lesson.durationSeconds !== null ? (
+      {/* `0` é "não informada" */}
+      {lesson.durationSeconds > 0 ? (
         <span className="text-sm text-ink-3">{formatDuration(lesson.durationSeconds)}</span>
       ) : null}
       <span className="ml-auto flex flex-wrap items-center gap-1">
@@ -300,7 +308,12 @@ export function CourseContentTab({ course, canPublish }: Props) {
       {dialog?.kind === 'module-new' || dialog?.kind === 'module-rename' ? (
         <ModuleDialog
           courseId={course.id}
-          module={dialog.kind === 'module-rename' ? dialog.module : null}
+          module={
+            dialog.kind === 'module-rename'
+              ? // o módulo do curso como está no cache: depois de recarregar, com o `version` novo
+                (course.modules.find((item) => item.id === dialog.module.id) ?? dialog.module)
+              : null
+          }
           onClose={close}
         />
       ) : null}
@@ -388,7 +401,10 @@ function ModuleDialog({ courseId, module, onClose }: ModuleDialogProps) {
   const save = useAction(async () => {
     const body = { title: title.trim() };
     if (module) {
-      await api.PATCH('/api/v1/modules/{id}', { params: { path: { id: module.id } }, body });
+      await api.PATCH('/api/v1/modules/{id}', {
+        params: { path: { id: module.id } },
+        body: { ...body, version: module.version },
+      });
     } else {
       await api.POST('/api/v1/courses/{id}/modules', { params: { path: { id: courseId } }, body });
     }
@@ -432,7 +448,15 @@ function ModuleDialog({ courseId, module, onClose }: ModuleDialogProps) {
         </>
       }
     >
-      {refusal.general(['title']) ? (
+      {isVersionConflict(save.error) ? (
+        <ConflictAlert
+          className="mb-4"
+          onReload={async () => {
+            await refreshCourse(queryClient, courseId);
+            save.reset();
+          }}
+        />
+      ) : refusal.general(['title']) ? (
         <Alert tone="error" className="mb-4">
           {message(save.error)}
         </Alert>

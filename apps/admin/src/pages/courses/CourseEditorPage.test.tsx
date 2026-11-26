@@ -217,7 +217,7 @@ describe('editor de curso: módulos e aulas', () => {
     await user.clear(name);
     await user.type(name, 'Bônus{Enter}');
     await screen.findByRole('heading', { level: 3, name: 'Bônus' });
-    expect(catalog.bodies('PATCH /api/v1/modules/vazio')).toEqual([{ title: 'Bônus' }]);
+    expect(catalog.bodies('PATCH /api/v1/modules/vazio')).toEqual([{ title: 'Bônus', version: 1 }]);
 
     await user.click(button('Excluir o módulo Bônus'));
     const confirm = await screen.findByRole('alertdialog', { name: 'Excluir o módulo?' });
@@ -251,9 +251,10 @@ describe('editor de curso: módulos e aulas', () => {
     await user.click(await screen.findByRole('button', { name: 'Publicar a aula Variáveis' }));
     await user.click(await screen.findByRole('button', { name: 'Despublicar a aula Variáveis' }));
     await screen.findByRole('button', { name: 'Publicar a aula Variáveis' });
+    // o resumo da aula não traz o `version`: a aula é lida antes de cada mudança
     expect(catalog.bodies(`PATCH /api/v1/lessons/${L1}`)).toEqual([
-      { status: 'published' },
-      { status: 'draft' },
+      { status: 'published', version: 1 },
+      { status: 'draft', version: 2 },
     ]);
 
     await user.click(button('Excluir a aula Calculadora'));
@@ -297,7 +298,7 @@ describe('editor de curso: aula', () => {
     await user.click(within(box).getByRole('button', { name: 'Salvar' }));
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
     expect(catalog.bodies(`PATCH /api/v1/lessons/${L1}`)).toEqual([
-      { videoUrl: 'https://youtu.be/abc123', durationSeconds: 3930, isSample: true },
+      { videoUrl: 'https://youtu.be/abc123', durationSeconds: 3930, isSample: true, version: 1 },
     ]);
     expect(catalog.bodies(`PUT /api/v1/lessons/${L1}/links`)).toEqual([
       {
@@ -305,6 +306,8 @@ describe('editor de curso: aula', () => {
           { label: 'Slides', url: 'https://exemplo.com/slides.pdf', kind: 'file' },
           { label: 'Documentação', url: 'https://docs.python.org', kind: 'page' },
         ],
+        // o `version` da resposta do `PATCH`, que veio antes
+        version: 2,
       },
     ]);
     expect(router.state.location.search).toBe('?aba=conteudo');
@@ -423,7 +426,7 @@ describe('editor de curso: dados, capa e certificado', () => {
     await user.click(button('Salvar'));
     expect(await screen.findByText('Dados do curso salvos.')).toBeTruthy();
     expect(catalog.bodies(`PATCH /api/v1/courses/${COURSE_ID}`)).toEqual([
-      { description: 'Aprenda **Python**.', level: 'beginner' },
+      { description: 'Aprenda **Python**.', level: 'beginner', version: 1 },
     ]);
     await waitFor(() => expect(button('Salvar').hasAttribute('disabled')).toBe(true));
   });
@@ -462,6 +465,7 @@ describe('editor de curso: dados, capa e certificado', () => {
       slug: 'python',
       accessMode: 'paid',
       priceCents: 4990,
+      version: 1,
     });
   });
 
@@ -482,7 +486,7 @@ describe('editor de curso: dados, capa e certificado', () => {
     await user.click(button('Salvar'));
     await waitFor(() =>
       expect(catalog.bodies(`PATCH /api/v1/courses/${COURSE_ID}`)).toEqual([
-        { accessMode: 'open' },
+        { accessMode: 'open', version: 1 },
       ]),
     );
   });
@@ -525,13 +529,18 @@ describe('editor de curso: dados, capa e certificado', () => {
     const image = catalog.course(COURSE_ID)?.cover?.imageId;
     expect(catalog.bodies(`PATCH /api/v1/courses/${COURSE_ID}`)[0]).toEqual({
       coverImageId: image,
+      version: 1,
     });
     const shown = await screen.findByRole('img', { name: 'Capa de Curso de Python' });
     expect(shown.getAttribute('src')).toBe(`/api/v1/images/${image}/480.webp`);
 
     await user.click(button('Remover a capa'));
     expect(await screen.findByText('Capa removida.')).toBeTruthy();
-    expect(catalog.bodies(`PATCH /api/v1/courses/${COURSE_ID}`)[1]).toEqual({ coverImageId: null });
+    // a segunda gravação leva o `version` da resposta da primeira
+    expect(catalog.bodies(`PATCH /api/v1/courses/${COURSE_ID}`)[1]).toEqual({
+      coverImageId: null,
+      version: 2,
+    });
   });
 
   it('capa recusada pela API mostra o motivo no seletor', async () => {
@@ -570,7 +579,7 @@ describe('editor de curso: dados, capa e certificado', () => {
     await user.click(button('Salvar'));
     expect(await screen.findByText('Certificado do curso salvo.')).toBeTruthy();
     expect(catalog.bodies(`PATCH /api/v1/courses/${COURSE_ID}`)).toEqual([
-      { certificateEnabled: true, certificateHours: 40 },
+      { certificateEnabled: true, certificateHours: 40, version: 1 },
     ]);
     await expectNoAxeViolations();
   });
@@ -725,5 +734,151 @@ describe('editor de curso: publicação, arquivo e exclusão', () => {
     expect(screen.getByRole('link', { name: 'Voltar aos cursos' }).getAttribute('href')).toBe(
       '/cursos',
     );
+  });
+});
+
+describe('editor de curso: conflito de edição (409 version_conflict)', () => {
+  const TITLE = 'Este item foi alterado por outra pessoa';
+  /** O aviso do conflito (o `Alert` não tem nome acessível: acha-se pelo título). */
+  const conflict = async (scope: HTMLElement = document.body) =>
+    (await within(scope).findByText(TITLE)).closest('[role="alert"]') as HTMLElement;
+  const noConflict = (scope: HTMLElement = document.body) =>
+    waitFor(() => expect(within(scope).queryByText(TITLE)).toBeNull());
+
+  it('dados: avisa sem perder o que foi digitado, recarrega e grava com o version novo', async () => {
+    const user = userEvent.setup();
+    const catalog = fakeCatalog({ courses: [filled()] });
+    renderApp(PATH, catalog.respond);
+    await heading('Curso de Python');
+    const title = screen.getByLabelText('Título') as HTMLInputElement;
+    await user.clear(title);
+    await user.type(title, 'Python do zero');
+
+    // outra pessoa grava o resumo no meio da edição
+    const stored = catalog.course(COURSE_ID);
+    if (!stored) throw new Error('curso ausente');
+    Object.assign(stored, { summary: 'Resumo da outra pessoa.', version: 4 });
+
+    await user.click(button('Salvar'));
+    const alert = await conflict();
+    expect(within(alert).getByText(/Nada foi gravado/)).toBeTruthy();
+    expect(title.value).toBe('Python do zero');
+    expect(catalog.course(COURSE_ID)?.title).toBe('Curso de Python');
+    await expectNoAxeViolations();
+
+    await user.click(within(alert).getByRole('button', { name: 'Recarregar' }));
+    await noConflict();
+    // o campo mexido fica; o que a pessoa não mexeu mostra a versão atual
+    expect(title.value).toBe('Python do zero');
+    expect((screen.getByLabelText('Resumo') as HTMLTextAreaElement).value).toBe(
+      'Resumo da outra pessoa.',
+    );
+    // não reenvia sozinho
+    expect(catalog.bodies(`PATCH /api/v1/courses/${COURSE_ID}`)).toHaveLength(1);
+
+    await user.click(button('Salvar'));
+    expect(await screen.findByText('Dados do curso salvos.')).toBeTruthy();
+    expect(catalog.bodies(`PATCH /api/v1/courses/${COURSE_ID}`)).toEqual([
+      { title: 'Python do zero', version: 1 },
+      { title: 'Python do zero', version: 4 },
+    ]);
+    expect(catalog.course(COURSE_ID)?.summary).toBe('Resumo da outra pessoa.');
+  });
+
+  it('certificado: o conflito aparece na aba e se recupera', async () => {
+    const user = userEvent.setup();
+    const catalog = fakeCatalog({ courses: [filled({ version: 3 })] });
+    renderApp(`${PATH}?aba=certificado`, catalog.respond);
+    await heading('Curso de Python');
+    await user.type(screen.getByLabelText('Carga horária (horas)'), '20');
+    const stored = catalog.course(COURSE_ID);
+    if (stored) stored.version = 7;
+    await user.click(button('Salvar'));
+    await user.click(within(await conflict()).getByRole('button', { name: 'Recarregar' }));
+    await noConflict();
+    expect((screen.getByLabelText('Carga horária (horas)') as HTMLInputElement).value).toBe('20');
+    await user.click(button('Salvar'));
+    expect(await screen.findByText('Certificado do curso salvo.')).toBeTruthy();
+    expect(catalog.bodies(`PATCH /api/v1/courses/${COURSE_ID}`)).toEqual([
+      { certificateHours: 20, version: 3 },
+      { certificateHours: 20, version: 7 },
+    ]);
+  });
+
+  it('módulo: renomear com conflito avisa no diálogo; depois de recarregar, grava', async () => {
+    const user = userEvent.setup();
+    const catalog = fakeCatalog({ courses: [filled()] });
+    renderApp(CONTENT, catalog.respond);
+    await user.click(await screen.findByRole('button', { name: 'Renomear o módulo Projetos' }));
+    const box = await screen.findByRole('dialog', { name: 'Renomear o módulo' });
+    const name = within(box).getByLabelText('Nome do módulo') as HTMLInputElement;
+    await user.clear(name);
+    await user.type(name, 'Prática');
+    const stored = catalog.course(COURSE_ID)?.modules.find((item) => item.id === M2);
+    if (stored) stored.version = 2;
+
+    await user.click(within(box).getByRole('button', { name: 'Salvar' }));
+    const alert = await conflict(box);
+    expect(name.value).toBe('Prática');
+    await user.click(within(alert).getByRole('button', { name: 'Recarregar' }));
+    await noConflict(box);
+    expect(name.value).toBe('Prática');
+    await user.click(within(box).getByRole('button', { name: 'Salvar' }));
+    await screen.findByRole('heading', { level: 3, name: 'Prática' });
+    expect(catalog.bodies(`PATCH /api/v1/modules/${M2}`)).toEqual([
+      { title: 'Prática', version: 1 },
+      { title: 'Prática', version: 2 },
+    ]);
+  });
+
+  it('aula: o conflito no diálogo mantém o formulário e grava depois de recarregar', async () => {
+    const user = userEvent.setup();
+    const catalog = fakeCatalog({ courses: [filled()] });
+    renderApp(`${CONTENT}&aula=${L1}`, catalog.respond);
+    const title = (await screen.findByLabelText('Título')) as HTMLInputElement;
+    const box = screen.getByRole('dialog', { name: 'Editar a aula' });
+    await user.clear(title);
+    await user.type(title, 'Variáveis e tipos');
+    const stored = catalog.lesson(L1);
+    if (!stored) throw new Error('aula ausente');
+    Object.assign(stored, { description: 'Texto da outra pessoa.', version: 5 });
+
+    await user.click(within(box).getByRole('button', { name: 'Salvar' }));
+    const alert = await conflict(box);
+    await user.click(within(alert).getByRole('button', { name: 'Recarregar' }));
+    await noConflict(box);
+    // o diálogo continua aberto, com o título digitado e a descrição atual
+    expect(title.value).toBe('Variáveis e tipos');
+    expect((within(box).getByLabelText('Descrição') as HTMLTextAreaElement).value).toBe(
+      'Texto da outra pessoa.',
+    );
+
+    await user.click(within(box).getByRole('button', { name: 'Salvar' }));
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    expect(catalog.bodies(`PATCH /api/v1/lessons/${L1}`)).toEqual([
+      { title: 'Variáveis e tipos', version: 1 },
+      { title: 'Variáveis e tipos', version: 5 },
+    ]);
+  });
+});
+
+describe('editor de curso: duração não informada', () => {
+  it('duração 0 não aparece na lista, abre o campo vazio e salvar sem mudança não grava', async () => {
+    const user = userEvent.setup();
+    const catalog = fakeCatalog({ courses: [filled()] });
+    renderApp(CONTENT, catalog.respond);
+    const list = await screen.findByRole('list', { name: 'Aulas do módulo Fundamentos' });
+    const row = within(list).getByRole('button', { name: 'Funções' }).closest('li') as HTMLElement;
+    expect(within(row).queryByText(/^\d+:\d{2}$/)).toBeNull();
+    expect(within(list).getByText('12:34')).toBeTruthy();
+
+    await user.click(within(list).getByRole('button', { name: 'Funções' }));
+    const box = await screen.findByRole('dialog', { name: 'Editar a aula' });
+    const duration = (await within(box).findByLabelText('Duração')) as HTMLInputElement;
+    expect(duration.value).toBe('');
+    await user.click(within(box).getByRole('button', { name: 'Salvar' }));
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    // nada mudou: nenhum `PATCH` só com `version`
+    expect(catalog.writes()).toEqual([]);
   });
 });

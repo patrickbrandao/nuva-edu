@@ -1,4 +1,4 @@
-import type { AdminOperations, AdminSchemas } from '@nuva-edu/api-client/admin';
+import type { AdminClient, AdminOperations, AdminSchemas } from '@nuva-edu/api-client/admin';
 import { type QueryClient, useInfiniteQuery, useQuery } from '@tanstack/react-query';
 import { useApi } from './client';
 
@@ -80,21 +80,48 @@ export function useCourse(id: string) {
   });
 }
 
+export async function fetchLesson(
+  api: AdminClient,
+  id: string,
+  signal?: AbortSignal,
+): Promise<LessonDetail> {
+  const { data } = await api.GET('/api/v1/lessons/{id}', {
+    params: { path: { id } },
+    ...(signal ? { signal } : {}),
+  });
+  if (!data) throw new Error('GET /api/v1/lessons/{id} respondeu sem corpo');
+  return data;
+}
+
 /** A aula para edição, com vídeo e links de apoio (`GET /api/v1/lessons/{id}`). */
 export function useLesson(id: string | null) {
   const api = useApi();
   return useQuery({
     queryKey: coursesKeys.lesson(id ?? ''),
-    queryFn: async ({ signal }): Promise<LessonDetail> => {
-      const { data } = await api.GET('/api/v1/lessons/{id}', {
-        params: { path: { id: id ?? '' } },
-        signal,
-      });
-      if (!data) throw new Error('GET /api/v1/lessons/{id} respondeu sem corpo');
-      return data;
-    },
+    queryFn: ({ signal }) => fetchLesson(api, id ?? '', signal),
     enabled: id !== null,
   });
+}
+
+/**
+ * A aula lida agora, para uma escrita que precisa do `version` dela (o resumo da aula, no curso,
+ * não o traz). A resposta fica no cache da aula.
+ */
+export function freshLesson(
+  api: AdminClient,
+  queryClient: QueryClient,
+  id: string,
+): Promise<LessonDetail> {
+  return queryClient.fetchQuery({
+    queryKey: coursesKeys.lesson(id),
+    queryFn: ({ signal }) => fetchLesson(api, id, signal),
+    staleTime: 0,
+  });
+}
+
+/** Depois de uma escrita que devolve a aula: o diálogo dela passa a ter o `version` novo. */
+export function lessonChanged(queryClient: QueryClient, lesson: LessonDetail): void {
+  queryClient.setQueryData(coursesKeys.lesson(lesson.id), lesson);
 }
 
 /** Depois de uma escrita que devolve o curso: atualiza o editor e refaz as listas. */

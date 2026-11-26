@@ -4,15 +4,23 @@ import { type FormEvent, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useAction } from '../../api/action';
 import { useApi } from '../../api/client';
-import { type CourseDetail, courseChanged } from '../../api/courses';
+import { type CourseDetail, courseChanged, refreshCourse } from '../../api/courses';
+import { ConflictAlert } from './CourseBits';
 import { useCourseError, useFieldRefusal } from './errors';
 import { parseWhole } from './format';
+import { isVersionConflict, useEditedForm } from './version';
 
 const HOURS_MAX = 10000;
 
+const formOf = (course: CourseDetail) => ({
+  enabled: course.certificateEnabled,
+  hours: course.certificateHours === null ? '' : String(course.certificateHours),
+});
+
 /**
  * Certificado do curso (spec 015): habilitar e fixar a carga horária (`PATCH /courses/{id}`,
- * `course.edit`). O template do certificado tem aba própria (tarefa 467).
+ * `course.edit`, com o `version` do curso e só o que mudou). O template do certificado tem aba
+ * própria (tarefa 467).
  */
 export function CourseCertificateTab({ course }: { course: CourseDetail }) {
   const { t } = useTranslation();
@@ -20,16 +28,20 @@ export function CourseCertificateTab({ course }: { course: CourseDetail }) {
   const toast = useToast();
   const queryClient = useQueryClient();
   const message = useCourseError();
-  const [enabled, setEnabled] = useState(course.certificateEnabled);
-  const [hours, setHours] = useState(
-    course.certificateHours === null ? '' : String(course.certificateHours),
-  );
+  const [form, setForm] = useEditedForm(course, formOf);
+  const { enabled, hours } = form;
+  const setEnabled = (value: boolean) => setForm((current) => ({ ...current, enabled: value }));
+  const setHours = (value: string) => setForm((current) => ({ ...current, hours: value }));
   const [invalid, setInvalid] = useState(false);
 
   const save = useAction(async (certificateHours: number | null) => {
     const { data } = await api.PATCH('/api/v1/courses/{id}', {
       params: { path: { id: course.id } },
-      body: { certificateEnabled: enabled, certificateHours },
+      body: {
+        ...(enabled !== course.certificateEnabled ? { certificateEnabled: enabled } : {}),
+        ...(certificateHours !== course.certificateHours ? { certificateHours } : {}),
+        version: course.version,
+      },
     });
     if (!data) throw new Error('PATCH /api/v1/courses/{id} respondeu sem corpo');
     return data;
@@ -42,7 +54,8 @@ export function CourseCertificateTab({ course }: { course: CourseDetail }) {
   const onSubmit = async (event: FormEvent) => {
     event.preventDefault();
     setInvalid(parsed === undefined);
-    if (parsed === undefined) return;
+    // sem mudança, nada a gravar: o `PATCH` só com `version` é recusado
+    if (parsed === undefined || !dirty) return;
     const result = await save.run(parsed);
     if (!result.ok) return;
     courseChanged(queryClient, result.data);
@@ -51,7 +64,15 @@ export function CourseCertificateTab({ course }: { course: CourseDetail }) {
 
   return (
     <AdminSection title={t('courses.certificate.title')}>
-      {refusal.general(['certificateHours']) ? (
+      {isVersionConflict(save.error) ? (
+        <ConflictAlert
+          className="mb-4"
+          onReload={async () => {
+            await refreshCourse(queryClient, course.id);
+            save.reset();
+          }}
+        />
+      ) : refusal.general(['certificateHours']) ? (
         <Alert tone="error" className="mb-4">
           {message(save.error)}
         </Alert>

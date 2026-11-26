@@ -7,10 +7,14 @@ import { coursePath } from '../../api/courses';
 import {
   type EbookDetail,
   type EbookTarget,
+  linkTargets,
   productChanged,
   productPath,
-  setEbookLink,
+  productsKeys,
+  putEbookTargets,
 } from '../../api/products';
+import { ConflictAlert } from '../courses/CourseBits';
+import { isVersionConflict } from '../courses/version';
 import { useProductError } from './errors';
 
 function targetHref(target: EbookTarget): string {
@@ -23,8 +27,9 @@ function targetHref(target: EbookTarget): string {
 
 /**
  * Onde o ebook está vinculado (spec 009, "Ebooks vinculados"): cursos, aulas e os pacotes que o
- * têm como item. Daqui se desvincula de curso e de aula; vincular é no editor do curso ou da
- * aula, e pacote se muda nos itens do pacote.
+ * têm como item. Daqui se desvincula de curso e de aula, gravando a lista de vínculos de curso e
+ * de aula com o `version` do ebook (`PUT /ebooks/{id}/targets`); os de pacote só aparecem, e a
+ * API os preserva. Vincular é no editor do curso ou da aula, e pacote se muda nos itens dele.
  */
 export function EbookTargetsTab({ ebook }: { ebook: EbookDetail }) {
   const { t } = useTranslation();
@@ -33,14 +38,12 @@ export function EbookTargetsTab({ ebook }: { ebook: EbookDetail }) {
   const queryClient = useQueryClient();
   const message = useProductError();
   const unlink = useAction((target: EbookTarget) =>
-    setEbookLink(
+    putEbookTargets(
       api,
-      ebook.id,
-      {
-        targetType: target.targetType === 'lesson' ? 'lesson' : 'course',
-        targetId: target.targetId,
-      },
-      false,
+      ebook,
+      linkTargets(ebook).filter(
+        (item) => item.targetType !== target.targetType || item.targetId !== target.targetId,
+      ),
     ),
   );
 
@@ -49,7 +52,7 @@ export function EbookTargetsTab({ ebook }: { ebook: EbookDetail }) {
     if (result.ok) {
       productChanged(queryClient, 'ebook', result.data);
       toast.success(t('products.links.unlinkedFrom', { title: target.title }));
-    } else {
+    } else if (!isVersionConflict(result.error)) {
       toast.error(message(result.error), { title: t('products.links.error') });
     }
   };
@@ -57,6 +60,17 @@ export function EbookTargetsTab({ ebook }: { ebook: EbookDetail }) {
   return (
     <AdminSection title={t('products.links.targetsTitle')}>
       <p className="mt-0 mb-3 text-sm text-ink-3">{t('products.links.targetsHint')}</p>
+      {isVersionConflict(unlink.error) ? (
+        <ConflictAlert
+          className="mb-3"
+          onReload={async () => {
+            await queryClient.invalidateQueries({
+              queryKey: productsKeys.detail('ebook', ebook.id),
+            });
+            unlink.reset();
+          }}
+        />
+      ) : null}
       {ebook.targets.length === 0 ? (
         <p className="m-0 text-sm text-ink-2">{t('products.links.noTargets')}</p>
       ) : (

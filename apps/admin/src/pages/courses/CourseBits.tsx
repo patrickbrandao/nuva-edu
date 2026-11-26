@@ -1,11 +1,13 @@
 import {
+  AdminButton,
   AdminStatus,
   AdminTag,
+  Alert,
   ConfirmDialog,
   type SortableListLabels,
   useToast,
 } from '@nuva-edu/ui';
-import type { ReactNode } from 'react';
+import { type ReactNode, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useAction } from '../../api/action';
 import type { CourseSummary } from '../../api/courses';
@@ -57,6 +59,8 @@ interface ConfirmActionProps<R> {
   onDone: (result: R) => void;
   /** Texto da recusa; por padrão, o do editor de curso. */
   describeError?: ((error: unknown) => string) | undefined;
+  /** Recusa tratada por quem abriu (ex.: o conflito de edição); sem ele, a recusa vira aviso. */
+  onError?: ((error: unknown) => void) | undefined;
 }
 
 /** Confirmação de uma ação do catálogo sem formulário. A recusa da API vira aviso. */
@@ -66,6 +70,7 @@ export function ConfirmAction<R>({
   onDone,
   destructive = false,
   describeError,
+  onError,
   ...text
 }: ConfirmActionProps<R>) {
   const { t } = useTranslation();
@@ -77,6 +82,7 @@ export function ConfirmAction<R>({
   const onConfirm = async () => {
     const result = await run.run();
     if (result.ok) onDone(result.data);
+    else if (onError) onError(result.error);
     else toast.error(message(result.error), { title: text.title });
     onClose();
   };
@@ -95,5 +101,45 @@ export function ConfirmAction<R>({
       busyLabel={text.busyLabel}
       destructive={destructive}
     />
+  );
+}
+
+/**
+ * Aviso do `409` `version_conflict` (spec 009, "Criação e edição"): outra pessoa gravou o item
+ * no meio da edição. Nada foi gravado, o que foi digitado continua na tela, e "Recarregar" traz
+ * a versão atual; salvar de novo fica com a pessoa.
+ */
+export function ConflictAlert({
+  onReload,
+  className,
+}: {
+  /** Lê o item de novo; o aviso some quando a leitura termina. */
+  onReload: () => Promise<unknown>;
+  className?: string;
+}) {
+  const { t } = useTranslation();
+  const [reloading, setReloading] = useState(false);
+  const reload = async () => {
+    setReloading(true);
+    try {
+      await onReload();
+    } finally {
+      setReloading(false);
+    }
+  };
+  return (
+    <Alert
+      tone="warning"
+      role="alert"
+      className={className}
+      title={t('courses.conflict.title')}
+      actions={
+        <AdminButton size="sm" disabled={reloading} onClick={() => void reload()}>
+          {reloading ? t('courses.conflict.reloading') : t('courses.conflict.reload')}
+        </AdminButton>
+      }
+    >
+      {t('courses.conflict.text')}
+    </Alert>
   );
 }

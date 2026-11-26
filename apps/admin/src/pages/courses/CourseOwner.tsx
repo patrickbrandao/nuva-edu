@@ -14,9 +14,11 @@ import { type KeyboardEvent, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useAction } from '../../api/action';
 import { useApi } from '../../api/client';
-import { type CourseDetail, courseChanged } from '../../api/courses';
+import { type CourseDetail, courseChanged, refreshCourse } from '../../api/courses';
 import { QueryErrorState } from '../../api/problems';
+import { ConflictAlert } from './CourseBits';
 import { useCourseError, useFieldRefusal } from './errors';
+import { isVersionConflict } from './version';
 
 /** Um instrutor na busca: o que a escolha precisa. */
 export interface OwnerOption {
@@ -176,7 +178,7 @@ function OwnerDialog({ course, onClose }: { course: CourseDetail; onClose: () =>
   const save = useAction(async (ownerId: string | null) => {
     const { data } = await api.PATCH('/api/v1/courses/{id}/owner', {
       params: { path: { id: course.id } },
-      body: { ownerId },
+      body: { ownerId, version: course.version },
     });
     if (!data) throw new Error('PATCH /api/v1/courses/{id}/owner respondeu sem corpo');
     return data;
@@ -220,7 +222,15 @@ function OwnerDialog({ course, onClose }: { course: CourseDetail; onClose: () =>
         </>
       }
     >
-      {refusal.general(['ownerId']) ? (
+      {isVersionConflict(save.error) ? (
+        <ConflictAlert
+          className="mb-4"
+          onReload={async () => {
+            await refreshCourse(queryClient, course.id);
+            save.reset();
+          }}
+        />
+      ) : refusal.general(['ownerId']) ? (
         <Alert tone="error" className="mb-4">
           {message(save.error)}
         </Alert>

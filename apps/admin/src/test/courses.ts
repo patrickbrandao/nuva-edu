@@ -44,17 +44,27 @@ export function courseDetail(overrides: Partial<CourseDetail> = {}): CourseDetai
     description: null,
     certificateEnabled: false,
     certificateHours: null,
+    version: 1,
     studentCount: 0,
     modules: [],
+    ebooks: [],
     ...overrides,
   };
 }
 
 /** Item `CourseSummary` da lista. */
 export function courseSummary(overrides: Partial<CourseSummary> = {}): CourseSummary {
-  const { description, certificateEnabled, certificateHours, studentCount, modules, ...summary } =
-    courseDetail();
-  void [description, certificateEnabled, certificateHours, studentCount, modules];
+  const {
+    description,
+    certificateEnabled,
+    certificateHours,
+    version,
+    studentCount,
+    modules,
+    ebooks,
+    ...summary
+  } = courseDetail();
+  void [description, certificateEnabled, certificateHours, version, studentCount, modules, ebooks];
   return { ...summary, ...overrides };
 }
 
@@ -65,7 +75,7 @@ export function lessonSummary(overrides: Partial<LessonSummary> = {}): LessonSum
     title: 'Aula 1',
     status: 'draft',
     isSample: false,
-    durationSeconds: null,
+    durationSeconds: 0,
     videoProvider: null,
     position: 0,
     ...overrides,
@@ -78,6 +88,7 @@ export function courseModule(overrides: Partial<CourseModule> = {}): CourseModul
     courseId: COURSE_ID,
     title: 'Módulo 1',
     position: 0,
+    version: 1,
     lessons: [],
     createdAt: NOW,
     updatedAt: NOW,
@@ -105,6 +116,7 @@ export function ebookDetail(overrides: Partial<EbookDetail> = {}): EbookDetail {
     updatedAt: NOW,
     description: null,
     fileUrl: null,
+    version: 1,
     targets: [],
     studentCount: 0,
     ...overrides,
@@ -129,6 +141,7 @@ export function bundleDetail(overrides: Partial<BundleDetail> = {}): BundleDetai
     createdAt: NOW,
     updatedAt: NOW,
     description: null,
+    version: 1,
     items: [],
     itemsPriceCents: 0,
     studentCount: 0,
@@ -211,6 +224,7 @@ export function fakeCatalog({
       description: null,
       type: 'video',
       videoUrl: null,
+      version: 1,
       links: [],
       ebooks: [],
       createdAt: NOW,
@@ -218,8 +232,47 @@ export function fakeCatalog({
       ...known,
       ...summary,
     };
+    detail.ebooks = ebookRefs('lesson', summary.id);
     details.set(summary.id, detail);
     return detail;
+  };
+
+  /** Os ebooks vinculados a um curso ou aula, pelos vínculos gravados nos ebooks. */
+  const ebookRefs = (targetType: string, targetId: string) =>
+    [...ebookStore.values()]
+      .filter((ebook) =>
+        ebook.targets.some(
+          (target) => target.targetType === targetType && target.targetId === targetId,
+        ),
+      )
+      .map(({ id, slug, title, status }) => ({ id, slug, title, status }));
+  /** O curso como a API o devolve: com os ebooks vinculados a ele. */
+  const courseOut = (course: CourseDetail) => {
+    course.ebooks = ebookRefs('course', course.id);
+    return jsonResponse(course);
+  };
+
+  /**
+   * Confere o `version` como a API: obrigatório nos `PATCH` (`400` sem ele), opcional nas trocas
+   * de lista; diferente do gravado, `409` `version_conflict`. Devolve a recusa, ou `undefined` e
+   * tira o `version` do corpo.
+   */
+  const checkVersion = (
+    item: { version: number },
+    input: Record<string, unknown>,
+    required: boolean,
+  ): Response | undefined => {
+    const { version } = input;
+    if (version === undefined) {
+      return required
+        ? problem(400, 'validation_failed', {
+            errors: [{ path: 'body.version', message: 'obrigatório' }],
+          })
+        : undefined;
+    }
+    if (version !== item.version) return problem(409, 'version_conflict');
+    delete input.version;
+    return undefined;
   };
 
   const cover = (coverImageId: unknown) =>
@@ -273,6 +326,7 @@ export function fakeCatalog({
             void [description, studentCount];
             const rest = summary as Record<string, unknown>;
             delete rest.fileUrl;
+            delete rest.version;
             delete rest.targets;
             delete rest.items;
             delete rest.itemsPriceCents;
@@ -301,15 +355,20 @@ export function fakeCatalog({
         return noContent();
       }
       if (method === 'PATCH') {
+        const refused = checkVersion(product, input, true);
+        if (refused) return refused;
         const { coverImageId, ...fields } = input;
         Object.assign(product, fields);
         if (coverImageId !== undefined) product.cover = cover(coverImageId);
+        product.version += 1;
         return jsonResponse(product);
       }
       return undefined;
     }
 
     if (action === 'targets' && method === 'PUT' && 'targets' in product) {
+      const refused = checkVersion(product, input, false);
+      if (refused) return refused;
       const wanted = input.targets as { targetType: string; targetId: string }[];
       const next = wanted.map((item) => targetOf(item.targetType, item.targetId));
       if (next.some((item) => item === undefined)) {
@@ -319,9 +378,12 @@ export function fakeCatalog({
         ...(next as EbookTarget[]),
         ...product.targets.filter((item) => item.targetType === 'bundle'),
       ];
+      product.version += 1;
       return jsonResponse(product);
     }
     if (action === 'items' && method === 'PUT' && 'items' in product) {
+      const refused = checkVersion(product, input, false);
+      if (refused) return refused;
       const wanted = input.items as { productType: 'course' | 'ebook'; productId: string }[];
       const next: BundleItem[] = [];
       for (const [position, item] of wanted.entries()) {
@@ -347,6 +409,7 @@ export function fakeCatalog({
         (sum, item) => sum + (item.accessMode === 'paid' ? (item.priceCents ?? 0) : 0),
         0,
       );
+      product.version += 1;
       return jsonResponse(product);
     }
     if (method === 'POST') {
@@ -360,13 +423,15 @@ export function fakeCatalog({
       if (action === 'unpublish') product.status = 'draft';
       if (action === 'archive') Object.assign(product, { status: 'draft', archivedAt: NOW });
       if (action === 'unarchive') product.archivedAt = null;
+      product.version += 1;
       return jsonResponse(product);
     }
     return undefined;
   };
 
   const handle = (method: string, path: string, body: unknown): Response | undefined => {
-    const input = (body ?? {}) as Record<string, unknown>;
+    // cópia: a conferência do `version` o tira do corpo, e o corpo gravado em `requests` fica inteiro
+    const input = { ...((body ?? {}) as Record<string, unknown>) };
     let match: RegExpMatchArray | null;
 
     if (path === '/api/v1/users' && method === 'GET') {
@@ -394,10 +459,13 @@ export function fakeCatalog({
     if (match && method === 'PATCH') {
       const course = store.get(match[1] ?? '');
       if (!course) return problem(404, 'not_found');
+      const refused = checkVersion(course, input, false);
+      if (refused) return refused;
       const owner = instructors.find((item) => item.id === input.ownerId);
       if (input.ownerId !== null && !owner) return problem(422, 'owner_invalid');
       course.owner = owner ? { id: owner.id, name: owner.name } : null;
-      return jsonResponse(course);
+      course.version += 1;
+      return courseOut(course);
     }
 
     if (path === '/api/v1/courses' && method === 'GET') {
@@ -431,6 +499,27 @@ export function fakeCatalog({
       });
     }
 
+    match = path.match(/^\/api\/v1\/ebooks\/([^/]+)\/targets\/(course|lesson)\/([^/]+)$/);
+    if (match && (method === 'PUT' || method === 'DELETE')) {
+      const ebook = ebookStore.get(match[1] ?? '');
+      if (!ebook) return problem(404, 'not_found');
+      const [, , targetType = '', targetId = ''] = match;
+      const target = targetOf(targetType, targetId);
+      if (!target) return problem(422, 'catalog_item_not_found');
+      const has = ebook.targets.some(
+        (item) => item.targetType === targetType && item.targetId === targetId,
+      );
+      // idempotente: sem mudança, nada é gravado
+      if (method === 'PUT' && !has) ebook.targets.push(target);
+      if (method === 'DELETE' && has) {
+        ebook.targets = ebook.targets.filter(
+          (item) => item.targetType !== targetType || item.targetId !== targetId,
+        );
+      }
+      if (has !== (method === 'PUT')) ebook.version += 1;
+      return noContent();
+    }
+
     const products = handleProducts(method, path, input);
     if (products) return products;
 
@@ -438,12 +527,14 @@ export function fakeCatalog({
     if (match) {
       const course = store.get(match[1] ?? '');
       if (!course) return problem(404, 'not_found');
-      if (method === 'GET') return jsonResponse(course);
+      if (method === 'GET') return courseOut(course);
       if (method === 'DELETE') {
         store.delete(course.id);
         return noContent();
       }
       if (method === 'PATCH') {
+        const refused = checkVersion(course, input, true);
+        if (refused) return refused;
         const { coverImageId, ...fields } = input;
         Object.assign(course, fields);
         if (coverImageId !== undefined) {
@@ -456,7 +547,8 @@ export function fakeCatalog({
                   largeUrl: `/api/v1/images/${String(coverImageId)}/1280.webp`,
                 };
         }
-        return jsonResponse(course);
+        course.version += 1;
+        return courseOut(course);
       }
     }
 
@@ -470,7 +562,8 @@ export function fakeCatalog({
       if (action === 'archive') Object.assign(course, { status: 'draft', archivedAt: NOW });
       if (action === 'unarchive') course.archivedAt = null;
       if (action === 'publish') course.reviewRequestedAt = null;
-      return jsonResponse(course);
+      course.version += 1;
+      return courseOut(course);
     }
 
     match = path.match(/^\/api\/v1\/courses\/([^/]+)\/request-review$/);
@@ -478,7 +571,8 @@ export function fakeCatalog({
       const course = store.get(match[1] ?? '');
       if (!course) return problem(404, 'not_found');
       course.reviewRequestedAt = method === 'POST' ? NOW : null;
-      return jsonResponse(course);
+      course.version += 1;
+      return courseOut(course);
     }
 
     match = path.match(/^\/api\/v1\/courses\/([^/]+)\/modules$/);
@@ -514,7 +608,10 @@ export function fakeCatalog({
       const item = course?.modules.find((candidate) => candidate.id === match?.[1]);
       if (!course || !item) return problem(404, 'not_found');
       if (method === 'PATCH') {
+        const refused = checkVersion(item, input, true);
+        if (refused) return refused;
         item.title = String(input.title);
+        item.version += 1;
         return jsonResponse(item);
       }
       if (method === 'DELETE') {
@@ -535,7 +632,7 @@ export function fakeCatalog({
         moduleId: item.id,
         title: String(input.title),
         isSample: input.isSample === true,
-        durationSeconds: (input.durationSeconds as number | null | undefined) ?? null,
+        durationSeconds: (input.durationSeconds as number | null | undefined) ?? 0,
         videoProvider: input.videoUrl ? 'link' : null,
         position: item.lessons.length,
       });
@@ -578,8 +675,11 @@ export function fakeCatalog({
       if (!item || !summary || !course) return problem(404, 'not_found');
       const detail = detailOf(summary, course.id);
       if (match[2]) {
+        const refused = checkVersion(detail, input, false);
+        if (refused) return refused;
         const links = input.links as { label: string; url: string; kind: 'file' | 'page' }[];
         detail.links = links.map((link, position) => ({ id: newId('b'), ...link, position }));
+        detail.version += 1;
         return jsonResponse(detail);
       }
       if (method === 'GET') return jsonResponse(detail);
@@ -589,10 +689,15 @@ export function fakeCatalog({
         return noContent();
       }
       if (method === 'PATCH') {
+        const refused = checkVersion(detail, input, true);
+        if (refused) return refused;
+        // `null` grava `0`, "não informada"
+        if (input.durationSeconds === null) input.durationSeconds = 0;
         const { description, videoUrl, ...fields } = input;
         Object.assign(summary, fields);
         Object.assign(detail, input);
         void [description, videoUrl];
+        detail.version += 1;
         recount(course);
         return jsonResponse(detail);
       }
@@ -618,6 +723,8 @@ export function fakeCatalog({
     requests,
     /** O curso como está gravado no catálogo simulado. */
     course: (id: string) => store.get(id),
+    /** A aula completa como está gravada (depois de lida ou criada). */
+    lesson: (id: string) => details.get(id),
     /** O ebook e o pacote como estão gravados. */
     ebook: (id: string) => ebookStore.get(id),
     bundle: (id: string) => bundleStore.get(id),

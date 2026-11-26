@@ -112,7 +112,12 @@ describe('ebooks (/ebooks)', () => {
     await user.click(button('Salvar'));
     await screen.findByText('Dados do ebook salvos.');
     expect(catalog.bodies(`PATCH /api/v1/ebooks/${EBOOK_ID}`)).toEqual([
-      { authorName: 'Ana Autora', fileUrl: 'https://exemplo.com/guia.pdf', pages: 120 },
+      {
+        authorName: 'Ana Autora',
+        fileUrl: 'https://exemplo.com/guia.pdf',
+        pages: 120,
+        version: 1,
+      },
     ]);
 
     await user.click(button('Publicar'));
@@ -135,7 +140,9 @@ describe('ebooks (/ebooks)', () => {
     expect(screen.getByText('O preço é definido pelo administrador.')).toBeTruthy();
     await user.click(button('Salvar'));
     await screen.findByText('Dados do ebook salvos.');
-    expect(manager.bodies(`PATCH /api/v1/ebooks/${EBOOK_ID}`)).toEqual([{ accessMode: 'paid' }]);
+    expect(manager.bodies(`PATCH /api/v1/ebooks/${EBOOK_ID}`)).toEqual([
+      { accessMode: 'paid', version: 1 },
+    ]);
     first.unmount();
 
     const admin = fakeCatalog({ ebooks: [ebookDetail({ studentCount: 2 })] });
@@ -181,8 +188,13 @@ describe('ebooks (/ebooks)', () => {
 
     await user.click(within(list).getByRole('button', { name: 'Desvincular Curso de Python' }));
     await screen.findByText('Ebook desvinculado de “Curso de Python”.');
+    // só os vínculos de curso e de aula vão no corpo: o de pacote a API preserva
     expect(catalog.bodies(`PUT /api/v1/ebooks/${EBOOK_ID}/targets`)).toEqual([
-      { targets: [{ targetType: 'lesson', targetId: LESSON }] },
+      { targets: [{ targetType: 'lesson', targetId: LESSON }], version: 1 },
+    ]);
+    expect(catalog.ebook(EBOOK_ID)?.targets.map((target) => target.targetType)).toEqual([
+      'lesson',
+      'bundle',
     ]);
     expect(within(list).queryByRole('link', { name: 'Curso de Python' })).toBeNull();
     await expectNoAxeViolations();
@@ -253,13 +265,16 @@ describe('pacotes (/pacotes)', () => {
     await within(picker).findByText('Já no pacote');
     await user.click(within(picker).getByRole('button', { name: 'Concluir' }));
 
+    // cada troca leva o `version` da resposta anterior (a criação e a recusa ao publicar não
+    // gravam nada)
     expect(catalog.bodies(`PUT /api/v1/bundles/${id}/items`)).toEqual([
-      { items: [{ productType: 'course', productId: COURSE_ID }] },
+      { items: [{ productType: 'course', productId: COURSE_ID }], version: 1 },
       {
         items: [
           { productType: 'course', productId: COURSE_ID },
           { productType: 'ebook', productId: EBOOK_ID },
         ],
+        version: 2,
       },
     ]);
     // a soma dos preços avulsos evidencia a economia
@@ -299,7 +314,7 @@ describe('pacotes (/pacotes)', () => {
     await user.click(within(confirm).getByRole('button', { name: 'Remover do pacote' }));
     await screen.findByText('“Guia de Python” removido do pacote.');
     expect(catalog.bodies(`PUT /api/v1/bundles/${BUNDLE_ID}/items`)).toEqual([
-      { items: [{ productType: 'course', productId: COURSE_ID }] },
+      { items: [{ productType: 'course', productId: COURSE_ID }], version: 1 },
     ]);
     expect(catalog.bundle(BUNDLE_ID)?.items.map((entry) => entry.title)).toEqual([
       'Curso de Python',
@@ -327,6 +342,7 @@ describe('pacotes (/pacotes)', () => {
             { productType: 'ebook', productId: EBOOK_ID },
             { productType: 'course', productId: COURSE_ID },
           ],
+          version: 1,
         },
       ]),
     );
@@ -367,16 +383,16 @@ describe('vínculo de ebooks no curso e na aula', () => {
       await within(list).findByRole('button', { name: 'Vincular o ebook Guia de Python' }),
     );
     await screen.findByText('Ebook “Guia de Python” vinculado.');
-    expect(catalog.bodies(`PUT /api/v1/ebooks/${EBOOK_ID}/targets`)).toEqual([
-      { targets: [{ targetType: 'course', targetId: COURSE_ID }] },
-    ]);
     const row = within(list).getByText('Guia de Python').closest('li') as HTMLElement;
     expect(within(row).getByText('Vinculado')).toBeTruthy();
     expect(
       within(list).getByRole('button', { name: 'Vincular o ebook Apostila de SQL' }),
     ).toBeTruthy();
-    // só escritas de vínculo: nada em ebook nem em pacote
-    expect(catalog.writes()).toEqual([`PUT /api/v1/ebooks/${EBOOK_ID}/targets`]);
+    // um vínculo só, sem reenviar a lista: nada em ebook nem em pacote
+    expect(catalog.writes()).toEqual([
+      `PUT /api/v1/ebooks/${EBOOK_ID}/targets/course/${COURSE_ID}`,
+    ]);
+    expect(catalog.ebook(EBOOK_ID)?.targets.map((target) => target.targetId)).toEqual([COURSE_ID]);
     await expectNoAxeViolations();
   });
 
@@ -403,12 +419,170 @@ describe('vínculo de ebooks no curso e na aula', () => {
     await within(list).findByRole('button', { name: 'Desvincular Guia de Python' });
     await user.click(within(list).getByRole('button', { name: 'Desvincular Guia de Python' }));
     await within(list).findByRole('button', { name: 'Vincular o ebook Guia de Python' });
-    const course = { targetType: 'course', targetId: COURSE_ID };
-    expect(catalog.bodies(`PUT /api/v1/ebooks/${EBOOK_ID}/targets`)).toEqual([
-      { targets: [course, { targetType: 'lesson', targetId: LESSON }] },
-      { targets: [course] },
+    expect(catalog.writes()).toEqual([
+      `PUT /api/v1/ebooks/${EBOOK_ID}/targets/lesson/${LESSON}`,
+      `DELETE /api/v1/ebooks/${EBOOK_ID}/targets/lesson/${LESSON}`,
     ]);
+    // o vínculo com o curso ficou como estava
+    expect(catalog.ebook(EBOOK_ID)?.targets.map((target) => target.targetType)).toEqual(['course']);
     // o formulário da aula não foi enviado
     expect(catalog.writes().some((entry) => entry.includes('/lessons/'))).toBe(false);
+  });
+});
+
+describe('ebooks vinculados vêm do curso', () => {
+  it('os vinculados aparecem primeiro, mesmo fora da busca, sem uma leitura por ebook', async () => {
+    const user = userEvent.setup();
+    const sql = ebookDetail({
+      id: EBOOK2,
+      slug: 'sql',
+      title: 'Apostila de SQL',
+      status: 'published',
+      targets: [
+        { targetType: 'course', targetId: COURSE_ID, title: 'Curso de Python', course: null },
+      ],
+    });
+    const catalog = fakeCatalog({ courses: [COURSE], ebooks: [GUIDE, sql] });
+    renderApp(`/cursos/${COURSE_ID}?aba=ebooks`, catalog.respond);
+    const list = await screen.findByRole('list', { name: 'Ebooks para o curso Curso de Python' });
+    await within(list).findByRole('button', { name: 'Vincular o ebook Guia de Python' });
+    const titles = () =>
+      within(list)
+        .getAllByRole('listitem')
+        .map((row) => row.querySelector('a, span')?.textContent);
+    expect(titles()).toEqual(['Apostila de SQL', 'Guia de Python']);
+
+    // a busca não acha o vinculado, e ele continua em primeiro
+    await user.type(
+      screen.getByRole('searchbox', { name: 'Buscar ebook por título ou resumo' }),
+      'Guia{Enter}',
+    );
+    await waitFor(() => expect(catalog.requests.at(-1)?.query.get('q')).toBe('Guia'));
+    expect(titles()).toEqual(['Apostila de SQL', 'Guia de Python']);
+    const linked = within(list).getByText('Apostila de SQL').closest('li') as HTMLElement;
+    expect(within(linked).getByText('Vinculado')).toBeTruthy();
+
+    await user.click(within(list).getByRole('button', { name: 'Desvincular Apostila de SQL' }));
+    await screen.findByText('Ebook “Apostila de SQL” desvinculado.');
+    expect(catalog.writes()).toEqual([
+      `DELETE /api/v1/ebooks/${EBOOK2}/targets/course/${COURSE_ID}`,
+    ]);
+    // o vínculo de cada ebook vem do curso: nenhum `GET /ebooks/{id}`
+    expect(
+      catalog.requests.some(
+        (entry) => entry.method === 'GET' && /^\/api\/v1\/ebooks\/./.test(entry.path),
+      ),
+    ).toBe(false);
+  });
+});
+
+describe('conflito de edição (409 version_conflict) em ebook e pacote', () => {
+  const TITLE = 'Este item foi alterado por outra pessoa';
+  const conflict = async () =>
+    (await screen.findByText(TITLE)).closest('[role="alert"]') as HTMLElement;
+  const noConflict = () => waitFor(() => expect(screen.queryByText(TITLE)).toBeNull());
+
+  it('ebook: avisa sem perder o que foi digitado e grava depois de recarregar', async () => {
+    const user = userEvent.setup();
+    const catalog = fakeCatalog({ ebooks: [ebookDetail()] });
+    renderApp(`/ebooks/${EBOOK_ID}`, catalog.respond);
+    await heading('Guia de Python');
+    const author = screen.getByLabelText('Autor') as HTMLInputElement;
+    await user.type(author, 'Ana Autora');
+    const stored = catalog.ebook(EBOOK_ID);
+    if (!stored) throw new Error('ebook ausente');
+    Object.assign(stored, { pages: 80, version: 3 });
+
+    await user.click(button('Salvar'));
+    await user.click(within(await conflict()).getByRole('button', { name: 'Recarregar' }));
+    await noConflict();
+    expect(author.value).toBe('Ana Autora');
+    expect((screen.getByLabelText('Páginas') as HTMLInputElement).value).toBe('80');
+    await user.click(button('Salvar'));
+    await screen.findByText('Dados do ebook salvos.');
+    expect(catalog.bodies(`PATCH /api/v1/ebooks/${EBOOK_ID}`)).toEqual([
+      { authorName: 'Ana Autora', version: 1 },
+      { authorName: 'Ana Autora', version: 3 },
+    ]);
+  });
+
+  it('ebook: desvincular com conflito avisa e, depois de recarregar, grava', async () => {
+    const user = userEvent.setup();
+    const catalog = fakeCatalog({
+      courses: [COURSE],
+      ebooks: [
+        ebookDetail({
+          targets: [
+            { targetType: 'course', targetId: COURSE_ID, title: 'Curso de Python', course: null },
+          ],
+        }),
+      ],
+    });
+    renderApp(`/ebooks/${EBOOK_ID}?aba=vinculos`, catalog.respond);
+    const list = await screen.findByRole('list', { name: 'Onde o ebook está vinculado' });
+    const stored = catalog.ebook(EBOOK_ID);
+    if (stored) stored.version = 2;
+    await user.click(within(list).getByRole('button', { name: 'Desvincular Curso de Python' }));
+    await user.click(within(await conflict()).getByRole('button', { name: 'Recarregar' }));
+    await noConflict();
+    await user.click(within(list).getByRole('button', { name: 'Desvincular Curso de Python' }));
+    await screen.findByText('Ebook desvinculado de “Curso de Python”.');
+    expect(catalog.bodies(`PUT /api/v1/ebooks/${EBOOK_ID}/targets`)).toEqual([
+      { targets: [], version: 1 },
+      { targets: [], version: 2 },
+    ]);
+  });
+
+  it('pacote: dados e itens avisam o conflito; a ordem gravada volta e nada é reenviado', async () => {
+    const user = userEvent.setup();
+    const catalog = fakeCatalog({
+      courses: [COURSE],
+      ebooks: [GUIDE],
+      bundles: [{ ...FILLED, studentCount: 0 }],
+    });
+    renderApp(`/pacotes/${BUNDLE_ID}`, catalog.respond);
+    await heading('Trilha Python');
+    const title = screen.getByLabelText('Título') as HTMLInputElement;
+    await user.clear(title);
+    await user.type(title, 'Trilha de dados');
+    const stored = catalog.bundle(BUNDLE_ID);
+    if (!stored) throw new Error('pacote ausente');
+    stored.version = 2;
+    await user.click(button('Salvar'));
+    await user.click(within(await conflict()).getByRole('button', { name: 'Recarregar' }));
+    await noConflict();
+    expect(title.value).toBe('Trilha de dados');
+    await user.click(button('Salvar'));
+    await screen.findByText('Dados do pacote salvos.');
+    expect(catalog.bodies(`PATCH /api/v1/bundles/${BUNDLE_ID}`)).toEqual([
+      { title: 'Trilha de dados', version: 1 },
+      { title: 'Trilha de dados', version: 2 },
+    ]);
+
+    await user.click(screen.getByRole('tab', { name: 'Itens' }));
+    const list = await screen.findByRole('list', { name: 'Itens do pacote, na ordem' });
+    stored.version = 9;
+    within(list).getByRole('button', { name: 'Mover Guia de Python' }).focus();
+    await user.keyboard(' ');
+    await user.keyboard('{ArrowUp}');
+    await user.keyboard(' ');
+    const alert = await conflict();
+    const order = () =>
+      within(list)
+        .getAllByRole('link')
+        .map((link) => link.textContent);
+    await waitFor(() => expect(order()).toEqual(['Curso de Python', 'Guia de Python']));
+    expect(catalog.bodies(`PUT /api/v1/bundles/${BUNDLE_ID}/items`)).toHaveLength(1);
+    await user.click(within(alert).getByRole('button', { name: 'Recarregar' }));
+    await noConflict();
+
+    await user.click(screen.getByRole('button', { name: 'Remover Curso de Python do pacote' }));
+    const confirm = await screen.findByRole('alertdialog');
+    await user.click(within(confirm).getByRole('button', { name: 'Remover do pacote' }));
+    await screen.findByText('“Curso de Python” removido do pacote.');
+    expect(catalog.bodies(`PUT /api/v1/bundles/${BUNDLE_ID}/items`).at(-1)).toEqual({
+      items: [{ productType: 'ebook', productId: EBOOK_ID }],
+      version: 9,
+    });
   });
 });

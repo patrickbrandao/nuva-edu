@@ -24,14 +24,18 @@ import {
   type CourseLevel,
   courseChanged,
   DESCRIPTION_MAX,
+  refreshCourse,
   SUMMARY_MAX,
   TITLE_MAX,
 } from '../../api/courses';
 import { useMeta } from '../../api/meta';
+import { ConflictAlert } from './CourseBits';
 import { useCourseError, useFieldRefusal } from './errors';
 import { formatPrice, parsePrice, parseWhole, priceInput } from './format';
+import { isVersionConflict, useEditedForm } from './version';
 
-type CourseUpdate = AdminSchemas['CourseUpdate'];
+/** Os campos de `PATCH /courses/{id}`; o `version` entra na hora de enviar. */
+type CourseChanges = Omit<AdminSchemas['CourseUpdate'], 'version'>;
 
 const NO_LEVEL = 'none';
 const SLUG_PATTERN = /^[a-z0-9]+(-[a-z0-9]+)*$/;
@@ -71,8 +75,10 @@ interface Props {
 
 /**
  * Dados do curso (`PATCH /api/v1/courses/{id}`) e capa (`POST /api/v1/images` com a finalidade
- * `product_cover`). Só os campos alterados são enviados, e os de acesso e de preço nem aparecem
- * para quem não tem a ação: a API é quem recusa (`403`), e a recusa de um campo aparece nele.
+ * `product_cover`). Só os campos alterados são enviados, com o `version` do curso; sem mudança,
+ * nada é enviado. Os de acesso e de preço nem aparecem para quem não tem a ação: a API é quem
+ * recusa (`403`), e a recusa de um campo aparece nele. O `409` `version_conflict` avisa e oferece
+ * recarregar, sem perder o que foi digitado.
  */
 export function CourseDataTab({ course, canSetAccess, canSetPrice }: Props) {
   const { t } = useTranslation();
@@ -81,24 +87,24 @@ export function CourseDataTab({ course, canSetAccess, canSetPrice }: Props) {
   const queryClient = useQueryClient();
   const meta = useMeta();
   const message = useCourseError();
-  const [form, setForm] = useState<FormState>(() => formOf(course));
+  const [form, setForm] = useEditedForm(course, formOf);
   const [invalid, setInvalid] = useState<Map<string, string>>(new Map());
   const [preview, setPreview] = useState(false);
   const set = <K extends keyof FormState>(key: K, value: FormState[K]) =>
     setForm((current) => ({ ...current, [key]: value }));
 
-  const patch = async (body: CourseUpdate) => {
+  const patch = async (body: CourseChanges) => {
     const { data } = await api.PATCH('/api/v1/courses/{id}', {
       params: { path: { id: course.id } },
-      body,
+      body: { ...body, version: course.version },
     });
     if (!data) throw new Error('PATCH /api/v1/courses/{id} respondeu sem corpo');
     return data;
   };
 
   /** O que mudou em relação ao curso gravado, já no formato do contrato. */
-  const changes = (): { body: CourseUpdate; problems: Map<string, string> } => {
-    const body: CourseUpdate = {};
+  const changes = (): { body: CourseChanges; problems: Map<string, string> } => {
+    const body: CourseChanges = {};
     const problems = new Map<string, string>();
     const title = form.title.trim();
     if (title === '') problems.set('title', t('forms.required'));
@@ -136,6 +142,7 @@ export function CourseDataTab({ course, canSetAccess, canSetPrice }: Props) {
   const refusal = useFieldRefusal(save.error);
   const dirty = JSON.stringify(form) !== JSON.stringify(formOf(course));
   const fieldError = (field: string) => invalid.get(field) ?? refusal.of(field);
+  const reload = () => refreshCourse(queryClient, course.id);
 
   const onSubmit = async (event: FormEvent) => {
     event.preventDefault();
@@ -189,6 +196,15 @@ export function CourseDataTab({ course, canSetAccess, canSetPrice }: Props) {
   return (
     <>
       <AdminSection title={t('courses.cover.title')}>
+        {isVersionConflict(cover.error) ? (
+          <ConflictAlert
+            className="mb-4"
+            onReload={async () => {
+              await reload();
+              cover.reset();
+            }}
+          />
+        ) : null}
         <ImagePicker
           key={pickerKey}
           shape="wide"
@@ -205,7 +221,7 @@ export function CourseDataTab({ course, canSetAccess, canSetPrice }: Props) {
           currentUrl={course.cover?.url ?? null}
           placeholder={t('courses.cover.none')}
           busy={cover.busy}
-          error={cover.error ? message(cover.error) : undefined}
+          error={cover.error && !isVersionConflict(cover.error) ? message(cover.error) : undefined}
           onChange={(file) => {
             if (file) void changeCover(file);
           }}
@@ -214,7 +230,15 @@ export function CourseDataTab({ course, canSetAccess, canSetPrice }: Props) {
       </AdminSection>
 
       <AdminSection title={t('courses.data.title')}>
-        {refusal.general(known) ? (
+        {isVersionConflict(save.error) ? (
+          <ConflictAlert
+            className="mb-4"
+            onReload={async () => {
+              await reload();
+              save.reset();
+            }}
+          />
+        ) : refusal.general(known) ? (
           <Alert tone="error" className="mb-4">
             {message(save.error)}
           </Alert>

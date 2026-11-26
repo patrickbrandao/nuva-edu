@@ -680,7 +680,14 @@
       "image_too_heavy": "A imagem ficou pesada demais depois de processada. Envie uma mais simples ou menor.",
       "image_processing_busy": "O processamento de imagens está ocupado. Tente de novo em instantes.",
       "not_found": "Não encontrado. O item pode ter sido excluído.",
+      "version_conflict": "Este item foi alterado por outra pessoa. O curso foi recarregado; tente de novo.",
       "validation_failed": "Confira os campos e tente de novo."
+    },
+    "conflict": {
+      "title": "Este item foi alterado por outra pessoa",
+      "text": "Nada foi gravado, e o que você digitou continua aqui. Recarregue para ver a versão atual e salve de novo.",
+      "reload": "Recarregar",
+      "reloading": "Recarregando…"
     },
     "editor": {
       "loading": "Carregando o curso…",
@@ -1019,11 +1026,10 @@
       "product_has_links": "Há pedido ou acesso de aluno ligado a este produto, e ele não pode ser excluído. Use arquivar.",
       "ebook_file_required": "Para publicar, o ebook precisa do endereço do arquivo.",
       "bundle_has_no_items": "Para publicar, o pacote precisa de ao menos um item.",
-      "bundle_in_bundle": "Um pacote não pode conter outro pacote.",
       "catalog_item_not_found": "Um dos itens não existe mais no catálogo. Recarregue a página e tente de novo.",
       "catalog_limit_exceeded": "O limite de itens ou de vínculos foi atingido.",
       "catalog_limit_exceededMax": "O limite foi atingido: no máximo {{max}}.",
-      "version_conflict": "Outra pessoa alterou este registro. Recarregue a página e tente de novo.",
+      "version_conflict": "Este item foi alterado por outra pessoa. Recarregue e tente de novo.",
       "not_found": "Não encontrado. O item pode ter sido excluído ou não é seu."
     },
     "links": {
