@@ -242,13 +242,15 @@ describe('casca do classroom', () => {
     await user.click(await screen.findByRole('link', { name: 'Escola Aurora' }));
     await waitFor(() => expect(path()).toBe('/'));
 
-    // "Notificações" existe no menu e na barra superior; aqui é o botão da barra
+    // "Notificações" existe no menu e na barra superior; aqui é o botão da barra. Sem sessão, a
+    // central leva ao login guardando o destino.
     const toggle = screen.getByRole('button', { name: ptBR.shell.collapseMenu });
     const topbar = within(toggle.closest('header') as HTMLElement);
     await user.click(topbar.getByRole('link', { name: ptBR.shell.notifications }));
-    await waitFor(() => expect(path()).toBe('/notificacoes'));
+    await waitFor(() => expect(path()).toBe('/entrar'));
+    expect(router.state.location.search).toBe('?destino=%2Fnotificacoes');
 
-    await user.click(await screen.findByRole('link', { name: ptBR.common.backHome }));
+    await user.click(await screen.findByRole('link', { name: 'Escola Aurora' }));
     await waitFor(() => expect(path()).toBe('/'));
 
     await user.click(screen.getByRole('link', { name: ptBR.home.catalog.action }));
@@ -306,6 +308,7 @@ describe('casca do classroom', () => {
       '/progresso',
       '/cesta',
       '/conta/compras',
+      '/notificacoes',
       '/conta',
     ]);
     // os planos são públicos: abrem sem sessão

@@ -11,6 +11,8 @@ import {
   MY_COURSES_PATH,
   MY_EBOOKS_PATH,
   NOTES_PATH,
+  NOTIFICATION_PREFS_PATH,
+  NOTIFICATIONS_PATH,
   ORDER_PATH,
   PENDING_PAGES,
   PLANS_PATH,
@@ -18,6 +20,7 @@ import {
   PURCHASES_PATH,
   START_PATH,
   SUBSCRIPTIONS_PATH,
+  UNSUBSCRIBE_PATH,
 } from './shell/navigation';
 import { type RouteHandle, Shell } from './shell/Shell';
 
@@ -65,6 +68,28 @@ export const routes: RouteObject[] = [
         path: '/conta/perfil',
         handle: handle({ titleKey: 'pages.profile' }),
         lazy: async () => ({ Component: (await import('./pages/ProfilePage')).ProfilePage }),
+      },
+      {
+        path: NOTIFICATION_PREFS_PATH,
+        handle: handle({ titleKey: 'notifications.preferences.title' }),
+        lazy: async () => ({
+          Component: (await import('./notifications/NotificationPreferencesPage'))
+            .NotificationPreferencesPage,
+        }),
+      },
+      {
+        path: NOTIFICATIONS_PATH,
+        handle: handle({ titleKey: 'menu.items.notifications' }),
+        lazy: async () => ({
+          Component: (await import('./notifications/NotificationsPage')).NotificationsPage,
+        }),
+      },
+      {
+        path: `${UNSUBSCRIBE_PATH}/:token`,
+        handle: handle({ titleKey: 'notifications.unsubscribe.title' }),
+        lazy: async () => ({
+          Component: (await import('./notifications/UnsubscribePage')).UnsubscribePage,
+        }),
       },
       {
         path: '/confirmar',

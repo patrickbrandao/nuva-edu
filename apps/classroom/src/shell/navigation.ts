@@ -42,6 +42,13 @@ export interface NavGroup {
   items: readonly NavItem[];
 }
 
+/** Central de notificações do aluno (spec 024). */
+export const NOTIFICATIONS_PATH = '/notificacoes';
+/** Preferências de notificação dentro das configurações da conta (spec 006, `/conta/*`). */
+export const NOTIFICATION_PREFS_PATH = '/conta/notificacoes';
+/** Descadastro de um grupo de e-mail pelo token do link (spec 024, RF-07); público. */
+export const UNSUBSCRIBE_PATH = '/descadastro';
+
 /** Menu do classroom: os grupos e as telas de entrada do mapa da spec 006. */
 export const NAV_GROUPS: readonly NavGroup[] = [
   {
@@ -103,7 +110,7 @@ export const NAV_GROUPS: readonly NavGroup[] = [
       { id: 'news', path: '/novidades', labelKey: 'menu.items.news', icon: Megaphone },
       {
         id: 'notifications',
-        path: '/notificacoes',
+        path: NOTIFICATIONS_PATH,
         labelKey: 'menu.items.notifications',
         icon: Bell,
       },
@@ -153,6 +160,7 @@ const BUILT_PAGES: readonly string[] = [
   PLANS_PATH,
   CART_PATH,
   PURCHASES_PATH,
+  NOTIFICATIONS_PATH,
 ];
 
 /**

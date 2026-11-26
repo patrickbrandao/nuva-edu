@@ -6,12 +6,14 @@ import { matchPath, Outlet, ScrollRestoration, useLocation, useMatches } from 'r
 import { useMeta } from '../api/meta';
 import { MENU_STORAGE_KEY } from '../config';
 import { TermsGate } from '../legal/TermsGate';
+import { NotificationsMenu } from '../notifications/NotificationsMenu';
+import { useNotificationStream } from '../notifications/stream';
 import { safeReturnTo, withReturnTo } from '../session/returnTo';
 import { useSession } from '../session/session';
 import { BrandLogo, useBrandLogo } from './BrandLogo';
 import { useBrandAccent } from './brand';
 import { Footer } from './Footer';
-import { HOME_PATH, LOGIN_PATH, NAV_GROUPS, type TextKey } from './navigation';
+import { HOME_PATH, LOGIN_PATH, NAV_GROUPS, NOTIFICATIONS_PATH, type TextKey } from './navigation';
 import { UserMenu } from './UserMenu';
 import { useThemeLabels } from './useThemeLabels';
 import { VerifyEmailBanner } from './VerifyEmailBanner';
@@ -60,6 +62,8 @@ export function Shell() {
   const matches = useMatches();
 
   useBrandAccent();
+  // Uma conexão SSE por aba (spec 024, "Central"): o sino muda sem recarregar a página.
+  useNotificationStream();
 
   const [collapsed, setCollapsed] = useState(readCollapsed);
   const mainRef = useRef<HTMLElement>(null);
@@ -125,15 +129,17 @@ export function Shell() {
       actions={
         <>
           <ThemeSwitch compact mode={themeMode} onChange={setThemeMode} {...themeLabels} />
-          <span className="hidden sm:flex">
+          {session ? (
+            <NotificationsMenu />
+          ) : (
             <AdminButton
-              href="/notificacoes"
+              href={NOTIFICATIONS_PATH}
               variant="ghost"
               icon={<Bell aria-hidden="true" />}
               aria-label={t('shell.notifications')}
               title={t('shell.notifications')}
             />
-          </span>
+          )}
           {session ? (
             <UserMenu session={session} />
           ) : (

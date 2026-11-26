@@ -2,10 +2,16 @@ import { AdminCard, PageTitle, TextLink } from '@nuva-edu/ui';
 import { useTranslation } from 'react-i18next';
 import { usePageMeta } from '../lib/usePageMeta';
 import { RequireSession } from '../session/RequireSession';
+import { NOTIFICATION_PREFS_PATH } from '../shell/navigation';
 
 const SECTIONS = [
   { path: '/conta/perfil', title: 'account.profile', text: 'account.profileText' },
   { path: '/conta/acesso', title: 'account.access', text: 'account.accessText' },
+  {
+    path: NOTIFICATION_PREFS_PATH,
+    title: 'notifications.preferences.title',
+    text: 'notifications.preferences.accountText',
+  },
 ] as const;
 
 /** `/conta`: entrada das configurações da conta (spec 006, `/conta/*`). */
