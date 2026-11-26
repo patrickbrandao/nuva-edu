@@ -6,6 +6,7 @@ Detalhe das decisões em `specs/decisions/`.
 ## [Não lançado]
 
 ### Adicionado
+- specs: oito tentativas do webhook de pagamento em falhas transitórias e três com credenciais inválidas (specs 005 e 013, task 723).
 - admin-api: solicitações repetidas de reembolso de assinatura com a mesma `Idempotency-Key` devolvem o reembolso original e geram uma única tarefa e auditoria (spec 003, task 712).
 - classroom: a vitrine reutiliza a chave de idempotência ao reenviar o checkout de assinatura e gera outra quando o plano, o cupom ou a validação exige nova tentativa (spec 012, task 716).
 - admin-api: cobertura HTTP alinhada ao contrato para combinações inválidas de planos e itens duplicados (spec 012, task 722).

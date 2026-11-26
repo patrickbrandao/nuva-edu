@@ -70,7 +70,7 @@ Este é o catálogo único de tipos de tarefa; as demais specs usam exatamente e
 | --- | --- | --- | --- |
 | `email.send` | Qualquer serviço, por `enqueueEmail` de `packages/core` | Envia uma linha de `email_outbox` por SMTP, criando o token do link quando o tipo tem um ([024](024-notificacoes-e-email.md)) | 5, com as quatro esperas próprias de [024](024-notificacoes-e-email.md) (RNF-02: 1 min, 5 min, 30 min, 2 h) |
 | `notify` | Qualquer serviço, pela função `notify` de `packages/core` | Cria as notificações dos destinatários e enfileira e-mails conforme as preferências ([024](024-notificacoes-e-email.md)) | 5 |
-| `payment.webhook` | `classroom-api` | Processa um `webhook_events`: consulta o pagamento e atualiza pedido ou assinatura ([013](013-pagamentos-mercado-pago.md)) | 10 |
+| `payment.webhook` | `classroom-api` | Processa um `webhook_events`: consulta o pagamento e atualiza pedido ou assinatura ([013](013-pagamentos-mercado-pago.md)) | 8, ou 3 com credenciais inválidas |
 | `order.fulfill` | `payment.webhook`, reconciliação | Marca o pedido pago e cria os direitos em cascata ([010](010-direitos-de-acesso.md)) | 10 |
 | `refund.execute` | `admin-api` | Estorna no Mercado Pago e revoga direitos em cascata ([011](011-vendas-e-checkout.md)) | 10 |
 | `entitlement.recompute` | Mudança de vínculo ebook ↔ produto, de itens de pacote ou de plano | Recalcula direitos derivados dos usuários afetados | 5 |
