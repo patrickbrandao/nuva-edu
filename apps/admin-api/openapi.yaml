@@ -4694,7 +4694,6 @@ paths:
       tags: [sales]
       summary: Listar pedidos
       x-permission: sales.view
-      x-nuva-pending: true
       description: |
         Pedidos da escola, do mais novo para o mais antigo (`specs/011-vendas-e-checkout.md`,
         "Consulta e exportação"), com filtros por período, estado, produto, cupom e comprador. Os
@@ -4772,7 +4771,6 @@ paths:
       tags: [sales]
       summary: Exportar vendas em CSV
       x-permission: sales.export
-      x-nuva-pending: true
       description: |
         Exportação de vendas (`specs/011-vendas-e-checkout.md`, "Consulta e exportação"), só do
         `admin`: `sales.export` é exclusiva dele e o `manager` recebe `403` `permission_denied` e
@@ -4844,7 +4842,6 @@ paths:
       tags: [sales]
       summary: Um pedido
       x-permission: sales.view
-      x-nuva-pending: true
       description: |
         O pedido com comprador (nome, e-mail e documento fiscal), itens e valores congelados,
         cobranças e reembolsos (`specs/011-vendas-e-checkout.md`). `manager` e `admin` veem;
@@ -4881,7 +4878,6 @@ paths:
       tags: [sales]
       summary: Pedir reembolso do pedido
       x-permission: order.refund
-      x-nuva-pending: true
       description: |
         Só o `admin` reembolsa (`specs/011-vendas-e-checkout.md`, "Reembolso"); `manager` recebe
         `403` `permission_denied`. O pedido inteiro (`items` ausente ou nulo) ou itens escolhidos,
@@ -4966,7 +4962,6 @@ paths:
       tags: [sales]
       summary: Tentar o reembolso de novo
       x-permission: order.refund
-      x-nuva-pending: true
       description: |
         Repete o estorno de um reembolso `failed` (`specs/011-vendas-e-checkout.md`, "Reembolso"),
         com a mesma cobrança e os mesmos itens; volta a `requested` e enfileira `refund.execute`.
@@ -5009,7 +5004,6 @@ paths:
       tags: [sales]
       summary: Listar cupons
       x-permission: coupon.manage
-      x-nuva-pending: true
       description: |
         Cupons da escola, do mais novo para o mais antigo (`specs/011-vendas-e-checkout.md`,
         "Cupons"). Só o `admin` (`coupon.manage`); `manager` e `instructor` recebem `403`
@@ -5060,7 +5054,6 @@ paths:
       tags: [sales]
       summary: Criar cupom
       x-permission: coupon.manage
-      x-nuva-pending: true
       description: |
         Só o `admin` (`specs/011-vendas-e-checkout.md`, "Cupons"). O código é único sem diferenciar
         maiúsculas: repetido, `409` `coupon_code_taken`. `percent` exige `percentOff` de 1 a 100 e
@@ -5113,7 +5106,6 @@ paths:
       tags: [sales]
       summary: Um cupom
       x-permission: coupon.manage
-      x-nuva-pending: true
       description: |
         Só o `admin` (`coupon.manage`); inexistente: `404` `not_found`.
       parameters:
@@ -5147,7 +5139,6 @@ paths:
       tags: [sales]
       summary: Editar ou desativar cupom
       x-permission: coupon.manage
-      x-nuva-pending: true
       description: |
         Só o `admin` (`specs/011-vendas-e-checkout.md`); a desativação é `active: false`, não há
         exclusão. Só os campos enviados mudam; `products` enviada substitui a lista inteira e
@@ -5205,7 +5196,6 @@ paths:
       tags: [payments]
       summary: Listar cobranças
       x-permission: sales.view
-      x-nuva-pending: true
       description: |
         Cobranças conhecidas (`specs/013-pagamentos-mercado-pago.md`), do mais recente ao mais
         antigo, de pedidos e de assinaturas; `manager` e `admin` consultam (`specs/008-papeis-e-permissoes.md`).
@@ -5273,7 +5263,6 @@ paths:
       tags: [payments]
       summary: Uma cobrança
       x-permission: sales.view
-      x-nuva-pending: true
       description: |
         A cobrança, com o estado normalizado, o estado original do provedor e os reembolsos
         relacionados (`specs/013-pagamentos-mercado-pago.md`). `manager` e `admin`; inexistente:
@@ -5310,7 +5299,6 @@ paths:
       tags: [payments]
       summary: Avisos de pagamento com falha
       x-permission: ops.manage
-      x-nuva-pending: true
       description: |
         Só o `admin` (`ops.manage`, `specs/008-papeis-e-permissoes.md`; `specs/013-pagamentos-mercado-pago.md`,
         "Webhook"). `status=failed` (padrão) é a fila de falhas operacionais, cujo evento pode ser
@@ -5356,7 +5344,6 @@ paths:
       tags: [payments]
       summary: Reprocessar aviso com falha
       x-permission: ops.manage
-      x-nuva-pending: true
       description: |
         Só o `admin` (`ops.manage`) e somente evento `failed` (`specs/013-pagamentos-mercado-pago.md`):
         volta a `received` e enfileira `payment.webhook` de novo. Evento `rejected` nunca é
@@ -5399,7 +5386,6 @@ paths:
       tags: [payments]
       summary: Estado da integração de pagamento
       x-permission: settings.manage
-      x-nuva-pending: true
       description: |
         Só o `admin` (`settings.manage`, `specs/007-contas-e-autenticacao.md` e
         `specs/013-pagamentos-mercado-pago.md`, "Modo de teste"): o provedor em uso, se o token é de
@@ -5435,7 +5421,6 @@ paths:
       tags: [subscriptions]
       summary: Listar planos
       x-permission: plan.manage
-      x-nuva-pending: true
       description: |
         Planos da escola, por `position` e depois pelo título (`specs/012-assinaturas.md`,
         "Planos"). Só o `admin` (`plan.manage`); `manager` e `instructor` recebem `403`
@@ -5495,7 +5480,6 @@ paths:
       tags: [subscriptions]
       summary: Criar plano
       x-permission: plan.manage
-      x-nuva-pending: true
       description: |
         Cria um plano de assinatura (`specs/012-assinaturas.md`, "Planos"). Só o `admin`
         (`plan.manage`); `manager` e `instructor` recebem `403` `permission_denied`. A ação é
@@ -5562,7 +5546,6 @@ paths:
       tags: [subscriptions]
       summary: Um plano
       x-permission: plan.manage
-      x-nuva-pending: true
       description: |
         O plano com os itens e a contagem de assinaturas (`specs/012-assinaturas.md`). Só o
         `admin` (`plan.manage`); inexistente: `404 not_found`.
@@ -5597,7 +5580,6 @@ paths:
       tags: [subscriptions]
       summary: Editar ou desativar plano
       x-permission: plan.manage
-      x-nuva-pending: true
       description: |
         Edição parcial (`specs/012-assinaturas.md`, "Planos"): só os campos enviados mudam. Só o
         `admin` (`plan.manage`); a ação é registrada na auditoria (`specs/028-auditoria.md`).
@@ -5658,7 +5640,6 @@ paths:
       tags: [subscriptions]
       summary: Definir os itens do plano
       x-permission: plan.manage
-      x-nuva-pending: true
       description: |
         Substitui a lista de cursos, pacotes e ebooks que o plano libera
         (`specs/012-assinaturas.md`, "Planos"). Só o `admin` (`plan.manage`); a ação é registrada
@@ -5716,7 +5697,6 @@ paths:
       tags: [subscriptions]
       summary: Listar assinaturas
       x-permission: sales.view
-      x-nuva-pending: true
       description: |
         Assinaturas da escola, da mais nova para a mais antiga (`specs/012-assinaturas.md`,
         "Interfaces e contratos"), com filtros por período, estado, plano, assinante e busca por
@@ -5783,7 +5763,6 @@ paths:
       tags: [subscriptions]
       summary: Uma assinatura
       x-permission: sales.view
-      x-nuva-pending: true
       description: |
         A assinatura com o assinante, o plano atual (preço, itens e periodicidade), o período, a
         carência e as cobranças com os reembolsos de cada uma
@@ -5824,7 +5803,6 @@ paths:
       tags: [subscriptions]
       summary: Cancelar assinatura de um aluno
       x-permission: subscription.cancel
-      x-nuva-pending: true
       description: |
         Cancela a assinatura de um aluno (`specs/012-assinaturas.md`, "Cancelamento"). Só o
         `admin` (`subscription.cancel`); `manager` recebe `403` `permission_denied`
@@ -5898,7 +5876,6 @@ paths:
       tags: [subscriptions]
       summary: Reembolsar cobrança da assinatura
       x-permission: order.refund
-      x-nuva-pending: true
       description: |
         Reembolsa uma cobrança recorrente (`specs/012-assinaturas.md`, "Reembolso de cobrança";
         `specs/011-vendas-e-checkout.md`, "Reembolso"). Só o `admin` (`order.refund`); `manager`
@@ -6034,7 +6011,6 @@ paths:
       tags: [notifications]
       summary: Central da equipe
       x-permission: admin.access
-      x-nuva-pending: true
       description: |
         Notificações do usuário da sessão, da mais nova para a mais antiga
         (`specs/024-notificacoes-e-email.md`, "Central"), paginadas por cursor. A equipe recebe
@@ -6072,7 +6048,6 @@ paths:
       tags: [notifications]
       summary: Limpar todas
       x-permission: admin.access
-      x-nuva-pending: true
       description: |
         "Limpar todas": apaga lidas e não lidas do usuário da sessão (o histórico lido também
         some). Nunca alcança notificação de outra pessoa; devolve quantas foram apagadas.
@@ -6107,7 +6082,6 @@ paths:
       tags: [notifications]
       summary: Contador do sino
       x-permission: admin.access
-      x-nuva-pending: true
       description: |
         Não lidas do usuário da sessão: o número que o sino do admin mostra e que o evento SSE
         `notification.created` atualiza sem recarregar.
@@ -6139,7 +6113,6 @@ paths:
       tags: [notifications]
       summary: Marcar uma notificação como lida
       x-permission: admin.access
-      x-nuva-pending: true
       description: |
         Marca a notificação do usuário da sessão como lida e devolve o item atualizado com o
         contador do sino. Idempotente: já lida devolve o mesmo item. Notificação inexistente ou
@@ -6179,7 +6152,6 @@ paths:
       tags: [notifications]
       summary: Marcar todas como lidas
       x-permission: admin.access
-      x-nuva-pending: true
       description: |
         Marca todas as não lidas do usuário da sessão como lidas. `updated` é quantas linhas
         mudaram; o contador do sino fica zero.
@@ -6214,7 +6186,6 @@ paths:
       tags: [notifications]
       summary: Preferências da equipe por grupo
       x-permission: admin.access
-      x-nuva-pending: true
       description: |
         Canais efetivos dos onze grupos (`specs/024-notificacoes-e-email.md`, "Tipos e grupos"),
         para o usuário da sessão. Grupo obrigatório devolve `emailRequired: true`, com o e-mail
@@ -6247,7 +6218,6 @@ paths:
       tags: [notifications]
       summary: Gravar preferências da equipe por grupo
       x-permission: admin.access
-      x-nuva-pending: true
       description: |
         Muda só os canais enviados; grupo omitido e canal omitido ficam como estão. Recusa com
         `400 validation_failed` o e-mail desligado em grupo obrigatório (`account`, `purchase`,
@@ -6296,7 +6266,6 @@ paths:
       tags: [ops]
       summary: Resumo da operação
       x-permission: ops.manage
-      x-nuva-pending: true
       description: |
         Números da tela "Operação" e do selo do menu
         (`specs/033-observabilidade-retencao-backup.md`, "Tela Operação"): a fila por tipo com a
@@ -6331,7 +6300,6 @@ paths:
       tags: [ops]
       summary: Fila por estado
       x-permission: ops.manage
-      x-nuva-pending: true
       description: |
         Tarefas da fila, da mais antiga para a mais nova (`specs/005-worker-e-fila.md`,
         "Dados"): pendentes (`queued`), em execução (`running`) e com falha (`failed`). Tarefas
@@ -6378,7 +6346,6 @@ paths:
       tags: [ops]
       summary: Reenfileirar tarefa com falha
       x-permission: ops.manage
-      x-nuva-pending: true
       description: |
         A tarefa `failed` volta a `queued` para agora, com `attempts = 0`; `lastError` fica como
         registro (`specs/005-worker-e-fila.md`, "Interfaces e contratos"). A ação grava
@@ -6422,7 +6389,6 @@ paths:
       tags: [ops]
       summary: Descartar tarefa com falha
       x-permission: ops.manage
-      x-nuva-pending: true
       description: |
         Apaga a tarefa `failed` (`specs/005-worker-e-fila.md`). `404 not_found` se não existe;
         `409 job_not_failed` se não está `failed`. A ação grava auditoria.
@@ -6459,7 +6425,6 @@ paths:
       tags: [ops]
       summary: E-mails pendentes e com falha
       x-permission: ops.manage
-      x-nuva-pending: true
       description: |
         Linhas de `email_outbox` que ainda não saíram: `queued` e `failed`
         (`specs/024-notificacoes-e-email.md`, "E-mail"; `specs/033-observabilidade-retencao-backup.md`,
@@ -6508,7 +6473,6 @@ paths:
       tags: [ops]
       summary: Reenviar e-mail com falha
       x-permission: ops.manage
-      x-nuva-pending: true
       description: |
         O "reenviar" da tela de operação devolve o e-mail `failed` a `queued`
         (`specs/024-notificacoes-e-email.md`, "E-mail"): a tarefa `email.send` é enfileirada de
@@ -6551,7 +6515,6 @@ paths:
       tags: [settings]
       summary: Identidade da escola nos e-mails
       x-permission: settings.manage
-      x-nuva-pending: true
       description: |
         Nome, logotipo, cor de destaque e rodapé usados nos e-mails de notificação
         (`specs/024-notificacoes-e-email.md`, "E-mail"). O admin edita só a identidade; os
@@ -6584,7 +6547,6 @@ paths:
       tags: [settings]
       summary: Gravar a identidade da escola nos e-mails
       x-permission: settings.manage
-      x-nuva-pending: true
       description: |
         Grava os quatro campos juntos (`specs/024-notificacoes-e-email.md`): nome, logotipo, cor
         de destaque e rodapé. O rodapé tem até 500 caracteres e aceita quebras de linha; nulo

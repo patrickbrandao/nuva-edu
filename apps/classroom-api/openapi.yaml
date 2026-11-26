@@ -2399,7 +2399,6 @@ paths:
       tags: [sales]
       summary: Cesta do aluno
       x-permission: purchase.create
-      x-nuva-pending: true
       description: |
         A cesta aberta do próprio usuário (`specs/011-vendas-e-checkout.md`, "Cesta"), vazia quando
         ele ainda não acrescentou nada. Traz, por item, o preço atual do produto, o desconto do cupom rateado
@@ -2440,7 +2439,6 @@ paths:
       tags: [sales]
       summary: Acrescentar produto à cesta
       x-permission: purchase.create
-      x-nuva-pending: true
       description: |
         Acrescenta um produto avulso `paid` e publicado (`specs/011-vendas-e-checkout.md`,
         "Cesta"). Devolve a cesta inteira, já com o rateio do cupom e a cascata do item novo.
@@ -2499,7 +2497,6 @@ paths:
       tags: [sales]
       summary: Remover produto da cesta
       x-permission: purchase.create
-      x-nuva-pending: true
       description: |
         Remove o item da própria cesta. Item de outra cesta ou já removido: `404` `not_found`.
       security:
@@ -2533,7 +2530,6 @@ paths:
       tags: [sales]
       summary: Aplicar cupom à cesta
       x-permission: purchase.create
-      x-nuva-pending: true
       description: |
         Um cupom por cesta (`specs/011-vendas-e-checkout.md`, "Cupons"). O código é comparado sem
         diferenciar maiúsculas e substitui o cupom anterior. Devolve a cesta com o desconto
@@ -2594,7 +2590,6 @@ paths:
       tags: [sales]
       summary: Remover o cupom da cesta
       x-permission: purchase.create
-      x-nuva-pending: true
       description: |
         Tira o cupom da cesta e devolve a cesta recalculada. Sem cupom aplicado, responde `200` com
         a cesta como está.
@@ -2629,7 +2624,6 @@ paths:
       tags: [sales]
       summary: Dados de comprador
       x-permission: purchase.create
-      x-nuva-pending: true
       description: |
         Nome completo e CPF/CNPJ já informados (`specs/011-vendas-e-checkout.md`, "Dados do
         comprador"), para o formulário do primeiro checkout vir preenchido e os seguintes
@@ -2663,7 +2657,6 @@ paths:
       tags: [sales]
       summary: Gravar dados de comprador
       x-permission: purchase.create
-      x-nuva-pending: true
       description: |
         Grava nome completo, tipo e número do documento no próprio usuário; o pedido copia os
         valores na finalização. CPF/CNPJ validado por dígito verificador e guardado só com os
@@ -2729,7 +2722,6 @@ paths:
       tags: [sales]
       summary: Pedidos do aluno
       x-permission: purchase.create
-      x-nuva-pending: true
       description: |
         Os pedidos do próprio usuário, do mais recente ao mais antigo (`specs/011-vendas-e-checkout.md`,
         RF-08), sem os `draft` (restos de tentativa que não chegaram ao provedor). Filtro por
@@ -2768,7 +2760,6 @@ paths:
       tags: [sales]
       summary: Fechar a cesta e criar o pedido
       x-permission: purchase.create
-      x-nuva-pending: true
       description: |
         Fecha a cesta do próprio usuário (`specs/011-vendas-e-checkout.md`, "Pedido e seus
         estados"). Numa transação, valida a cesta e o cupom, cria o pedido e os itens com preços,
@@ -2824,7 +2815,6 @@ paths:
       tags: [sales]
       summary: Um pedido do aluno
       x-permission: purchase.create
-      x-nuva-pending: true
       description: |
         O pedido do próprio usuário, com itens, valores congelados, estado e a cobrança conhecida
         (`specs/011-vendas-e-checkout.md`, "Retorno do checkout"). Pedido de outra pessoa ou `draft`:
@@ -2864,7 +2854,6 @@ paths:
       tags: [sales]
       summary: Cancelar pedido pendente
       x-permission: purchase.create
-      x-nuva-pending: true
       description: |
         Cancela um pedido `pending` do próprio usuário antes do pagamento (`specs/011-vendas-e-checkout.md`,
         "Pedido e seus estados") e pede o cancelamento do checkout ao provedor. Pedido pago,
@@ -2907,7 +2896,6 @@ paths:
       operationId: listPlans
       tags: [subscriptions]
       summary: Vitrine de planos
-      x-nuva-pending: true
       description: |
         Planos `active` agrupados por `groupKey`, para a página alternar mensal e anual
         (`specs/012-assinaturas.md`, "Planos"), sem login. Plano inativo sai da vitrine e não
@@ -2944,7 +2932,6 @@ paths:
       tags: [subscriptions]
       summary: Assinar um plano
       x-permission: purchase.create
-      x-nuva-pending: true
       description: |
         Assina um plano em checkout próprio, fora da cesta (`specs/012-assinaturas.md`,
         "Assinar"). Exige sessão e e-mail confirmado; o nome e o CPF/CNPJ vêm de
@@ -3035,7 +3022,6 @@ paths:
       tags: [subscriptions]
       summary: Assinaturas do aluno
       x-permission: purchase.create
-      x-nuva-pending: true
       description: |
         As assinaturas do próprio usuário, da mais nova para a mais antiga
         (`specs/012-assinaturas.md`, RF-08): a atual e o histórico, inclusive `ended` e `expired`.
@@ -3076,7 +3062,6 @@ paths:
       tags: [subscriptions]
       summary: Uma assinatura do aluno
       x-permission: purchase.create
-      x-nuva-pending: true
       description: |
         A assinatura do próprio usuário com o plano atual (título, periodicidade e itens que
         libera), o preço contratado, o período, a carência e todos os estados do ciclo de vida,
@@ -3116,7 +3101,6 @@ paths:
       tags: [subscriptions]
       summary: Cancelar a própria assinatura
       x-permission: purchase.create
-      x-nuva-pending: true
       description: |
         Cancela a assinatura do próprio usuário (`specs/012-assinaturas.md`, "Cancelamento").
         Em `pending`, cancela a adesão no provedor e a assinatura vai a `expired` (nunca foi
@@ -3170,7 +3154,6 @@ paths:
       operationId: receiveMercadoPagoWebhook
       tags: [webhooks]
       summary: Aviso de pagamento do Mercado Pago
-      x-nuva-pending: true
       description: |
         Endpoint público do aviso de pagamento (`specs/013-pagamentos-mercado-pago.md`, "Webhook"),
         sem sessão e **sem CSRF**: quem chama é o provedor, não um navegador com a sessão do aluno; a
@@ -3260,7 +3243,6 @@ paths:
       tags: [notifications]
       summary: Central do usuário
       x-permission: account.self_service
-      x-nuva-pending: true
       description: |
         Notificações do usuário da sessão, da mais nova para a mais antiga
         (`specs/024-notificacoes-e-email.md`, "Central"), paginadas por cursor. O item traz o
@@ -3298,7 +3280,6 @@ paths:
       tags: [notifications]
       summary: Limpar todas
       x-permission: account.self_service
-      x-nuva-pending: true
       description: |
         "Limpar todas": apaga lidas e não lidas do usuário da sessão (o histórico lido também
         some). Nunca alcança notificação de outra pessoa; devolve quantas foram apagadas.
@@ -3333,7 +3314,6 @@ paths:
       tags: [notifications]
       summary: Contador do sino
       x-permission: account.self_service
-      x-nuva-pending: true
       description: |
         Não lidas do usuário da sessão: o número que o sino mostra e que o evento SSE
         `notification.created` atualiza sem recarregar.
@@ -3365,7 +3345,6 @@ paths:
       tags: [notifications]
       summary: Marcar uma notificação como lida
       x-permission: account.self_service
-      x-nuva-pending: true
       description: |
         Marca a notificação do usuário da sessão como lida e devolve o item atualizado com o
         contador do sino. Idempotente: já lida devolve o mesmo item. Notificação inexistente ou
@@ -3405,7 +3384,6 @@ paths:
       tags: [notifications]
       summary: Marcar todas como lidas
       x-permission: account.self_service
-      x-nuva-pending: true
       description: |
         Marca todas as não lidas do usuário da sessão como lidas. `updated` é quantas linhas
         mudaram; o contador do sino fica zero.
@@ -3440,7 +3418,6 @@ paths:
       tags: [notifications]
       summary: Preferências por grupo
       x-permission: account.self_service
-      x-nuva-pending: true
       description: |
         Canais efetivos dos onze grupos (`specs/024-notificacoes-e-email.md`, "Tipos e grupos").
         Grupo obrigatório devolve `emailRequired: true`, com o e-mail sempre ligado; o grupo
@@ -3473,7 +3450,6 @@ paths:
       tags: [notifications]
       summary: Gravar preferências por grupo
       x-permission: account.self_service
-      x-nuva-pending: true
       description: |
         Muda só os canais enviados; grupo omitido e canal omitido ficam como estão. Recusa com
         `400 validation_failed` o e-mail desligado em grupo obrigatório (`account`, `purchase`,
@@ -3519,7 +3495,6 @@ paths:
       operationId: unsubscribe
       tags: [notifications]
       summary: Descadastro de um grupo pelo token
-      x-nuva-pending: true
       description: |
         Link de descadastro de um clique dos e-mails não obrigatórios
         (`specs/024-notificacoes-e-email.md`, RF-07 e "Links com token"): sem login e **sem
