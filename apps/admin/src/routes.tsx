@@ -8,11 +8,17 @@ import { BUNDLES_PATH, EBOOKS_PATH } from './api/products';
 import { TERMS_PATH } from './api/terms';
 import { OperationsPage } from './features/payments/OperationsPage';
 import { OPERATIONS_PATH } from './features/payments/queries';
+import { PlanEditorPage } from './features/plans/PlanEditorPage';
+import { PlansPage } from './features/plans/PlansPage';
+import { NEW_PLAN_PATH, PLANS_PATH } from './features/plans/queries';
 import { CouponsPage } from './features/sales/CouponsPage';
 import { ExportPage } from './features/sales/ExportPage';
 import { OrderDetailPage } from './features/sales/OrderDetailPage';
 import { OrdersPage } from './features/sales/OrdersPage';
 import { COUPONS_PATH, EXPORT_PATH } from './features/sales/queries';
+import { SUBSCRIPTIONS_PATH } from './features/subscriptions/queries';
+import { SubscriptionDetailPage } from './features/subscriptions/SubscriptionDetailPage';
+import { SubscriptionsPage } from './features/subscriptions/SubscriptionsPage';
 import { AuditEntryPage } from './pages/audit/AuditEntryPage';
 import { AUDIT_PATH, AuditPage } from './pages/audit/AuditPage';
 import { CertificatesPage } from './pages/certificates/CertificatesPage';
@@ -78,6 +84,15 @@ const PAGES: Partial<Record<MenuItemId, RouteObject[]>> = {
     { path: '/pedidos/:id', element: <OrderDetailPage /> },
   ],
   exportSales: [{ path: EXPORT_PATH, element: <ExportPage /> }],
+  subscriptions: [
+    { path: SUBSCRIPTIONS_PATH, element: <SubscriptionsPage /> },
+    { path: `${SUBSCRIPTIONS_PATH}/:id`, element: <SubscriptionDetailPage /> },
+  ],
+  plans: [
+    { path: PLANS_PATH, element: <PlansPage /> },
+    { path: NEW_PLAN_PATH, element: <PlanEditorPage /> },
+    { path: `${PLANS_PATH}/:id`, element: <PlanEditorPage /> },
+  ],
   coupons: [{ path: COUPONS_PATH, element: <CouponsPage /> }],
   operations: [{ path: OPERATIONS_PATH, element: <OperationsPage /> }],
   students: [
