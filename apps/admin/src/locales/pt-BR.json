@@ -471,6 +471,24 @@
       "signerRole": "Cargo de quem assina",
       "emptyHint": "Em branco, a palavra-chave fica vazia no certificado.",
       "saved": "Configurações do certificado salvas."
+    },
+    "branding": {
+      "title": "E-mail",
+      "text": "Nome, logotipo, cor e rodapé que identificam a escola nos e-mails de notificação.",
+      "loading": "Carregando a identidade da escola…",
+      "errorTitle": "Não foi possível carregar a identidade da escola",
+      "schoolName": "Nome da escola",
+      "schoolNameHint": "Aparece no cabeçalho dos e-mails e no site.",
+      "accentColor": "Cor de destaque",
+      "accentColorHint": "Formato #RRGGBB, ou em branco para a cor padrão.",
+      "logo": "Logotipo",
+      "logoAlt": "Logotipo de {{name}}",
+      "noLogo": "Sem logotipo",
+      "logoReadOnly": "O envio do logotipo pela admin ainda não está disponível; o arquivo atual continua valendo.",
+      "footer": "Rodapé",
+      "footerHint": "Texto livre ao pé do e-mail, com quebras de linha.",
+      "footerCounter": "{{length}} de {{max}} caracteres",
+      "saved": "Identidade da escola salva."
     }
   },
   "audit": {
@@ -1804,7 +1822,6 @@
     }
   },
   "payments": {
-    "operations": "Fila, e-mails e avisos de pagamento da escola.",
     "provider": {
       "mercadopago": "Mercado Pago",
       "fake": "Simulado"
@@ -2186,6 +2203,276 @@
       "refund_exceeds_paid": "O valor passa do saldo não reembolsado da cobrança.",
       "not_found": "A assinatura ou a cobrança não foi encontrada.",
       "validation_failed": "Confira os dados e tente de novo."
+    }
+  },
+  "notifications": {
+    "title": "Notificações",
+    "subtitle": "Avisos da escola para você: fórum, chamados, compras e a operação.",
+    "region": "Central de notificações",
+    "panelTitle": "Notificações",
+    "bell_one": "Notificações: {{count}} não lida",
+    "bell_other": "Notificações: {{count}} não lidas",
+    "bellNone": "Notificações: nenhuma não lida",
+    "loading": "Carregando as notificações…",
+    "errorTitle": "Não foi possível carregar as notificações",
+    "errorText": "Tente de novo em instantes.",
+    "empty": "Nenhuma notificação",
+    "emptyText": "Quando algo precisar de você, aparece aqui.",
+    "markAll": "Marcar todas como lidas",
+    "clearAll": "Limpar todas",
+    "markedAll": "Todas as notificações foram marcadas como lidas.",
+    "cleared": "Notificações apagadas.",
+    "clearTitle": "Limpar notificações",
+    "clearItem": "Notificações",
+    "clearMessage": "Lidas e não lidas serão apagadas. Esta ação não pode ser desfeita.",
+    "clearError": "Não foi possível limpar as notificações",
+    "markAllError": "Não foi possível marcar as notificações como lidas",
+    "readError": "Não foi possível marcar a notificação como lida",
+    "unread": "Não lida",
+    "grouped_one": "e mais {{count}}",
+    "grouped_other": "e mais {{count}}",
+    "openAll": "Ver todas",
+    "preferences": "Preferências",
+    "time": {
+      "now": "agora"
+    },
+    "types": {
+      "account": {
+        "verify_email": "Confirme seu e-mail",
+        "password_reset": "Redefinição de senha solicitada",
+        "exists": "Já existe uma conta com este e-mail",
+        "new_login": "Novo acesso à sua conta",
+        "locked": "Conta bloqueada por tentativas",
+        "password_changed": "Sua senha foi alterada",
+        "role_changed": "Seu papel na equipe mudou",
+        "deleted": "Sua conta foi excluída"
+      },
+      "order": {
+        "approved": "Pagamento aprovado",
+        "refunded": "Pedido reembolsado"
+      },
+      "subscription": {
+        "renewed": "Assinatura renovada",
+        "payment_failed": "Falha na renovação da assinatura",
+        "canceled": "Assinatura cancelada",
+        "expired": "Assinatura expirada"
+      },
+      "access": {
+        "granted": "Novo acesso liberado",
+        "revoked": "Acesso revogado"
+      },
+      "lesson": {
+        "published": "Nova aula publicada"
+      },
+      "course": {
+        "published": "Curso publicado"
+      },
+      "certificate": {
+        "issued": "Certificado emitido"
+      },
+      "forum": {
+        "reply": "Nova resposta no fórum",
+        "mention": "Você foi mencionado no fórum",
+        "solution": "Sua resposta foi marcada como solução"
+      },
+      "dm": {
+        "received": "Nova mensagem direta"
+      },
+      "follow": {
+        "created": "Novo seguidor"
+      },
+      "case": {
+        "liked": "Curtida no seu case",
+        "commented": "Comentário no seu case"
+      },
+      "badge": {
+        "awarded": "Nova medalha"
+      },
+      "level": {
+        "up": "Você subiu de nível"
+      },
+      "event": {
+        "created": "Novo evento",
+        "reminder": "Lembrete de evento",
+        "canceled": "Evento cancelado"
+      },
+      "ticket": {
+        "reply": "Resposta no seu chamado",
+        "status_changed": "Chamado atualizado",
+        "opened": "Novo chamado aberto",
+        "user_reply": "Nova resposta do aluno no chamado"
+      },
+      "announcement": {
+        "published": "Nova novidade"
+      },
+      "moderation": {
+        "content_hidden": "Conteúdo ocultado",
+        "warning": "Advertência da moderação",
+        "suspended": "Conta suspensa"
+      },
+      "report": {
+        "created": "Nova denúncia"
+      },
+      "ops": {
+        "job_failed": "Tarefa da fila falhou"
+      },
+      "unknown": "Notificação"
+    },
+    "groups": {
+      "account": "Conta",
+      "purchase": "Compras e acesso",
+      "courses": "Cursos",
+      "forum": "Fórum",
+      "messages": "Mensagens",
+      "community": "Comunidade",
+      "events": "Eventos",
+      "support": "Suporte",
+      "announcements": "Novidades",
+      "moderation": "Moderação",
+      "staff": "Equipe"
+    },
+    "groupDescriptions": {
+      "account": "Avisos de segurança e acesso à sua conta.",
+      "purchase": "Pedidos, assinaturas e liberação de acesso.",
+      "courses": "Publicações de aulas e cursos, e certificados.",
+      "forum": "Respostas, menções e soluções nos tópicos.",
+      "messages": "Mensagens diretas de outros usuários.",
+      "community": "Seguidores, curtidas, comentários, medalhas e níveis.",
+      "events": "Novos eventos, lembretes e cancelamentos.",
+      "support": "Respostas e mudanças de estado nos seus chamados.",
+      "announcements": "Avisos publicados pela escola.",
+      "moderation": "Conteúdo ocultado, advertências e suspensões.",
+      "staff": "O que precisa da equipe: chamados, denúncias e falhas da fila."
+    },
+    "prefs": {
+      "title": "Preferências de notificação",
+      "subtitle": "Escolha, por grupo, o que chega na central e o que também vai por e-mail.",
+      "heading": "Canais por grupo",
+      "description": "A central mostra os avisos na plataforma; o e-mail chega à sua caixa. Grupos obrigatórios mantêm o e-mail ligado.",
+      "region": "Preferências de notificação",
+      "inApp": "Na plataforma",
+      "email": "Por e-mail",
+      "required": "Sempre ativo",
+      "notAvailable": "Não se aplica",
+      "saved": "Preferências salvas.",
+      "saveError": "Não foi possível salvar a preferência",
+      "loading": "Carregando as preferências…",
+      "errorTitle": "Não foi possível carregar as preferências"
+    },
+    "errors": {
+      "not_found": "A notificação não foi encontrada.",
+      "validation_failed": "Confira os dados e tente de novo."
+    }
+  },
+  "operations": {
+    "subtitle": "Fila, e-mails, webhooks e sistema da escola.",
+    "summary": {
+      "title": "Resumo",
+      "failures": "Falhas",
+      "queued": "Na fila",
+      "running": "Em execução",
+      "emails": "E-mails pendentes",
+      "loading": "Carregando o resumo…",
+      "errorTitle": "Não foi possível carregar o resumo",
+      "perType": {
+        "queued_one": "{{count}} na fila",
+        "queued_other": "{{count}} na fila",
+        "running_one": "{{count}} em execução",
+        "running_other": "{{count}} em execução",
+        "failed_one": "{{count}} com falha",
+        "failed_other": "{{count}} com falha",
+        "nonePending": "Nada pendente",
+        "oldest": "mais antiga há {{age}}"
+      }
+    },
+    "jobs": {
+      "title": "Fila de tarefas",
+      "text": "Tarefas que o worker ainda não concluiu. Falhas podem ser tentadas de novo ou descartadas; a API é quem decide.",
+      "tabs": "Estado das tarefas",
+      "status": {
+        "failed": "Com falha",
+        "queued": "Na fila",
+        "running": "Em execução"
+      },
+      "columns": {
+        "type": "Tipo",
+        "attempts": "Tentativas",
+        "runAt": "Quando",
+        "lastError": "Último erro",
+        "none": "—",
+        "actions": "Ações"
+      },
+      "attempts": "{{attempts}} de {{max}}",
+      "createdAt": "Criada em {{date}}",
+      "retry": "Tentar de novo",
+      "retryError": "Não foi possível tentar de novo",
+      "retried": "Tarefa {{type}} voltou para a fila.",
+      "discard": "Descartar",
+      "discardTitle": "Descartar tarefa",
+      "discardMessage": "A tarefa com falha será removida da fila sem nova tentativa.",
+      "discardError": "Não foi possível descartar a tarefa",
+      "discarded": "Tarefa {{type}} descartada.",
+      "loading": "Carregando a fila…",
+      "errorTitle": "Não foi possível carregar a fila",
+      "empty": "Nenhuma tarefa",
+      "emptyText": "Nada neste estado agora."
+    },
+    "emails": {
+      "title": "E-mails",
+      "text": "E-mails pendentes e com falha. O destinatário aparece mascarado; o corpo não é guardado.",
+      "tabs": "Estado dos e-mails",
+      "status": {
+        "failed": "Com falha",
+        "queued": "Na fila"
+      },
+      "columns": {
+        "type": "Tipo",
+        "to": "Destinatário",
+        "subject": "Assunto",
+        "noSubject": "Ainda sem assunto",
+        "attempts": "Tentativas",
+        "lastError": "Último erro",
+        "none": "—",
+        "createdAt": "Criado em",
+        "actions": "Ações"
+      },
+      "retry": "Reenviar",
+      "retryError": "Não foi possível reenviar o e-mail",
+      "retried": "E-mail devolvido à fila.",
+      "loading": "Carregando os e-mails…",
+      "errorTitle": "Não foi possível carregar os e-mails",
+      "empty": "Nenhum e-mail",
+      "emptyText": "Nada neste estado agora."
+    },
+    "system": {
+      "title": "Sistema",
+      "version": "Versão",
+      "migrationVersion": "Migration",
+      "databaseBytes": "Banco",
+      "imageBytes": "Imagens",
+      "lastBackup": "Último backup",
+      "lastPurge": "Último expurgo",
+      "never": "Ainda não houve",
+      "backupLate": "Atrasado",
+      "backupStatus": {
+        "ok": "Concluído",
+        "failed": "Falhou"
+      },
+      "loading": "Carregando o sistema…",
+      "errorTitle": "Não foi possível carregar o sistema"
+    },
+    "errors": {
+      "job_not_failed": "Esta tarefa não está com falha.",
+      "job_already_active": "Esta tarefa já está na fila ou em execução.",
+      "email_not_failed": "Este e-mail não está com falha.",
+      "not_found": "O item não foi encontrado.",
+      "validation_failed": "Confira os dados e tente de novo."
+    },
+    "age": {
+      "seconds": "{{value}} s",
+      "minutes": "{{value}} min",
+      "hours": "{{value}} h",
+      "days": "{{value}} d"
     }
   }
 }

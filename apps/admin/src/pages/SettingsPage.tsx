@@ -2,6 +2,7 @@ import { AdminCard, AdminPageHeader, AdminSection, LoadingState, TextLink } from
 import { lazy, Suspense } from 'react';
 import { useTranslation } from 'react-i18next';
 import { TERMS_PATH } from '../api/terms';
+import { BrandingSection } from '../features/email-operations/BrandingSection';
 import { PaymentSettingsSection } from '../features/payments/PaymentSettingsSection';
 import { useCan } from '../session/session';
 import { CertificateSettingsSection } from './certificates/CertificateSettingsSection';
@@ -15,8 +16,8 @@ const TemplateEditor = lazy(() =>
 
 /**
  * Configurações (spec 006, mapa de telas): os termos (spec 030), o signatário e o template padrão
- * do certificado (spec 015) e o estado da integração de pagamento (spec 013); escola e marca,
- * login social e e-mail chegam com as próprias specs.
+ * do certificado (spec 015), o estado da integração de pagamento (spec 013) e a identidade da
+ * escola nos e-mails (spec 024); login social chega com a própria spec.
  */
 export function SettingsPage() {
   const { t } = useTranslation();
@@ -32,6 +33,7 @@ export function SettingsPage() {
       </AdminSection>
       <CertificateSettingsSection />
       <PaymentSettingsSection />
+      <BrandingSection />
       {can('settings.manage') ? (
         <Suspense fallback={<LoadingState label={t('certificateTemplate.loading')} />}>
           <TemplateEditor scope={{ kind: 'school' }} />

@@ -6,7 +6,10 @@ import { CERTIFICATES_PATH } from './api/certificates';
 import { COURSES_PATH } from './api/courses';
 import { BUNDLES_PATH, EBOOKS_PATH } from './api/products';
 import { TERMS_PATH } from './api/terms';
-import { OperationsPage } from './features/payments/OperationsPage';
+import { OperationsPage } from './features/email-operations/OperationsPage';
+import { NotificationPreferencesPage } from './features/notifications/NotificationPreferencesPage';
+import { NotificationsPage } from './features/notifications/NotificationsPage';
+import { NOTIFICATION_PREFS_PATH, NOTIFICATIONS_PATH } from './features/notifications/paths';
 import { OPERATIONS_PATH } from './features/payments/queries';
 import { PlanEditorPage } from './features/plans/PlanEditorPage';
 import { PlansPage } from './features/plans/PlansPage';
@@ -145,6 +148,24 @@ export const routes: RouteObject[] = [
                 },
               ],
           ),
+          // Central e preferências da equipe: sem item de menu (spec 006 não as lista no mapa);
+          // chegam pelo sino da barra superior e valem para qualquer sessão administrativa.
+          {
+            path: NOTIFICATIONS_PATH,
+            element: (
+              <RequirePermission permission="admin.access">
+                <NotificationsPage />
+              </RequirePermission>
+            ),
+          },
+          {
+            path: NOTIFICATION_PREFS_PATH,
+            element: (
+              <RequirePermission permission="admin.access">
+                <NotificationPreferencesPage />
+              </RequirePermission>
+            ),
+          },
           { path: '*', element: <NotFoundPage /> },
         ],
       },

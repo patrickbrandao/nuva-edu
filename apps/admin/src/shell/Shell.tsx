@@ -18,6 +18,9 @@ import { Outlet, useLocation, useNavigate } from 'react-router';
 import { useApi } from '../api/client';
 import { useMeta } from '../api/meta';
 import { useProblemText } from '../api/problems';
+import { useOpsSummary } from '../features/email-operations/queries';
+import { NotificationBellMenu } from '../features/notifications/NotificationBellMenu';
+import { NOTIFICATION_PREFS_PATH, NOTIFICATIONS_PATH } from '../features/notifications/paths';
 import { forgetSession, useSession } from '../session/session';
 import { BrandMark } from './BrandMark';
 import { validAccentColor } from './brand';
@@ -49,10 +52,20 @@ export function Shell() {
 
   const current = menuItemForPath(pathname);
   const home = t('menu.items.dashboard');
-  const pageTitle = current ? t(`menu.items.${current.id}`) : t('notFound.title');
+  // A central e as preferências não têm item de menu; a trilha e o título da aba ainda precisam
+  // de um nome legível (spec 006, RF-07).
+  const extraTitle =
+    pathname === NOTIFICATIONS_PATH
+      ? t('notifications.title')
+      : pathname === NOTIFICATION_PREFS_PATH
+        ? t('notifications.prefs.title')
+        : undefined;
+  const pageTitle = current ? t(`menu.items.${current.id}`) : (extraTitle ?? t('notFound.title'));
   const brandName = meta?.schoolName ?? t('app.name');
   const [subPage, provideCrumb] = useCrumbState();
   const accentColor = validAccentColor(meta?.accentColor);
+  // Selo do menu com as falhas da operação (spec 033): só o `admin` tem a leitura.
+  const ops = useOpsSummary(session.permissions.includes('ops.manage'));
 
   useEffect(() => {
     document.title = `${subPage ?? pageTitle} · ${brandName}`;
@@ -82,6 +95,9 @@ export function Shell() {
       label: t(`menu.items.${item.id}`),
       icon: <item.icon size={16} aria-hidden="true" />,
       href: item.path,
+      ...(item.id === 'operations' && ops.data && ops.data.failures > 0
+        ? { badge: ops.data.failures }
+        : {}),
     })),
   }));
 
@@ -138,13 +154,16 @@ export function Shell() {
     >
       <AdminTopbar
         actions={
-          <ThemeSwitch
-            compact
-            mode={mode}
-            onChange={setMode}
-            labels={theme.labels}
-            groupLabel={theme.groupLabel}
-          />
+          <span className="flex items-center gap-2">
+            <NotificationBellMenu />
+            <ThemeSwitch
+              compact
+              mode={mode}
+              onChange={setMode}
+              labels={theme.labels}
+              groupLabel={theme.groupLabel}
+            />
+          </span>
         }
       >
         <AdminBreadcrumb items={crumbs} label={t('shell.breadcrumb')} />
