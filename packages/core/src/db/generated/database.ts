@@ -667,6 +667,42 @@ export interface TermsVersions {
   version: number | null;
 }
 
+export interface TicketFollowers {
+  createdAt: Generated<Timestamp>;
+  ticketId: string;
+  userId: string;
+}
+
+export interface TicketMessages {
+  authorId: string;
+  bodyHtml: string;
+  bodyMd: string;
+  createdAt: Generated<Timestamp>;
+  id: Generated<string>;
+  internal: Generated<boolean>;
+  ticketId: string;
+}
+
+export interface Tickets {
+  assigneeId: string | null;
+  closedAt: Timestamp | null;
+  courseId: string | null;
+  createdAt: Generated<Timestamp>;
+  ebookId: string | null;
+  id: Generated<string>;
+  kind: string;
+  lastUserMessageAt: Generated<Timestamp>;
+  lessonId: string | null;
+  number: Generated<Int8>;
+  orderId: string | null;
+  reportsCount: Generated<number>;
+  resolvedAt: Timestamp | null;
+  status: Generated<string>;
+  subject: string;
+  updatedAt: Generated<Timestamp>;
+  userId: string;
+}
+
 export interface UserDevices {
   deviceKey: string;
   firstSeenAt: Generated<Timestamp>;
@@ -773,6 +809,9 @@ export interface DB {
   subscriptions: Subscriptions;
   termsAcceptances: TermsAcceptances;
   termsVersions: TermsVersions;
+  ticketFollowers: TicketFollowers;
+  ticketMessages: TicketMessages;
+  tickets: Tickets;
   userDevices: UserDevices;
   users: Users;
   userSuspensions: UserSuspensions;
