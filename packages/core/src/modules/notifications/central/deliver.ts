@@ -18,6 +18,11 @@ import { isNotificationType, notificationGroupHasInApp, notificationTypeGroup } 
 
 export interface DeliverNotificationInput extends CreateNotificationInput {}
 
+export interface DeliverNotificationOptions extends CreateNotificationOptions {
+  /** Limite de frequência ou endereço com recusas permanentes. A central continua disponível. */
+  suppressEmail?: boolean;
+}
+
 export interface DeliveredNotification {
   /** Motivo de nada ter sido entregue, ou `null` quando o destinatário recebeu. */
   skipped: NotificationSkipReason | null;
@@ -40,7 +45,7 @@ export interface DeliveredNotification {
 export async function deliverNotification(
   trx: Database,
   input: DeliverNotificationInput,
-  options: CreateNotificationOptions = {},
+  options: DeliverNotificationOptions = {},
 ): Promise<DeliveredNotification> {
   if (!trx.isTransaction) {
     throw new TypeError('deliverNotification exige uma transação aberta (db.transaction()).');
@@ -64,12 +69,13 @@ export async function deliverNotification(
   const prefs = await getNotificationPrefs(trx, input.userId);
   const channels = prefs[group];
   const created = channels.inApp ? await createNotification(trx, input, options) : null;
-  const email = channels.email
-    ? await enqueueNotificationEmail(trx, {
-        userId: input.userId,
-        type,
-        data: input.data ?? {},
-      })
-    : null;
+  const email =
+    channels.email && options.suppressEmail !== true
+      ? await enqueueNotificationEmail(trx, {
+          userId: input.userId,
+          type,
+          data: input.data ?? {},
+        })
+      : null;
   return { skipped: null, created, email, channels };
 }

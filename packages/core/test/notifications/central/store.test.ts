@@ -376,6 +376,20 @@ describe('deliverNotification (canais e preferências)', () => {
     });
   });
 
+  it('permite suprimir um e-mail sem alterar preferências nem a central', async () => {
+    await inRollback(db, async (trx) => {
+      const userId = await createUser(trx);
+      const delivered = await deliverNotification(
+        trx,
+        { userId, type: 'forum.reply', data: {} },
+        { nextEventId: eventIds(), suppressEmail: true },
+      );
+      expect(delivered.channels).toEqual({ inApp: true, email: true });
+      expect(delivered.created).not.toBeNull();
+      expect(delivered.email).toBeNull();
+    });
+  });
+
   it('conta suspensa não recebe nada, nem a central nem o e-mail', async () => {
     await inRollback(db, async (trx) => {
       const userId = await createUser(trx, { suspendedKind: 'full' });
