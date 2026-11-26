@@ -17,6 +17,7 @@ export const IDEMPOTENCY_KEY_MAX_LENGTH = 128;
 export const IDEMPOTENCY_SCOPES = {
   orderCreate: 'order.create',
   orderRefund: 'refund.order',
+  subscriptionCreate: 'subscription.create',
   subscriptionRefund: 'refund.subscription',
 } as const;
 

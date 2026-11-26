@@ -156,7 +156,18 @@ export async function runIdempotent<T>(
 // `Date` de novo para o corpo repetido ser igual ao da primeira resposta; as rotas formatam com
 // `toISOString()`. Outros textos com cara de data (título, motivo, URL) não são tocados: só os
 // nomes de campo abaixo.
-const TIMESTAMP_FIELDS = new Set(['createdAt', 'doneAt', 'expiresAt', 'paidAt']);
+const TIMESTAMP_FIELDS = new Set([
+  'canceledAt',
+  'createdAt',
+  'currentPeriodEnd',
+  'currentPeriodStart',
+  'doneAt',
+  'endedAt',
+  'expiresAt',
+  'graceUntil',
+  'nextChargeAt',
+  'paidAt',
+]);
 const ISO_TIMESTAMP = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,6})?(?:Z|[+-]\d{2}:\d{2})$/;
 
 /** Devolve o JSON gravado com os campos de data de `TIMESTAMP_FIELDS` como `Date`. */

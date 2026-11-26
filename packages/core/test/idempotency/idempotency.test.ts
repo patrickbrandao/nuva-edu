@@ -154,6 +154,36 @@ describe('execução idempotente', () => {
     expect(calls).toBe(1);
   });
 
+  it('reconstitui datas de pedido, reembolso e assinatura na repetição', async () => {
+    const sample = new Date('2026-04-01T12:00:00.000Z');
+    const payload = {
+      createdAt: sample,
+      doneAt: sample,
+      expiresAt: sample,
+      paidAt: sample,
+      currentPeriodStart: sample,
+      currentPeriodEnd: sample,
+      graceUntil: sample,
+      nextChargeAt: sample,
+      canceledAt: sample,
+      endedAt: sample,
+      title: '2026-04-01T12:00:00.000Z',
+    };
+    const request = {
+      scope: IDEMPOTENCY_SCOPES.subscriptionCreate,
+      userId: user.id,
+      key: KEY,
+      requestHash: 'hash-datas',
+      status: 201,
+      execute: async () => payload,
+    };
+    await runIdempotent(db, request);
+    const replay = await runIdempotent(db, request);
+    expect(replay.replayed).toBe(true);
+    expect(replay.body).toEqual(payload);
+    expect(typeof replay.body.title).toBe('string');
+  });
+
   it('mesma chave com hash diferente responde 422 idempotency_key_reuse', async () => {
     const request = {
       scope: SCOPE,

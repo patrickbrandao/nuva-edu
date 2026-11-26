@@ -6,6 +6,7 @@ Detalhe das decisões em `specs/decisions/`.
 ## [Não lançado]
 
 ### Adicionado
+- core: idempotência na criação de assinatura (`createSubscriptionCheckout` com `idempotencyKey` opcional e escopo `subscription.create`), devolvendo a primeira assinatura e `checkoutUrl` por 24 h sem segunda adesão no provedor, recusando plano ou cupom divergente com `422 idempotency_key_reuse` e liberando a chave sem criar assinatura quando o provedor está indisponível (specs 003 e 012; task 718).
 - contratos: `Idempotency-Key` declarada em `POST /api/v1/subscriptions` e exceção explícita de idempotência natural registrada para `POST /api/v1/users/{id}/entitlements` (specs 003, 004 e 012; task 713).
 - interface: cliente regenerado com cabeçalho `Idempotency-Key` em `POST /api/v1/subscriptions` (task 714).
 - core: expurgo das chaves de idempotência financeira (`purgeIdempotencyKeys`), apagando em lotes de 5.000 as linhas de `idempotency_keys` com mais de 24 h desde `created_at`, inclusive reservas sem resposta (specs 003 e 033; task 719).

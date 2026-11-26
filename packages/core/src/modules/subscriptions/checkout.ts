@@ -1,10 +1,12 @@
 import { sql } from 'kysely';
 import type { Database } from '../../db/database.ts';
 import { isUniqueViolation } from '../catalog/common.ts';
+import { IDEMPOTENCY_SCOPES, requestFingerprint, runIdempotent } from '../idempotency/index.ts';
 import { subscriptionExternalReference } from '../payments/references.ts';
 import type { PaymentBuyer, PaymentProvider, PaymentReturnUrls } from '../payments/types.ts';
 import { requireBilling } from '../sales/billing.ts';
 import { assertPurchaseAllowed } from '../sales/cart.ts';
+import { isProviderUnavailable } from '../sales/checkout.ts';
 import type { CouponWithProducts } from '../sales/coupons.ts';
 import { findCouponByCode } from '../sales/coupons.ts';
 import { planNotFound, subscriptionAlreadyActive, subscriptionCouponInvalid } from './errors.ts';
@@ -33,6 +35,12 @@ export interface CreateSubscriptionCheckoutInput {
   returnUrls: PaymentReturnUrls;
   /** Instante da criação; padrão: agora. */
   now?: Date;
+  /**
+   * `Idempotency-Key` do contrato (`POST /subscriptions`). A repetição com a mesma chave e o
+   * mesmo plano/cupom devolve a primeira assinatura e a primeira URL de checkout por 24 h;
+   * ausente, o comportamento é o de antes.
+   */
+  idempotencyKey?: string | null;
 }
 
 /**
@@ -40,71 +48,102 @@ export interface CreateSubscriptionCheckoutInput {
  * `billing_required`, `not_found` (plano inexistente ou inativo), `coupon_invalid`,
  * `subscription_already_exists` e `payment_provider_unavailable` (nada é criado). Uma
  * assinatura em `canceling` não ocupa a chave: o aluno assina de novo para desfazer o
- * cancelamento, como manda a spec.
+ * cancelamento, como manda a spec. Com `idempotencyKey`, repetir com o mesmo plano e cupom
+ * devolve a primeira resposta por 24 h, sem segunda assinatura nem segunda adesão no provedor;
+ * a mesma chave com outro plano ou cupom responde `422 idempotency_key_reuse` (spec 003).
  */
 export async function createSubscriptionCheckout(
   db: Database,
   input: CreateSubscriptionCheckoutInput,
 ): Promise<SubscriptionCheckout> {
   const now = input.now ?? new Date();
-  await assertPurchaseAllowed(db, input.userId);
+  const { body } = await runIdempotent(db, {
+    scope: IDEMPOTENCY_SCOPES.subscriptionCreate,
+    userId: input.userId,
+    key: input.idempotencyKey,
+    requestHash: requestFingerprint(IDEMPOTENCY_SCOPES.subscriptionCreate, input.userId, {
+      planId: input.planId.trim().toLowerCase(),
+      couponCode: normalizeCouponCode(input.couponCode),
+    }),
+    status: 201,
+    now,
+    // Provedor fora: nenhuma assinatura fica gravada e a chave é liberada para nova tentativa
+    // (preservando `plans.provider_plan_id` caso `ensurePlan` tenha criado o plano antes).
+    releaseOn: isProviderUnavailable,
+    execute: (trx) => openSubscriptionCheckout(trx, input, now),
+  });
+  return body;
+}
 
-  const plan = await findPlan(db, input.planId);
+function normalizeCouponCode(code: string | null | undefined): string | null {
+  if (typeof code !== 'string') return null;
+  const trimmed = code.trim();
+  return trimmed === '' ? null : trimmed.toLowerCase();
+}
+
+async function openSubscriptionCheckout(
+  trx: Database,
+  input: CreateSubscriptionCheckoutInput,
+  now: Date,
+): Promise<SubscriptionCheckout> {
+  await assertPurchaseAllowed(trx, input.userId);
+
+  const plan = await findPlan(trx, input.planId);
   if (!plan?.active) throw planNotFound();
 
-  const billing = await requireBilling(db, input.userId);
-  const user = await db
+  const billing = await requireBilling(trx, input.userId);
+  const user = await trx
     .selectFrom('users')
     .select(['email'])
     .where('id', '=', input.userId)
     .executeTakeFirstOrThrow();
 
-  const coupon = await loadCheckoutCoupon(db, input.couponCode, input.userId, now);
+  const coupon = await loadCheckoutCoupon(trx, input.couponCode, input.userId, now);
   const discountCents = coupon === null ? 0 : firstChargeDiscountCents(plan.priceCents, coupon);
+
+  // Serializa a criação do mesmo aluno: a chave "uma assinatura por plano" e a conferência
+  // anterior não escapam numa corrida de dois checkouts.
+  await sql`SELECT pg_advisory_xact_lock(hashtext(${input.userId}))`.execute(trx);
+  const existing = await trx
+    .selectFrom('subscriptions')
+    .select('id')
+    .where('userId', '=', input.userId)
+    .where('planId', '=', plan.id)
+    .where('status', 'in', [...SUBSCRIPTION_OPEN_STATUSES])
+    .executeTakeFirst();
+  if (existing) throw subscriptionAlreadyActive();
 
   // O plano do provedor é criado/reaproveitado antes da assinatura: `createSubscription` exige
   // `providerPlanId` (spec 013). Provedor fora daqui não deixa assinatura local.
-  const providerPlanId = await ensureProviderPlan(db, plan, input.provider, input.currency);
+  const providerPlanId = await ensureProviderPlan(trx, plan, input.provider, input.currency);
 
-  const subscriptionId = await db.transaction().execute(async (trx) => {
-    // Serializa a criação do mesmo aluno: a chave "uma assinatura por plano" e a conferência
-    // anterior não escapam numa corrida de dois checkouts.
-    await sql`SELECT pg_advisory_xact_lock(hashtext(${input.userId}))`.execute(trx);
-    const existing = await trx
-      .selectFrom('subscriptions')
-      .select('id')
-      .where('userId', '=', input.userId)
-      .where('planId', '=', plan.id)
-      .where('status', 'in', [...SUBSCRIPTION_OPEN_STATUSES])
-      .executeTakeFirst();
-    if (existing) throw subscriptionAlreadyActive();
-    try {
-      const row = await trx
-        .insertInto('subscriptions')
-        .values({
-          userId: input.userId,
-          planId: plan.id,
-          status: 'pending',
-          priceCents: plan.priceCents,
-          currency: input.currency,
-          couponId: coupon?.id ?? null,
-          provider: input.provider.name,
-          providerSubscriptionId: null,
-        })
-        .returning('id')
-        .executeTakeFirstOrThrow();
-      return row.id;
-    } catch (error) {
-      // O índice único parcial protege a corrida que o lock não cobriu.
-      if (
-        isUniqueViolation(error, 'subscriptions_user_plan_open_unique') ||
-        isUniqueViolation(error, 'subscriptions_pkey')
-      ) {
-        throw subscriptionAlreadyActive();
-      }
-      throw error;
+  let subscriptionId: string;
+  try {
+    const row = await trx
+      .insertInto('subscriptions')
+      .values({
+        userId: input.userId,
+        planId: plan.id,
+        status: 'pending',
+        priceCents: plan.priceCents,
+        currency: input.currency,
+        couponId: coupon?.id ?? null,
+        provider: input.provider.name,
+        providerSubscriptionId: null,
+      })
+      .returning('id')
+      .executeTakeFirstOrThrow();
+    subscriptionId = row.id;
+  } catch (error) {
+    // O índice único parcial protege a corrida que o lock não cobriu.
+    if (
+      isUniqueViolation(error, 'subscriptions_user_plan_open_unique') ||
+      isUniqueViolation(error, 'subscriptions_pkey')
+    ) {
+      throw subscriptionAlreadyActive();
     }
-  });
+    throw error;
+  }
 
   let providerSubscriptionId: string;
   let checkoutUrl: string;
@@ -130,18 +169,21 @@ export async function createSubscriptionCheckout(
     checkoutUrl = checkout.checkoutUrl;
   } catch (error) {
     // Provedor fora: nenhuma assinatura é criada nem cobrada (spec 012, "Casos de erro").
-    await db.deleteFrom('subscriptions').where('id', '=', subscriptionId).execute();
+    // Apaga a linha antes do `releaseOn` fechar a transação com `plans.provider_plan_id`.
+    if (isProviderUnavailable(error)) {
+      await trx.deleteFrom('subscriptions').where('id', '=', subscriptionId).execute();
+    }
     throw error;
   }
 
-  await db
+  await trx
     .updateTable('subscriptions')
     .set({ providerSubscriptionId })
     .where('id', '=', subscriptionId)
     .execute();
 
   return {
-    subscription: await getMySubscription(db, input.userId, subscriptionId),
+    subscription: await getMySubscription(trx, input.userId, subscriptionId),
     checkoutUrl,
   };
 }
