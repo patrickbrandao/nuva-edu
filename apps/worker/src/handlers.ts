@@ -5,14 +5,19 @@ import {
   isDomainError,
   type JobHandlers,
   type Logger,
+  type PaymentProvider,
   PermanentJobError,
   recalculateEntitlements,
+  recalculatePlanSubscriptions,
 } from '@nuva-edu/core';
 import { createCertificateHandlers } from './certificates/handlers.ts';
 import type { CertificateRenderer } from './certificates/renderer.ts';
 import { createEmailSendHandler } from './email/send-email.ts';
 import type { Mailer } from './email/smtp.ts';
+import { createSalesHandlers } from './handlers/sales.ts';
 import { drainBatches, purgeRetention, type RetentionSettings } from './retention.ts';
+import { purgeWebhookEvents } from './retention-sales.ts';
+import { createSubscriptionHandlers } from './subscriptions/handlers.ts';
 
 /** Lote de `expireSuspensions` e de `deleteOrphanImages` (o padrão das duas no núcleo). */
 export const CORE_BATCH_SIZE = 500;
@@ -29,6 +34,13 @@ export interface HandlerDependencies {
   retention: RetentionSettings;
   /** Navegador dos PDFs de certificado, um por processo (spec 015, "PDF"). */
   renderer: CertificateRenderer;
+  payment: {
+    provider(): PaymentProvider;
+    boletoDays: number;
+    graceDays: number;
+    webhookDays: number;
+    now?: () => Date;
+  };
 }
 
 /**
@@ -36,8 +48,17 @@ export interface HandlerDependencies {
  * pode executar mais de uma vez (nova tentativa, worker morto, encerramento no meio).
  */
 export function createHandlers(deps: HandlerDependencies): JobHandlers {
-  const { db, logger } = deps;
+  const { db, logger, payment } = deps;
+  const sales = createSalesHandlers({ db, logger, ...payment });
+  const subscriptions = createSubscriptionHandlers({ db, logger, ...payment });
   return {
+    ...sales,
+    'payment.reconcile_orders': async (job, context) => {
+      // A reconciliação remota de assinaturas é a cada 6 h. Os prazos locais seguem a janela de 5 min.
+      await subscriptions.checkDeadlines(job, context);
+      await sales['payment.reconcile_orders'](job, context);
+    },
+    'payment.reconcile_subscriptions': subscriptions.reconcile,
     // Exemplo da Fase 0: sem efeito além do log, então repetir não muda nada.
     'example.echo': async (job) => {
       logger.info({ job_id: job.id, message: job.payload.message }, 'Tarefa de exemplo executada');
@@ -45,8 +66,13 @@ export function createHandlers(deps: HandlerDependencies): JobHandlers {
     // Expurgo diário (spec 033): apagar por prazo é idempotente por natureza.
     'retention.purge': async (job, context) => {
       const deleted = await purgeRetention(db, deps.retention, { signal: context.signal });
+      const webhookEvents = await purgeWebhookEvents(db, {
+        days: payment.webhookDays,
+        now: new Date(),
+        signal: context.signal,
+      });
       logger.info(
-        { job_id: job.id, unique_key: job.uniqueKey, deleted },
+        { job_id: job.id, unique_key: job.uniqueKey, deleted: { ...deleted, webhookEvents } },
         'Expurgo diário executado',
       );
     },
@@ -77,9 +103,14 @@ export function createHandlers(deps: HandlerDependencies): JobHandlers {
     'entitlement.recompute': async (job, context) => {
       context.signal.throwIfAborted();
       const { productType, productId } = job.payload;
-      let result: Awaited<ReturnType<typeof recalculateEntitlements>>;
+      let result:
+        | Awaited<ReturnType<typeof recalculateEntitlements>>
+        | Awaited<ReturnType<typeof recalculatePlanSubscriptions>>;
       try {
-        result = await recalculateEntitlements(db, { productType, productId });
+        result =
+          productType === 'plan'
+            ? await recalculatePlanSubscriptions(db, productId, { graceDays: payment.graceDays })
+            : await recalculateEntitlements(db, { productType, productId });
       } catch (error) {
         // Payload fora do formato (tipo ou id inválido) não melhora com nova tentativa.
         if (isDomainError(error) && error.code === 'validation_failed') {

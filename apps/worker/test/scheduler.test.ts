@@ -169,7 +169,7 @@ describe('agendador', () => {
     expect((await getJobCounts(db)).queued).toBe(1);
   });
 
-  it('enfileira as três recorrentes da fase, cada uma com a sua janela', async () => {
+  it('enfileira as recorrentes da fase, cada uma com a sua janela', async () => {
     // 07:00 em São Paulo: as duas diárias já são devidas; a de 15 min, sempre.
     const scheduler = createScheduler({
       db,
@@ -179,12 +179,18 @@ describe('agendador', () => {
     const keys = (await scheduler.runOnce()).map((job) => job.uniqueKey).sort();
     expect(keys).toEqual([
       recurringKey('image.cleanup', '2026-11-24'),
+      recurringKey('payment.reconcile_orders', '2026-11-24T10:05'),
+      recurringKey('payment.reconcile_refunds', '2026-11-24T10:00'),
+      recurringKey('payment.reconcile_subscriptions', '2026-11-24T06:00'),
       recurringKey('retention.purge', '2026-11-24'),
       recurringKey('suspension.expire', '2026-11-24T10:00'),
     ]);
     const jobs = await db.selectFrom('jobs').select(['type', 'maxAttempts']).execute();
     expect(Object.fromEntries(jobs.map((job) => [job.type, job.maxAttempts]))).toEqual({
       'image.cleanup': 5,
+      'payment.reconcile_orders': 3,
+      'payment.reconcile_refunds': 3,
+      'payment.reconcile_subscriptions': 3,
       'retention.purge': 5,
       'suspension.expire': 3,
     });
@@ -196,6 +202,9 @@ describe('agendador', () => {
       now: at('2026-11-24T06:40:00Z'),
     });
     expect((await early.runOnce()).map((job) => job.type).sort()).toEqual([
+      'payment.reconcile_orders',
+      'payment.reconcile_refunds',
+      'payment.reconcile_subscriptions',
       'retention.purge',
       'suspension.expire',
     ]);

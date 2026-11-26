@@ -2,6 +2,7 @@ import {
   createDatabase,
   createLogger,
   type Database,
+  FakePaymentProvider,
   type Job,
   type JobHandlers,
   type Logger,
@@ -84,6 +85,12 @@ export function handlersWith(overrides: Partial<JobHandlers> = {}): JobHandlers 
     'certificate.render': async () => {},
     'certificate.backfill': async () => {},
     'certificate.preview': async () => {},
+    'payment.webhook': async () => {},
+    'order.fulfill': async () => {},
+    'refund.execute': async () => {},
+    'payment.reconcile_orders': async () => {},
+    'payment.reconcile_refunds': async () => {},
+    'payment.reconcile_subscriptions': async () => {},
     ...overrides,
   };
 }
@@ -114,7 +121,9 @@ export function handlerDependencies(
   logger: Logger,
   overrides: Partial<HandlerDependencies> = {},
 ): HandlerDependencies {
+  const provider = new FakePaymentProvider();
   return {
+    payment: { provider: () => provider, boletoDays: 3, graceDays: 3, webhookDays: 90 },
     db,
     logger,
     mailer: memoryMailer(),

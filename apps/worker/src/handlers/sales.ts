@@ -2,6 +2,7 @@ import {
   type Database,
   executeRefund,
   fulfillOrder,
+  JOB_DEFINITIONS,
   type JobHandlers,
   type Logger,
   type PaymentProvider,
@@ -41,7 +42,8 @@ export function createSalesHandlers({
       const result = await processPaymentWebhook(db, provider(), job.payload.webhookEventId, {
         now: now(),
         graceDays,
-        finalAttempt: job.attempts >= job.maxAttempts,
+        finalAttempt:
+          job.attempts >= Math.min(job.maxAttempts, JOB_DEFINITIONS['payment.webhook'].maxAttempts),
       });
       logger.info({ job_id: job.id, ...result }, 'Webhook de pagamento processado');
     },
@@ -66,7 +68,10 @@ export function createSalesHandlers({
     },
     'refund.execute': async (job, { signal }) => {
       signal.throwIfAborted();
-      const refund = await executeRefund(db, provider(), job.payload.refundId, { now: now() });
+      const refund = await executeRefund(db, provider(), job.payload.refundId, {
+        now: now(),
+        attempt: job.attempts,
+      });
       logger.info(
         { job_id: job.id, refund_id: refund.id, status: refund.status },
         'Estorno conferido',

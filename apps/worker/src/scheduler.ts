@@ -8,6 +8,7 @@ import {
   type Logger,
   type SettingsReader,
 } from '@nuva-edu/core';
+import { SALES_RECURRING_JOBS } from './scheduler-sales.ts';
 
 /** O agendador confere as recorrentes a cada minuto (spec 005). */
 export const SCHEDULER_INTERVAL_MS = 60_000;
@@ -33,6 +34,12 @@ export type RecurringJob = {
  * do registro do núcleo (`JOB_DEFINITIONS`): 3 nas de intervalo, 5 nas diárias e na semanal.
  */
 export const RECURRING_JOBS: readonly RecurringJob[] = [
+  ...SALES_RECURRING_JOBS,
+  {
+    type: 'payment.reconcile_subscriptions',
+    schedule: { kind: 'interval', everyMinutes: 360 },
+    payload: {},
+  },
   { type: 'retention.purge', schedule: { kind: 'daily', hour: 3, minute: 30 }, payload: {} },
   { type: 'image.cleanup', schedule: { kind: 'daily', hour: 3, minute: 45 }, payload: {} },
   { type: 'suspension.expire', schedule: { kind: 'interval', everyMinutes: 15 }, payload: {} },

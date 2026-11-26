@@ -1,5 +1,13 @@
 import { databaseReadiness } from '@nuva-edu/api-kit/health';
-import { type Config, closeDatabase, createDatabase, type Logger } from '@nuva-edu/core';
+import {
+  type Config,
+  closeDatabase,
+  createDatabase,
+  createPaymentProvider,
+  type Logger,
+  type PaymentProvider,
+  paymentUnavailable,
+} from '@nuva-edu/core';
 import { createCertificateRenderer } from './certificates/renderer.ts';
 import { createMailer, type Mailer } from './email/smtp.ts';
 import { createHandlers } from './handlers.ts';
@@ -18,6 +26,7 @@ export interface AppOptions {
   shutdownTimeoutMs?: number;
   /** Padrão: SMTP de `config.smtp`. Os testes trocam pelo servidor local. */
   mailer?: Mailer;
+  paymentProvider?: PaymentProvider;
 }
 
 export interface App {
@@ -41,6 +50,15 @@ export async function startApp(options: AppOptions): Promise<App> {
   const metrics = createWorkerMetrics();
   const mailer = options.mailer ?? createMailer(config.smtp);
   const renderer = createCertificateRenderer({ logger, histogram: metrics.certificateRender });
+  let paymentProvider = options.paymentProvider;
+  const provider = () => {
+    try {
+      paymentProvider ??= createPaymentProvider(config);
+      return paymentProvider;
+    } catch {
+      throw paymentUnavailable();
+    }
+  };
   const worker = createWorker({
     db,
     databaseUrl: config.databaseUrl,
@@ -54,6 +72,12 @@ export async function startApp(options: AppOptions): Promise<App> {
       locale: config.locale,
       retention: config.retention,
       renderer,
+      payment: {
+        provider,
+        boletoDays: config.payment.orderBoletoDays,
+        graceDays: config.payment.subscriptionGraceDays,
+        webhookDays: config.retention.webhookDays,
+      },
     }),
     concurrency,
     metrics,
