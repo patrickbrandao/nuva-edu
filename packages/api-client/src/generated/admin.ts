@@ -550,9 +550,10 @@ export interface paths {
          * @description Cria o curso em `draft`. O `instructor` vira o dono; `manager` e `admin` informam `ownerId`
          *     (ou nenhum). Sem `accessMode`, o curso nasce `private` e sem preço. `accessMode` exige
          *     `product.set_access` e `priceCents`, `product.set_price`: o `instructor` que os envia recebe
-         *     `403`, e o `manager` que envia preço também.
+         *     `403`, e o `manager` que envia preço também. O `403` vem antes de qualquer regra do valor.
          *
-         *     - `slug` ausente: gerado do título. Repetido: `409` `slug_taken`.
+         *     - `slug` ausente: gerado do título; se já existir, recebe o menor sufixo livre `-2`…`-99`
+         *       (sem sufixo livre: `409` `slug_taken`). Informado e repetido: `409` `slug_taken`.
          *     - `ownerId` que não é `instructor` (ou foi excluído): `422` `owner_invalid`.
          */
         post: operations["createCourse"];
@@ -571,7 +572,8 @@ export interface paths {
         };
         /**
          * Curso com módulos e aulas
-         * @description O curso para o editor: dados, módulos e aulas na ordem. Curso alheio ao `instructor`: `404`.
+         * @description O curso para o editor: dados, módulos e aulas na ordem, os ebooks vinculados ao curso e o
+         *     `version` da edição. Curso alheio ao `instructor`: `404`.
          */
         get: operations["getCourse"];
         put?: never;
@@ -590,8 +592,10 @@ export interface paths {
          *     `priceCents`, `product.set_price` (`admin`): sem a ação, `403`. `certificateEnabled` e
          *     `certificateHours` (`specs/015-certificados.md`) seguem `course.edit`. O template de
          *     certificado não é editado aqui (`/courses/{id}/certificate-template`); o dono, em
-         *     `PATCH /courses/{id}/owner`.
+         *     `PATCH /courses/{id}/owner`. O `403` vem antes de qualquer regra do valor; campo enviado
+         *     com o valor que o curso já tem não exige a ação.
          *
+         *     - `version` obrigatória (`400` sem ela); diferente da gravada: `409` `version_conflict`.
          *     - Curso alheio ao `instructor`: `404`. Slug repetido: `409` `slug_taken`.
          *     - Publicado e `paid` sem preço: `422` `price_required`. Preço enviado para produto `open`: `422`
          *       `price_not_allowed`. Capa que não é `product_cover`: `422` `cover_image_invalid`.
@@ -729,7 +733,7 @@ export interface paths {
          * Trocar o dono do curso
          * @description `manager` e `admin` (`specs/008-papeis-e-permissoes.md`). `ownerId: null` deixa o curso sem
          *     dono, gerido só por gerente e admin. Usuário que não é `instructor` (ou foi excluído): `422`
-         *     `owner_invalid`.
+         *     `owner_invalid`. `version` opcional; enviada e diferente da gravada: `409` `version_conflict`.
          */
         patch: operations["setCourseOwner"];
         trace?: never;
@@ -796,7 +800,8 @@ export interface paths {
         head?: never;
         /**
          * Renomear módulo
-         * @description Módulo de curso alheio ao `instructor`: `404`.
+         * @description Módulo de curso alheio ao `instructor`: `404`. `version` obrigatória (`400` sem ela);
+         *     diferente da gravada: `409` `version_conflict`.
          */
         patch: operations["updateModule"];
         trace?: never;
@@ -832,9 +837,11 @@ export interface paths {
         get?: never;
         /**
          * Reordenar aulas do módulo
-         * @description Recebe as aulas do módulo na ordem nova; uma aula de outro módulo do mesmo curso, na lista, é
-         *     movida para este. Aula de outro curso ou aula do módulo que falta na lista: `422`
-         *     `order_mismatch`.
+         * @description Recebe as aulas do módulo na ordem nova. A lista contém todas as aulas que já estão no módulo;
+         *     uma aula de outro módulo do mesmo curso, na lista, é movida para este, na posição indicada, e
+         *     o módulo de origem fecha a numeração. Aula de outro curso, aula inexistente ou aula do módulo
+         *     que falta na lista: `422` `order_mismatch`. Sem `version`: a lista é conferida contra as
+         *     aulas atuais.
          */
         put: operations["reorderLessons"];
         post?: never;
@@ -871,7 +878,8 @@ export interface paths {
          * @description Altera só os campos enviados. `status` publica ou despublica a aula, com a regra do curso: o
          *     `instructor` só o faz em curso `open` de que é dono (`403` nos demais). Despublicar aula de
          *     curso publicado enfileira `course.completion_check`. Publicar a última aula `draft` limpa o
-         *     pedido de publicação do curso.
+         *     pedido de publicação do curso. `version` obrigatória (`400` sem ela); diferente da gravada:
+         *     `409` `version_conflict`.
          */
         patch: operations["updateLesson"];
         trace?: never;
@@ -887,7 +895,8 @@ export interface paths {
         /**
          * Definir os links de apoio
          * @description Substitui a lista inteira, na ordem enviada (até 20). URL fora das regras: `422`
-         *     `content_url_invalid`, com o índice do link.
+         *     `content_url_invalid`, com o índice do link. `version` opcional; enviada e diferente da
+         *     gravada: `409` `version_conflict`.
          */
         put: operations["setLessonLinks"];
         post?: never;
@@ -913,9 +922,12 @@ export interface paths {
         put?: never;
         /**
          * Criar ebook
-         * @description Cria o ebook em `draft`. Sem `accessMode`, nasce `private`. `priceCents` exige
-         *     `product.set_price`. Slug repetido: `409` `slug_taken`; URL fora das regras: `422`
-         *     `content_url_invalid`.
+         * @description Cria o ebook em `draft`. Sem `accessMode`, nasce `private`. `accessMode` e `accessDays`
+         *     exigem `product.set_access`; `priceCents`, `product.set_price`: sem a ação, `403`, antes de
+         *     qualquer regra do valor. URL fora das regras: `422` `content_url_invalid`.
+         *
+         *     - `slug` ausente: gerado do título; se já existir, recebe o menor sufixo livre `-2`…`-99`
+         *       (sem sufixo livre: `409` `slug_taken`). Informado e repetido: `409` `slug_taken`.
          */
         post: operations["createEbook"];
         delete?: never;
@@ -947,8 +959,10 @@ export interface paths {
         head?: never;
         /**
          * Editar ebook
-         * @description Altera só os campos enviados. `accessMode` exige `product.set_access`; `priceCents`,
-         *     `product.set_price`. Slug repetido: `409` `slug_taken`.
+         * @description Altera só os campos enviados. `accessMode` e `accessDays` exigem `product.set_access`;
+         *     `priceCents`, `product.set_price`: sem a ação, `403`, antes de qualquer regra do valor.
+         *     Slug repetido: `409` `slug_taken`. `version` obrigatória (`400` sem ela); diferente da
+         *     gravada: `409` `version_conflict`.
          */
         patch: operations["updateEbook"];
         trace?: never;
@@ -1048,15 +1062,61 @@ export interface paths {
         get?: never;
         /**
          * Vincular o ebook a cursos e aulas
-         * @description Substitui os vínculos de `product_ebooks` com alvo `course` ou `lesson` (o vínculo a pacote é
-         *     feito pelos itens do pacote). Para o `instructor`, a lista substitui só os vínculos com os
-         *     próprios cursos e aulas; os demais ficam como estão, e alvo alheio responde `404`. A mudança
-         *     enfileira o recálculo da cascata (`entitlement.recompute`, `specs/010-direitos-de-acesso.md`).
-         *     Até 500 vínculos; alvo inexistente: `422` `catalog_item_not_found`.
+         * @description Substitui os vínculos de `product_ebooks` com alvo `course` ou `lesson`. Para o
+         *     `instructor`, a lista substitui só os vínculos com os próprios cursos e aulas; os demais ficam
+         *     como estão, e alvo alheio responde `404`. A mudança enfileira o recálculo da cascata
+         *     (`entitlement.recompute`, `specs/010-direitos-de-acesso.md`).
+         *
+         *     - Os vínculos `bundle` do ebook nunca são criados, removidos nem recalculados por aqui, para
+         *       nenhum papel: continuam como estão e aparecem em `targets` da resposta, só para leitura.
+         *       `targetType: bundle` no corpo: `400`. Pôr um ebook num pacote é `PUT /bundles/{id}/items`.
+         *     - Alvo inexistente: `422` `catalog_item_not_found`, com o campo. Os 500 vínculos por ebook
+         *       contam todos os vínculos do ebook depois da gravação, inclusive os que a troca não alcança
+         *       (os `bundle` e, para o `instructor`, os de cursos alheios); acima disso, `422`
+         *       `catalog_limit_exceeded`.
+         *     - `version` opcional; enviada e diferente da gravada: `409` `version_conflict`.
+         *     - Para vincular ou desvincular um alvo só, sem reenviar a lista:
+         *       `PUT|DELETE /ebooks/{id}/targets/{targetType}/{targetId}`.
          */
         put: operations["setEbookTargets"];
         post?: never;
         delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/ebooks/{id}/targets/{targetType}/{targetId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Vincular o ebook a um curso ou aula
+         * @description Acrescenta um vínculo, sem tocar nos outros vínculos do ebook e sem `version`
+         *     (`specs/009-catalogo-e-conteudo.md`, "Ebooks vinculados"). Idempotente: vínculo que já existe
+         *     responde `204` sem gravar nem auditar. A mudança avança o `version` do ebook, enfileira o
+         *     recálculo da cascata (`entitlement.recompute`) e grava a auditoria `ebook.set_targets`.
+         *
+         *     - Ebook inexistente, ou alvo de curso alheio ao `instructor`: `404`.
+         *     - Alvo inexistente: `422` `catalog_item_not_found`. O 501º vínculo do ebook (de qualquer
+         *       tipo): `422` `catalog_limit_exceeded` (`limit: targetsPerEbook`).
+         */
+        put: operations["linkEbookTarget"];
+        post?: never;
+        /**
+         * Desvincular o ebook de um curso ou aula
+         * @description Desfaz um vínculo, sem tocar nos outros vínculos do ebook e sem `version`. Idempotente:
+         *     vínculo que não existe responde `204` sem gravar nem auditar. A mudança avança o `version`
+         *     do ebook, enfileira o recálculo da cascata e grava a auditoria `ebook.set_targets`.
+         *
+         *     - Ebook inexistente, ou alvo de curso alheio ao `instructor`: `404`.
+         *     - Alvo inexistente: `422` `catalog_item_not_found`.
+         */
+        delete: operations["unlinkEbookTarget"];
         options?: never;
         head?: never;
         patch?: never;
@@ -1077,8 +1137,12 @@ export interface paths {
         put?: never;
         /**
          * Criar pacote
-         * @description Cria o pacote em `draft`, sem itens. Sem `accessMode`, nasce `private`. `priceCents` exige
-         *     `product.set_price`. Slug repetido: `409` `slug_taken`.
+         * @description Cria o pacote em `draft`, sem itens. Sem `accessMode`, nasce `private`. `accessMode` e
+         *     `accessDays` exigem `product.set_access`; `priceCents`, `product.set_price`: sem a ação,
+         *     `403`, antes de qualquer regra do valor.
+         *
+         *     - `slug` ausente: gerado do título; se já existir, recebe o menor sufixo livre `-2`…`-99`
+         *       (sem sufixo livre: `409` `slug_taken`). Informado e repetido: `409` `slug_taken`.
          */
         post: operations["createBundle"];
         delete?: never;
@@ -1110,8 +1174,10 @@ export interface paths {
         head?: never;
         /**
          * Editar pacote
-         * @description Altera só os campos enviados. `accessMode` exige `product.set_access`; `priceCents`,
-         *     `product.set_price`. Slug repetido: `409` `slug_taken`.
+         * @description Altera só os campos enviados. `accessMode` e `accessDays` exigem `product.set_access`;
+         *     `priceCents`, `product.set_price`: sem a ação, `403`, antes de qualquer regra do valor.
+         *     Slug repetido: `409` `slug_taken`. `version` obrigatória (`400` sem ela); diferente da
+         *     gravada: `409` `version_conflict`.
          */
         patch: operations["updateBundle"];
         trace?: never;
@@ -1211,11 +1277,14 @@ export interface paths {
         get?: never;
         /**
          * Definir os itens do pacote
-         * @description Substitui a lista inteira, na ordem enviada: cursos e ebooks, nunca outro pacote. Produto
-         *     inexistente: `422` `catalog_item_not_found`; pacote na lista: `422` `bundle_in_bundle`. Em pacote já vendido, a mudança enfileira o recálculo
-         *     da cascata de quem o tem (`specs/010-direitos-de-acesso.md`); o site confirma antes a remoção
-         *     com
-         *     o `studentCount`.
+         * @description Substitui a lista inteira, na ordem enviada: cursos e ebooks, nunca outro pacote. Em pacote já
+         *     vendido, a mudança enfileira o recálculo da cascata de quem o tem
+         *     (`specs/010-direitos-de-acesso.md`); o site confirma antes a remoção com o `studentCount`.
+         *
+         *     - `productType` fora de `course` e `ebook` (`bundle` inclusive): `400`.
+         *     - Produto inexistente, inclusive o id de um pacote enviado como `course` ou `ebook`: `422`
+         *       `catalog_item_not_found`, com o campo.
+         *     - `version` opcional; enviada e diferente da gravada: `409` `version_conflict`.
          */
         put: operations["setBundleItems"];
         post?: never;
@@ -2363,9 +2432,15 @@ export interface components {
             certificateEnabled: boolean;
             /** @description Carga horária fixada; `null` é calculada pelas aulas publicadas. */
             certificateHours: number | null;
+            version: components["schemas"]["CatalogVersion"];
             /** @description Alunos com direito ativo ao produto, para os avisos de despublicar e de remover item. */
             studentCount: number;
             modules: components["schemas"]["CourseModule"][];
+            /**
+             * @description Ebooks vinculados ao curso (`product_ebooks` com alvo `course`), em qualquer estado, por
+             *     título. Os das aulas vêm no detalhe de cada aula.
+             */
+            ebooks: components["schemas"]["EbookRef"][];
         };
         CourseCreate: {
             slug?: components["schemas"]["Slug"];
@@ -2387,6 +2462,10 @@ export interface components {
             /** @description Só `manager` e `admin`. */
             ownerId?: components["schemas"]["Uuid"] | null;
         };
+        /**
+         * @description Só os campos enviados mudam; além de `version` (obrigatória), ao menos um campo. Sem
+         *     `version`: `400`; diferente da gravada: `409` `version_conflict`.
+         */
         CourseUpdate: {
             slug?: components["schemas"]["Slug"];
             title?: string;
@@ -2406,6 +2485,7 @@ export interface components {
             accessDays?: number | null;
             certificateEnabled?: boolean;
             certificateHours?: number | null;
+            version: components["schemas"]["CatalogVersionInput"];
         };
         /** @description Um módulo, com as aulas na ordem (rascunhos inclusive). */
         CourseModule: {
@@ -2413,6 +2493,7 @@ export interface components {
             courseId: components["schemas"]["Uuid"];
             title: string;
             position: number;
+            version: components["schemas"]["CatalogVersion"];
             lessons: components["schemas"]["LessonSummary"][];
             createdAt: components["schemas"]["DateTime"];
             updatedAt: components["schemas"]["DateTime"];
@@ -2426,7 +2507,8 @@ export interface components {
             title: string;
             status: components["schemas"]["PublicationStatus"];
             isSample: boolean;
-            durationSeconds: number | null;
+            /** @description `0`: não informada. */
+            durationSeconds: number;
             videoProvider: components["schemas"]["VideoProvider"] | null;
             position: number;
         };
@@ -2447,8 +2529,10 @@ export interface components {
             isSample: boolean;
             videoUrl: string | null;
             videoProvider: components["schemas"]["VideoProvider"] | null;
-            durationSeconds: number | null;
+            /** @description `0`: não informada. */
+            durationSeconds: number;
             position: number;
+            version: components["schemas"]["CatalogVersion"];
             links: components["schemas"]["LessonLink"][];
             /** @description Ebooks vinculados à aula (`product_ebooks` com alvo `lesson`). */
             ebooks: components["schemas"]["EbookRef"][];
@@ -2466,11 +2550,18 @@ export interface components {
              *     `content_url_invalid` com o campo e o motivo. A URL nunca é buscada pelo servidor.
              */
             videoUrl?: string | null;
-            /** @description Informada pelo autor; o sistema não mede vídeo externo. */
+            /**
+             * @description Informada pelo autor; o sistema não mede vídeo externo. Ausente ou `null` grava `0`
+             *     ("não informada"); a resposta traz sempre o inteiro.
+             */
             durationSeconds?: number | null;
             /** @default false */
             isSample: boolean;
         };
+        /**
+         * @description Só os campos enviados mudam; além de `version` (obrigatória), ao menos um campo. Sem
+         *     `version`: `400`; diferente da gravada: `409` `version_conflict`.
+         */
         LessonUpdate: {
             title?: string;
             /** @description Markdown, exibido sanitizado. */
@@ -2482,10 +2573,23 @@ export interface components {
              *     `content_url_invalid` com o campo e o motivo. A URL nunca é buscada pelo servidor.
              */
             videoUrl?: string | null;
+            /** @description `null` grava `0` ("não informada"); a resposta traz sempre o inteiro. */
             durationSeconds?: number | null;
             isSample?: boolean;
             status?: components["schemas"]["PublicationStatus"];
+            version: components["schemas"]["CatalogVersionInput"];
         };
+        /**
+         * @description Versão do item do catálogo (`specs/009-catalogo-e-conteudo.md`, "Criação e edição"): começa
+         *     em 1 e avança a cada gravação no item, inclusive ações e trocas de lista. Quem edita envia a
+         *     da última resposta.
+         */
+        CatalogVersion: number;
+        /**
+         * @description O `version` da última resposta do item. Diferente do gravado: `409` `version_conflict`,
+         *     sem gravar; o site relê o item e a pessoa refaz a edição.
+         */
+        CatalogVersionInput: number;
         EbookRef: {
             id: components["schemas"]["Uuid"];
             slug: components["schemas"]["Slug"];
@@ -2517,8 +2621,10 @@ export interface components {
             items: components["schemas"]["EbookSummary"][];
         };
         /**
-         * @description Alvo de um vínculo de ebook (`product_ebooks`). `bundle` existe na tabela, mas o vínculo a
-         *     pacote é feito pelos itens do pacote e não é oferecido na interface.
+         * @description Alvo de um vínculo de ebook (`product_ebooks`), na leitura. `bundle` vem só de carga direta
+         *     no banco e vale na cascata (`specs/010-direitos-de-acesso.md`): o admin não o cria nem o
+         *     remove (pôr um ebook num pacote é `PUT /bundles/{id}/items`), só o lê. Na escrita de
+         *     vínculos, o alvo é `course` ou `lesson`.
          * @enum {string}
          */
         EbookTargetType: "course" | "bundle" | "lesson";
@@ -2553,6 +2659,11 @@ export interface components {
             description: string | null;
             /** @description Link externo do arquivo. */
             fileUrl: string | null;
+            version: components["schemas"]["CatalogVersion"];
+            /**
+             * @description Os vínculos que quem pede alcança: o `instructor`, só os dos próprios cursos e aulas;
+             *     `manager` e `admin`, todos, inclusive os `bundle` (só leitura).
+             */
             targets: components["schemas"]["EbookTarget"][];
             /** @description Alunos com direito ativo ao produto, para os avisos de despublicar e de remover item. */
             studentCount: number;
@@ -2583,6 +2694,10 @@ export interface components {
             /** @description Dias de acesso a partir da compra; `null` é vitalício. */
             accessDays?: number | null;
         };
+        /**
+         * @description Só os campos enviados mudam; além de `version` (obrigatória), ao menos um campo. Sem
+         *     `version`: `400`; diferente da gravada: `409` `version_conflict`.
+         */
         EbookUpdate: {
             slug?: components["schemas"]["Slug"];
             title?: string;
@@ -2608,6 +2723,7 @@ export interface components {
             priceCents?: number | null;
             /** @description Dias de acesso a partir da compra; `null` é vitalício. */
             accessDays?: number | null;
+            version: components["schemas"]["CatalogVersionInput"];
         };
         /** @description Um produto citado por outro registro. */
         ProductRef: {
@@ -2669,6 +2785,7 @@ export interface components {
             updatedAt: components["schemas"]["DateTime"];
             /** @description Markdown. */
             description: string | null;
+            version: components["schemas"]["CatalogVersion"];
             items: components["schemas"]["BundleItem"][];
             /** @description Soma dos preços avulsos dos itens `paid`, para mostrar a economia. */
             itemsPriceCents: number;
@@ -2692,6 +2809,10 @@ export interface components {
             /** @description Dias de acesso a partir da compra; `null` é vitalício. */
             accessDays?: number | null;
         };
+        /**
+         * @description Só os campos enviados mudam; além de `version` (obrigatória), ao menos um campo. Sem
+         *     `version`: `400`; diferente da gravada: `409` `version_conflict`.
+         */
         BundleUpdate: {
             slug?: components["schemas"]["Slug"];
             title?: string;
@@ -2708,6 +2829,7 @@ export interface components {
             priceCents?: number | null;
             /** @description Dias de acesso a partir da compra; `null` é vitalício. */
             accessDays?: number | null;
+            version: components["schemas"]["CatalogVersionInput"];
         };
         /**
          * @description Fonte do direito (`specs/010-direitos-de-acesso.md`, "Fontes").
@@ -3194,6 +3316,10 @@ export interface components {
         IdempotencyKey: string;
         /** @description Identificador do recurso. */
         IdPath: components["schemas"]["Uuid"];
+        /** @description Tipo do alvo do vínculo: `course` ou `lesson` (`bundle` e outros: `400`). */
+        EbookTargetTypePath: "course" | "lesson";
+        /** @description Identificador do curso ou da aula. */
+        EbookTargetIdPath: components["schemas"]["Uuid"];
         /**
          * @description Provedor de login social. Provedor sem as variáveis configuradas nesta instalação (fora de
          *     `authProviders` em `GET /api/v1/meta`) responde `404`.
@@ -4521,6 +4647,11 @@ export interface operations {
             content: {
                 "application/json": {
                     ownerId: components["schemas"]["Uuid"] | null;
+                    /**
+                     * @description Opcional: o `version` do curso na última resposta. Enviado, é conferido
+                     *     (`409` `version_conflict`); o site admin sempre o envia.
+                     */
+                    version?: number;
                 };
             };
         };
@@ -4539,6 +4670,7 @@ export interface operations {
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
             413: components["responses"]["PayloadTooLarge"];
             415: components["responses"]["UnsupportedMediaType"];
             422: components["responses"]["UnprocessableEntity"];
@@ -4671,6 +4803,7 @@ export interface operations {
             content: {
                 "application/json": {
                     title: string;
+                    version: components["schemas"]["CatalogVersionInput"];
                 };
             };
         };
@@ -4689,6 +4822,7 @@ export interface operations {
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
             413: components["responses"]["PayloadTooLarge"];
             415: components["responses"]["UnsupportedMediaType"];
             429: components["responses"]["TooManyRequests"];
@@ -4864,6 +4998,7 @@ export interface operations {
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
             413: components["responses"]["PayloadTooLarge"];
             415: components["responses"]["UnsupportedMediaType"];
             422: components["responses"]["UnprocessableEntity"];
@@ -4896,6 +5031,11 @@ export interface operations {
                         url: string | null;
                         kind: components["schemas"]["LessonLinkKind"];
                     }[];
+                    /**
+                     * @description Opcional: o `version` da aula na última resposta. Enviado, é conferido
+                     *     (`409` `version_conflict`); o site admin sempre o envia.
+                     */
+                    version?: number;
                 };
             };
         };
@@ -4914,6 +5054,7 @@ export interface operations {
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
             413: components["responses"]["PayloadTooLarge"];
             415: components["responses"]["UnsupportedMediaType"];
             422: components["responses"]["UnprocessableEntity"];
@@ -5241,6 +5382,11 @@ export interface operations {
                         targetType: "course" | "lesson";
                         targetId: components["schemas"]["Uuid"];
                     }[];
+                    /**
+                     * @description Opcional: o `version` do ebook na última resposta. Enviado, é conferido
+                     *     (`409` `version_conflict`); o site admin sempre o envia.
+                     */
+                    version?: number;
                 };
             };
         };
@@ -5259,8 +5405,78 @@ export interface operations {
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
             413: components["responses"]["PayloadTooLarge"];
             415: components["responses"]["UnsupportedMediaType"];
+            422: components["responses"]["UnprocessableEntity"];
+            429: components["responses"]["TooManyRequests"];
+            500: components["responses"]["InternalError"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    linkEbookTarget: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Identificador do recurso. */
+                id: components["parameters"]["IdPath"];
+                /** @description Tipo do alvo do vínculo: `course` ou `lesson` (`bundle` e outros: `400`). */
+                targetType: components["parameters"]["EbookTargetTypePath"];
+                /** @description Identificador do curso ou da aula. */
+                targetId: components["parameters"]["EbookTargetIdPath"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Vínculo presente. */
+            204: {
+                headers: {
+                    "X-Request-Id": components["headers"]["XRequestId"];
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            422: components["responses"]["UnprocessableEntity"];
+            429: components["responses"]["TooManyRequests"];
+            500: components["responses"]["InternalError"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    unlinkEbookTarget: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Identificador do recurso. */
+                id: components["parameters"]["IdPath"];
+                /** @description Tipo do alvo do vínculo: `course` ou `lesson` (`bundle` e outros: `400`). */
+                targetType: components["parameters"]["EbookTargetTypePath"];
+                /** @description Identificador do curso ou da aula. */
+                targetId: components["parameters"]["EbookTargetIdPath"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Vínculo ausente. */
+            204: {
+                headers: {
+                    "X-Request-Id": components["headers"]["XRequestId"];
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            422: components["responses"]["UnprocessableEntity"];
             429: components["responses"]["TooManyRequests"];
             500: components["responses"]["InternalError"];
             503: components["responses"]["ServiceUnavailable"];
@@ -5585,6 +5801,11 @@ export interface operations {
                         productType: "course" | "ebook";
                         productId: components["schemas"]["Uuid"];
                     }[];
+                    /**
+                     * @description Opcional: o `version` do pacote na última resposta. Enviado, é conferido
+                     *     (`409` `version_conflict`); o site admin sempre o envia.
+                     */
+                    version?: number;
                 };
             };
         };
@@ -5603,6 +5824,7 @@ export interface operations {
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
             413: components["responses"]["PayloadTooLarge"];
             415: components["responses"]["UnsupportedMediaType"];
             422: components["responses"]["UnprocessableEntity"];
