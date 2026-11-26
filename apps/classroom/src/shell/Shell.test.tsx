@@ -228,12 +228,12 @@ describe('casca do classroom', () => {
     const menu = screen.getByRole('navigation', { name: ptBR.shell.menu });
     await user.click(within(menu).getByRole('link', { name: ptBR.menu.items.plans }));
     await waitFor(() => expect(path()).toBe('/planos'));
-    expect(within(menu).getByRole('link', { current: 'page' }).textContent).toBe(
-      ptBR.menu.items.plans,
-    );
+    expect(
+      await within(menu).findByRole('link', { name: ptBR.menu.items.plans, current: 'page' }),
+    ).toBeTruthy();
 
-    const trail = screen.getByRole('navigation', { name: ptBR.shell.breadcrumb });
-    await user.click(within(trail).getByRole('link', { name: ptBR.home.title }));
+    const trail = await screen.findByRole('navigation', { name: ptBR.shell.breadcrumb });
+    await user.click(await within(trail).findByRole('link', { name: ptBR.home.title }));
     await waitFor(() => expect(path()).toBe('/'));
 
     await user.click(screen.getByRole('link', { name: ptBR.shell.signIn }));
@@ -253,7 +253,7 @@ describe('casca do classroom', () => {
     await user.click(await screen.findByRole('link', { name: 'Escola Aurora' }));
     await waitFor(() => expect(path()).toBe('/'));
 
-    await user.click(screen.getByRole('link', { name: ptBR.home.catalog.action }));
+    await user.click(await screen.findByRole('link', { name: ptBR.home.catalog.action }));
     await waitFor(() => expect(path()).toBe('/cadastro'));
 
     const footer = screen.getByRole('contentinfo');
