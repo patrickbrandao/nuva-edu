@@ -78,6 +78,12 @@ export function handlersWith(overrides: Partial<JobHandlers> = {}): JobHandlers 
     'email.send': async () => {},
     'suspension.expire': async () => {},
     'image.cleanup': async () => {},
+    'entitlement.recompute': async () => {},
+    'course.completed': async () => {},
+    'course.completion_check': async () => {},
+    'certificate.render': async () => {},
+    'certificate.backfill': async () => {},
+    'certificate.preview': async () => {},
     ...overrides,
   };
 }
