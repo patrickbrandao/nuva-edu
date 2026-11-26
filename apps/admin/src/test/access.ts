@@ -9,6 +9,7 @@ type UserCourseProgress = AdminSchemas['UserCourseProgress'];
 type CourseStudent = AdminSchemas['CourseStudent'];
 type CourseProgressSummary = AdminSchemas['CourseProgressSummary'];
 type ProgressCounts = AdminSchemas['ProgressCounts'];
+type ProductEntitlement = AdminSchemas['ProductEntitlement'];
 
 const NOW = '2026-11-20T12:00:00Z';
 export const GRANT_ID = '0193a5b2-0000-7000-8000-0000000000a1';
@@ -78,6 +79,25 @@ export function courseStudent(
   };
 }
 
+/** Um direito na lista de quem tem acesso a um produto: por padrão, compra ativa e vitalícia. */
+export function productEntitlement(
+  id: string,
+  user: { id: string; name: string },
+  overrides: Partial<ProductEntitlement> = {},
+): ProductEntitlement {
+  return {
+    id,
+    user: { ...user, avatarUrl: null },
+    source: 'order',
+    via: null,
+    state: 'active',
+    startsAt: NOW,
+    expiresAt: null,
+    revokedAt: null,
+    ...overrides,
+  };
+}
+
 interface Options {
   role?: StaffRole;
   /** O usuário da ficha. */
@@ -92,6 +112,8 @@ interface Options {
   students?: CourseStudent[];
   /** Alunos por página de `GET /courses/{id}/students`. */
   pageSize?: number;
+  /** Direitos por produto (`tipo/id`), mais recentes primeiro, de todos os estados; o resto, nenhum. */
+  productAccess?: Record<string, ProductEntitlement[]>;
   /** Respostas fixas por `MÉTODO /caminho`, à frente das simuladas (ex.: uma recusa). */
   overrides?: Routes;
   /** Quem responde o resto (ex.: o `respond` do catálogo simulado). */
@@ -112,6 +134,7 @@ export function fakeAccess({
   courseId = '',
   students = [],
   pageSize = 25,
+  productAccess = {},
   overrides = {},
   fallback,
 }: Options = {}) {
@@ -202,6 +225,19 @@ export function fakeAccess({
       if (node.state === 'revoked') return problem(409, 'entitlement_already_revoked');
       revokeTree(node);
       return jsonResponse(node);
+    }
+
+    const product = path.match(/^\/api\/v1\/products\/([^/]+)\/([^/]+)\/entitlements$/);
+    if (product && method === 'GET') {
+      const items = productAccess[`${product[1]}/${product[2]}`] ?? [];
+      const state = query.get('state') ?? 'active';
+      const found = items.filter((item) => item.state === state);
+      const start = Number(query.get('cursor') ?? 0);
+      const end = start + pageSize;
+      return jsonResponse({
+        items: found.slice(start, end),
+        nextCursor: end < found.length ? String(end) : null,
+      });
     }
 
     if (path === `/api/v1/users/${userId}/progress` && method === 'GET') {

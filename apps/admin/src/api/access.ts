@@ -13,6 +13,7 @@ export type UserCourseProgress = AdminSchemas['UserCourseProgress'];
 export type CourseProgressSummary = AdminSchemas['CourseProgressSummary'];
 export type CourseProgressState = AdminSchemas['CourseProgressState'];
 export type CourseStudent = AdminSchemas['CourseStudent'];
+export type ProductEntitlement = AdminSchemas['ProductEntitlement'];
 
 export type StudentsQuery = NonNullable<
   AdminOperations['listCourseStudents']['parameters']['query']
@@ -28,6 +29,15 @@ export const PROGRESS_STATES: readonly CourseProgressState[] = [
 export const STUDENTS_SORTS: readonly StudentsSort[] = ['-lastActivityAt', 'name', '-percent'];
 export const DEFAULT_STUDENTS_SORT: StudentsSort = '-lastActivityAt';
 export const STUDENTS_PAGE_SIZE = 25;
+export const ENTITLEMENT_STATES: readonly EntitlementState[] = [
+  'active',
+  'scheduled',
+  'expired',
+  'revoked',
+];
+/** Sem `state`, `GET /products/{type}/{id}/entitlements` devolve só os ativos. */
+export const DEFAULT_ENTITLEMENT_STATE: EntitlementState = 'active';
+export const PRODUCT_ACCESS_PAGE_SIZE = 25;
 /** Limite do motivo de concessão e de revogação, igual ao do contrato. */
 export const REASON_MAX = 500;
 
@@ -38,6 +48,8 @@ export const accessKeys = {
   students: (courseId: string) => ['access', 'students', courseId] as const,
   studentsList: (courseId: string, query: Omit<StudentsQuery, 'cursor'>) =>
     ['access', 'students', courseId, query] as const,
+  product: (type: ProductType, id: string, state: EntitlementState) =>
+    ['access', 'product', type, id, state] as const,
 };
 
 /** Raízes dos direitos do usuário, com a cascata em `children` (`GET /users/{id}/entitlements`). */
@@ -106,6 +118,33 @@ export function useCourseStudents(
         signal,
       });
       if (!data) throw new Error('GET /api/v1/courses/{id}/students respondeu sem corpo');
+      return data;
+    },
+    initialPageParam: undefined as string | undefined,
+    getNextPageParam: (page) => page.nextCursor ?? undefined,
+  });
+}
+
+/**
+ * Quem tem acesso a um produto, raiz ou derivado, mais recente primeiro, por cursor
+ * (`GET /products/{type}/{id}/entitlements`, `entitlement.manage`).
+ */
+export function useProductEntitlements(type: ProductType, id: string, state: EntitlementState) {
+  const api = useApi();
+  const query = { state, limit: PRODUCT_ACCESS_PAGE_SIZE };
+  return useInfiniteQuery({
+    queryKey: accessKeys.product(type, id, state),
+    queryFn: async ({ pageParam, signal }) => {
+      const { data } = await api.GET('/api/v1/products/{type}/{id}/entitlements', {
+        params: {
+          path: { type, id },
+          query: pageParam ? { ...query, cursor: pageParam } : query,
+        },
+        signal,
+      });
+      if (!data) {
+        throw new Error('GET /api/v1/products/{type}/{id}/entitlements respondeu sem corpo');
+      }
       return data;
     },
     initialPageParam: undefined as string | undefined,

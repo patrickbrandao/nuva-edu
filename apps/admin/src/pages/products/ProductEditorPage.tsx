@@ -30,6 +30,7 @@ import {
 import { formatDateTime } from '../../format';
 import { useCan } from '../../session/session';
 import { usePageCrumb } from '../../shell/crumbs';
+import { ProductAccessSection } from '../access/ProductAccessSection';
 import { ConfirmAction, CourseStatusCell } from '../courses/CourseBits';
 import { BundleItemsTab } from './BundleItemsTab';
 import { EbookTargetsTab } from './EbookTargetsTab';
@@ -37,12 +38,13 @@ import { useProductError } from './errors';
 import { ProductDataTab } from './ProductDataTab';
 
 const TAB_PARAM = 'aba';
-type TabId = 'dados' | 'vinculos' | 'itens';
+type TabId = 'dados' | 'vinculos' | 'itens' | 'acessos';
 type ConfirmName = 'publish' | 'unpublish' | 'archive' | 'unarchive' | 'delete';
 
 /**
  * Editor de ebook (`/ebooks/:id`) e de pacote (`/pacotes/:id`), spec 009: dados e capa, vínculos
- * do ebook ou itens do pacote, e as ações de publicação. Arquivar é só de quem tem
+ * do ebook ou itens do pacote, quem tem acesso (spec 010, só com `entitlement.manage`) e as
+ * ações de publicação. Arquivar é só de quem tem
  * `product.archive` (admin); a API confere cada ação.
  */
 export function ProductEditorPage({ kind }: { kind: ProductKind }) {
@@ -121,8 +123,11 @@ function ProductEditor({ kind, product }: { kind: ProductKind; product: ProductD
   const canDelete = canManage && product.studentCount === 0;
 
   const second: TabId = kind === 'ebook' ? 'vinculos' : 'itens';
-  const tabs: readonly TabId[] = ['dados', second];
-  const tab: TabId = params.get(TAB_PARAM) === second ? second : 'dados';
+  // a aba "Acessos" é de quem gere direitos; sem a ação, nem aparece
+  const tabs: readonly TabId[] = can('entitlement.manage')
+    ? ['dados', second, 'acessos']
+    : ['dados', second];
+  const tab: TabId = tabs.find((item) => item === params.get(TAB_PARAM)) ?? 'dados';
   const selectTab = (next: TabId) =>
     setParams(next === 'dados' ? {} : { [TAB_PARAM]: next }, { replace: true });
 
@@ -182,6 +187,8 @@ function ProductEditor({ kind, product }: { kind: ProductKind; product: ProductD
           canSetAccess={can('product.set_access')}
           canSetPrice={can('product.set_price')}
         />
+      ) : tab === 'acessos' ? (
+        <ProductAccessSection type={kind} id={product.id} />
       ) : isEbook(product) ? (
         <EbookTargetsTab ebook={product} />
       ) : (

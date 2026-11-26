@@ -16,8 +16,9 @@ import {
   TextLink,
 } from '@nuva-edu/ui';
 import { Users } from 'lucide-react';
-import { type FormEvent, useState } from 'react';
+import { type FormEvent, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useSearchParams } from 'react-router';
 import {
   type CourseProgressState,
   type CourseStudent,
@@ -33,22 +34,33 @@ import { QueryErrorState, useProblemText } from '../../api/problems';
 import { formatDate, formatDateTime } from '../../format';
 import { useCan } from '../../session/session';
 import { STUDENTS_PATH } from '../users/UserBits';
+import { ProductAccessSection } from './ProductAccessSection';
+import { setParam } from './params';
 
 const ALL = 'all';
+/** Parâmetros do endereço com a busca, o filtro de progresso e a ordem (spec 006, RF-07). */
+export const STUDENTS_PARAMS = { q: 'q', state: 'progresso', sort: 'sort' } as const;
 const BUCKETS = ['notStarted', 'upTo25', 'upTo50', 'upTo75', 'upTo99', 'completed'] as const;
 
 /**
  * Alunos do curso e resumo de progresso (spec 006, mapa de telas; spec 014;
  * `GET /courses/{id}/progress-summary` e `GET /courses/{id}/students`). É a lista de alunos do
- * instrutor, só nos próprios cursos: nome, avatar e progresso, sem e-mail nem compras.
+ * instrutor, só nos próprios cursos: nome, avatar e progresso, sem e-mail nem compras. Quem tem
+ * `entitlement.manage` vê também os direitos ao curso, com fonte e estado (spec 010).
  */
 export function CourseStudentsTab({ course }: { course: CourseDetail }) {
+  const can = useCan();
   return (
     <>
       <SummarySection courseId={course.id} />
       <StudentsSection courseId={course.id} />
+      {can('entitlement.manage') ? <ProductAccessSection type="course" id={course.id} /> : null}
     </>
   );
+}
+
+function pick<T extends string>(value: string | null, allowed: readonly T[]): T | undefined {
+  return allowed.find((item) => item === value);
 }
 
 function SummarySection({ courseId }: { courseId: string }) {
@@ -109,10 +121,15 @@ function StudentsSection({ courseId }: { courseId: string }) {
   const { t } = useTranslation();
   const can = useCan();
   const describe = useProblemText();
-  const [search, setSearch] = useState('');
-  const [q, setQ] = useState<string | undefined>(undefined);
-  const [state, setState] = useState<CourseProgressState | undefined>(undefined);
-  const [sort, setSort] = useState<StudentsSort>(DEFAULT_STUDENTS_SORT);
+  const [params, setParams] = useSearchParams();
+  const q = params.get(STUDENTS_PARAMS.q)?.trim() || undefined;
+  const state = pick(params.get(STUDENTS_PARAMS.state), PROGRESS_STATES);
+  const sort = pick(params.get(STUDENTS_PARAMS.sort), STUDENTS_SORTS) ?? DEFAULT_STUDENTS_SORT;
+  const [search, setSearch] = useState(q ?? '');
+  useEffect(() => setSearch(q ?? ''), [q]);
+  // só o parâmetro mexido muda: a `aba` e o resto do endereço ficam
+  const update = (key: string, value: string | undefined) =>
+    setParams((current) => setParam(current, key, value), { replace: true });
   const list = useCourseStudents(courseId, {
     ...(q ? { q } : {}),
     ...(state ? { state } : {}),
@@ -126,7 +143,7 @@ function StudentsSection({ courseId }: { courseId: string }) {
 
   const onSearch = (event: FormEvent) => {
     event.preventDefault();
-    setQ(search.trim() || undefined);
+    update(STUDENTS_PARAMS.q, search.trim() || undefined);
   };
 
   const stateOptions = [
@@ -212,7 +229,9 @@ function StudentsSection({ courseId }: { courseId: string }) {
         <AdminMenu
           options={stateOptions}
           value={state ?? ALL}
-          onChange={(id: CourseProgressState | typeof ALL) => setState(id === ALL ? undefined : id)}
+          onChange={(id: CourseProgressState | typeof ALL) =>
+            update(STUDENTS_PARAMS.state, id === ALL ? undefined : id)
+          }
           aria-label={t('access.students.stateLabel', {
             value: labelOf(stateOptions, state ?? ALL),
           })}
@@ -220,7 +239,9 @@ function StudentsSection({ courseId }: { courseId: string }) {
         <AdminMenu
           options={sortOptions}
           value={sort}
-          onChange={(id: StudentsSort) => setSort(id)}
+          onChange={(id: StudentsSort) =>
+            update(STUDENTS_PARAMS.sort, id === DEFAULT_STUDENTS_SORT ? undefined : id)
+          }
           aria-label={t('access.students.sortLabel', { value: labelOf(sortOptions, sort) })}
         />
       </div>

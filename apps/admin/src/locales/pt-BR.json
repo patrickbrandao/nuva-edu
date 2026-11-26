@@ -1000,7 +1000,8 @@
     "tabs": {
       "dados": "Dados",
       "vinculos": "Vínculos",
-      "itens": "Itens"
+      "itens": "Itens",
+      "acessos": "Acessos"
     },
     "fields": {
       "authorName": "Autor",
@@ -1251,6 +1252,48 @@
         "upTo75": "De 51% a 75%",
         "upTo99": "De 76% a 99%",
         "completed": "Concluíram"
+      }
+    },
+    "who": {
+      "title": "Quem tem acesso",
+      "hint": {
+        "course": "Cada direito ao curso, com a fonte e o produto de onde veio.",
+        "ebook": "Cada direito ao ebook, com a fonte e o produto de onde veio.",
+        "bundle": "Cada direito ao pacote, com a fonte e o produto de onde veio."
+      },
+      "loading": "Carregando os acessos…",
+      "errorTitle": "Não foi possível carregar os acessos",
+      "loadMoreError": "Não foi possível carregar mais acessos.",
+      "stateLabel": "Estado: {{value}}",
+      "states": {
+        "active": "Ativos",
+        "scheduled": "Agendados",
+        "expired": "Vencidos",
+        "revoked": "Revogados"
+      },
+      "empty": {
+        "active": "Ninguém com acesso ativo",
+        "scheduled": "Nenhum acesso agendado",
+        "expired": "Nenhum acesso vencido",
+        "revoked": "Nenhum acesso revogado"
+      },
+      "emptyText": {
+        "active": "Quando alguém comprar, assinar ou receber o acesso, aparece aqui.",
+        "scheduled": "Acessos com início no futuro aparecem aqui.",
+        "expired": "Acessos que passaram da validade aparecem aqui.",
+        "revoked": "Acessos retirados por reembolso, fim de assinatura ou revogação aparecem aqui."
+      },
+      "via": {
+        "course": "pelo curso",
+        "ebook": "pelo ebook",
+        "bundle": "pelo pacote"
+      },
+      "expiredAt": "Venceu em {{date}}",
+      "columns": {
+        "student": "Aluno",
+        "source": "Fonte",
+        "state": "Estado",
+        "validity": "Validade"
       }
     }
   },
