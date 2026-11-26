@@ -231,8 +231,7 @@ describe('antes de começar', () => {
       access: { state: 'active', expiresAt: null },
       action: 'start',
       lastAccessedAt: null,
-      // Composto na tarefa 433.
-      certificate: null,
+      certificate: { state: 'in_progress', certificateId: null, code: null },
     });
     expect(item).not.toHaveProperty('certificateEnabled');
   });
@@ -276,7 +275,7 @@ describe('abrir a aula (GET /lessons/{id})', () => {
     expect(course).toMatchObject({
       progress: { completedLessons: 0, totalLessons: 3, percent: 0, state: 'in_progress' },
       continueLessonId: lesson1,
-      certificate: null,
+      certificate: { state: 'in_progress', certificateId: null },
     });
   });
 
@@ -497,7 +496,13 @@ describe('depois de concluir o curso', () => {
     });
     expect(shelf.startHereCourseId).toBeNull();
     expect(shelf.items).toMatchObject([
-      { id: paid.id, action: 'review', progress: { percent: 100 }, certificate: null },
+      // Concluído sem template de certificado: aguarda o instrutor (spec 015, RF-12).
+      {
+        id: paid.id,
+        action: 'review',
+        progress: { percent: 100 },
+        certificate: { state: 'awaiting_template', certificateId: null, code: null },
+      },
     ]);
     expect(shelf.items[0].lastAccessedAt).not.toBeNull();
     // Curso concluído sai de "continue assistindo".

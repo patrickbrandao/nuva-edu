@@ -1,6 +1,7 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from '@nuva-edu/api-kit';
 import {
   type CatalogViewer,
+  getCourseCertificateState,
   getCourseLearningView,
   getEbookDownload,
   getEbookView,
@@ -56,17 +57,23 @@ export function registerCatalogRoutes(app: FastifyInstance, ctx: RouteContext): 
     return toWire(product);
   });
 
-  // `GET /courses/{slug}`: o programa com o estado de acesso, o progresso por módulo e aula e a
-  // aula de "Continuar" (spec 014). O contrato não tem `certificateEnabled`; o estado do
-  // certificado é composto na tarefa 433 e até lá sai `null` (a página não menciona certificado).
+  // `GET /courses/{slug}`: o programa com o estado de acesso, o progresso por módulo e aula, a
+  // aula de "Continuar" (spec 014) e o estado do certificado (spec 015), `null` com certificado
+  // desabilitado. O contrato não tem `certificateEnabled`: ele só decide o estado.
   app.operation('getCourse', async (request, reply) => {
     const { slug } = paramsOf<{ slug: string }>(request);
-    const view = await getCourseLearningView(db, viewerOf(request), slug);
-    const { certificateEnabled: _certificateEnabled, modules, ...course } = view;
+    const viewer = viewerOf(request);
+    const view = await getCourseLearningView(db, viewer, slug);
+    const { certificateEnabled, modules, ...course } = view;
+    const certificate = await getCourseCertificateState(db, viewer, {
+      id: view.id,
+      certificateEnabled,
+      completed: view.progress.state === 'completed',
+    });
     privateCache(reply);
     return toWire({
       ...course,
-      certificate: null,
+      certificate,
       modules: modules.map(({ lessonCount: _lessonCount, ...module }) => module),
     });
   });

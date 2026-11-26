@@ -1,5 +1,6 @@
 import type { FastifyInstance } from '@nuva-edu/api-kit';
 import {
+  getCourseCertificateStates,
   getCourseProgress,
   getMyActivity,
   getMyProgress,
@@ -20,8 +21,8 @@ import { bodyOf, paramsOf, type RouteContext } from './context.ts';
  * `course.completed` na mesma transação) são do núcleo; a rota só adapta ao contrato. A abertura
  * da aula e o curso com progresso ficam em `catalog.ts` (`getLesson`, `getCourse`).
  *
- * O estado do certificado (`certificate`) é composto na tarefa 433; até lá sai `null`, que o
- * contrato define como "certificado desabilitado".
+ * O estado do certificado (`certificate`, spec 015) vem do módulo de certificados, em lote para a
+ * estante; `null` é "certificado desabilitado".
  */
 export function registerLearningRoutes(app: FastifyInstance, ctx: RouteContext): void {
   const { db } = ctx;
@@ -44,15 +45,26 @@ export function registerLearningRoutes(app: FastifyInstance, ctx: RouteContext):
     { noStore: true },
   );
 
-  // `GET /me/courses`: a estante. Filtro, busca e ordem chegam validados e com os padrões.
+  // `GET /me/courses`: a estante. Filtro, busca e ordem chegam validados e com os padrões. O
+  // estado do certificado de todos os cursos da página sai de uma leitura em lote.
   app.operation('listMyCourses', async (request, reply) => {
-    const shelf = await listMyCourses(db, viewerOf(request), request.query as ShelfQuery);
+    const viewer = viewerOf(request);
+    const shelf = await listMyCourses(db, viewer, request.query as ShelfQuery);
+    const states = await getCourseCertificateStates(
+      db,
+      viewer,
+      shelf.items.map((course) => ({
+        id: course.id,
+        certificateEnabled: course.certificateEnabled,
+        completed: course.progress.state === 'completed',
+      })),
+    );
     privateCache(reply);
     return toWire({
       ...shelf,
       items: shelf.items.map(({ certificateEnabled: _certificateEnabled, ...course }) => ({
         ...course,
-        certificate: null,
+        certificate: states.get(course.id) ?? null,
       })),
     });
   });

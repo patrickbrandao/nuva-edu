@@ -20,6 +20,9 @@ export const AUTH_RATE_LIMITED_OPERATIONS: readonly string[] = [
  */
 export const IMAGE_DELIVERY_OPERATIONS: readonly string[] = ['getImageVariant'];
 
+/** Validação pública do certificado: conta própria por IP (spec 015, RNF-05). */
+export const CERTIFICATE_VERIFY_OPERATIONS: readonly string[] = ['verifyCertificate'];
+
 function isImageDelivery(request: FastifyRequest): boolean {
   const operationId = request.operation?.operationId;
   return operationId !== undefined && IMAGE_DELIVERY_OPERATIONS.includes(operationId);
@@ -33,6 +36,8 @@ function isImageDelivery(request: FastifyRequest): boolean {
  * - `visitor`: 60 por minuto por IP, nas requisições sem sessão, exceto a entrega de imagem.
  * - `auth-ip`: 10 por minuto por IP em login, cadastro e redefinição de senha.
  * - `image-ip`: 600 por minuto por IP na entrega de imagem, com ou sem sessão; `304` conta.
+ * - `certificate-verify-ip`: 30 por minuto por IP na validação pública do certificado, com ou
+ *   sem sessão (spec 015, RNF-05), além do limite de visitante ou de sessão.
  */
 export const CLASSROOM_RATE_LIMITS: readonly RateLimitRule[] = [
   {
@@ -61,5 +66,12 @@ export const CLASSROOM_RATE_LIMITS: readonly RateLimitRule[] = [
     windowSeconds: 60,
     key: rateLimitByIp,
     operations: IMAGE_DELIVERY_OPERATIONS,
+  },
+  {
+    name: 'certificate-verify-ip',
+    limit: 30,
+    windowSeconds: 60,
+    key: rateLimitByIp,
+    operations: CERTIFICATE_VERIFY_OPERATIONS,
   },
 ];

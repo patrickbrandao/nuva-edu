@@ -353,10 +353,15 @@ describe('curso com o estado do usuário (GET /courses/{slug})', () => {
       priceCents: 9900,
       lessonCount: 2,
       access: { allowed: false, reason: 'no_entitlement', expiresAt: null },
-      // Quem não tem o curso vê o progresso zerado (spec 014); `certificate` vem na tarefa 433.
+      // Quem não tem o curso vê o progresso zerado (spec 014) e o certificado "ao concluir".
       progress: { completedLessons: 0, totalLessons: 2, percent: 0, state: 'not_started' },
       continueLessonId: null,
-      certificate: null,
+      certificate: {
+        state: 'in_progress',
+        certificateId: null,
+        code: null,
+        studentName: 'Aluna de Teste',
+      },
     });
     expect(course).not.toHaveProperty('certificateEnabled');
     expect(course.modules).toHaveLength(1);
