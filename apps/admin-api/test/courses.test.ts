@@ -59,9 +59,24 @@ async function newLesson(as: Actor, moduleId: string, extra: object = {}) {
   return response.json();
 }
 
-/** Curso com um módulo e uma aula publicada: pronto para publicar. */
+/**
+ * Curso `open` do instrutor: o gerente o cria com o dono e o modo. Criado pelo próprio
+ * instrutor, o curso nasce `private` e ele não publica curso nem aula (spec 009, "Modo de
+ * acesso inicial").
+ */
+async function openCourseOf(owner: Actor, extra: object = {}) {
+  const course = await newCourse(manager, { ownerId: owner.id, accessMode: 'open', ...extra });
+  expect(course).toMatchObject({ accessMode: 'open', owner: { id: owner.id } });
+  return course;
+}
+
+/**
+ * Curso com um módulo e uma aula publicada: pronto para publicar. O do instrutor é `open`,
+ * criado pelo gerente; o da equipe nasce `private`.
+ */
 async function publishableCourse(as: Actor, extra: object = {}) {
-  const course = await newCourse(as, extra);
+  const course =
+    as.role === 'instructor' ? await openCourseOf(as, extra) : await newCourse(as, extra);
   const module = await newModule(as, course.id);
   const lesson = await newLesson(as, module.id);
   const published = await call({
@@ -104,6 +119,7 @@ describe('POST e GET /api/v1/courses', () => {
       description: '# Olá',
       level: 'beginner',
       status: 'draft',
+      accessMode: 'private',
       cover: null,
       priceCents: null,
       owner: { id: instructor.id },
@@ -314,6 +330,7 @@ describe('PATCH /api/v1/courses/{id} e a regra do instrutor', () => {
   it('instrutor que muda o preço ou o modo de acesso do próprio curso: 403, gravado uma vez', async () => {
     const owner = await createActor(test, 'instructor');
     const course = await newCourse(owner);
+    expect(course).toMatchObject({ accessMode: 'private', priceCents: null });
     const access = await call({
       method: 'PATCH',
       url: `/api/v1/courses/${course.id}`,
@@ -324,7 +341,25 @@ describe('PATCH /api/v1/courses/{id} e a regra do instrutor', () => {
     expect(access.json()).toMatchObject({ code: 'permission_denied' });
     expect(await deniedBy(test, owner.id)).toHaveLength(1);
 
-    // Produto aberto não tem preço: a regra do produto vem antes da permissão.
+    // A permissão do campo vem antes da regra do valor: em curso `open`, que não tem preço,
+    // o instrutor que envia `priceCents` recebe 403; o admin, que tem a permissão, 422.
+    const opened = await call({
+      method: 'PATCH',
+      url: `/api/v1/courses/${course.id}`,
+      as: manager,
+      payload: { accessMode: 'open' },
+    });
+    expect(opened.statusCode).toBe(200);
+    expect(opened.json()).toMatchObject({ accessMode: 'open' });
+    const ownerOpenPrice = await call({
+      method: 'PATCH',
+      url: `/api/v1/courses/${course.id}`,
+      as: owner,
+      payload: { priceCents: 9900 },
+    });
+    expect(ownerOpenPrice.statusCode).toBe(403);
+    expect(ownerOpenPrice.json()).toMatchObject({ code: 'permission_denied' });
+    expect(await deniedBy(test, owner.id)).toHaveLength(2);
     const openPrice = await call({
       method: 'PATCH',
       url: `/api/v1/courses/${course.id}`,
@@ -351,7 +386,7 @@ describe('PATCH /api/v1/courses/{id} e a regra do instrutor', () => {
     });
     expect(price.statusCode).toBe(403);
     expect(price.json()).toMatchObject({ code: 'permission_denied' });
-    expect(await deniedBy(test, owner.id)).toHaveLength(2);
+    expect(await deniedBy(test, owner.id)).toHaveLength(3);
     // O título segue editável pelo dono.
     const title = await call({
       method: 'PATCH',
@@ -400,7 +435,7 @@ describe('PATCH /api/v1/courses/{id} e a regra do instrutor', () => {
 
 describe('publicação, pedido de publicação, arquivo e dono', () => {
   it('publicar exige aula publicada; instrutor publica e despublica o próprio curso open', async () => {
-    const course = await newCourse(instructor);
+    const course = await openCourseOf(instructor);
     const empty = await call({
       method: 'POST',
       url: `/api/v1/courses/${course.id}/publish`,
@@ -710,7 +745,7 @@ describe('módulos', () => {
 
 describe('aulas e links de apoio', () => {
   it('cria com vídeo, lê, edita, publica e exclui', async () => {
-    const course = await newCourse(instructor);
+    const course = await openCourseOf(instructor);
     const module = await newModule(instructor, course.id);
     const created = await newLesson(instructor, module.id, {
       title: 'Primeira aula',
@@ -820,15 +855,11 @@ describe('aulas e links de apoio', () => {
   });
 
   it('instrutor não publica aula de curso que não é open: 403', async () => {
+    // Criado pelo instrutor, o curso nasce `private`.
     const course = await newCourse(instructor);
+    expect(course).toMatchObject({ accessMode: 'private' });
     const module = await newModule(instructor, course.id);
     const lesson = await newLesson(instructor, module.id);
-    await call({
-      method: 'PATCH',
-      url: `/api/v1/courses/${course.id}`,
-      as: manager,
-      payload: { accessMode: 'private' },
-    });
     const response = await call({
       method: 'PATCH',
       url: `/api/v1/lessons/${lesson.id}`,
