@@ -259,6 +259,63 @@ export interface Entitlements {
   version: Generated<number>;
 }
 
+export interface ForumCategories {
+  archivedAt: Timestamp | null;
+  audience: Generated<string>;
+  courseId: string | null;
+  createdAt: Generated<Timestamp>;
+  description: string | null;
+  id: Generated<string>;
+  kind: string;
+  name: string;
+  position: Generated<number>;
+  updatedAt: Generated<Timestamp>;
+}
+
+export interface ForumPosts {
+  authorId: string;
+  bodyHtml: string;
+  bodyMd: string;
+  createdAt: Generated<Timestamp>;
+  deletedAt: Timestamp | null;
+  editedAt: Timestamp | null;
+  editedBy: string | null;
+  hiddenAt: Timestamp | null;
+  hiddenBy: string | null;
+  id: Generated<string>;
+  parentPostId: string | null;
+  topicId: string;
+  updatedAt: Generated<Timestamp>;
+}
+
+export interface ForumTopicFollows {
+  createdAt: Generated<Timestamp>;
+  topicId: string;
+  userId: string;
+}
+
+export interface ForumTopics {
+  authorId: string | null;
+  bodyHtml: string;
+  bodyMd: string;
+  categoryId: string;
+  createdAt: Generated<Timestamp>;
+  deletedAt: Timestamp | null;
+  editedAt: Timestamp | null;
+  editedBy: string | null;
+  hiddenAt: Timestamp | null;
+  hiddenBy: string | null;
+  id: Generated<string>;
+  lastActivityAt: Generated<Timestamp>;
+  lessonId: string | null;
+  pinned: Generated<boolean>;
+  postsCount: Generated<number>;
+  solutionPostId: string | null;
+  status: Generated<string>;
+  title: string;
+  updatedAt: Generated<Timestamp>;
+}
+
 export interface Images {
   createdAt: Generated<Timestamp>;
   hiddenAt: Timestamp | null;
@@ -344,6 +401,17 @@ export interface LoginAttempts {
   ip: string;
   site: string;
   success: boolean;
+}
+
+export interface ModerationActions {
+  action: string;
+  createdAt: Generated<Timestamp>;
+  id: Generated<string>;
+  moderatorId: string;
+  reason: string | null;
+  targetId: string;
+  targetType: string;
+  targetUserId: string;
 }
 
 export interface Modules {
@@ -498,6 +566,14 @@ export interface Profiles {
   userId: string;
 }
 
+export interface Reactions {
+  createdAt: Generated<Timestamp>;
+  emoji: string;
+  targetId: string;
+  targetType: string;
+  userId: string;
+}
+
 export interface Refunds {
   amountCents: Int8;
   createdAt: Generated<Timestamp>;
@@ -511,6 +587,22 @@ export interface Refunds {
   reason: string;
   requestedBy: string;
   status: Generated<string>;
+  updatedAt: Generated<Timestamp>;
+}
+
+export interface Reports {
+  context: Json | null;
+  createdAt: Generated<Timestamp>;
+  details: string | null;
+  id: Generated<string>;
+  reason: string;
+  reporterId: string | null;
+  resolution: string | null;
+  resolvedAt: Timestamp | null;
+  resolvedBy: string | null;
+  status: Generated<string>;
+  targetId: string;
+  targetType: string;
   updatedAt: Generated<Timestamp>;
 }
 
@@ -648,6 +740,10 @@ export interface DB {
   emailOutbox: EmailOutbox;
   emailTokens: EmailTokens;
   entitlements: Entitlements;
+  forumCategories: ForumCategories;
+  forumPosts: ForumPosts;
+  forumTopicFollows: ForumTopicFollows;
+  forumTopics: ForumTopics;
   images: Images;
   imageVariants: ImageVariants;
   jobs: Jobs;
@@ -655,6 +751,7 @@ export interface DB {
   lessonProgress: LessonProgress;
   lessons: Lessons;
   loginAttempts: LoginAttempts;
+  moderationActions: ModerationActions;
   modules: Modules;
   notes: Notes;
   notificationPrefs: NotificationPrefs;
@@ -668,7 +765,9 @@ export interface DB {
   plans: Plans;
   productEbooks: ProductEbooks;
   profiles: Profiles;
+  reactions: Reactions;
   refunds: Refunds;
+  reports: Reports;
   sessions: Sessions;
   settings: Settings;
   subscriptions: Subscriptions;
