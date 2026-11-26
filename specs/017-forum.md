@@ -53,7 +53,7 @@ O fórum é o único espaço de conversa assíncrona entre alunos e equipe (cana
 - "Resolvido": o autor do tópico ou a equipe escolhem uma resposta como solução; ela aparece logo abaixo do tópico. Pode ser desfeito. Tópicos automáticos de aula não têm estado de resolvido.
 - Menção `@usuario`: autocompletar só com usuários que podem ler a categoria; gera notificação ([024](024-notificacoes-e-email.md)). Menção a quem não pode ler vira texto simples.
 - Reações: conjunto fixo de 6 emojis (👍 ❤️ 🎉 😄 🤔 👀), uma reação de cada tipo por usuário por publicação.
-- Markdown saneado: negrito, itálico, listas, citação, código, links e imagens por URL externa. HTML bruto é removido; links recebem `rel="nofollow noopener"` e abrem em nova aba; `javascript:` e `data:` são recusados. O saneamento ocorre no servidor, na gravação, e o HTML resultante é guardado junto do Markdown.
+- Markdown saneado: negrito, itálico, listas, citação, código, links e imagens por URL externa. HTML bruto não é interpretado nem gravado no HTML resultante; links recebem `rel="nofollow noopener noreferrer"` e abrem em nova aba; `javascript:` e `data:` são recusados. O saneamento ocorre no servidor, na gravação, e o HTML resultante é guardado junto do Markdown. O pipeline, as listas de elementos/protocolos, a compatibilidade e os testes comuns estão na [0027](decisions/0027-markdown-saneado-no-servidor.md).
 - Pontuação por participação: ver [020](020-gamificacao.md).
 
 ### Casos de erro
@@ -90,7 +90,7 @@ Retenção: conteúdo permanente. Na exclusão de conta ([030](030-lgpd.md)) o a
 - [ ] Aluno sem o curso não vê a categoria nem os tópicos, por lista, busca ou URL direta (404).
 - [ ] Aluno sem nenhum produto pago escreve em categoria livre `all` e não vê categoria livre `active`.
 - [ ] Reembolso do curso remove leitura e escrita na categoria sem apagar as publicações do aluno.
-- [ ] Publicação com `<script>` ou `javascript:` é gravada sem o trecho perigoso (teste de XSS).
+- [ ] Publicação com `<script>` ou `javascript:` tem HTML persistido sem trecho ativo; `https` de imagem permitida aparece, e URL proibida não gera imagem/link ativo (testes de XSS e paridade com a interface).
 - [ ] Menção gera notificação apenas para quem pode ler a categoria.
 - [ ] Marcar e desmarcar solução funciona para o autor do tópico e para a equipe, e é recusado para terceiros.
 - [ ] Limite de envio retorna 429.
@@ -105,3 +105,4 @@ Retenção: conteúdo permanente. Na exclusão de conta ([030](030-lgpd.md)) o a
 - [0017 — Escopo do MVP](decisions/0017-escopo-do-mvp.md)
 - [0008 — Fila e SSE no Postgres](decisions/0008-fila-e-sse-no-postgres.md)
 - [0001 — Decisões iniciais](decisions/0001-decisoes-iniciais.md) (P-03, F1-14, F1-23)
+- [0027 — Markdown saneado no servidor](decisions/0027-markdown-saneado-no-servidor.md)

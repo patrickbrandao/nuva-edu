@@ -14,13 +14,13 @@ O Mercado Pago avisa por webhook, que pode atrasar, repetir ou se perder. Por is
 - RF-01: Interface `PaymentProvider` em `packages/core`; pedidos e assinaturas não conhecem o Mercado Pago.
 - RF-02: Checkout hospedado para pedido avulso, com cartão, Pix e boleto conforme a conta do vendedor.
 - RF-03: Assinatura recorrente criada no provedor, com cobrança automática por período.
-- RF-04: Webhook com assinatura validada; evento com assinatura inválida é descartado.
+- RF-04: Webhook com assinatura validada; evento com assinatura inválida é recusado com `401` e registrado como `rejected`, sem corpo e sem processamento.
 - RF-05: Processamento idempotente: o mesmo evento, recebido várias vezes, produz um único efeito.
 - RF-06: Reconciliação periódica de pedidos pendentes e de assinaturas contra o provedor.
 - RF-07: Estorno total e parcial pelo provedor, acionado pelo fluxo de reembolso.
 - RF-08: Modo de teste com credenciais de teste nos ambientes `dev` e `teste`.
 - RF-09: Indisponibilidade do provedor afeta só o checkout; o restante do site segue funcionando.
-- RNF-01: O endpoint de webhook responde em p95 < 200 ms (só valida, grava e enfileira).
+- RNF-01: O endpoint de webhook responde em p95 < 200 ms: valida e grava a recepção; só enfileira evento com assinatura válida.
 - RNF-02: Evento gravado é processado em até 10 s (p95).
 - RNF-03: Chamadas ao provedor têm tempo limite de 10 s e até 3 tentativas com espera crescente (1 s, 4 s, 16 s) para erros de rede e respostas 5xx.
 - RNF-04: Token de acesso e segredo do webhook nunca aparecem em logs, respostas ou mensagens de erro.
@@ -67,13 +67,15 @@ Endpoint público `POST /api/v1/webhooks/mercadopago` no `classroom-api`, sem se
 
 1. Ler o corpo bruto (limite de 64 KB).
 2. Validar a assinatura enviada pelo Mercado Pago no cabeçalho `x-signature` (HMAC-SHA256 com `MP_WEBHOOK_SECRET` sobre o manifesto definido pelo provedor, que inclui o identificador do recurso, o `x-request-id` e o carimbo de tempo), em comparação de tempo constante. Carimbo com mais de 5 min de diferença é recusado.
-3. Assinatura inválida ou ausente: responder `401`, não gravar o corpo, contar na métrica `nuva_webhook_rejected_total`.
-4. Assinatura válida: gravar em `webhook_events` com chave única (`provider`, `event_id`); se a chave já existe, responder `200` sem enfileirar de novo.
+3. Assinatura inválida ou ausente: responder `401`, gravar em `webhook_events` com `status = rejected` e `error = invalid_signature`, contar na métrica `webhooks_total{provider="mercadopago",outcome="rejected"}` e registrar log sem corpo, assinatura ou segredo. Não enfileirar `payment.webhook` nem consultar o provedor.
+4. Assinatura válida: gravar em `webhook_events` com chave única (`provider`, `event_id`); se a chave já existe em evento que não está `rejected`, responder `200` sem enfileirar de novo.
 5. Enfileirar a tarefa `payment.webhook` ([005](005-worker-e-fila.md)) e responder `200`.
 
 O endpoint nunca confia no conteúdo do aviso: o worker usa só o identificador recebido e busca o estado real no provedor com `getPayment` ou `getSubscription`.
 
-Limite de taxa: 300 requisições por minuto por IP, respeitando `TRUSTED_PROXIES` para o IP real.
+O registro `rejected` é somente trilha de segurança e diagnóstico, retido por 90 dias desde `received_at` e expurgado por `NUVA_RETENTION_WEBHOOK_DAYS` ([033](033-observabilidade-retencao-backup.md)). Guarda `provider`, identificadores do evento/recurso quando foram extraídos sem executar o conteúdo, estado, motivo, tentativas e datas; nunca o corpo bruto, cabeçalhos ou a assinatura. Identificadores ausentes ou malformados ficam nulos. A chave (`provider`, `event_id`) é única apenas para evento com identificador não nulo e estado diferente de `rejected`; rejeições não ocupam essa chave e várias podem guardar o mesmo identificador ainda não autenticado. Quando chega evento válido com esse identificador, ele é gravado e processado normalmente; os registros rejeitados anteriores permanecem inalterados. Um registro `rejected` não aparece na fila de falhas operacionais nem aceita reprocessamento.
+
+Limite de taxa: 300 requisições por minuto por IP, respeitando `TRUSTED_PROXIES` para o IP real. A gravação de rejeição também está sujeita a esse limite, para que a trilha não se torne escrita sem controle.
 
 ### Processamento no worker
 
@@ -117,7 +119,7 @@ A reconciliação usa o mesmo código de transição do webhook; a ordem de cheg
 | Webhook atrasado ou perdido | reconciliação aplica o estado em até 5 min (pedido) |
 | Webhook repetido | chave única em `webhook_events`; sem efeito duplo |
 | Webhook fora de ordem (reembolso antes da aprovação) | o worker sempre lê o estado atual no provedor, então aplica o estado final |
-| Assinatura do webhook inválida | `401`, nada gravado, métrica e log sem o corpo |
+| Assinatura do webhook inválida | `401`, evento `rejected` com metadados mínimos, sem fila nem reprocessamento, métrica e log sem o corpo |
 | Credenciais inválidas (`401` do provedor) | checkout responde `503`; alerta na tela de falhas do admin; tarefas param de repetir após 3 tentativas |
 | Pagamento aprovado com valor diferente do pedido | pedido não é marcado `paid`; evento vai para `failed` com motivo `amount_mismatch` para análise do admin |
 | Cobrança de assinatura recusada | `past_due` e carência ([012](012-assinaturas.md)) |
@@ -138,7 +140,7 @@ A reconciliação usa o mesmo código de transição do webhook; a ordem de cheg
 `apps/admin-api/openapi.yaml`, sob `/api/v1`:
 
 - `GET /payments`, `GET /payments/{id}` (admin e gerente)
-- `GET /webhook-events?status=failed`, `POST /webhook-events/{id}/retry` (admin)
+- `GET /webhook-events?status=failed`, `POST /webhook-events/{id}/retry` (admin; somente `failed`, nunca `rejected`)
 - `GET /settings/payments` (provedor, modo de teste, última reconciliação; nunca os segredos)
 
 Tarefas da fila: `payment.webhook`, `payment.reconcile_orders`, `payment.reconcile_subscriptions`, `payment.reconcile_refunds` ([005](005-worker-e-fila.md)).
@@ -150,7 +152,7 @@ Dono (escrita): `classroom-api` grava `webhook_events` na chegada; `worker` grav
 | Tabela | Campos principais |
 | --- | --- |
 | `payments` | `id`, `order_id` (ou nulo), `subscription_id` (ou nulo), `provider`, `provider_payment_id`, `status`, `method` (`card` \| `pix` \| `boleto` \| `other`), `amount_cents`, `refunded_cents`, `currency`, `paid_at`, `raw_status`, `created_at`, `updated_at` |
-| `webhook_events` | `id`, `provider`, `event_id`, `resource_type`, `resource_id`, `status` (`received` \| `processed` \| `ignored` \| `failed`), `attempts`, `error`, `received_at`, `processed_at` |
+| `webhook_events` | `id`, `provider`, `event_id` (nulo se ilegível), `resource_type`, `resource_id` (nulos se ilegíveis), `status` (`received` \| `rejected` \| `processed` \| `ignored` \| `failed`), `attempts`, `error`, `received_at`, `processed_at` |
 
 - `payments` não guarda dado de cartão nem o corpo completo devolvido pelo provedor.
 - `webhook_events` guarda só identificadores, não o corpo.
@@ -159,7 +161,7 @@ Dono (escrita): `classroom-api` grava `webhook_events` na chegada; `worker` grav
 ## Critérios de aceite
 
 - [ ] Pedidos e assinaturas funcionam de ponta a ponta com o provedor `fake` sem nenhuma referência ao Mercado Pago fora da implementação dele.
-- [ ] Webhook com assinatura inválida responde `401` e não grava nada.
+- [ ] Webhook com assinatura inválida responde `401`, grava `rejected` sem corpo/assinatura e não enfileira; evento válido posterior com o mesmo identificador é processado, e o rejeitado não pode ser reprocessado.
 - [ ] O mesmo evento enviado 5 vezes gera um único pagamento e uma única concessão de direitos.
 - [ ] Com o webhook desligado, um pedido pago é liberado pela reconciliação em até 5 min.
 - [ ] Reembolso e aprovação chegando fora de ordem terminam no estado final correto.

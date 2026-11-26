@@ -1,6 +1,6 @@
 # 0025 — Bibliotecas da Fase 2: certificado, Markdown, lista reordenável e player
 
-Status: aceita (item "PDF do certificado" substituído por [0026](0026-certificado-por-template-html.md))
+Status: aceita (itens "PDF do certificado" e "Markdown" substituídos por [0026](0026-certificado-por-template-html.md) e [0027](0027-markdown-saneado-no-servidor.md))
 Data: 2026-11-25
 
 ## Contexto
@@ -12,7 +12,7 @@ Toda dependência nova passa pela conferência de licenças do `verify:quick` ([
 ## Decisão
 
 - **PDF do certificado** (substituído pela [0026](0026-certificado-por-template-html.md): template HTML renderizado pelo Chromium headless no worker; o texto abaixo fica só como registro): `pdfkit` no worker, com a fonte Inter em TTF (OFL-1.1) guardada em `apps/worker/src/` junto do arquivo de licença dela; o `pdfkit` embute só os glifos usados, o que mantém o PDF abaixo de 300 KB. Código QR com `qrcode`, desenhado como vetor no PDF (não como imagem). Logotipo: o `pdfkit` não lê WebP, então o worker converte a variante de 256 px do `school_logo` para PNG com o `sharp` do módulo `images` de `packages/core`. Nenhum serviço externo nem navegador.
-- **Markdown:** `react-markdown`, sem `rehype-raw` (HTML bruto nunca é interpretado), com `allowedElements` restrito ao que a [006](../006-sites-e-interface.md) lista (parágrafo, negrito, itálico, listas, links, código, citação, quebra de linha), links só `https`, `http` e `mailto`, sempre com `rel="noopener noreferrer"` e `target="_blank"`. Um único componente `Markdown` em `packages/ui`, usado pelos dois sites e, na Fase 4, pelo fórum.
+- **Markdown:** substituído pela [0027](0027-markdown-saneado-no-servidor.md): pipeline isomórfico no núcleo, HTML saneado persistido nas novas escritas, imagens externas `https` e conversão segura em React. O texto histórico abaixo fica só como registro: `react-markdown`, sem `rehype-raw`, com `allowedElements` restrito ao que a [006](../006-sites-e-interface.md) listava (parágrafo, negrito, itálico, listas, links, código, citação, quebra de linha), links só `https`, `http` e `mailto`, sempre com `rel="noopener noreferrer"` e `target="_blank"`. Um único componente `Markdown` em `packages/ui`.
 - **Lista reordenável:** `@dnd-kit/core` e `@dnd-kit/sortable`, com o sensor de teclado ligado e os anúncios de leitor de tela em pt-BR; componente `SortableList` em `packages/ui`. Cada reordenação grava a ordem inteira (`PUT .../order`).
 - **Player:** componente `VideoPlayer` em `packages/ui`, um adaptador por provedor, todos com a mesma interface (`onEnded`, `onTime(seconds)`, `seek(seconds)`, posição inicial):
   - `youtube`: IFrame Player API, carregada sob demanda só na aula do YouTube (`https://www.youtube.com/iframe_api`), com `youtube-nocookie.com` no `iframe`. É o único script externo, coberto pela exceção do "player incorporado de vídeo" da [006](../006-sites-e-interface.md), RNF-05.
@@ -26,13 +26,13 @@ Toda dependência nova passa pela conferência de licenças do `verify:quick` ([
 
 - PDF com `pdf-lib`: sem manutenção ativa desde 2021 e sem quebra de linha de texto, que o certificado precisa para títulos longos. Com navegador embutido (Puppeteer, Playwright): proibido pela [015](../015-certificados.md) e pesado na imagem.
 - Fontes padrão do PDF (Helvetica, sem embutir): PDF menor e sem arquivo de fonte, mas só cobrem Latin-1; nome de aluno com caractere fora dele sairia errado.
-- Markdown com `marked` ou `markdown-it` mais `DOMPurify` e `dangerouslySetInnerHTML`: duas bibliotecas e a higienização como etapa separada que alguém pode esquecer; o `react-markdown` não gera HTML bruto.
+- Markdown com `marked` ou `markdown-it` mais `DOMPurify` e `dangerouslySetInnerHTML`: alternativa considerada originalmente; a decisão vigente e suas alternativas estão na [0027](0027-markdown-saneado-no-servidor.md).
 - Arrastar com a API nativa de HTML5: não funciona por teclado nem em tela de toque sem código próprio.
 - Controlar o YouTube só por `postMessage`, sem a IFrame API: tiraria o script externo, mas depende de mensagens não documentadas, que o provedor muda sem aviso.
 
 ## Consequências
 
-- Quatro dependências novas nos sites (`react-markdown`, `@dnd-kit/*`, `@vimeo/player`, `hls.js`) e duas no worker (`pdfkit`, `qrcode`), cada uma com a conferência de licenças na tarefa que a instala.
+- Dependências novas originais nos sites (`react-markdown`, `@dnd-kit/*`, `@vimeo/player`, `hls.js`) e no worker (`pdfkit`, `qrcode`), cada uma com a conferência de licenças na tarefa que a instala; as mudanças posteriores do Markdown estão na [0027](0027-markdown-saneado-no-servidor.md).
 - A CSP do classroom passa a ter origens externas, limitadas às da tabela de provedores; provedor novo exige mudar a tabela da [009](../009-catalogo-e-conteudo.md), o adaptador e a política juntos.
 - O adaptador de `bunny` e `panda` depende de mensagens que o provedor pode mudar; o teste do componente cobre o protocolo, e a conferência real com cada provedor fica na tarefa 065.
 - A fonte do certificado é a mesma família dos sites, e o PDF não depende de fonte instalada na imagem do worker.

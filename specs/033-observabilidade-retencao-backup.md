@@ -55,7 +55,7 @@ Sem identificadores de usuário nos rótulos.
 | --- | --- | --- |
 | `http_requests_total{route,method,status}` | contador | APIs |
 | `http_request_duration_seconds{route,method}` | histograma | APIs |
-| `sse_connections` | medidor | APIs com fluxo SSE (`classroom-api`) |
+| `sse_connections` | medidor | `classroom-api` e, desde a Fase 4, `admin-api` |
 | `db_pool_connections{state}` | medidor | todos |
 | `jobs_total{type,outcome}` | contador | worker |
 | `jobs_duration_seconds{type}` | histograma | worker |
@@ -86,7 +86,7 @@ Detalhe das métricas do worker:
 - `certificate_render_seconds`: tempo de cada renderização de PDF pelo navegador ([015](015-certificados.md)), com `kind` `certificate` ou `preview`, faixas de 100 ms a 30 s; renderização que estoura o tempo limite de 20 s também é observada.
 - Os medidores da fila são lidos do banco a cada coleta; com mais de um worker, todos devolvem o mesmo valor, e quem coleta usa `max`, não `sum`.
 
-`sse_connections` conta os fluxos SSE abertos no processo. O medidor é registrado pela base HTTP (`packages/api-kit`) em todo serviço que liga os fluxos SSE, e só neles ([004](004-classroom-api.md), "Base do fluxo"); hoje, a `classroom-api`.
+`sse_connections` conta os fluxos SSE abertos no processo. O medidor é registrado pela base HTTP (`packages/api-kit`) em todo serviço que liga os fluxos SSE, e só neles ([004](004-classroom-api.md), "Base do fluxo"); a partir da Fase 4, na `classroom-api` e na `admin-api`.
 
 ### Requisição encerrada pelo cliente
 
@@ -108,7 +108,7 @@ Não há tracing distribuído nem alertas embutidos. O guia em `docs/` traz um e
 
 - **Fila**: pendentes, em execução e com falha por tipo; idade da tarefa mais antiga; ação "tentar de novo" e "descartar" nas com falha.
 - **E-mails**: pendentes e com falha, com destinatário mascarado, assunto e último erro do SMTP; "reenviar".
-- **Webhooks**: recebidos com falha de assinatura ou de processamento; "reprocessar".
+- **Webhooks**: eventos `failed` com erro de processamento permitem "reprocessar"; eventos `rejected` por assinatura aparecem somente em consulta de segurança, com metadados mínimos, sem ação de reprocessamento e sem corpo/assinatura.
 - **Sistema**: versão, versão das migrations, tamanho do banco, espaço ocupado por imagens ([029](029-imagens.md)), data do último backup e do último expurgo.
 - Um selo no menu do admin indica quando há falhas; não há envio de alerta para fora.
 
@@ -130,7 +130,7 @@ Expurgo diário às 03:30 (fuso da escola, `settings.timezone`), tarefa `retenti
 | E-mails com falha (`email_outbox`) | 90 dias | `NUVA_RETENTION_EMAIL_FAILED_DAYS` |
 | Denúncias resolvidas, ações de moderação e suspensões | 2 anos (730 dias) | `NUVA_RETENTION_MODERATION_DAYS` |
 | Visualizações de case (`case_views`) | 90 dias | fixo |
-| Webhooks recebidos | 90 dias | `NUVA_RETENTION_WEBHOOK_DAYS` |
+| Webhooks recebidos, inclusive `rejected` | 90 dias desde `received_at` | `NUVA_RETENTION_WEBHOOK_DAYS` |
 | Auditoria | 2 anos (730 dias) | `NUVA_RETENTION_AUDIT_DAYS` |
 | Chaves MCP revogadas ou expiradas | 2 anos | acompanha a auditoria |
 | Exportações de dados (LGPD) | 24 horas | fixo |
@@ -162,7 +162,7 @@ Esta tabela é a lista completa e única de prazos; as demais specs usam estes n
 | 2 | Tomada de conta por força bruta ou por vínculo social indevido | 5 erros = 15 min de bloqueio por conta e por IP; comparação em tempo constante; senha vazia nunca autentica; aviso por e-mail de login em dispositivo novo; vínculo social só com e-mail verificado pelo provedor; conta por senha só compra ou posta após confirmar o e-mail | Bloqueio na 6ª tentativa; login com senha vazia em conta social recusado; provedor com e-mail não verificado não une contas |
 | 3 | Webhook de pagamento forjado ou repetido | Validação da assinatura com `MP_WEBHOOK_SECRET`; processamento idempotente por identificador do evento; estado conferido na API do Mercado Pago antes de liberar acesso; reconciliação periódica | Webhook sem assinatura válida é recusado; o mesmo evento duas vezes libera um único direito |
 | 4 | Elevação de privilégio entre papéis ou por chave MCP | Autorização central em `packages/core`, usada pelas duas APIs e pelo MCP; papel lido do banco a cada requisição; chave MCP usa o papel atual do emissor; `instructor` restrito aos próprios cursos; último `admin` não pode ser rebaixado | Matriz de permissões testada rota a rota e ferramenta a ferramenta para os quatro papéis |
-| 5 | XSS em conteúdo de aluno (fórum, cases, mensagens, perfil) | Markdown convertido com lista de permissão de marcações e saneado no servidor e no navegador; sem HTML bruto; links com `rel="noopener nofollow"`; Content-Security-Policy sem `unsafe-inline` para scripts; cookie `HttpOnly`, `Secure`, `SameSite=Lax`; imagens regravadas ([029](029-imagens.md)) | Conjunto de cargas de XSS conhecidas publicadas em cada campo e conferidas como inertes no e2e |
+| 5 | XSS em conteúdo de aluno (fórum, cases, mensagens, perfil) | Markdown convertido com lista de permissão, saneado no servidor e novamente na exibição; sem HTML bruto nem `dangerouslySetInnerHTML`; links com `rel="noopener nofollow noreferrer"`; CSP sem `unsafe-inline` para scripts e `img-src https:` apenas para as imagens externas do Markdown ([0027](decisions/0027-markdown-saneado-no-servidor.md)); cookie `HttpOnly`, `Secure`, `SameSite=Lax`; imagens **enviadas** regravadas ([029](029-imagens.md)) | Conjunto de cargas de XSS conhecidas publicadas em cada campo e conferidas como inertes no e2e; paridade núcleo/interface e imagem externa `https` permitida |
 | 6 | Acesso a aula ou ebook sem direito | Links de vídeo, arquivo e ebook só saem da API depois da checagem de direito ([010](010-direitos-de-acesso.md)); o programa do curso não traz os links; reembolso e fim de plano revogam em cascata | Usuário sem direito recebe 403 e nenhuma resposta contém o link; revogação testada após reembolso |
 | 7 | Template de certificado (HTML escrito pela equipe) usado para executar código, buscar recurso externo ou esgotar o worker | Lista de permissões de elementos, atributos, URLs e CSS, com recusa ao salvar e nova validação antes de renderizar; valores das palavras-chave escapados; Chromium com JavaScript desligado e toda requisição abortada; tempo limite de 20 s, um PDF por vez por processo, template até 768 KiB e PDF até 2 MiB ([015](015-certificados.md), [0026](decisions/0026-certificado-por-template-html.md)) | Cargas conhecidas (script, `on*`, `iframe`, `object`, `@import`, `url()` externo, `img` externa, `meta refresh`) recusadas; renderização de template com recurso externo não faz requisição; nome de aluno com marcação sai escapado |
 

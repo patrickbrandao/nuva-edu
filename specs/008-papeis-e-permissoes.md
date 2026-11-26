@@ -65,7 +65,8 @@ Legenda: ✓ permitido · ◐ só nos próprios cursos · — negado.
 | Publicar novidades | — | ◐ (ligadas aos seus cursos) | ✓ | ✓ |
 | **Acessos e vendas** | | | | |
 | Conceder e revogar acesso manual | — | — | ✓ | ✓ |
-| Ver pedidos, assinaturas e exportar CSV | — | — | ✓ | ✓ |
+| Ver pedidos e assinaturas | — | — | ✓ | ✓ |
+| Exportar vendas em CSV | — | — | — | ✓ |
 | Reembolsar pedido | — | — | — | ✓ |
 | Cancelar assinatura de um aluno | — | — | — | ✓ |
 | Criar e editar planos | — | — | — | ✓ |
@@ -106,7 +107,7 @@ Legenda: ✓ permitido · ◐ só nos próprios cursos · — negado.
 | Ver diretório e perfis | — | ✓ | ✓ |
 | Enviar mensagem direta | — | Com acesso ativo ([021](021-mensagens-diretas.md)) | ✓ |
 | Publicar case | — | ✓ (e-mail confirmado) | ✓ |
-| Abrir chamado | — | ✓ | ✓ |
+| Abrir e responder chamado | — | ✓ (sem suspensão `full`) | ✓ (sem suspensão `full`) |
 | Denunciar conteúdo ou usuário | — | ✓ | ✓ |
 | Exportar os próprios dados e excluir a própria conta | — | ✓ | Exporta: ✓; exclusão: só depois de o admin rebaixar a conta a `student` ([030](030-lgpd.md)) |
 
@@ -121,7 +122,7 @@ Cada linha das matrizes é uma ação de `packages/core`, com o identificador ab
 | Acesso | `admin.access`, `dashboard.view` |
 | Pessoas | `users.list`, `users.view_private`, `users.edit`, `users.suspend`, `users.sessions.revoke`, `users.password.view`, `users.password.set`, `staff.manage`, `users.delete` |
 | Conteúdo | `course.create`, `course.edit`, `course.publish`, `course.delete`, `product.archive`, `course.set_owner`, `ebook_bundle.manage`, `ebook.link`, `product.set_access`, `product.set_price`, `event.manage`, `announcement.publish` |
-| Acessos e vendas | `entitlement.manage`, `sales.view`, `order.refund`, `subscription.cancel`, `plan.manage`, `coupon.manage` |
+| Acessos e vendas | `entitlement.manage`, `sales.view`, `sales.export`, `order.refund`, `subscription.cancel`, `plan.manage`, `coupon.manage` |
 | Comunidade e suporte | `forum.category.manage`, `forum.moderate`, `report.handle`, `case.moderate`, `badge.award`, `gamification.configure`, `ticket.handle`, `progress.view`, `certificate.issue`, `certificate.revoke`, `certificate.template.edit` |
 | Sistema | `mcp_key.own`, `mcp_key.manage_all`, `audit.view`, `ops.manage`, `settings.manage` |
 | Classroom | `catalog.view`, `course.view_program`, `lesson.watch_open`, `lesson.watch_sample`, `content.access_paid`, `purchase.create`, `learning.track`, `forum.course.participate`, `forum.free.participate`, `members.view`, `dm.send`, `case.publish`, `ticket.open`, `report.create`, `account.self_service` |
@@ -152,7 +153,7 @@ Cada linha das matrizes é uma ação de `packages/core`, com o identificador ab
 ### Suspensão
 
 - `manager` suspende e reativa `student`; só `admin` suspende equipe. Ninguém suspende a si mesmo.
-- Dois tipos, registrados em `user_suspensions` ([026](026-moderacao-e-denuncias.md)): `posting` impede publicar em fórum, cases, comentários e mensagens, mas o usuário entra e estuda normalmente; `full` encerra todas as sessões, recusa o login com `account_suspended` e fecha as conexões SSE. Nos dois tipos as chaves MCP são recusadas.
+- Dois tipos, registrados em `user_suspensions` ([026](026-moderacao-e-denuncias.md)): `posting` impede publicar em fórum, cases, comentários e mensagens, mas o usuário entra, estuda e usa chamados normalmente; `full` encerra todas as sessões, recusa o login com `account_suspended` e fecha as conexões SSE. Com `full`, também não abre nem responde chamados, inclusive por link de e-mail: não existe sessão especial, token de suporte ou rota pública para isso. Nos dois tipos as chaves MCP são recusadas.
 - A suspensão pode ter prazo (`ends_at`); ao fim dele o worker a encerra.
 - O que permanece: compras, direitos de acesso, progresso e conteúdo já publicado (que pode ser ocultado pela moderação). A suspensão não cancela assinatura: a cobrança segue até o admin cancelar ([012](012-assinaturas.md)).
 - Suspensão exige motivo (texto), guardado em `user_suspensions.reason` (resumo em `users.suspended_reason`), auditado e visível só à equipe. O usuário é avisado por e-mail, sem o motivo interno.
@@ -192,6 +193,7 @@ Cada linha das matrizes é uma ação de `packages/core`, com o identificador ab
 - [ ] `manager` concede acesso manual e é recusado ao reembolsar, criar cupom, alterar preço e ver senha.
 - [ ] Mudança de papel vale na requisição seguinte e encerra as sessões do admin.
 - [ ] Suspender um usuário derruba as sessões, fecha o SSE e faz as chaves MCP dele responderem erro em até 5 s.
+- [ ] A exportação CSV exige `sales.export`: só `admin` a tem; `manager` não vê a ação no menu e recebe `403` na rota, com tentativa registrada na auditoria.
 - [ ] O último admin não pode ser rebaixado, suspenso nem excluído.
 - [ ] Toda negação na `admin-api` e no MCP aparece na auditoria.
 - [ ] O menu do site admin corresponde à lista de ações devolvida por `/session`.

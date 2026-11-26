@@ -32,12 +32,12 @@ O nuva-edu tem dois sites, ambos SPAs em React: `admin` (equipe) e `classroom` (
 ### Base técnica
 
 - React 19, Vite e Tailwind 4; React Router para rotas; TanStack Query para dados do servidor; ícones `lucide-react`.
-- `packages/ui` contém: tokens (`--minui-*` com `light-dark()`), primitivos (Surface, Txt, Avatar, Badge, Dot, Field, LabelPill, ActionButton), a casca administrativa (`AdminShell`), os controles e as tabelas do `AdminKit` (`AdminControls`, `AdminData`), o quadro `CasesBoard`, a visão `ClientOverview` e a página `PricingPage`. Componentes que faltarem (player, editor de texto, calendário, acordeão de módulos, modal, toast) nascem em `packages/ui` seguindo os mesmos tokens. As bibliotecas do Markdown, da lista reordenável e do player estão na [0025](decisions/0025-bibliotecas-da-fase-2.md).
+- `packages/ui` contém: tokens (`--minui-*` com `light-dark()`), primitivos (Surface, Txt, Avatar, Badge, Dot, Field, LabelPill, ActionButton), a casca administrativa (`AdminShell`), os controles e as tabelas do `AdminKit` (`AdminControls`, `AdminData`), o quadro `CasesBoard`, a visão `ClientOverview` e a página `PricingPage`. Componentes que faltarem (player, editor de texto, calendário, acordeão de módulos, modal, toast) nascem em `packages/ui` seguindo os mesmos tokens. As bibliotecas da lista reordenável e do player estão na [0025](decisions/0025-bibliotecas-da-fase-2.md); o pipeline do Markdown está na [0027](decisions/0027-markdown-saneado-no-servidor.md).
 - Quando uma tarefa citar um código de referência do minui (ex.: `CasesBoard.screen02`), o exemplo é localizado no projeto de origem e portado para `packages/ui`; o código de referência fica anotado em comentário no componente portado.
 - Componentes de vitrine do minui sem uso no produto (personagens, palco, efeitos, teclado, metal líquido) não são copiados.
-- Texto escrito por usuário é exibido a partir de Markdown restrito (negrito, itálico, listas, links, código, citação), sempre higienizado; nunca HTML bruto.
+- Texto escrito por usuário usa o Markdown comum da [017](017-forum.md) e da [0027](decisions/0027-markdown-saneado-no-servidor.md): negrito, itálico, listas, links, código, citação e imagem externa `https`, sem interpretar HTML bruto. Novas escritas persistem o HTML saneado no servidor; a interface transforma esse HTML em React sem `dangerouslySetInnerHTML`.
 - Sessão: ao carregar, o site chama `GET /api/v1/session`; `401` leva à tela de login guardando o destino. O site admin, ao receber `403` por papel, mostra "sem acesso ao painel" com link para o classroom.
-- Tempo real no classroom: uma conexão SSE por aba ([004](004-classroom-api.md)), que invalida as consultas afetadas.
+- Tempo real nos dois sites: uma conexão SSE por aba, na API do próprio host ([003](003-admin-api.md), [004](004-classroom-api.md)), que invalida as consultas afetadas. No admin entrega as notificações da equipe; no classroom também mensagens e eventos da comunidade.
 
 ### Configuração de execução
 
@@ -59,7 +59,7 @@ Cada dado tem uma única fonte ([031](031-infraestrutura-e-deploy.md), "Configur
 
 ### Casca comum
 
-- Barra superior: recolher menu, breadcrumb, busca global, seletor de tema, sino de notificações (classroom), menu do usuário (perfil, configurações, sair).
+- Barra superior: recolher menu, breadcrumb, busca global, seletor de tema, sino de notificações (nos dois sites) e menu do usuário (perfil, configurações, sair).
 - Menu lateral em grupos, recolhível; rodapé com avatar, nome e papel.
 - Avisos por toast; ações destrutivas pedem confirmação com o nome do item.
 
@@ -112,7 +112,7 @@ Conteúdo sem direito de acesso mostra o programa, um aviso de bloqueio e o bot�
 | Vendas | Pedidos, detalhe do pedido, reembolso | `/pedidos`, `/pedidos/:id` | `sales.view` | manager (reembolso: admin) | [011](011-vendas-e-checkout.md) |
 | Vendas | Assinaturas | `/assinaturas` | `sales.view` | manager | [012](012-assinaturas.md) |
 | Vendas | Planos, cupons, preços | `/planos`, `/cupons` | `plan.manage`, `coupon.manage` | admin | [011](011-vendas-e-checkout.md), [012](012-assinaturas.md) |
-| Vendas | Exportar vendas (CSV) | `/pedidos/exportar` | `sales.view` | manager | [011](011-vendas-e-checkout.md) |
+| Vendas | Exportar vendas (CSV) | `/pedidos/exportar` | `sales.export` | admin | [011](011-vendas-e-checkout.md) |
 | Comunidade | Fórum (categorias livres, tópicos) | `/forum` | `forum.moderate` | instructor (◐ fórum dos seus cursos) | [017](017-forum.md) |
 | Comunidade | Denúncias | `/denuncias` | `report.handle` | instructor (◐ do fórum dos seus cursos) | [026](026-moderacao-e-denuncias.md) |
 | Comunidade | Cases (destaque, ocultar) | `/cases` | `case.moderate` | manager | [022](022-cases.md) |
@@ -181,3 +181,5 @@ Os sites não são donos de dados. No navegador guardam apenas: tema (`nuva-them
 - [0017 — Escopo do MVP](decisions/0017-escopo-do-mvp.md)
 - [0023 — lighttpd como servidor de arquivos dos sites](decisions/0023-lighttpd-nos-sites.md)
 - [0025 — Bibliotecas da Fase 2](decisions/0025-bibliotecas-da-fase-2.md)
+- [0027 — Markdown saneado no servidor](decisions/0027-markdown-saneado-no-servidor.md)
+- [0028 — SSE também na admin-api](decisions/0028-sse-tambem-na-admin-api.md)

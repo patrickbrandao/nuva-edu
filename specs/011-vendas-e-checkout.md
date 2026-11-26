@@ -104,8 +104,7 @@ paid ──> chargeback          (contestação no provedor)
 ### Consulta e exportação
 
 - Lista de pedidos no admin com filtros por período, estado, produto, cupom e comprador; totais do período (bruto, descontos, reembolsos, líquido).
-- CSV (só admin), uma linha por item de pedido: `order_id`, `order_number`, `created_at`, `paid_at`, `status`, `buyer_name`, `buyer_email`, `tax_id_type`, `tax_id`, `product_type`, `product_title`, `unit_price`, `discount`, `paid_amount`, `refunded_amount`, `coupon_code`, `payment_method`, `provider`, `provider_payment_id`. UTF-8 com BOM, separador `;`, valores decimais com vírgula.
-- A exportação grava auditoria ([028](028-auditoria.md)).
+- CSV (só admin, permissão `sales.export`; gerente recebe `403` e não vê a ação no menu), uma linha por item de pedido. A exportação é leitura sensível auditada, inclusive quando recusada ([028](028-auditoria.md)); o conteúdo e os filtros não vão para logs. Colunas: `order_id`, `order_number`, `created_at`, `paid_at`, `status`, `buyer_name`, `buyer_email`, `tax_id_type`, `tax_id`, `product_type`, `product_title`, `unit_price`, `discount`, `paid_amount`, `refunded_amount`, `coupon_code`, `payment_method`, `provider`, `provider_payment_id`. UTF-8 com BOM, separador `;`, valores decimais com vírgula.
 
 ### Casos de erro
 

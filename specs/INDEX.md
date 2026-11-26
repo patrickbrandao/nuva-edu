@@ -7,7 +7,7 @@ As specs são a fonte da verdade. Carregue apenas a que a tarefa pedir. Decisõe
 | [000-visao-geral.md](000-visao-geral.md) | Visão geral | Propósito, usuários, escopo, MVP, requisitos não funcionais | — | aprovada |
 | [001-arquitetura.md](001-arquitetura.md) | Arquitetura | Componentes, dono dos dados, integrações, stack, operação | 000 | aprovada |
 | [002-organizacao-do-trabalho.md](002-organizacao-do-trabalho.md) | Organização do trabalho | Papéis, pastas, Git, tarefas, Definition of Done, escalonamento | 000, 001 | aprovada |
-| [003-admin-api.md](003-admin-api.md) | admin-api | Serviço da API administrativa | 001 | aprovada |
+| [003-admin-api.md](003-admin-api.md) | admin-api | Serviço da API administrativa e SSE da equipe | 001 | aprovada |
 | [004-classroom-api.md](004-classroom-api.md) | classroom-api | Serviço da API do aluno, SSE | 001 | aprovada |
 | [005-worker-e-fila.md](005-worker-e-fila.md) | Worker e fila | Tarefas em segundo plano | 001 | aprovada |
 | [006-sites-e-interface.md](006-sites-e-interface.md) | Sites e interface | Sites admin e classroom, telas, `packages/ui`, uso do `/config.json` | 001 | aprovada |
@@ -28,7 +28,7 @@ As specs são a fonte da verdade. Carregue apenas a que a tarefa pedir. Decisõe
 | [021-mensagens-diretas.md](021-mensagens-diretas.md) | Mensagens diretas | Conversa 1:1 em tempo real | 010, 004 | aprovada |
 | [022-cases.md](022-cases.md) | Cases | Vitrine de projetos dos alunos | 019, 029 | aprovada |
 | [023-chamados-de-suporte.md](023-chamados-de-suporte.md) | Chamados de suporte | Atendimento ao aluno | 008 | aprovada |
-| [024-notificacoes-e-email.md](024-notificacoes-e-email.md) | Notificações e e-mail | Central, preferências, e-mail transacional | 004, 005 | aprovada |
+| [024-notificacoes-e-email.md](024-notificacoes-e-email.md) | Notificações e e-mail | Central, preferências e e-mail transacional nos dois sites | 003, 004, 005 | aprovada |
 | [025-novidades.md](025-novidades.md) | Novidades | Mural de anúncios da escola | 008 | aprovada |
 | [026-moderacao-e-denuncias.md](026-moderacao-e-denuncias.md) | Moderação e denúncias | Denúncia, fila, ações, suspensão | 008, 017 | aprovada |
 | [027-mcp.md](027-mcp.md) | MCP | Servidor MCP, chaves, ferramentas | 003, 008 | aprovada |

@@ -22,6 +22,7 @@ A `admin-api` é o backend do site de administração (`https://<NUVA_ADMIN_HOST
 - RNF-02: Corpo de requisição limitado a 1 MB, exceto envio de imagem, limitado a 5 MB ([029](029-imagens.md)); a imagem é processada na própria API que recebe o envio, não no worker.
 - RNF-03: Limites de taxa: 300 requisições por minuto por sessão; 20 por minuto por IP nas operações de autenticação (`/api/v1/auth/*`: login, logout e as três do login social). Não há limite de visitante: requisição sem sessão só conta no limite da autenticação ou no da entrega de imagens. A entrega de imagens (`getImageVariant`) fica fora do limite por sessão e tem conta própria, de 600 por minuto por IP, com ou sem sessão ([029](029-imagens.md), "Limite de taxa da entrega"). Acima de qualquer limite, `429` `rate_limited` com `Retry-After`.
 - RNF-04: Nenhuma resposta, log ou erro contém o campo de senha, exceto a rota dedicada de exibição de senha ([007](007-contas-e-autenticacao.md)).
+- RNF-05: Sustentar 500 conexões SSE abertas num único processo, com consumo adicional inferior a 200 MB de RAM, e entregar `notification.created` em até 2 s após a gravação ([024](024-notificacoes-e-email.md)).
 
 ## Comportamento
 
@@ -121,6 +122,16 @@ Não há parâmetro de cabeçalho para o token. Como parâmetro obrigatório, o 
 - Operação de escrita sem `csrfToken` no `security` é exceção e diz o motivo na descrição.
 - O teste de contrato confere que toda operação que não é de leitura declara `csrfToken` ou está na lista de exceções.
 
+### Fluxo SSE da equipe
+
+Desde a Fase 4, `GET /api/v1/stream` existe também na `admin-api` ([0028](decisions/0028-sse-tambem-na-admin-api.md)). Usa a sessão `nuva_admin_session` e as regras desta API: sem sessão responde `401 unauthenticated`; sessão apenas `student` responde `403 permission_denied`. A suspensão `full` fecha a conexão pela regra comum de sessões.
+
+- Abre `text/event-stream` com cookie, sem CSRF por ser leitura; uma conexão por aba do admin e no máximo 3 por usuário, derrubando a mais antiga na quarta.
+- Entrega `notification.created` das notificações destinadas ao usuário da sessão, com o contador de não lidas; nenhum evento de outro usuário, mensagem direta ou conteúdo da comunidade. O nome, os campos `id`/`event`/`data` e o esquema são os mesmos do classroom ([004](004-classroom-api.md), "Fluxo SSE").
+- Reutiliza `packages/api-kit`, `user_event_id_seq`, `publishUserEvent`, `LISTEN/NOTIFY`, `ping`, reenvio por `Last-Event-ID`, recarga na reconexão e limites de carga do fluxo do classroom. O hub comum filtra o canal a `notification.created`; os demais tipos não são entregues nem guardados para reenvio no admin. Não cria canal, sequência ou infraestrutura paralela.
+- Os limites de reenvio são os mesmos da [004](004-classroom-api.md): o estado persistido e a recarga da central são a fonte de recuperação; nenhuma tela depende de receber todos os eventos.
+- O contrato declara o caminho completo, os erros e os esquemas do evento. O proxy configura o host admin como configura o classroom ([031](031-infraestrutura-e-deploy.md), "SSE atrás do proxy").
+
 ### Grupos de rotas
 
 | Prefixo em `/api/v1` | Conteúdo | Spec |
@@ -145,8 +156,8 @@ Não há parâmetro de cabeçalho para o token. Como parâmetro obrigatório, o 
 | `/audit` | Consulta ao registro de auditoria | [028](028-auditoria.md) |
 | `/images` | Envio e leitura de imagens | [029](029-imagens.md) |
 | `/settings/*`, `/terms`, `/users/{id}/export`, `/users/{id}/deletion` | Configuração da escola, identidade visual, versões de termos, exportação e exclusão em nome do usuário | [030](030-lgpd.md), [031](031-infraestrutura-e-deploy.md) |
-| `/ops/*` (inclui `/ops/jobs`, `/ops/emails`, `/ops/webhooks`) | Fila, e-mails e webhooks com falha, reprocessamento | [005](005-worker-e-fila.md), [024](024-notificacoes-e-email.md), [033](033-observabilidade-retencao-backup.md) |
-| `/notifications` | Central de notificações da equipe | [024](024-notificacoes-e-email.md) |
+| `/ops/*` (inclui `/ops/jobs`, `/ops/emails`, `/ops/webhooks`) | Fila, e-mails e webhooks com falha; só evento de webhook `failed` aceita reprocessamento, `rejected` fica sem essa ação | [005](005-worker-e-fila.md), [024](024-notificacoes-e-email.md), [033](033-observabilidade-retencao-backup.md) |
+| `/notifications`, `/stream` | Central de notificações da equipe e seu fluxo SSE | [024](024-notificacoes-e-email.md), esta spec |
 | `/search` | Busca global no painel | [006](006-sites-e-interface.md) |
 | `/dashboard` | Indicadores da tela inicial | [006](006-sites-e-interface.md) |
 
@@ -201,7 +212,7 @@ Toda listagem e toda leitura de conteúdo, fórum, progresso e certificados feit
 
 ## Dados
 
-A `admin-api` é a única que escreve em: `settings`, `terms_versions`, `courses`, `modules`, `lessons`, `lesson_links`, `ebooks`, `bundles`, `bundle_items`, `product_ebooks`, `plans`, `plan_items`, `coupons`, `events`, `announcements`, `levels`, `badges`, `mcp_keys`, `audit_log`, `refunds` (solicitação), `entitlements` com `source = grant`, papel e estado de suspensão em `users`, estado de moderação em `forum_topics`, `forum_posts`, `cases`, `case_comments` e `reports`, e o lado da equipe em `tickets` e `ticket_messages`.
+A `admin-api` é a única que escreve em: `settings`, `terms_versions`, `courses`, `modules`, `lessons`, `lesson_links`, `ebooks`, `bundles`, `bundle_items`, `product_ebooks`, `plans`, `plan_items`, `coupons`, `events`, `announcements`, `levels`, `badges`, `mcp_keys`, `audit_log`, `refunds` (solicitação), `entitlements` com `source = grant`, papel e estado de suspensão em `users`, estado de moderação em `forum_topics`, `forum_posts`, `cases`, `case_comments` e `reports`, preferências de notificação da equipe no admin e o lado da equipe em `tickets` e `ticket_messages`.
 
 Lê as demais tabelas. Retenção: [033](033-observabilidade-retencao-backup.md).
 
@@ -210,6 +221,7 @@ Lê as demais tabelas. Retenção: [033](033-observabilidade-retencao-backup.md)
 - [ ] Toda rota registrada existe em `apps/admin-api/openapi.yaml` e vice-versa (teste de contrato).
 - [ ] Sessão de `student` recebe `403` em qualquer rota de `/api/v1`, exceto `/auth/*` e `/meta`.
 - [ ] `instructor` recebe `404` ao pedir curso, aula, tópico ou progresso de curso que não é seu.
+- [ ] `/api/v1/stream` exige sessão de equipe, entrega só as notificações do titular, limita três conexões e recupera a central após reconexão; `student` recebe `403`.
 - [ ] Erros seguem `application/problem+json` com `code` estável, e os códigos gerais são os da tabela de [Códigos de erro](#códigos-de-erro).
 - [ ] Corpo acima do limite recebe `413` com `payload_too_large`; `Content-Type` não declarado recebe `415` com `unsupported_media_type`; JSON malformado recebe `400` com `validation_failed`.
 - [ ] Toda operação declara as respostas de erro da tabela de [Respostas de erro declaradas](#respostas-de-erro-declaradas) (teste de contrato).
@@ -232,6 +244,7 @@ Lê as demais tabelas. Retenção: [033](033-observabilidade-retencao-backup.md)
 ## Decisões relacionadas
 
 - [0004 — Duas APIs, um banco](decisions/0004-duas-apis-um-banco.md)
+- [0028 — SSE também na admin-api](decisions/0028-sse-tambem-na-admin-api.md)
 - [0009 — Stack TypeScript, Fastify e Kysely](decisions/0009-stack-typescript-fastify-kysely.md)
 - [0012 — Chaves MCP herdam o papel](decisions/0012-mcp-chaves-herdam-papel.md)
 - [0019 — Janela de contrato e operações pendentes](decisions/0019-janela-de-contrato-e-operacoes-pendentes.md)

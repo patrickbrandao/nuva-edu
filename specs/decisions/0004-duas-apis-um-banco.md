@@ -1,6 +1,6 @@
 # 0004 — Duas APIs sobre um único banco
 
-Status: aceita
+Status: aceita (recorte de distribuição do SSE entre as APIs substituído por [0028](0028-sse-tambem-na-admin-api.md))
 Data: 2026-11-24
 
 ## Contexto
@@ -11,7 +11,7 @@ O sistema tem dois sites (admin e classroom) e um servidor MCP administrativo. E
 
 (F2-01, A-01, A-02, A-03) Escolhida pelo usuário contra a recomendação de uma API única modular.
 
-- Duas APIs sobre um único PostgreSQL: `admin-api` (API administrativa e MCP) e `classroom-api` (API do aluno, vitrine, checkout, webhook do Mercado Pago e SSE).
+- Duas APIs sobre um único PostgreSQL: `admin-api` (API administrativa, MCP e SSE das notificações da equipe) e `classroom-api` (API do aluno, vitrine, checkout, webhook do Mercado Pago e SSE da comunidade). As duas reutilizam a mesma infraestrutura de eventos; a separação dos serviços permanece.
 - Um `worker` processa a fila, e-mails, reconciliação de pagamentos, vencimentos e certificados.
 - Os sites `admin` e `classroom` são estáticos. Completam o conjunto `postgres` e `traefik`; `mailpit` só no desenvolvimento.
 - Imagens: `tmsoftbrasil/nuva-edu-{admin-api,classroom-api,worker,admin,classroom}`.

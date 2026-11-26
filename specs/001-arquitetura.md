@@ -22,7 +22,7 @@ Define os componentes do nuva-edu, quem é dono de cada dado, as integrações, 
 
 | Componente | Imagem | Responsabilidade | Spec |
 | --- | --- | --- | --- |
-| `admin-api` | `tmsoftbrasil/nuva-edu-admin-api` | API administrativa e servidor MCP | [003](003-admin-api.md), [027](027-mcp.md) |
+| `admin-api` | `tmsoftbrasil/nuva-edu-admin-api` | API administrativa, servidor MCP e SSE das notificações da equipe | [003](003-admin-api.md), [027](027-mcp.md) |
 | `classroom-api` | `tmsoftbrasil/nuva-edu-classroom-api` | API do aluno, vitrine, checkout, webhook de pagamento, SSE | [004](004-classroom-api.md) |
 | `worker` | `tmsoftbrasil/nuva-edu-worker` | Fila, e-mails, reconciliação, vencimentos, certificados, expurgo | [005](005-worker-e-fila.md) |
 | `admin` | `tmsoftbrasil/nuva-edu-admin` | Site estático de administração, servido por lighttpd ([0023](decisions/0023-lighttpd-nos-sites.md)) | [006](006-sites-e-interface.md) |
@@ -64,7 +64,7 @@ Cada site chama só a API do próprio endereço: não há CORS, e o cookie de se
 
 ### Tempo real
 
-SSE em `GET /api/v1/stream` da `classroom-api`, alimentado por `LISTEN/NOTIFY` do PostgreSQL. Serve mensagens diretas e notificações. O envio é sempre por HTTP comum.
+SSE em `GET /api/v1/stream` das duas APIs, alimentado por `LISTEN/NOTIFY` do PostgreSQL e pela mesma base de eventos. A `classroom-api` serve mensagens diretas, comunidade e notificações; a `admin-api` serve as notificações da equipe. O envio é sempre por HTTP comum, e cada host autentica a própria sessão.
 
 ### Autenticação e autorização
 
@@ -77,7 +77,7 @@ SSE em `GET /api/v1/stream` da `classroom-api`, alimentado por `LISTEN/NOTIFY` d
 
 ## Interfaces e contratos
 
-- `apps/admin-api/openapi.yaml` e `apps/classroom-api/openapi.yaml`, em OpenAPI 3.1, escritos à mão e anteriores ao código. O fluxo SSE é descrito no contrato da `classroom-api`.
+- `apps/admin-api/openapi.yaml` e `apps/classroom-api/openapi.yaml`, em OpenAPI 3.1, escritos à mão e anteriores ao código. Os fluxos SSE são descritos nos contratos das duas APIs.
 - As ferramentas do MCP são descritas em [027](027-mcp.md).
 - Não há sistema de eventos, portanto não há AsyncAPI.
 - Não há API pública para terceiros além do MCP.
@@ -140,6 +140,7 @@ Imagens enviadas (avatar, capas, galeria de cases) ficam no próprio banco ([029
 
 - [0004 — Duas APIs, um banco](decisions/0004-duas-apis-um-banco.md)
 - [0008 — Fila e SSE no PostgreSQL](decisions/0008-fila-e-sse-no-postgres.md)
+- [0028 — SSE também na admin-api](decisions/0028-sse-tambem-na-admin-api.md)
 - [0007 — Imagens no PostgreSQL](decisions/0007-imagens-no-postgres.md)
 - [0009 — Stack TypeScript, Fastify, Kysely](decisions/0009-stack-typescript-fastify-kysely.md)
 - [0010 — Interface: minui em packages/ui](decisions/0010-interface-minui-em-packages-ui.md)

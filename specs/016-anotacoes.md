@@ -50,7 +50,7 @@ O aluno anota enquanto assiste. A nota fica presa à aula, com um link de volta 
 
 ### Edição
 
-- Corpo em Markdown, com as mesmas regras de sanitização do fórum ([017](017-forum.md)): sem HTML bruto, links com `rel="noopener noreferrer"`. As regras moram no componente `Markdown` de `packages/ui` ([006](006-sites-e-interface.md), [0025](decisions/0025-bibliotecas-da-fase-2.md)), que nasce na Fase 2 com as notas e as descrições do catálogo e é o mesmo que o fórum usa.
+- Corpo em Markdown, com as mesmas regras de sanitização do fórum ([017](017-forum.md)): sem HTML bruto interpretado e links com `rel="nofollow noopener noreferrer"`. As regras ficam no módulo de `packages/core` e no componente `Markdown` de `packages/ui` ([006](006-sites-e-interface.md), [0027](decisions/0027-markdown-saneado-no-servidor.md)). Notas anteriores continuam sendo lidas do Markdown com segurança; não são reescritas em lote nem exigem persistir HTML nesta fase.
 - Salvamento automático: 2 s após a última tecla e ao sair do campo; indicador "salvando…" e "salvo".
 - Conflito entre dois dispositivos: a gravação envia `updated_at` conhecido; se o registro mudou, a API responde `409` com a versão atual e o classroom oferece manter a local, a do servidor, ou copiar a local para uma nota nova.
 - Toda gravação que altera a nota avança `updated_at` (precisão de milissegundos; duas versões nunca têm o mesmo valor). Gravação que não altera nenhum campo devolve a nota como está, sem nova versão; com `updated_at` desatualizado ela também responde `409`.

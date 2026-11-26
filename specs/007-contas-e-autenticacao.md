@@ -109,7 +109,7 @@ Códigos do retorno: `oauth_state_invalid` (sem cookie, `state` diferente ou ven
 - Troca de e-mail pela equipe (`PATCH /users/{id}`): na mesma transação, todos os tokens não usados da conta (`verify` e `reset`) são invalidados (`used_at = now()`), com a mesma trava por usuário e propósito da emissão. Um link enviado ao endereço anterior não confirma o novo nem redefine a senha. O `account.verify_email` enfileirado pela troca gera o link novo, para o novo endereço; quem precisar redefinir a senha pede outro link.
 - E-mail com link ainda na fila para o endereço anterior (`email_outbox.to` diferente do e-mail atual da conta) não sai: o worker o marca `sent` sem envio e sem criar token (`last_error = 'skipped: email_changed'`), na mesma transação que emitiria o token ([024](024-notificacoes-e-email.md), "Links com token").
 - Link de redefinição: `<classroomUrl>/redefinir?token=<token>`. O site admin não tem redefinição própria: o "esqueci a senha" do admin leva a `<classroomUrl>/redefinir`.
-- Conta suspensa (`full` ou `posting`) continua recebendo os e-mails de conta desta spec: confirmação de e-mail, redefinição de senha, aviso de bloqueio, aviso de dispositivo novo, aviso de senha alterada e de mudança de papel. São de segurança da própria conta; a regra "suspenso não recebe nada" da [024](024-notificacoes-e-email.md) vale para as notificações. Conta excluída não recebe nenhum ([024](024-notificacoes-e-email.md), "E-mails do grupo `account` e da Fase 1").
+- Conta suspensa (`full` ou `posting`) continua recebendo os e-mails de conta desta spec: confirmação de e-mail, redefinição de senha, aviso de bloqueio, aviso de dispositivo novo, aviso de senha alterada e de mudança de papel. São de segurança da própria conta; a regra "suspenso não recebe nada" da [024](024-notificacoes-e-email.md) vale para as notificações. O e-mail de suspensão `full` não inclui link de abertura de chamado nem outro mecanismo que contorne o bloqueio. Conta excluída não recebe nenhum ([024](024-notificacoes-e-email.md), "E-mails do grupo `account` e da Fase 1").
 
 ### Exibição da senha (RF-09)
 
@@ -134,7 +134,7 @@ Códigos do retorno: `oauth_state_invalid` (sem cookie, `state` diferente ou ven
 - `sessions` guarda usuário, site (`classroom` ou `admin`), IP, navegador, token CSRF, criada em, usada em, expira em. `last_used_at` e `expires_at` (`last_used_at` + 30 dias) são atualizados no máximo uma vez por minuto.
 - Encerram sessões: sair, mudança de senha (as outras), suspensão `full` (todas), mudança de papel (todas do site admin), exclusão de conta (todas).
 - Token CSRF por sessão (32 bytes aleatórios em base64url), devolvido em `GET /api/v1/session`.
-- Validação a cada requisição: sessão existe, não venceu, é do site da API e o usuário não está excluído nem com suspensão `full`. Caso contrário, `401` `unauthenticated` e o cookie é apagado.
+- Validação a cada requisição: sessão existe, não venceu, é do site da API e o usuário não está excluído nem com suspensão `full`. Caso contrário, `401` `unauthenticated` e o cookie é apagado. Não há exceção para chamados: com suspensão `full`, abrir, listar, ler ou responder suporte segue a mesma autenticação das demais rotas privadas, e nenhum link de e-mail cria sessão ou acesso público ([023](023-chamados-de-suporte.md), [026](026-moderacao-e-denuncias.md)).
 - O usuário lista as próprias sessões dos dois sites (`GET /account/sessions`), encerra uma (`DELETE /account/sessions/{id}`) ou todas as outras (`DELETE /account/sessions`).
 
 ### Cookies
@@ -312,6 +312,7 @@ Retenção: sessões 30 dias sem uso; `email_tokens` 24 h; `login_attempts` 30 d
 - [ ] Conta criada pelo Google, sem senha, é recusada no login por senha com senha vazia, com espaços e com qualquer texto.
 - [ ] Mesma conta entra por senha e por Google depois de vincular; remover o último método é recusado.
 - [ ] Vincular uma segunda conta Google à mesma conta é recusado com `provider_already_linked`, também pelo banco.
+- [ ] Conta com suspensão `full` não abre nem responde chamado por sessão antiga, novo login ou link de e-mail; os e-mails de segurança continuam sem token de suporte.
 - [ ] Login social com e-mail verificado igual ao de conta existente entra na mesma conta; se a conta local não tinha e-mail confirmado, a senha anterior deixa de funcionar.
 - [ ] Cadastro com e-mail já existente responde igual ao cadastro novo e envia `account.exists` ao dono, sem alterar a conta.
 - [ ] Depois de a equipe trocar o e-mail de uma conta, os links `verify` e `reset` enviados antes da troca respondem `410` `token_expired`, e um link ainda na fila para o endereço anterior não é enviado.

@@ -125,12 +125,12 @@ Os sites são estáticos: o que depende da instalação e não vem da API chega 
 - `/healthz` é a única sonda roteada para fora, para monitoramento externo; `/readyz` e `/metrics` ficam só na rede interna ([033](033-observabilidade-retencao-backup.md)).
 - Os rótulos do Traefik ficam no `docker-compose.yml` de cada aplicação e usam `TRAEFIK_NETWORK`, `TRAEFIK_ENTRYPOINTS` e `TRAEFIK_CERTRESOLVER`.
 - Com `TRAEFIK_CERTRESOLVER` vazio, os rótulos de TLS não são emitidos (desenvolvimento em HTTP).
-- Prioridade dos roteadores: 30 para o fluxo SSE, 20 para as APIs, 10 para os sites; assim o caminho mais específico vence no mesmo host.
+- Prioridade dos roteadores: 30 para os fluxos SSE, 20 para as APIs, 10 para os sites; assim o caminho mais específico vence no mesmo host.
 - `/metrics` e `/readyz` não são roteados pelo proxy; se chegarem ao lighttpd de um site, a resposta é `404`, não o `index.html`.
 
 ### SSE atrás do proxy
 
-O fluxo `GET /api/v1/stream` ([004](004-classroom-api.md)) tem um roteador próprio no Traefik (`nuva-edu-classroom-stream`, regra `Path` exata), apontando para o mesmo serviço da `classroom-api`. O que é configurado, e onde:
+O fluxo `GET /api/v1/stream` de cada API ([003](003-admin-api.md), [004](004-classroom-api.md)) tem um roteador próprio no Traefik: `nuva-edu-classroom-stream` e `nuva-edu-admin-stream`, com regra exata de `Host` e `Path`, apontando para a API do host correspondente. O que é configurado, e onde:
 
 | Garantia | Onde | Como |
 | --- | --- | --- |
@@ -395,7 +395,7 @@ Transição de quem já tem os nomes antigos (`postgres-data`, `traefik-acme`, d
 - [ ] Com a publicação do Postgres desligada, nenhum serviço além do `traefik` publica porta.
 - [ ] `/config.json` dos dois sites traz `app`, `adminUrl` e `classroomUrl`, sem cache; host inválido impede a subida do contêiner.
 - [ ] Imagem construída com `NUVA_VERSION=1.2.3` responde `version: 1.2.3` no `/meta`.
-- [ ] O fluxo SSE atravessa o proxy sem compressão e sem atraso de entrega, e fica aberto por mais de 5 minutos só com os `ping`.
+- [ ] Os fluxos SSE dos dois hosts atravessam o proxy sem compressão nem atraso de entrega, e ficam abertos por mais de 5 minutos só com os `ping`.
 - [ ] Com os perfis `traefik` e `mailpit`, os dois sites respondem em `*.localhost:8080` no Docker Desktop.
 - [ ] Sem o perfil `traefik` e com `TRAEFIK_NETWORK=network_public`, os contêineres entram na rede externa e nenhum publica porta.
 - [ ] Todos os contêineres rodam com raiz somente leitura, limites de CPU e memória e `nofile` definidos (teste lê o `docker compose config`).

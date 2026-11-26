@@ -1,7 +1,7 @@
 # 024 — Notificações e e-mail
 
 Status: aprovada
-Depende de: 000, 001, 004, 005, 007, 033
+Depende de: 000, 001, 003, 004, 005, 007, 033
 
 ## Contexto
 
@@ -47,7 +47,7 @@ Vários recursos precisam avisar o usuário: resposta no fórum, compra aprovada
 
 - Cada item mostra ícone do tipo, foto de quem gerou, título, texto curto, tempo relativo e link para o alvo. Abrir o item marca como lido.
 - Agrupamento: notificações do mesmo tipo e alvo ainda não lidas são fundidas ("Ana e mais 3 responderam em…").
-- Evento SSE `notification.created` com o contador atualizado ([004](004-classroom-api.md)). A equipe recebe as do grupo `staff` também no sino do site admin.
+- Evento SSE `notification.created` com o contador atualizado, na API do próprio host: classroom ([004](004-classroom-api.md)) e admin ([003](003-admin-api.md), "Fluxo SSE da equipe"). A equipe recebe as do grupo `staff` também no sino do site admin, que abre uma conexão por aba com a sessão do admin; o cookie do classroom não é usado. As duas centrais recarregam listas e contadores ao reconectar.
 
 ### E-mail
 
@@ -107,7 +107,7 @@ Até a central de notificações (Fase 4), os dois avisos da Fase 2 saem só por
 ## Interfaces e contratos
 
 - `apps/classroom-api/openapi.yaml`: `GET /notifications`, `GET /notifications/unread-count`, `POST /notifications/{id}/read`, `POST /notifications/read-all`, `DELETE /notifications`, `GET|PUT /me/notification-prefs`, `POST /unsubscribe/{token}` (sem login).
-- `apps/admin-api/openapi.yaml`: as mesmas rotas de central para a equipe; `GET /ops/emails`, `POST /ops/emails/{id}/retry`; `GET|PUT /settings/branding`.
+- `apps/admin-api/openapi.yaml`: as mesmas rotas de central e preferências para a equipe e `GET /stream` para o sino em tempo real; `GET /ops/emails`, `POST /ops/emails/{id}/retry`; `GET|PUT /settings/branding`. O descadastro por token continua só no classroom.
 - Função `notify(type, recipients, payload)` em `packages/core`, único ponto de entrada para as APIs e o worker.
 
 ## Dados
@@ -115,7 +115,7 @@ Até a central de notificações (Fase 4), os dois avisos da Fase 2 saem só por
 | Tabela | Campos principais | Dono (escrita) |
 | --- | --- | --- |
 | `notifications` | `user_id`, `type`, `actor_id`, `target_type`, `target_id`, `data` (JSON), `group_key`, `count`, `read_at`, `created_at` | `worker` (criação); `classroom-api` e `admin-api` (leitura, limpeza) |
-| `notification_prefs` | `user_id`, `group`, `in_app`, `email` | `classroom-api` |
+| `notification_prefs` | `user_id`, `group`, `in_app`, `email` | `classroom-api` (aluno); `admin-api` (preferências da equipe no admin) |
 | `email_outbox` | `id`, `user_id`, `to`, `type`, `subject`, `data` (JSON), `status` (`queued`/`sent`/`failed`), `attempts`, `last_error`, `created_at`, `sent_at` | `worker` (envio); APIs e worker inserem por `enqueueEmail` |
 
 Retenção: `notifications` conforme RNF-04; `email_outbox` enviados por 30 dias e com falha por 90 dias. O corpo renderizado do e-mail não é guardado; `data` não contém senha nem token em claro.
@@ -130,6 +130,7 @@ Decisões de esquema da migration 0007 (aceitas na tarefa 198):
 ## Critérios de aceite
 
 - [ ] Resposta em tópico seguido cria notificação e incrementa o sino do destinatário sem recarregar.
+- [ ] Notificação `staff` incrementa o sino no admin por SSE, só para o destinatário; sem sessão o stream responde `401`, e a central se recupera após reconexão.
 - [ ] Desligar o e-mail do grupo `forum` impede o e-mail e mantém a notificação na plataforma.
 - [ ] Não é possível desligar e-mails dos grupos `account`, `purchase`, `support` e `moderation`.
 - [ ] Com o SMTP fora do ar, o cadastro conclui e o e-mail é enviado quando o SMTP volta.
@@ -145,6 +146,7 @@ Decisões de esquema da migration 0007 (aceitas na tarefa 198):
 ## Decisões relacionadas
 
 - [0008 — Fila e SSE no Postgres](decisions/0008-fila-e-sse-no-postgres.md)
+- [0028 — SSE também na admin-api](decisions/0028-sse-tambem-na-admin-api.md)
 - [0017 — Escopo do MVP](decisions/0017-escopo-do-mvp.md)
 - [0002 — Senha em texto legível](decisions/0002-senha-em-texto-legivel.md)
 - [0001 — Decisões iniciais](decisions/0001-decisoes-iniciais.md) (F2-11, F4-06)

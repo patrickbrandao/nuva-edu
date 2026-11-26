@@ -5,11 +5,11 @@ Depende de: 000, 001, 003, 004, 008, 009, 011, 024, 028
 
 ## Contexto
 
-O chamado é o canal oficial entre o aluno e a escola: dúvida, problema de acesso ou de pagamento, pedido de reembolso, bug, sugestão e aviso de link quebrado. Qualquer cadastrado pode abrir um, inclusive quem não comprou nada e por isso não pode usar mensagens diretas.
+O chamado é o canal oficial entre o aluno e a escola: dúvida, problema de acesso ou de pagamento, pedido de reembolso, bug, sugestão e aviso de link quebrado. Qualquer cadastrado com acesso à conta pode abrir um, inclusive quem não comprou nada e por isso não pode usar mensagens diretas. Suspensão `full` bloqueia também o suporte, como toda rota privada.
 
 ## Requisitos
 
-- RF-01: Qualquer usuário logado abre chamado, com tipo, assunto e descrição; acompanha os próprios chamados e responde neles.
+- RF-01: Qualquer usuário logado e sem suspensão `full` abre chamado, com tipo, assunto e descrição; acompanha os próprios chamados e responde neles.
 - RF-02: A equipe (`manager`, `admin`) vê todos os chamados, responde, muda o estado, atribui a um membro da equipe e escreve notas internas invisíveis ao aluno.
 - RF-03: O `instructor` vê e responde apenas chamados de conteúdo (inclusive "link quebrado") ligados aos próprios cursos; chamados de pagamento, reembolso e conta são só de `manager` e `admin` ([008](008-papeis-e-permissoes.md)).
 - RF-04: Botão "Reportar problema" no player e na página do ebook abre um chamado `broken_link` já preenchido com o produto, a aula e o link.
@@ -57,6 +57,7 @@ O chamado é o canal oficial entre o aluno e a escola: dúvida, problema de aces
 - O chamado mostra à equipe o contexto do aluno: produtos, pedidos recentes e estado da conta, sem a senha.
 - Toda mudança de estado e atribuição vai para a auditoria ([028](028-auditoria.md)).
 - A tarefa diária `ticket.autoclose` do worker ([005](005-worker-e-fila.md)) fecha os `resolved` vencidos.
+- Suspensão `full` derruba a sessão e bloqueia abrir, listar, ler e responder chamados pelo classroom. Não existe link assinado, token anônimo, rota pública ou sessão exclusiva de suporte; um link recebido por e-mail não restaura acesso. Ao fim ou à retirada da suspensão, o acesso normal volta. Suspensão `posting` não impede chamados.
 
 ### Casos de erro
 
@@ -66,6 +67,7 @@ O chamado é o canal oficial entre o aluno e a escola: dúvida, problema de aces
 | Ver chamado de terceiros | 404 |
 | Instrutor em chamado sem relação com seus cursos | 404 |
 | Limite excedido | 429 com `Retry-After` |
+| Conta com suspensão `full` | Autenticação/sessão recusada segundo [007](007-contas-e-autenticacao.md), inclusive por link de e-mail |
 
 ## Interfaces e contratos
 
@@ -93,10 +95,11 @@ Retenção: permanente enquanto a conta existir. Na exclusão de conta os chamad
 - [ ] Instrutor só enxerga chamados dos próprios cursos.
 - [ ] Chamado `resolved` há mais de 7 dias é fechado pela tarefa diária.
 - [ ] Sexto chamado do dia retorna 429.
+- [ ] Suspensão `full` impede abrir e responder chamados, inclusive por link de e-mail; ao fim da suspensão o acesso volta, e `posting` não bloqueia o suporte.
 
 ## Fora de escopo
 
-- Anexos enviados, SLA com alertas, pesquisa de satisfação, base de conhecimento, abertura por e-mail, chat ao vivo.
+- Anexos enviados, SLA com alertas, pesquisa de satisfação, base de conhecimento, abertura ou resposta por e-mail/link sem sessão, chat ao vivo.
 
 ## Decisões relacionadas
 

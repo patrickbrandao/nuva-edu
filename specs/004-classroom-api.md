@@ -112,7 +112,7 @@ Carga do `NOTIFY` (JSON):
 - Cliente que não lê: com mais de 256 KB pendentes de envio, a conexão é derrubada.
 - Presença: usuário é "online" enquanto tiver conexão SSE aberta; `profiles.last_seen_at` ([019](019-perfil-e-diretorio.md)) é atualizado no fechamento e a cada 60 s.
 - Sessão encerrada ou usuário com suspensão `full`: a conexão é fechada pelo servidor.
-- A rota existe só na `classroom-api`. No host do admin, `/api/v1/stream` responde `404`; por isso o e2e de fumaça cobre o fluxo apenas no host do classroom (sem sessão, `401 unauthenticated`).
+- A rota existe nas duas APIs desde a Fase 4. Na `classroom-api`, atende alunos e equipe na comunidade; na `admin-api`, atende só a equipe e entrega os eventos de notificação do grupo `staff` ([003](003-admin-api.md), [024](024-notificacoes-e-email.md)). O cookie de um host não vale no outro. O e2e de fumaça cobre os dois hosts: sem sessão, ambos respondem `401 unauthenticated`.
 
 ### Base do fluxo
 
@@ -127,24 +127,24 @@ O que não é específico deste fluxo fica em `packages/api-kit` e vale para qua
 
 - Sem `eventStreams` ligado, abrir um fluxo é erro de programação: a base recusa.
 - Fim do fluxo no log e nas métricas: quando é o cliente que fecha (o caso normal: aba fechada, navegação, queda de rede), a requisição é registrada com o status convencional `499`; quando é o servidor que encerra (sessão encerrada, limite de conexões, desligamento), com `200`. O `499` nunca vai ao navegador e não entra no contrato ([033](033-observabilidade-retencao-backup.md), "Requisição encerrada pelo cliente").
-- O que é deste fluxo e fica na `classroom-api`: a escuta do canal, a entrega por usuário, o `ping`, os limites por usuário e o reenvio.
+- O hub, o parser da carga, a entrega por usuário, o `ping`, os limites por usuário e o reenvio ficam em `packages/api-kit` para as duas APIs. Cada serviço configura a escuta, os tipos aceitos, a autenticação da sessão, a conferência periódica das sessões e a validação do evento contra o próprio contrato. A presença do perfil continua só no classroom; o admin aceita apenas `notification.created` ([0028](decisions/0028-sse-tambem-na-admin-api.md)).
 - O proxy não comprime nem segura o fluxo; o que é configurado nele está em [031](031-infraestrutura-e-deploy.md), "SSE atrás do proxy".
 
 ### Reenvio na reconexão
 
-Comportamento aceito para a Fase 0 e registrado como provisório ([0020](decisions/0020-eventos-de-usuario-do-sse.md)):
+Comportamento aceito para a Fase 0 e registrado como provisório ([0020](decisions/0020-eventos-de-usuario-do-sse.md)), agora reutilizado pela admin-api para as notificações da equipe:
 
 - A API guarda em memória, por processo, os eventos de cada usuário dos últimos 5 minutos, até 500 por usuário (os mais antigos saem primeiro).
 - Na reconexão com `Last-Event-ID`, a API reenvia os guardados de `id` maior, em ordem, antes dos novos.
-- O reenvio cobre a queda de rede do navegador. Não cobre o reinício da API, a queda da conexão `LISTEN` nem um segundo processo de `classroom-api`: o `NOTIFY` não é durável ([0008](decisions/0008-fila-e-sse-no-postgres.md)).
+- O reenvio cobre a queda de rede do navegador. Não cobre o reinício da API, a queda da conexão `LISTEN` nem um segundo processo da mesma API: o `NOTIFY` não é durável ([0008](decisions/0008-fila-e-sse-no-postgres.md)).
 - Por isso o SSE é só um atalho: mensagens e notificações têm estado no banco, e a interface recarrega as listas afetadas a cada reconexão, com ou sem reenvio. Nenhuma tela depende de ter recebido todos os eventos.
-- Não há tabela de eventos. Gatilho de revisão: perda de evento relatada por usuário, ou mais de um processo de `classroom-api`.
+- Não há tabela de eventos. Gatilho de revisão: perda de evento relatada por usuário, ou mais de um processo de uma API com fluxo SSE.
 
 ### Casos de erro
 
 - PostgreSQL indisponível: `503`; conexões SSE são fechadas e o navegador reconecta com espera crescente (1 s a 30 s).
 - Mercado Pago indisponível no checkout: `503` com `code: payment_provider_unavailable`; o restante do site segue normal ([013](013-pagamentos-mercado-pago.md)).
-- Webhook com assinatura inválida: `401`, registrado em `webhook_events` com `status = rejected`.
+- Webhook com assinatura inválida: `401`, registrado em `webhook_events` com `status = rejected`, `error = invalid_signature`, sem corpo, cabeçalhos ou assinatura; não enfileira nem admite reprocessamento. Os detalhes e a convivência com evento válido de mesmo identificador estão em [013](013-pagamentos-mercado-pago.md), "Webhook".
 
 ## Interfaces e contratos
 
@@ -171,7 +171,7 @@ O estado de pagamento, as assinaturas e os direitos derivados são escritos pelo
 - [ ] Fechar a conexão pelo cliente baixa `sse_connections` e conta a requisição com `status="499"`; o `SIGTERM` com fluxos abertos encerra o serviço dentro do prazo.
 - [ ] 500 conexões SSE simultâneas mantidas em teste de carga, dentro de RNF-02.
 - [ ] Conteúdo com `<script>` em tópico, case, mensagem ou perfil é neutralizado na gravação e na leitura.
-- [ ] Webhook com assinatura inválida é recusado e registrado.
+- [ ] Webhook com assinatura inválida é recusado, registrado como `rejected` sem corpo e não é enfileirado.
 - [ ] Limites de taxa de RNF-04 respondem `429` com `Retry-After`.
 - [ ] Um visitante carrega 100 variantes de imagem num minuto sem `429` e ainda faz as suas 60 requisições de visitante; a 601ª entrega no mesmo minuto e IP responde `429`.
 - [ ] Definition of Done ([002](002-organizacao-do-trabalho.md)) atendida.
@@ -187,5 +187,6 @@ O estado de pagamento, as assinaturas e os direitos derivados são escritos pelo
 - [0004 — Duas APIs, um banco](decisions/0004-duas-apis-um-banco.md)
 - [0008 — Fila e SSE no PostgreSQL](decisions/0008-fila-e-sse-no-postgres.md)
 - [0020 — Eventos de usuário do SSE (provisória)](decisions/0020-eventos-de-usuario-do-sse.md)
+- [0028 — SSE também na admin-api](decisions/0028-sse-tambem-na-admin-api.md)
 - [0009 — Stack TypeScript, Fastify e Kysely](decisions/0009-stack-typescript-fastify-kysely.md)
 - [0011 — Autenticação, sessão e vínculo social](decisions/0011-autenticacao-sessao-e-vinculo-social.md)

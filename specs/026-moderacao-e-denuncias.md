@@ -55,7 +55,7 @@ Denúncias contra membros da equipe são visíveis apenas ao `admin`.
 - Tipos: `posting` (não publica em fórum, cases, comentários nem mensagens, mas estuda normalmente) e `full` (não entra; todas as sessões são derrubadas na hora, ver [007](007-contas-e-autenticacao.md)).
 - Prazo: 1, 7 ou 30 dias, ou indeterminado. O fim do prazo reativa automaticamente (tarefa `suspension.expire` do worker, [005](005-worker-e-fila.md)).
 - Suspensão `full` não cancela assinatura nem reembolsa compras; isso é decisão separada do admin ([011](011-vendas-e-checkout.md), [012](012-assinaturas.md)).
-- O suspenso continua podendo abrir chamado de suporte por um link enviado no e-mail de suspensão (`posting`: pela própria conta).
+- Com suspensão `full`, não abre nem responde chamados, inclusive por link enviado no e-mail de suspensão; não há token ou sessão especial de suporte. Com `posting`, abre e responde pela própria conta. O e-mail de segurança continua sendo enviado, sem link de suporte ([007](007-contas-e-autenticacao.md), [023](023-chamados-de-suporte.md)).
 - Chaves MCP emitidas por um usuário suspenso param de funcionar na hora ([027](027-mcp.md)).
 - O histórico de advertências e suspensões aparece na ficha do usuário no admin.
 
@@ -103,7 +103,7 @@ Retenção: denúncias resolvidas por 2 anos; ações de moderação e suspensõ
 - [ ] Conteúdo ocultado some para os demais usuários na leitura seguinte e continua visível ao autor com aviso.
 - [ ] Cinco denunciantes distintos ocultam o conteúdo automaticamente e notificam a equipe.
 - [ ] Instrutor oculta resposta no fórum do próprio curso e recebe 403 em outro curso.
-- [ ] Suspensão `full` derruba as sessões abertas e bloqueia o login; ao fim do prazo o acesso volta sozinho.
+- [ ] Suspensão `full` derruba as sessões abertas, bloqueia o login e impede abrir/responder chamados, inclusive por link; ao fim do prazo o acesso volta sozinho.
 - [ ] Suspensão `posting` bloqueia fórum, cases, comentários e mensagens, mas não o player.
 - [ ] Cada ação cria registro em `moderation_actions` e na auditoria.
 - [ ] Denúncia contra membro da equipe não aparece para `manager`.
@@ -111,7 +111,7 @@ Retenção: denúncias resolvidas por 2 anos; ações de moderação e suspensõ
 
 ## Fora de escopo
 
-- Aprovação prévia de conteúdo, filtro automático de palavras, detecção por IA, recurso formal contra punição (usa-se chamado de suporte), banimento por IP ou dispositivo.
+- Aprovação prévia de conteúdo, filtro automático de palavras, detecção por IA, recurso formal contra punição, canal de suporte para conta com suspensão `full`, banimento por IP ou dispositivo.
 
 ## Decisões relacionadas
 
