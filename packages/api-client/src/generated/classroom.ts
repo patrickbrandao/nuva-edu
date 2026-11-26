@@ -1221,6 +1221,277 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/cart": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Cesta do aluno
+         * @description A cesta aberta do próprio usuário (`specs/011-vendas-e-checkout.md`, "Cesta"), vazia quando
+         *     ele ainda não acrescentou nada. Traz, por item, o preço atual do produto, o desconto do cupom rateado
+         *     nele, os avisos que não bloqueiam a compra e a cascata que a compra libera. O preço da cesta
+         *     é sempre o do produto agora: como o pedido é que congela os preços, reabrir a cesta depois
+         *     de uma alteração mostra o preço novo. Produto despublicado, arquivado ou fora do modo `paid`
+         *     continua na cesta com `sellable: false` e o motivo; quem recusa a compra é a finalização.
+         *     Cupom que deixou de valer também continua na cesta, com `valid: false` e o motivo.
+         *
+         *     Os totais da cesta somam só os itens vendáveis (`sellable: true`). Item cobrado por
+         *     assinatura ativa, coberto por pacote já comprado ou com direito a prazo vem com aviso e
+         *     continua sendo cobrado: a compra é permitida.
+         */
+        get: operations["getCart"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/cart/items": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Acrescentar produto à cesta
+         * @description Acrescenta um produto avulso `paid` e publicado (`specs/011-vendas-e-checkout.md`,
+         *     "Cesta"). Devolve a cesta inteira, já com o rateio do cupom e a cascata do item novo.
+         *
+         *     Recusas, pelo `code`: `403` `email_not_verified` (e-mail da conta não confirmado);
+         *     `409` `product_not_sellable` (inexistente, despublicado, arquivado, `open` ou `private`);
+         *     `409` `product_already_in_cart`; `409` `product_already_owned` (direito ativo e vitalício
+         *     ao produto); `409` `cart_full` (a cesta já tem 50 itens).
+         */
+        post: operations["addCartItem"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/cart/items/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Remover produto da cesta
+         * @description Remove o item da própria cesta. Item de outra cesta ou já removido: `404` `not_found`.
+         */
+        delete: operations["removeCartItem"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/cart/coupon": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Aplicar cupom à cesta
+         * @description Um cupom por cesta (`specs/011-vendas-e-checkout.md`, "Cupons"). O código é comparado sem
+         *     diferenciar maiúsculas e substitui o cupom anterior. Devolve a cesta com o desconto
+         *     rateado nos itens elegíveis.
+         *
+         *     `422` `coupon_invalid` quando o código não existe, está fora da janela, esgotado, inativo,
+         *     não vale para pedidos avulsos (`applies_to` sem `orders`) ou não tem item elegível. A
+         *     mensagem é a mesma em todos os casos, para não revelar se o código existe em outro
+         *     contexto (`specs/011-vendas-e-checkout.md`, "Casos de erro"). Cupom recusado não altera a
+         *     cesta: o cupom anterior continua aplicado.
+         */
+        put: operations["setCartCoupon"];
+        post?: never;
+        /**
+         * Remover o cupom da cesta
+         * @description Tira o cupom da cesta e devolve a cesta recalculada. Sem cupom aplicado, responde `200` com
+         *     a cesta como está.
+         */
+        delete: operations["clearCartCoupon"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/me/billing": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Dados de comprador
+         * @description Nome completo e CPF/CNPJ já informados (`specs/011-vendas-e-checkout.md`, "Dados do
+         *     comprador"), para o formulário do primeiro checkout vir preenchido e os seguintes
+         *     reutilizarem o que foi informado (RF-05). A spec 011 lista só a escrita; esta leitura é o
+         *     que permite reutilizar os dados sem pedi-los de novo. O documento fiscal só aparece para o
+         *     próprio usuário e nunca vai para logs.
+         */
+        get: operations["getMyBilling"];
+        /**
+         * Gravar dados de comprador
+         * @description Grava nome completo, tipo e número do documento no próprio usuário; o pedido copia os
+         *     valores na finalização. CPF/CNPJ validado por dígito verificador e guardado só com os
+         *     dígitos, como a conta (`specs/007-contas-e-autenticacao.md`); o CNPJ alfanumérico é aceito,
+         *     em maiúsculas. Nome fora de 1 a 200 caracteres: `400` `validation_failed`. Documento
+         *     inválido: `422` `tax_id_invalid`. O documento nunca vai para logs.
+         */
+        put: operations["saveMyBilling"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/orders": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Pedidos do aluno
+         * @description Os pedidos do próprio usuário, do mais recente ao mais antigo (`specs/011-vendas-e-checkout.md`,
+         *     RF-08), sem os `draft` (restos de tentativa que não chegaram ao provedor). Filtro por
+         *     estado e paginação por cursor.
+         */
+        get: operations["listMyOrders"];
+        put?: never;
+        /**
+         * Fechar a cesta e criar o pedido
+         * @description Fecha a cesta do próprio usuário (`specs/011-vendas-e-checkout.md`, "Pedido e seus
+         *     estados"). Numa transação, valida a cesta e o cupom, cria o pedido e os itens com preços,
+         *     desconto e total congelados, esvazia a cesta e cria o checkout no provedor; devolve o pedido
+         *     e a `checkoutUrl` para onde o navegador vai.
+         *
+         *     `Idempotency-Key` é aceita: a repetição devolve o primeiro pedido por 24 h. Sem cupom
+         *     válido, a cesta e o pedido não mudam.
+         *
+         *     Recusas, pelo `code`: `403` `email_not_verified`; `409` `billing_required` (falta nome ou
+         *     documento de comprador); `409` `cart_empty`; `409` `cart_invalid` (item que deixou de ser
+         *     vendável; a cesta continua, com o item marcado); `409` `order_pending_limit` (o aluno já tem
+         *     3 pedidos `pending`; precisa cancelar um); `422` `coupon_invalid`; `503`
+         *     `payment_provider_unavailable` (provedor fora; o pedido fica `draft`, a cesta é restaurada e
+         *     a mensagem é "pagamento indisponível, tente em instantes").
+         *
+         *     Pedido de total zero (cupom de 100% ou produto `paid` de preço 0) já nasce `paid`, com
+         *     `provider: none` e `checkoutUrl: null`, sem chamar o provedor.
+         */
+        post: operations["createOrder"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/orders/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Um pedido do aluno
+         * @description O pedido do próprio usuário, com itens, valores congelados, estado e a cobrança conhecida
+         *     (`specs/011-vendas-e-checkout.md`, "Retorno do checkout"). Pedido de outra pessoa ou `draft`:
+         *     `404` `not_found`. Enquanto `pending` em provedor, `checkoutUrl` permite voltar à página de
+         *     pagamento; `payment` é nulo até o worker gravar a primeira cobrança.
+         */
+        get: operations["getMyOrder"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/orders/{id}/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Cancelar pedido pendente
+         * @description Cancela um pedido `pending` do próprio usuário antes do pagamento (`specs/011-vendas-e-checkout.md`,
+         *     "Pedido e seus estados") e pede o cancelamento do checkout ao provedor. Pedido pago,
+         *     reembolsado, expirado ou já cancelado: `409` `order_not_cancelable`. Pedido de outra pessoa
+         *     ou `draft`: `404` `not_found`. Devolve o pedido já com `status: canceled`.
+         */
+        post: operations["cancelMyOrder"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/webhooks/mercadopago": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Aviso de pagamento do Mercado Pago
+         * @description Endpoint público do aviso de pagamento (`specs/013-pagamentos-mercado-pago.md`, "Webhook"),
+         *     sem sessão e **sem CSRF**: quem chama é o provedor, não um navegador com a sessão do aluno; a
+         *     autenticação é a assinatura do cabeçalho `x-signature`. Por isso a operação não declara
+         *     `csrfToken` e entra na lista de exceções da API.
+         *
+         *     Lê o corpo bruto (limite de 64 KB) e valida a assinatura HMAC-SHA256 com
+         *     `MP_WEBHOOK_SECRET` sobre o manifesto do provedor, em tempo constante, recusando carimbo com
+         *     mais de 5 minutos. Assinatura inválida ou ausente: `401` `payment_webhook_invalid_signature`,
+         *     grava `webhook_events` com `status: rejected` e `error: invalid_signature`, conta a métrica
+         *     de rejeição e registra log sem corpo, assinatura ou segredo; **não** enfileira
+         *     `payment.webhook` nem consulta o provedor. A rejeição não ocupa a chave idempotente
+         *     (`provider`, `event_id`), então um evento válido posterior com o mesmo identificador é
+         *     gravado e processado normalmente. A trilha `rejected` fica 90 dias
+         *     (`NUVA_RETENTION_WEBHOOK_DAYS`) e não aceita reprocessamento.
+         *
+         *     Assinatura válida: grava em `webhook_events` com a chave única; evento já recebido e não
+         *     rejeitado responde `200` sem enfileirar de novo; evento novo enfileira `payment.webhook` e
+         *     responde `200`. A resposta não espera o processamento (p95 < 200 ms). O conteúdo do aviso
+         *     não é confiável: o worker usa só o identificador e consulta o estado real no provedor.
+         *
+         *     Assinatura válida com aviso fora do formato esperado: `422` `payment_webhook_invalid`.
+         *     Limite de 300 requisições por minuto por IP, contando também a gravação da rejeição; o IP
+         *     real respeita `TRUSTED_PROXIES`.
+         */
+        post: operations["receiveMercadoPagoWebhook"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -2413,6 +2684,224 @@ export interface components {
             schoolName: string | null;
             /** @description Só em `revoked`. */
             revokedAt: components["schemas"]["DateTime"] | null;
+        };
+        /**
+         * @description Tipo do documento fiscal do comprador (`specs/011-vendas-e-checkout.md`).
+         * @enum {string}
+         */
+        TaxIdType: "cpf" | "cnpj";
+        /**
+         * @description Provedor de pagamento do pedido ou da cobrança (`NUVA_PAYMENT_PROVIDER`); `none` no pedido de
+         *     total zero, que não passa pelo provedor.
+         * @enum {string}
+         */
+        PaymentProviderName: "mercadopago" | "fake" | "none";
+        /**
+         * @description Estado normalizado da cobrança no provedor (`specs/013-pagamentos-mercado-pago.md`).
+         * @enum {string}
+         */
+        PaymentStatus: "pending" | "approved" | "rejected" | "canceled" | "refunded" | "partially_refunded" | "charged_back";
+        /**
+         * @description Meio de pagamento informado pelo provedor; `other` quando não é um dos três.
+         * @enum {string}
+         */
+        PaymentMethod: "card" | "pix" | "boleto" | "other";
+        /**
+         * @description Estado do pedido do comprador (`specs/011-vendas-e-checkout.md`, "Pedido e seus estados").
+         *     `draft` não aparece aqui: é resto de tentativa que não chegou ao provedor e não é pedido do
+         *     aluno. `chargeback` revoga o acesso.
+         * @enum {string}
+         */
+        OrderStatus: "pending" | "paid" | "partially_refunded" | "refunded" | "canceled" | "expired" | "chargeback";
+        /**
+         * @description Aviso que não bloqueia a compra (`specs/011-vendas-e-checkout.md`, "Cesta"):
+         *     `bundle_item_owned` (o aluno já tem um dos itens do pacote), `subscription_covered` (o
+         *     produto já é coberto por assinatura ativa; o avulso sobrevive ao fim dela) ou
+         *     `time_limited_access` (o aluno já tem o produto com validade; a compra estende o acesso).
+         * @enum {string}
+         */
+        CartItemWarning: "bundle_item_owned" | "subscription_covered" | "time_limited_access";
+        /**
+         * @description Por que o item não pode ser comprado agora: despublicado, arquivado ou fora do modo `paid`.
+         *     O item continua na cesta para o aluno decidir entre remover ou esperar a republicação.
+         * @enum {string}
+         */
+        CartItemUnsellableReason: "unpublished" | "archived" | "not_paid";
+        /** @description Produto de onde o direito em cascata vem, para explicar a árvore na cesta. */
+        CartUnlockVia: {
+            productType: components["schemas"]["ProductType"];
+            title: string;
+        };
+        /** @description Produto que a compra do item libera, além do próprio item (`specs/010-direitos-de-acesso.md`, "Algoritmo de concessão"). */
+        CartUnlock: {
+            productType: components["schemas"]["ProductType"];
+            productId: components["schemas"]["Uuid"];
+            title: string;
+            /**
+             * @description Curso do pacote de onde vem o ebook, quando é o caso; `null` para o próprio item e para
+             *     os filhos diretos dele (cursos e ebooks do pacote, ebooks do curso).
+             */
+            via: components["schemas"]["CartUnlockVia"] | null;
+        };
+        /** @description Um produto na cesta, com o preço atual e o que a compra libera. */
+        CartItem: {
+            id: components["schemas"]["Uuid"];
+            productType: components["schemas"]["ProductType"];
+            productId: components["schemas"]["Uuid"];
+            title: string;
+            cover: components["schemas"]["ProductCover"] | null;
+            accessMode: components["schemas"]["AccessMode"];
+            /** @description Dias de acesso a partir da compra; `null` é vitalício. */
+            accessDays: number | null;
+            /** @description Preço atual do produto; `null` quando o produto deixou de ter preço. */
+            unitPriceCents: number | null;
+            /**
+             * @description Parte do desconto do cupom rateada neste item, pela regra de `specs/011-vendas-e-checkout.md`
+             *     ("Cupons"); zero sem cupom válido ou com item fora da restrição de produtos.
+             */
+            discountCents: number;
+            /** @description O cupom aplicado vale para este produto. */
+            couponEligible: boolean;
+            /** @description O item pode ser comprado agora. */
+            sellable: boolean;
+            /** @description `null` quando `sellable`. */
+            unsellableReason: components["schemas"]["CartItemUnsellableReason"] | null;
+            /** @description Avisos que não impedem a compra; vazio quando não há. */
+            warnings: components["schemas"]["CartItemWarning"][];
+            /** @description O que a compra libera além do item, na ordem do algoritmo de concessão; vazio em ebook. */
+            unlocks: components["schemas"]["CartUnlock"][];
+            addedAt: components["schemas"]["DateTime"];
+        };
+        /** @description Cupom aplicado à cesta, com o estado atual da validade. */
+        CartCoupon: {
+            code: string;
+            /** @enum {string} */
+            kind: "percent" | "fixed";
+            percentOff: number | null;
+            amountOffCents: number | null;
+            /** @description O cupom ainda vale para esta cesta; quando falso, nenhum desconto é aplicado. */
+            valid: boolean;
+            /** @description `null` quando `valid`. */
+            invalidReason: ("expired" | "exhausted" | "inactive" | "not_eligible") | null;
+        };
+        /** @description A cesta aberta do aluno. */
+        Cart: {
+            items: components["schemas"]["CartItem"][];
+            /** @description `null` sem cupom aplicado. */
+            coupon: components["schemas"]["CartCoupon"] | null;
+            itemCount: number;
+            subtotalCents: components["schemas"]["MoneyCents"];
+            discountCents: components["schemas"]["MoneyCents"];
+            totalCents: components["schemas"]["MoneyCents"];
+            currency: components["schemas"]["CurrencyCode"];
+            updatedAt: components["schemas"]["DateTime"];
+        };
+        /** @description Dados de comprador guardados no usuário (`specs/011-vendas-e-checkout.md`, "Dados do comprador"). */
+        Billing: {
+            fullName: string | null;
+            taxIdType: components["schemas"]["TaxIdType"] | null;
+            /** @description Só os caracteres do documento, sem pontuação; nunca vai para logs. */
+            taxId: string | null;
+            /** @description Nome e documento válidos guardados; a finalização exige `true`. */
+            complete: boolean;
+        };
+        /** @description Um item do pedido, só com o necessário para a lista. */
+        OrderProductRef: {
+            productType: components["schemas"]["ProductType"];
+            productId: components["schemas"]["Uuid"];
+            /** @description Título congelado no fechamento do pedido. */
+            title: string;
+        };
+        /** @description Um item do pedido, com os valores congelados no fechamento. */
+        OrderItem: {
+            id: components["schemas"]["Uuid"];
+            productType: components["schemas"]["ProductType"];
+            productId: components["schemas"]["Uuid"];
+            title: string;
+            /** @description Dias de acesso congelados; `null` é vitalício. */
+            accessDays: number | null;
+            unitPriceCents: components["schemas"]["MoneyCents"];
+            discountCents: components["schemas"]["MoneyCents"];
+            /** @description Preço menos o desconto rateado; o valor efetivamente pago. */
+            paidCents: components["schemas"]["MoneyCents"];
+            refundedCents: components["schemas"]["MoneyCents"];
+        };
+        /** @description A cobrança conhecida do pedido (a mais recente). */
+        MyPayment: {
+            method: components["schemas"]["PaymentMethod"];
+            status: components["schemas"]["PaymentStatus"];
+            amountCents: components["schemas"]["MoneyCents"];
+            refundedCents: components["schemas"]["MoneyCents"];
+            currency: components["schemas"]["CurrencyCode"];
+            /** @enum {string} */
+            provider: "mercadopago" | "fake";
+            /** @description Identificador da cobrança no provedor; serve de comprovante junto da página dele. */
+            providerPaymentId: string;
+            paidAt: components["schemas"]["DateTime"] | null;
+        };
+        /** @description Um pedido do aluno na lista. */
+        MyOrderSummary: {
+            id: components["schemas"]["Uuid"];
+            /** @description Número legível e sequencial do pedido, com saltos aceitos. */
+            number: number;
+            status: components["schemas"]["OrderStatus"];
+            itemCount: number;
+            items: components["schemas"]["OrderProductRef"][];
+            subtotalCents: components["schemas"]["MoneyCents"];
+            discountCents: components["schemas"]["MoneyCents"];
+            totalCents: components["schemas"]["MoneyCents"];
+            currency: components["schemas"]["CurrencyCode"];
+            createdAt: components["schemas"]["DateTime"];
+            paidAt: components["schemas"]["DateTime"] | null;
+            /** @description Prazo do `pending`; `null` fora dele. */
+            expiresAt: components["schemas"]["DateTime"] | null;
+            /** @description Meio da cobrança conhecida; `null` antes da primeira cobrança. */
+            paymentMethod: components["schemas"]["PaymentMethod"] | null;
+        };
+        MyOrderPage: components["schemas"]["Page"] & {
+            items: components["schemas"]["MyOrderSummary"][];
+        };
+        /** @description O pedido do aluno, com os valores congelados e a cobrança conhecida. */
+        MyOrderDetail: {
+            id: components["schemas"]["Uuid"];
+            number: number;
+            status: components["schemas"]["OrderStatus"];
+            subtotalCents: components["schemas"]["MoneyCents"];
+            discountCents: components["schemas"]["MoneyCents"];
+            totalCents: components["schemas"]["MoneyCents"];
+            currency: components["schemas"]["CurrencyCode"];
+            /** @description Código do cupom congelado no pedido; `null` sem cupom. */
+            couponCode: string | null;
+            buyerName: string;
+            buyerTaxIdType: components["schemas"]["TaxIdType"];
+            /** @description Documento do próprio comprador, sem pontuação; nunca vai para logs. */
+            buyerTaxId: string;
+            provider: components["schemas"]["PaymentProviderName"];
+            /**
+             * Format: uri
+             * @description Página de pagamento do provedor enquanto o pedido está `pending` e o provedor não é
+             *     `none`; `null` depois de pago, reembolsado, cancelado, expirado ou em pedido de total
+             *     zero. Com Checkout Pro, Pix e boleto são pagos nessa página: a API não recebe QR nem
+             *     código de barras.
+             */
+            checkoutUrl: string | null;
+            createdAt: components["schemas"]["DateTime"];
+            paidAt: components["schemas"]["DateTime"] | null;
+            /** @description Prazo do `pending` (30 min no cartão e no Pix, 3 dias no boleto); `null` fora dele. */
+            expiresAt: components["schemas"]["DateTime"] | null;
+            items: components["schemas"]["OrderItem"][];
+            /** @description `null` até a primeira cobrança ser conhecida. */
+            payment: components["schemas"]["MyPayment"] | null;
+        };
+        /** @description Resultado de fechar a cesta. */
+        OrderCheckout: {
+            order: components["schemas"]["MyOrderDetail"];
+            /**
+             * Format: uri
+             * @description Para onde o navegador vai pagar; `null` no pedido de total zero, já `paid` com
+             *     `provider: none`.
+             */
+            checkoutUrl: string | null;
         };
     };
     responses: {
@@ -4425,6 +4914,412 @@ export interface operations {
             };
             400: components["responses"]["BadRequest"];
             404: components["responses"]["NotFound"];
+            429: components["responses"]["TooManyRequests"];
+            500: components["responses"]["InternalError"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    getCart: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description A cesta aberta. */
+            200: {
+                headers: {
+                    "X-Request-Id": components["headers"]["XRequestId"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Cart"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            429: components["responses"]["TooManyRequests"];
+            500: components["responses"]["InternalError"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    addCartItem: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    productType: components["schemas"]["ProductType"];
+                    productId: components["schemas"]["Uuid"];
+                };
+            };
+        };
+        responses: {
+            /** @description Item acrescentado; a resposta é a cesta inteira. */
+            201: {
+                headers: {
+                    "X-Request-Id": components["headers"]["XRequestId"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Cart"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            409: components["responses"]["Conflict"];
+            413: components["responses"]["PayloadTooLarge"];
+            415: components["responses"]["UnsupportedMediaType"];
+            429: components["responses"]["TooManyRequests"];
+            500: components["responses"]["InternalError"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    removeCartItem: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Identificador do recurso. */
+                id: components["parameters"]["IdPath"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Item removido; a cesta fica sem ele. */
+            204: {
+                headers: {
+                    "X-Request-Id": components["headers"]["XRequestId"];
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            429: components["responses"]["TooManyRequests"];
+            500: components["responses"]["InternalError"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    setCartCoupon: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    code: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Cupom aplicado; a resposta é a cesta recalculada. */
+            200: {
+                headers: {
+                    "X-Request-Id": components["headers"]["XRequestId"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Cart"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            413: components["responses"]["PayloadTooLarge"];
+            415: components["responses"]["UnsupportedMediaType"];
+            422: components["responses"]["UnprocessableEntity"];
+            429: components["responses"]["TooManyRequests"];
+            500: components["responses"]["InternalError"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    clearCartCoupon: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Cesta sem cupom. */
+            200: {
+                headers: {
+                    "X-Request-Id": components["headers"]["XRequestId"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Cart"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            429: components["responses"]["TooManyRequests"];
+            500: components["responses"]["InternalError"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    getMyBilling: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Os dados guardados; campos nulos enquanto não informados. */
+            200: {
+                headers: {
+                    "X-Request-Id": components["headers"]["XRequestId"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Billing"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            429: components["responses"]["TooManyRequests"];
+            500: components["responses"]["InternalError"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    saveMyBilling: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    fullName: string;
+                    taxIdType: components["schemas"]["TaxIdType"];
+                    /**
+                     * @description CPF (11 dígitos) ou CNPJ (14 caracteres, podendo ser alfanumérico), com ou sem
+                     *     pontuação; a API guarda só os caracteres, sem pontos, traços ou barras.
+                     */
+                    taxId: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Dados gravados. */
+            200: {
+                headers: {
+                    "X-Request-Id": components["headers"]["XRequestId"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Billing"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            413: components["responses"]["PayloadTooLarge"];
+            415: components["responses"]["UnsupportedMediaType"];
+            422: components["responses"]["UnprocessableEntity"];
+            429: components["responses"]["TooManyRequests"];
+            500: components["responses"]["InternalError"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    listMyOrders: {
+        parameters: {
+            query?: {
+                status?: components["schemas"]["OrderStatus"];
+                /** @description Quantidade de itens por página. */
+                limit?: components["parameters"]["Limit"];
+                /** @description Valor de `nextCursor` da página anterior. Ausente na primeira página. */
+                cursor?: components["parameters"]["Cursor"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Uma página de pedidos. */
+            200: {
+                headers: {
+                    "X-Request-Id": components["headers"]["XRequestId"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MyOrderPage"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            429: components["responses"]["TooManyRequests"];
+            500: components["responses"]["InternalError"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    createOrder: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Chave escolhida pelo cliente; a repetição devolve a primeira resposta por 24 h. */
+                "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Pedido criado. */
+            201: {
+                headers: {
+                    "X-Request-Id": components["headers"]["XRequestId"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OrderCheckout"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            409: components["responses"]["Conflict"];
+            422: components["responses"]["UnprocessableEntity"];
+            429: components["responses"]["TooManyRequests"];
+            500: components["responses"]["InternalError"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    getMyOrder: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Identificador do recurso. */
+                id: components["parameters"]["IdPath"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description O pedido. */
+            200: {
+                headers: {
+                    "X-Request-Id": components["headers"]["XRequestId"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MyOrderDetail"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            429: components["responses"]["TooManyRequests"];
+            500: components["responses"]["InternalError"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    cancelMyOrder: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Identificador do recurso. */
+                id: components["parameters"]["IdPath"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Pedido cancelado. */
+            200: {
+                headers: {
+                    "X-Request-Id": components["headers"]["XRequestId"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MyOrderDetail"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            429: components["responses"]["TooManyRequests"];
+            500: components["responses"]["InternalError"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    receiveMercadoPagoWebhook: {
+        parameters: {
+            query?: never;
+            header?: {
+                /**
+                 * @description Assinatura do provedor (`ts`, `v1`). Ausente ou diferente do manifesto: `401`
+                 *     `payment_webhook_invalid_signature`.
+                 */
+                "x-signature"?: string;
+                /** @description Identificador da entrega, parte do manifesto assinado. */
+                "x-request-id"?: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    [key: string]: unknown;
+                };
+            };
+        };
+        responses: {
+            /** @description Aviso autenticado; recebido agora ou já recebido antes. */
+            200: {
+                headers: {
+                    "X-Request-Id": components["headers"]["XRequestId"];
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["BadRequest"];
+            /**
+             * @description Assinatura do aviso inválida, ausente ou com carimbo fora dos 5 minutos
+             *     (`payment_webhook_invalid_signature`); o evento é gravado como `rejected`.
+             */
+            401: {
+                headers: {
+                    "X-Request-Id": components["headers"]["XRequestId"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            413: components["responses"]["PayloadTooLarge"];
+            415: components["responses"]["UnsupportedMediaType"];
+            422: components["responses"]["UnprocessableEntity"];
             429: components["responses"]["TooManyRequests"];
             500: components["responses"]["InternalError"];
             503: components["responses"]["ServiceUnavailable"];

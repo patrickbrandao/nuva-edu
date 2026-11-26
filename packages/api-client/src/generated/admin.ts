@@ -1809,6 +1809,323 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/orders": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Listar pedidos
+         * @description Pedidos da escola, do mais novo para o mais antigo (`specs/011-vendas-e-checkout.md`,
+         *     "Consulta e exportação"), com filtros por período, estado, produto, cupom e comprador. Os
+         *     `draft` aparecem para quem filtra por `status=draft`; sem filtro de estado, a lista traz
+         *     todos, inclusive eles. `manager` e `admin` consultam; `instructor` recebe `403`
+         *     `permission_denied` (`specs/008-papeis-e-permissoes.md`).
+         *
+         *     `totals` soma todos os pedidos que casam com o filtro, não só a página: `subtotalCents`
+         *     (bruto), `discountCents`, `refundedCents` e `totalCents` (cobrado); `netCents` é o cobrado
+         *     menos os reembolsos. O documento fiscal do comprador não sai na lista, só no detalhe e no
+         *     CSV.
+         */
+        get: operations["listOrders"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/orders/export.csv": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Exportar vendas em CSV
+         * @description Exportação de vendas (`specs/011-vendas-e-checkout.md`, "Consulta e exportação"), só do
+         *     `admin`: `sales.export` é exclusiva dele e o `manager` recebe `403` `permission_denied` e
+         *     não vê a ação no menu (`specs/008-papeis-e-permissoes.md`). A tentativa recusada também é
+         *     auditada (`specs/028-auditoria.md`).
+         *
+         *     Uma linha por item de pedido, em fluxo contínuo (sem carregar tudo em memória; 50.000 itens
+         *     em menos de 30 s). UTF-8 com BOM, separador `;`, CRLF e cabeçalho com as colunas, nesta
+         *     ordem: `order_id`, `order_number`, `created_at`, `paid_at`, `status`, `buyer_name`,
+         *     `buyer_email`, `tax_id_type`, `tax_id`, `product_type`, `product_title`, `unit_price`,
+         *     `discount`, `paid_amount`, `refunded_amount`, `coupon_code`, `payment_method`, `provider`,
+         *     `provider_payment_id`. Datas em ISO 8601 UTC; valores monetários com duas casas e vírgula
+         *     decimal (`199,00`); campos vazios quando o dado não existe. Filtros iguais aos da lista. O
+         *     conteúdo e os filtros não vão para logs.
+         */
+        get: operations["exportOrdersCsv"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/orders/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Um pedido
+         * @description O pedido com comprador (nome, e-mail e documento fiscal), itens e valores congelados,
+         *     cobranças e reembolsos (`specs/011-vendas-e-checkout.md`). `manager` e `admin` veem;
+         *     `instructor` recebe `403`. O documento fiscal só sai aqui e no CSV, nunca nos logs.
+         */
+        get: operations["getOrder"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/orders/{id}/refunds": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Pedir reembolso do pedido
+         * @description Só o `admin` reembolsa (`specs/011-vendas-e-checkout.md`, "Reembolso"); `manager` recebe
+         *     `403` `permission_denied`. O pedido inteiro (`items` ausente ou nulo) ou itens escolhidos,
+         *     sempre com motivo. Cria o `refunds` em `requested` e enfileira `refund.execute`; a resposta
+         *     é `202` e o desfecho (estorno no provedor, revogação da cascata e estado do pedido) chega
+         *     depois, pelo worker, e aparece no detalhe do pedido. O valor de cada item é o pago por ele
+         *     (preço menos o desconto rateado), e um item pode ser reembolsado em parte, desde que a soma
+         *     não passe do valor pago e ainda não reembolsado.
+         *
+         *     `Idempotency-Key` é aceita: a repetição devolve o primeiro reembolso por 24 h.
+         *
+         *     Recusas, pelo `code`: `409` `order_not_refundable` (pedido que não está `paid` nem
+         *     `partially_refunded`); `422` `refund_exceeds_paid` (valor acima do pago e não reembolsado do
+         *     item, ou item de outro pedido). Falha do estorno não é resposta desta rota: o reembolso
+         *     fica `failed` com a mensagem do provedor e pode ser tentado de novo.
+         */
+        post: operations["requestOrderRefund"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/refunds/{id}/retry": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Tentar o reembolso de novo
+         * @description Repete o estorno de um reembolso `failed` (`specs/011-vendas-e-checkout.md`, "Reembolso"),
+         *     com a mesma cobrança e os mesmos itens; volta a `requested` e enfileira `refund.execute`.
+         *     Só o `admin` (`order.refund`). Reembolso em `requested` ou `done`: `409`
+         *     `refund_not_retryable`.
+         */
+        post: operations["retryRefund"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/coupons": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Listar cupons
+         * @description Cupons da escola, do mais novo para o mais antigo (`specs/011-vendas-e-checkout.md`,
+         *     "Cupons"). Só o `admin` (`coupon.manage`); `manager` e `instructor` recebem `403`
+         *     `permission_denied`. Busca pelo código (sem diferenciar maiúsculas) e filtros por situação
+         *     e por `appliesTo`.
+         */
+        get: operations["listCoupons"];
+        put?: never;
+        /**
+         * Criar cupom
+         * @description Só o `admin` (`specs/011-vendas-e-checkout.md`, "Cupons"). O código é único sem diferenciar
+         *     maiúsculas: repetido, `409` `coupon_code_taken`. `percent` exige `percentOff` de 1 a 100 e
+         *     `fixed` exige `amountOffCents` maior que zero; combinação diferente disso, inclusive os dois
+         *     ou nenhum campo: `422` `coupon_invalid`. `maxUses` nulo é ilimitado e `maxUsesPerUser` tem
+         *     padrão 1; `appliesTo` tem padrão `orders` e `active` tem padrão `true`. `products` vazia ou
+         *     ausente vale para todos os produtos; produtos inexistentes: `422` `coupon_invalid`.
+         */
+        post: operations["createCoupon"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/coupons/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Um cupom
+         * @description Só o `admin` (`coupon.manage`); inexistente: `404` `not_found`.
+         */
+        get: operations["getCoupon"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Editar ou desativar cupom
+         * @description Só o `admin` (`specs/011-vendas-e-checkout.md`); a desativação é `active: false`, não há
+         *     exclusão. Só os campos enviados mudam; `products` enviada substitui a lista inteira e
+         *     `products: []` volta a valer para todos. O código novo é único sem diferenciar maiúsculas:
+         *     repetido, `409` `coupon_code_taken`. A combinação resultante precisa continuar válida
+         *     (desconto casando com `kind`, `endsAt` depois de `startsAt`, limites dentro da faixa):
+         *     senão, `422` `coupon_invalid`. Baixar `maxUses` abaixo do já usado é permitido: os pedidos
+         *     pagos são honrados e o excesso fica registrado.
+         */
+        patch: operations["updateCoupon"];
+        trace?: never;
+    };
+    "/api/v1/payments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Listar cobranças
+         * @description Cobranças conhecidas (`specs/013-pagamentos-mercado-pago.md`), do mais recente ao mais
+         *     antigo, de pedidos e de assinaturas; `manager` e `admin` consultam (`specs/008-papeis-e-permissoes.md`).
+         *     Cada item traz `orderId`/`orderNumber` quando é de pedido e `subscriptionId` quando é de
+         *     assinatura, nunca os dois. Nenhum dado de cartão, token ou corpo do provedor.
+         */
+        get: operations["listPayments"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/payments/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Uma cobrança
+         * @description A cobrança, com o estado normalizado, o estado original do provedor e os reembolsos
+         *     relacionados (`specs/013-pagamentos-mercado-pago.md`). `manager` e `admin`; inexistente:
+         *     `404` `not_found`.
+         */
+        get: operations["getPayment"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/webhook-events": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Avisos de pagamento com falha
+         * @description Só o `admin` (`ops.manage`, `specs/008-papeis-e-permissoes.md`; `specs/013-pagamentos-mercado-pago.md`,
+         *     "Webhook"). `status=failed` (padrão) é a fila de falhas operacionais, cujo evento pode ser
+         *     reprocessado. `status=rejected` mostra a trilha de segurança das assinaturas recusadas,
+         *     somente leitura: sem corpo, sem cabeçalhos e sem assinatura, e sem ação de reprocessar. Um
+         *     evento `rejected` não entra na fila de falhas. Os dois filtros trazem do mais recente ao
+         *     mais antigo e a trilha `rejected` fica retida por 90 dias.
+         */
+        get: operations["listWebhookEvents"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/webhook-events/{id}/retry": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Reprocessar aviso com falha
+         * @description Só o `admin` (`ops.manage`) e somente evento `failed` (`specs/013-pagamentos-mercado-pago.md`):
+         *     volta a `received` e enfileira `payment.webhook` de novo. Evento `rejected` nunca é
+         *     reprocessado, e `processed`, `ignored` ou `received` também não: `409`
+         *     `webhook_event_not_retryable`. O evento volta com o estado novo.
+         */
+        post: operations["retryWebhookEvent"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/settings/payments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Estado da integração de pagamento
+         * @description Só o `admin` (`settings.manage`, `specs/007-contas-e-autenticacao.md` e
+         *     `specs/013-pagamentos-mercado-pago.md`, "Modo de teste"): o provedor em uso, se o token é de
+         *     teste, o aviso de produção com token de teste e a última reconciliação. Nunca devolve
+         *     token, chave pública, segredo do webhook nem URL com credencial.
+         */
+        get: operations["getPaymentSettings"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -3100,6 +3417,387 @@ export interface components {
             /** @description `school.name`, só leitura aqui. */
             schoolName: string;
         };
+        /**
+         * @description Tipo do documento fiscal do comprador (`specs/011-vendas-e-checkout.md`).
+         * @enum {string}
+         */
+        TaxIdType: "cpf" | "cnpj";
+        /**
+         * @description `percent` desconta uma porcentagem de cada item elegível; `fixed` desconta um valor em
+         *     centavos rateado entre os itens elegíveis (`specs/011-vendas-e-checkout.md`, "Cupons").
+         * @enum {string}
+         */
+        CouponKind: "percent" | "fixed";
+        /**
+         * @description A que o cupom se aplica (`specs/012-assinaturas.md`): pedidos avulsos, assinaturas ou os
+         *     dois. Nesta janela, só pedidos avulsos usam o cupom.
+         * @enum {string}
+         */
+        CouponAppliesTo: "orders" | "subscriptions" | "both";
+        /** @description Produto restringindo o cupom; vazio é o mesmo que todos. */
+        CouponProductInput: {
+            productType: components["schemas"]["ProductType"];
+            productId: components["schemas"]["Uuid"];
+        };
+        /** @description Produto elegível do cupom, com o título atual. */
+        CouponProduct: {
+            productType: components["schemas"]["ProductType"];
+            productId: components["schemas"]["Uuid"];
+            title: string;
+        };
+        /**
+         * @description Definição de um cupom novo (`specs/011-vendas-e-checkout.md`, "Cupons"). `appliesTo` tem
+         *     padrão `orders` e `active`, `true`.
+         */
+        CouponInput: {
+            /** @description Comparado sem diferenciar maiúsculas. */
+            code: string;
+            kind: components["schemas"]["CouponKind"];
+            /** @description Obrigatório em `percent`; proibido em `fixed`. */
+            percentOff?: number | null;
+            /** @description Obrigatório em `fixed`; proibido em `percent`. */
+            amountOffCents?: number | null;
+            /** @description Início da validade; `null` sem prazo para começar. */
+            startsAt?: components["schemas"]["DateTime"] | null;
+            /** @description Fim da validade; `null` sem prazo para acabar. */
+            endsAt?: components["schemas"]["DateTime"] | null;
+            /** @description Total de usos; `null` ilimitado. */
+            maxUses?: number | null;
+            /** @default 1 */
+            maxUsesPerUser: number;
+            appliesTo?: components["schemas"]["CouponAppliesTo"];
+            /**
+             * @description Restrição de produtos; vazia vale para todos.
+             * @default []
+             */
+            products: components["schemas"]["CouponProductInput"][];
+            /** @default true */
+            active: boolean;
+        };
+        /**
+         * @description Edição parcial: só os campos enviados mudam. `products` enviada substitui a lista inteira
+         *     e `products: []` volta a valer para todos (`specs/011-vendas-e-checkout.md`).
+         */
+        CouponUpdate: {
+            code?: string;
+            kind?: components["schemas"]["CouponKind"];
+            percentOff?: number | null;
+            amountOffCents?: number | null;
+            startsAt?: components["schemas"]["DateTime"] | null;
+            endsAt?: components["schemas"]["DateTime"] | null;
+            maxUses?: number | null;
+            maxUsesPerUser?: number;
+            appliesTo?: components["schemas"]["CouponAppliesTo"];
+            products?: components["schemas"]["CouponProductInput"][];
+            active?: boolean;
+        };
+        /** @description Um cupom da escola (`specs/011-vendas-e-checkout.md`, "Cupons"). */
+        Coupon: {
+            id: components["schemas"]["Uuid"];
+            code: string;
+            kind: components["schemas"]["CouponKind"];
+            percentOff: number | null;
+            amountOffCents: number | null;
+            startsAt: components["schemas"]["DateTime"] | null;
+            endsAt: components["schemas"]["DateTime"] | null;
+            /** @description `null` ilimitado. */
+            maxUses: number | null;
+            maxUsesPerUser: number;
+            /**
+             * @description Usos contabilizados. Pode passar de `maxUses`: pedido pago com o limite estourado é
+             *     honrado e o excesso fica registrado (spec 011).
+             */
+            usesCount: number;
+            appliesTo: components["schemas"]["CouponAppliesTo"];
+            products: components["schemas"]["CouponProduct"][];
+            active: boolean;
+            createdBy: components["schemas"]["UserRef"];
+            createdAt: components["schemas"]["DateTime"];
+            updatedAt: components["schemas"]["DateTime"];
+        };
+        CouponPage: components["schemas"]["Page"] & {
+            items: components["schemas"]["Coupon"][];
+        };
+        /**
+         * @description Estado do pedido (`specs/011-vendas-e-checkout.md`, "Pedido e seus estados"). `draft` é
+         *     resto de tentativa que não chegou ao provedor: aparece na consulta do admin, não na do
+         *     aluno.
+         * @enum {string}
+         */
+        OrderStatus: "draft" | "pending" | "paid" | "partially_refunded" | "refunded" | "canceled" | "expired" | "chargeback";
+        /**
+         * @description Estado normalizado da cobrança no provedor (`specs/013-pagamentos-mercado-pago.md`).
+         * @enum {string}
+         */
+        PaymentStatus: "pending" | "approved" | "rejected" | "canceled" | "refunded" | "partially_refunded" | "charged_back";
+        /**
+         * @description Meio de pagamento informado pelo provedor; `other` quando não é um dos três.
+         * @enum {string}
+         */
+        PaymentMethod: "card" | "pix" | "boleto" | "other";
+        /**
+         * @description Provedor da cobrança; `none` no pedido de total zero, que não passa pelo provedor
+         *     (`NUVA_PAYMENT_PROVIDER`).
+         * @enum {string}
+         */
+        PaymentProviderName: "mercadopago" | "fake" | "none";
+        /**
+         * @description `requested` enquanto o estorno não voltou; `done` com o estorno confirmado; `failed` com o
+         *     motivo em `error`, podendo ser tentado de novo (`specs/011-vendas-e-checkout.md`).
+         * @enum {string}
+         */
+        RefundStatus: "requested" | "done" | "failed";
+        /**
+         * @description Estado do aviso em `webhook_events` (`specs/013-pagamentos-mercado-pago.md`). `rejected` é
+         *     a trilha de assinatura recusada, só leitura; `failed` é a falha operacional que aceita
+         *     reprocessamento.
+         * @enum {string}
+         */
+        WebhookEventStatus: "received" | "rejected" | "processed" | "ignored" | "failed";
+        /**
+         * @description Tipo do recurso citado no aviso.
+         * @enum {string}
+         */
+        WebhookResourceType: "payment" | "subscription";
+        /** @description O comprador na lista de pedidos, sem o documento fiscal. */
+        OrderBuyer: {
+            id: components["schemas"]["Uuid"];
+            name: string;
+            email: components["schemas"]["Email"];
+        };
+        /**
+         * @description O comprador no detalhe do pedido. O documento fiscal só aparece aqui e no CSV, nunca nos
+         *     logs (`specs/011-vendas-e-checkout.md`).
+         */
+        OrderBuyerDetail: {
+            id: components["schemas"]["Uuid"];
+            name: string;
+            email: components["schemas"]["Email"];
+            taxIdType: components["schemas"]["TaxIdType"];
+            /** @description Só os caracteres do documento, sem pontuação. */
+            taxId: string;
+        };
+        /** @description Um item do pedido, só com o necessário para a lista. */
+        OrderProductRef: {
+            productType: components["schemas"]["ProductType"];
+            productId: components["schemas"]["Uuid"];
+            /** @description Título congelado no fechamento do pedido. */
+            title: string;
+        };
+        /** @description Um item do pedido, com os valores congelados no fechamento. */
+        OrderItem: {
+            id: components["schemas"]["Uuid"];
+            productType: components["schemas"]["ProductType"];
+            productId: components["schemas"]["Uuid"];
+            title: string;
+            /** @description Dias de acesso congelados; `null` é vitalício. */
+            accessDays: number | null;
+            unitPriceCents: components["schemas"]["MoneyCents"];
+            discountCents: components["schemas"]["MoneyCents"];
+            /** @description Preço menos o desconto rateado; o valor efetivamente pago. */
+            paidCents: components["schemas"]["MoneyCents"];
+            refundedCents: components["schemas"]["MoneyCents"];
+        };
+        /**
+         * @description Somas de todos os pedidos que casam com o filtro, não só da página
+         *     (`specs/011-vendas-e-checkout.md`, "Consulta e exportação").
+         */
+        OrderTotals: {
+            /** @description Bruto, antes dos descontos. */
+            subtotalCents: components["schemas"]["MoneyCents"];
+            discountCents: components["schemas"]["MoneyCents"];
+            refundedCents: components["schemas"]["MoneyCents"];
+            /** @description Cobrado, depois dos descontos. */
+            totalCents: components["schemas"]["MoneyCents"];
+            /** @description Cobrado menos os reembolsos. */
+            netCents: components["schemas"]["MoneyCents"];
+        };
+        /** @description Um pedido na lista do admin, sem o documento fiscal. */
+        OrderSummary: {
+            id: components["schemas"]["Uuid"];
+            /** @description Número legível e sequencial do pedido, com saltos aceitos. */
+            number: number;
+            status: components["schemas"]["OrderStatus"];
+            buyer: components["schemas"]["OrderBuyer"];
+            itemCount: number;
+            items: components["schemas"]["OrderProductRef"][];
+            subtotalCents: components["schemas"]["MoneyCents"];
+            discountCents: components["schemas"]["MoneyCents"];
+            refundedCents: components["schemas"]["MoneyCents"];
+            totalCents: components["schemas"]["MoneyCents"];
+            currency: components["schemas"]["CurrencyCode"];
+            /** @description Código do cupom congelado no pedido; `null` sem cupom. */
+            couponCode: string | null;
+            provider: components["schemas"]["PaymentProviderName"];
+            /** @description Meio da cobrança conhecida; `null` antes da primeira cobrança. */
+            paymentMethod: components["schemas"]["PaymentMethod"] | null;
+            createdAt: components["schemas"]["DateTime"];
+            paidAt: components["schemas"]["DateTime"] | null;
+            /** @description Prazo do `pending`; `null` fora dele. */
+            expiresAt: components["schemas"]["DateTime"] | null;
+        };
+        OrderSummaryPage: components["schemas"]["Page"] & {
+            items: components["schemas"]["OrderSummary"][];
+            totals: components["schemas"]["OrderTotals"];
+        };
+        /**
+         * @description O pedido completo, com comprador, valores congelados, cobranças e reembolsos
+         *     (`specs/011-vendas-e-checkout.md`). O documento fiscal só sai aqui e no CSV.
+         */
+        OrderDetail: {
+            id: components["schemas"]["Uuid"];
+            number: number;
+            status: components["schemas"]["OrderStatus"];
+            buyer: components["schemas"]["OrderBuyerDetail"];
+            itemCount: number;
+            subtotalCents: components["schemas"]["MoneyCents"];
+            discountCents: components["schemas"]["MoneyCents"];
+            refundedCents: components["schemas"]["MoneyCents"];
+            totalCents: components["schemas"]["MoneyCents"];
+            currency: components["schemas"]["CurrencyCode"];
+            /** @description Código do cupom congelado no pedido; `null` sem cupom. */
+            couponCode: string | null;
+            provider: components["schemas"]["PaymentProviderName"];
+            createdAt: components["schemas"]["DateTime"];
+            paidAt: components["schemas"]["DateTime"] | null;
+            /** @description Prazo do `pending` (30 min no cartão e no Pix, 3 dias no boleto); `null` fora dele. */
+            expiresAt: components["schemas"]["DateTime"] | null;
+            items: components["schemas"]["OrderItem"][];
+            /** @description Cobranças conhecidas do pedido, da mais recente à mais antiga. */
+            payments: components["schemas"]["Payment"][];
+            /** @description Reembolsos do pedido, do mais recente ao mais antigo. */
+            refunds: components["schemas"]["Refund"][];
+        };
+        /** @description Item e valor a reembolsar (`specs/011-vendas-e-checkout.md`, "Reembolso"). */
+        RefundItemInput: {
+            orderItemId: components["schemas"]["Uuid"];
+            /** @description Em centavos; no máximo o pago e ainda não reembolsado do item. */
+            amountCents: number;
+        };
+        /** @description Item reembolsado, com o título congelado do pedido. */
+        RefundItem: {
+            orderItemId: components["schemas"]["Uuid"];
+            title: string;
+            amountCents: components["schemas"]["MoneyCents"];
+        };
+        /** @description Um reembolso pedido, em execução ou concluído. */
+        Refund: {
+            id: components["schemas"]["Uuid"];
+            /** @description Pedido reembolsado; `null` no reembolso de cobrança recorrente. */
+            orderId?: components["schemas"]["Uuid"] | null;
+            paymentId: components["schemas"]["Uuid"];
+            /** @description Itens e valores do pedido; vazia no reembolso de cobrança recorrente. */
+            items: components["schemas"]["RefundItem"][];
+            amountCents: components["schemas"]["MoneyCents"];
+            /** @description Motivo informado pelo admin. */
+            reason: string;
+            status: components["schemas"]["RefundStatus"];
+            /** @description Identificador do estorno no provedor; `null` até a confirmação. */
+            providerRefundId: string | null;
+            /** @description Motivo da falha, quando `status` é `failed`; nunca o corpo do provedor. */
+            error: string | null;
+            requestedBy: components["schemas"]["UserRef"];
+            createdAt: components["schemas"]["DateTime"];
+            /** @description Quando o estorno foi confirmado; `null` fora de `done`. */
+            doneAt: components["schemas"]["DateTime"] | null;
+        };
+        /**
+         * @description Uma cobrança conhecida (`specs/013-pagamentos-mercado-pago.md`). Sem dado de cartão e sem
+         *     o corpo devolvido pelo provedor; só o estado original em `rawStatus`.
+         */
+        Payment: {
+            id: components["schemas"]["Uuid"];
+            /** @description Pedido da cobrança; `null` em cobrança de assinatura. */
+            orderId: components["schemas"]["Uuid"] | null;
+            /** @description Número legível do pedido; `null` em cobrança de assinatura. */
+            orderNumber: number | null;
+            /** @description Assinatura da cobrança; `null` em cobrança de pedido. */
+            subscriptionId: components["schemas"]["Uuid"] | null;
+            /** @enum {string} */
+            provider: "mercadopago" | "fake";
+            providerPaymentId: string;
+            status: components["schemas"]["PaymentStatus"];
+            method: components["schemas"]["PaymentMethod"];
+            amountCents: components["schemas"]["MoneyCents"];
+            refundedCents: components["schemas"]["MoneyCents"];
+            currency: components["schemas"]["CurrencyCode"];
+            /** @description Estado original devolvido pelo provedor, para diagnóstico. */
+            rawStatus: string;
+            paidAt: components["schemas"]["DateTime"] | null;
+            createdAt: components["schemas"]["DateTime"];
+            updatedAt: components["schemas"]["DateTime"];
+        };
+        PaymentPage: components["schemas"]["Page"] & {
+            items: components["schemas"]["Payment"][];
+        };
+        /** @description A cobrança com os reembolsos relacionados. */
+        PaymentDetail: {
+            id: components["schemas"]["Uuid"];
+            orderId: components["schemas"]["Uuid"] | null;
+            orderNumber: number | null;
+            subscriptionId: components["schemas"]["Uuid"] | null;
+            /** @enum {string} */
+            provider: "mercadopago" | "fake";
+            providerPaymentId: string;
+            status: components["schemas"]["PaymentStatus"];
+            method: components["schemas"]["PaymentMethod"];
+            amountCents: components["schemas"]["MoneyCents"];
+            refundedCents: components["schemas"]["MoneyCents"];
+            currency: components["schemas"]["CurrencyCode"];
+            rawStatus: string;
+            paidAt: components["schemas"]["DateTime"] | null;
+            createdAt: components["schemas"]["DateTime"];
+            updatedAt: components["schemas"]["DateTime"];
+            refunds: components["schemas"]["Refund"][];
+        };
+        /**
+         * @description Um aviso de pagamento recebido (`specs/013-pagamentos-mercado-pago.md`). Nunca traz o corpo
+         *     nem os cabeçalhos; em `rejected`, só os metadados mínimos da trilha de segurança.
+         */
+        WebhookEvent: {
+            id: components["schemas"]["Uuid"];
+            /** @enum {string} */
+            provider: "mercadopago" | "fake";
+            /** @description Identificador do evento; `null` quando não foi extraído. */
+            eventId: string | null;
+            resourceType: components["schemas"]["WebhookResourceType"] | null;
+            /** @description Identificador do recurso; `null` quando não foi extraído. */
+            resourceId: string | null;
+            status: components["schemas"]["WebhookEventStatus"];
+            /** @description Tentativas de processamento; zero na trilha `rejected`. */
+            attempts: number;
+            /** @description `invalid_signature` em `rejected`; motivo da falha em `failed`. */
+            error: string | null;
+            receivedAt: components["schemas"]["DateTime"];
+            /** @description Quando o evento foi processado ou ignorado; `null` nos demais estados. */
+            processedAt: components["schemas"]["DateTime"] | null;
+        };
+        WebhookEventPage: components["schemas"]["Page"] & {
+            items: components["schemas"]["WebhookEvent"][];
+        };
+        /**
+         * @description Estado da integração de pagamento (`specs/013-pagamentos-mercado-pago.md`, "Modo de
+         *     teste"). Nunca devolve token, chave pública, segredo do webhook nem URL com credencial.
+         */
+        PaymentSettings: {
+            /**
+             * @description `NUVA_PAYMENT_PROVIDER` em uso.
+             * @enum {string}
+             */
+            provider: "mercadopago" | "fake";
+            /** @description O token configurado é de teste; nenhuma cobrança real. */
+            testMode: boolean;
+            /**
+             * @description Verdadeiro só quando `NUVA_ENV=production` e o token é de teste: o admin vê o aviso em
+             *     vermelho.
+             */
+            productionWarning: boolean;
+            /**
+             * @description Fim da última execução bem-sucedida de `payment.reconcile_orders`; `null` quando ainda
+             *     não houve nenhuma.
+             */
+            lastReconciliationAt: components["schemas"]["DateTime"] | null;
+        };
     };
     responses: {
         /**
@@ -3304,6 +4002,25 @@ export interface components {
             };
             content: {
                 "application/problem+json": components["schemas"]["CertificateTemplateInvalidProblem"];
+            };
+        };
+        /**
+         * @description As vendas em CSV, uma linha por item de pedido (`specs/011-vendas-e-checkout.md`,
+         *     "Consulta e exportação"), em fluxo contínuo: a resposta começa antes de ler todos os
+         *     pedidos e não é guardada em memória. UTF-8 com BOM, separador `;`, CRLF, decimais com
+         *     vírgula; o nome sugerido do arquivo é `vendas-AAAA-MM-DD.csv`. O conteúdo e os filtros não
+         *     vão para logs.
+         */
+        SalesCsv: {
+            headers: {
+                "X-Request-Id": components["headers"]["XRequestId"];
+                "Cache-Control": components["headers"]["NoStore"];
+                "Content-Disposition": components["headers"]["ContentDisposition"];
+                "X-Content-Type-Options": components["headers"]["ContentTypeOptions"];
+                [name: string]: unknown;
+            };
+            content: {
+                "text/csv": string;
             };
         };
     };
@@ -6785,6 +7502,500 @@ export interface operations {
             403: components["responses"]["Forbidden"];
             413: components["responses"]["PayloadTooLarge"];
             415: components["responses"]["UnsupportedMediaType"];
+            429: components["responses"]["TooManyRequests"];
+            500: components["responses"]["InternalError"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    listOrders: {
+        parameters: {
+            query?: {
+                /** @description Início do período (inclusive), sobre `createdAt`. */
+                from?: components["schemas"]["DateTime"];
+                /** @description Fim do período (exclusive), sobre `createdAt`. */
+                to?: components["schemas"]["DateTime"];
+                status?: components["schemas"]["OrderStatus"];
+                /** @description Filtro por produto; exige `productId`. */
+                productType?: components["schemas"]["ProductType"];
+                /** @description Filtro por produto; exige `productType`. */
+                productId?: components["schemas"]["Uuid"];
+                couponId?: components["schemas"]["Uuid"];
+                /** @description Trecho do nome ou do e-mail do comprador. */
+                q?: string;
+                /** @description Quantidade de itens por página. */
+                limit?: components["parameters"]["Limit"];
+                /** @description Valor de `nextCursor` da página anterior. Ausente na primeira página. */
+                cursor?: components["parameters"]["Cursor"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Uma página de pedidos, com os totais do filtro. */
+            200: {
+                headers: {
+                    "X-Request-Id": components["headers"]["XRequestId"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OrderSummaryPage"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            429: components["responses"]["TooManyRequests"];
+            500: components["responses"]["InternalError"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    exportOrdersCsv: {
+        parameters: {
+            query?: {
+                /** @description Início do período (inclusive), sobre `createdAt`. */
+                from?: components["schemas"]["DateTime"];
+                /** @description Fim do período (exclusive), sobre `createdAt`. */
+                to?: components["schemas"]["DateTime"];
+                status?: components["schemas"]["OrderStatus"];
+                /** @description Filtro por produto; exige `productId`. */
+                productType?: components["schemas"]["ProductType"];
+                /** @description Filtro por produto; exige `productType`. */
+                productId?: components["schemas"]["Uuid"];
+                couponId?: components["schemas"]["Uuid"];
+                /** @description Trecho do nome ou do e-mail do comprador. */
+                q?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: components["responses"]["SalesCsv"];
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            429: components["responses"]["TooManyRequests"];
+            500: components["responses"]["InternalError"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    getOrder: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Identificador do recurso. */
+                id: components["parameters"]["IdPath"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description O pedido. */
+            200: {
+                headers: {
+                    "X-Request-Id": components["headers"]["XRequestId"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OrderDetail"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            429: components["responses"]["TooManyRequests"];
+            500: components["responses"]["InternalError"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    requestOrderRefund: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Chave escolhida pelo cliente; a repetição devolve a primeira resposta por 24 h. */
+                "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
+            };
+            path: {
+                /** @description Identificador do recurso. */
+                id: components["parameters"]["IdPath"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** @description Motivo informado pelo admin. */
+                    reason: string;
+                    /**
+                     * @description Itens e valores do pedido; ausente ou `null` reembolsa o pedido inteiro, pelo
+                     *     saldo não reembolsado de cada item.
+                     */
+                    items?: components["schemas"]["RefundItemInput"][] | null;
+                };
+            };
+        };
+        responses: {
+            /** @description Reembolso pedido; o estorno é executado em segundo plano. */
+            202: {
+                headers: {
+                    "X-Request-Id": components["headers"]["XRequestId"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Refund"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            413: components["responses"]["PayloadTooLarge"];
+            415: components["responses"]["UnsupportedMediaType"];
+            422: components["responses"]["UnprocessableEntity"];
+            429: components["responses"]["TooManyRequests"];
+            500: components["responses"]["InternalError"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    retryRefund: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Identificador do recurso. */
+                id: components["parameters"]["IdPath"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Reembolso devolvido à fila. */
+            202: {
+                headers: {
+                    "X-Request-Id": components["headers"]["XRequestId"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Refund"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            429: components["responses"]["TooManyRequests"];
+            500: components["responses"]["InternalError"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    listCoupons: {
+        parameters: {
+            query?: {
+                /** @description Trecho do código. */
+                q?: string;
+                active?: boolean;
+                appliesTo?: components["schemas"]["CouponAppliesTo"];
+                /** @description Quantidade de itens por página. */
+                limit?: components["parameters"]["Limit"];
+                /** @description Valor de `nextCursor` da página anterior. Ausente na primeira página. */
+                cursor?: components["parameters"]["Cursor"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Uma página de cupons. */
+            200: {
+                headers: {
+                    "X-Request-Id": components["headers"]["XRequestId"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CouponPage"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            429: components["responses"]["TooManyRequests"];
+            500: components["responses"]["InternalError"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    createCoupon: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CouponInput"];
+            };
+        };
+        responses: {
+            /** @description Cupom criado. */
+            201: {
+                headers: {
+                    "X-Request-Id": components["headers"]["XRequestId"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Coupon"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            409: components["responses"]["Conflict"];
+            413: components["responses"]["PayloadTooLarge"];
+            415: components["responses"]["UnsupportedMediaType"];
+            422: components["responses"]["UnprocessableEntity"];
+            429: components["responses"]["TooManyRequests"];
+            500: components["responses"]["InternalError"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    getCoupon: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Identificador do recurso. */
+                id: components["parameters"]["IdPath"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description O cupom. */
+            200: {
+                headers: {
+                    "X-Request-Id": components["headers"]["XRequestId"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Coupon"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            429: components["responses"]["TooManyRequests"];
+            500: components["responses"]["InternalError"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    updateCoupon: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Identificador do recurso. */
+                id: components["parameters"]["IdPath"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CouponUpdate"];
+            };
+        };
+        responses: {
+            /** @description Cupom gravado. */
+            200: {
+                headers: {
+                    "X-Request-Id": components["headers"]["XRequestId"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Coupon"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            413: components["responses"]["PayloadTooLarge"];
+            415: components["responses"]["UnsupportedMediaType"];
+            422: components["responses"]["UnprocessableEntity"];
+            429: components["responses"]["TooManyRequests"];
+            500: components["responses"]["InternalError"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    listPayments: {
+        parameters: {
+            query?: {
+                status?: components["schemas"]["PaymentStatus"];
+                method?: components["schemas"]["PaymentMethod"];
+                provider?: "mercadopago" | "fake";
+                /** @description Início do período (inclusive), sobre `createdAt`. */
+                from?: components["schemas"]["DateTime"];
+                /** @description Fim do período (exclusive), sobre `createdAt`. */
+                to?: components["schemas"]["DateTime"];
+                orderId?: components["schemas"]["Uuid"];
+                subscriptionId?: components["schemas"]["Uuid"];
+                /** @description Quantidade de itens por página. */
+                limit?: components["parameters"]["Limit"];
+                /** @description Valor de `nextCursor` da página anterior. Ausente na primeira página. */
+                cursor?: components["parameters"]["Cursor"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Uma página de cobranças. */
+            200: {
+                headers: {
+                    "X-Request-Id": components["headers"]["XRequestId"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaymentPage"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            429: components["responses"]["TooManyRequests"];
+            500: components["responses"]["InternalError"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    getPayment: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Identificador do recurso. */
+                id: components["parameters"]["IdPath"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description A cobrança. */
+            200: {
+                headers: {
+                    "X-Request-Id": components["headers"]["XRequestId"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaymentDetail"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            429: components["responses"]["TooManyRequests"];
+            500: components["responses"]["InternalError"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    listWebhookEvents: {
+        parameters: {
+            query?: {
+                /** @description `failed`: fila operacional; `rejected`: trilha de segurança, só leitura. */
+                status?: "failed" | "rejected";
+                /** @description Quantidade de itens por página. */
+                limit?: components["parameters"]["Limit"];
+                /** @description Valor de `nextCursor` da página anterior. Ausente na primeira página. */
+                cursor?: components["parameters"]["Cursor"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Uma página de avisos. */
+            200: {
+                headers: {
+                    "X-Request-Id": components["headers"]["XRequestId"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WebhookEventPage"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            429: components["responses"]["TooManyRequests"];
+            500: components["responses"]["InternalError"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    retryWebhookEvent: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Identificador do recurso. */
+                id: components["parameters"]["IdPath"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Aviso devolvido à fila. */
+            202: {
+                headers: {
+                    "X-Request-Id": components["headers"]["XRequestId"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WebhookEvent"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            429: components["responses"]["TooManyRequests"];
+            500: components["responses"]["InternalError"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    getPaymentSettings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description O estado da integração. */
+            200: {
+                headers: {
+                    "X-Request-Id": components["headers"]["XRequestId"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaymentSettings"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
             429: components["responses"]["TooManyRequests"];
             500: components["responses"]["InternalError"];
             503: components["responses"]["ServiceUnavailable"];
