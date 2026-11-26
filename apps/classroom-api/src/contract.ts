@@ -25,4 +25,9 @@ export const CSRF_EXCEPTIONS: readonly string[] = [
   'completeSocialSignup', // POST /auth/social/complete: conclui o cadastro social, ainda sem sessão.
   // Retorno OAuth (spec 007, passo 3): quem envia é o provedor, protegido pelo `state`.
   'oauthCallbackForm', // POST /auth/{provider}/callback: form_post da Apple.
+  // Webhook do provedor de pagamento (spec 013, "Webhook"): quem chama é o Mercado Pago, não um
+  // navegador com a sessão do aluno; a autenticação é a assinatura `x-signature`. Público
+  // (`security: []`), lê o corpo bruto com limite de 64 KB. É a rota
+  // `POST /api/v1/webhooks/mercadopago`.
+  'receiveMercadoPagoWebhook',
 ];
