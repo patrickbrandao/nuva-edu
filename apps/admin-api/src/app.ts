@@ -5,6 +5,8 @@ import {
   type RateLimiterOptions,
   type ReadinessChecks,
   registerMetaRoute,
+  type StreamHub,
+  type StreamHubOptions,
 } from '@nuva-edu/api-kit';
 import {
   type Config,
@@ -14,6 +16,7 @@ import {
   databasePoolStats,
   type ImageProcessingLimiter,
   type Logger,
+  listSessions,
   type OAuth,
   type SettingsReader,
 } from '@nuva-edu/core';
@@ -28,16 +31,41 @@ import { registerImageRoutes } from './routes/images.ts';
 import { registerOAuthRoutes } from './routes/oauth.ts';
 import { registerProductRoutes } from './routes/products.ts';
 import { registerProgressRoutes } from './routes/progress.ts';
+import { registerStreamRoutes } from './routes/stream.ts';
 import { registerTermsRoutes } from './routes/terms.ts';
 import { registerUserRoutes } from './routes/users.ts';
 import {
   adminRateLimits,
+  adminSession,
   auditPermissionDenied,
   registerSessionCookieHooks,
   sessionSecurity,
 } from './session.ts';
+import { type AdminStreamKind, createAdminStreamPipeline } from './stream/events.ts';
 
 export const SERVICE = 'admin-api';
+
+/** O fluxo SSE deste processo, para a subida, os testes e quem precisar derrubar conexões. */
+export interface AdminUserEventStream {
+  hub: StreamHub<AdminStreamKind>;
+  /** `true` enquanto a escuta do `nuva_user_events` está de pé. */
+  isListening(): boolean;
+  /** Sobe o serviço, se ainda não subiu, e resolve quando a escuta fica ativa. */
+  whenListening(): Promise<void>;
+  /** Confere agora as sessões dos fluxos abertos (o mesmo que roda a cada intervalo). */
+  checkSessions(): Promise<void>;
+}
+
+const streams = new WeakMap<FastifyInstance, AdminUserEventStream>();
+
+/** O fluxo SSE de uma API montada por `buildAdminApp`. */
+export function userEventStream(app: FastifyInstance): AdminUserEventStream {
+  const stream = streams.get(app);
+  if (!stream) {
+    throw new TypeError('Esta instância não foi montada por buildAdminApp.');
+  }
+  return stream;
+}
 
 export interface AdminAppOptions {
   config: Config;
@@ -61,6 +89,19 @@ export interface AdminAppOptions {
   imageLimiter?: ImageProcessingLimiter;
   /** Relógio do limite de taxa; para os testes. */
   rateLimiter?: RateLimiterOptions;
+  /**
+   * Intervalo da conferência das sessões dos fluxos SSE abertos, em ms: fluxo de sessão
+   * encerrada por outro processo (suspensão `full`, troca de senha, expiração) é fechado.
+   * Padrão: 30 s; `0` desliga.
+   */
+  streamSessionCheckMs?: number;
+  /** Ajustes do fluxo SSE (intervalo do `ping`, limites); os padrões são os das specs 003 e 004. */
+  stream?: StreamHubOptions;
+  /**
+   * `false` monta a API sem abrir a escuta do `nuva_user_events`: nenhuma conexão é aberta na
+   * subida e o fluxo SSE responde `503`. É para quem só lê rotas e contrato.
+   */
+  listenUserEvents?: boolean;
 }
 
 /**
@@ -81,8 +122,78 @@ export function buildAdminApp(options: AdminAppOptions): FastifyInstance {
     ...(options.rateLimiter === undefined ? {} : { rateLimiter: options.rateLimiter }),
     // Negação por permissão: `outcome = denied` na auditoria (spec 028).
     onPermissionDenied: auditPermissionDenied(db),
+    // Medidor `sse_connections` e fechamento dos fluxos abertos no encerramento do serviço.
+    eventStreams: true,
   });
   registerSessionCookieHooks(app, ttlDays);
+
+  // O fluxo SSE do processo (spec 003, "Fluxo SSE da equipe"; ADR 0028): escuta do canal, filtro
+  // a `notification.created`, conferência com o `StreamEvent` do contrato e hub das conexões.
+  const streamEventErrors = app.contractSchema('StreamEvent');
+  const pipeline = createAdminStreamPipeline({
+    config,
+    logger,
+    ...(options.stream === undefined ? {} : { hub: options.stream }),
+    // O cliente gerado confia no contrato: evento que não confere com `StreamEvent` não sai.
+    validate: (body) => streamEventErrors(body).map((error) => error.path),
+  });
+  const hub = pipeline.hub;
+  let sessionCheck: NodeJS.Timeout | null = null;
+
+  // Fecha os fluxos cujas sessões deixaram de valer (encerradas em outro processo). Suspensão
+  // `full`, troca de senha e exclusão também encerram as sessões, então a lista basta.
+  const checkStreamSessions = async (): Promise<void> => {
+    for (const userId of hub.connectedUsers()) {
+      try {
+        const valid = await listSessions(db, userId);
+        hub.retainSessions(userId, new Set(valid.map((item) => item.id)));
+      } catch (error) {
+        logger.warn({ err: error }, 'Falha ao conferir as sessões dos fluxos SSE');
+        return;
+      }
+    }
+  };
+
+  // Saída da própria sessão: os fluxos que ela abriu terminam já, sem esperar a conferência
+  // periódica. Qualquer rota que encerre a sessão na requisição passa por aqui.
+  app.addHook('onResponse', async (request) => {
+    const current = adminSession.get(request);
+    if (current?.ended) {
+      hub.disconnectSession(current.session.id);
+    }
+  });
+
+  streams.set(app, {
+    hub,
+    isListening: () => pipeline.isListening(),
+    whenListening: async () => {
+      await app.ready();
+      await pipeline.whenListening();
+    },
+    checkSessions: () => checkStreamSessions(),
+  });
+
+  // Depois da conferência do contrato (gancho registrado antes, na base): se o serviço não
+  // sobe, nenhuma conexão com o banco fica para trás.
+  app.addHook('onReady', async () => {
+    if (options.listenUserEvents === false) {
+      return;
+    }
+    pipeline.start();
+    const interval = options.streamSessionCheckMs ?? 30_000;
+    if (interval > 0) {
+      sessionCheck = setInterval(() => void checkStreamSessions(), interval);
+      sessionCheck.unref();
+    }
+  });
+  // Os fluxos abertos já foram encerrados pela base no `preClose`; sobra parar o batimento.
+  app.addHook('onClose', async () => {
+    if (sessionCheck) {
+      clearInterval(sessionCheck);
+      sessionCheck = null;
+    }
+    await pipeline.close();
+  });
 
   app.metrics.gauge({
     name: 'db_pool_connections',
@@ -107,6 +218,7 @@ export function buildAdminApp(options: AdminAppOptions): FastifyInstance {
     version: options.version ?? readServiceVersion(),
     settings,
   });
+  registerStreamRoutes(app, { hub, isListening: () => pipeline.isListening() });
   registerAuthRoutes(app, { db, ttlDays });
   // O cookie de retorno é assinado pelo núcleo (HMAC com `SESSION_SECRET`), não pelo
   // `@fastify/cookie`: o app não recebe `cookieSecret`.
