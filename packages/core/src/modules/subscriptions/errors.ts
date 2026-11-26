@@ -1,7 +1,7 @@
 import {
   businessRule,
   conflict,
-  type DomainError,
+  DomainError,
   type FieldError,
   notFound,
   permissionDenied,
@@ -40,12 +40,21 @@ export function subscriptionNotCancelable(
   return conflict('subscription_not_cancelable', detail);
 }
 
-/** `422` de regra do plano: itens com `includes_all`, `includes_private` sem `includes_all`. */
-export function planRule(detail: string): DomainError {
-  return businessRule('plan_invalid', detail);
+/**
+ * `422` de regra do plano: itens com `includes_all`, `includes_private` sem `includes_all`
+ * (spec 012, "Planos"). `errors` aponta o campo do corpo que a regra recusou.
+ */
+export function planRule(detail: string, errors?: readonly FieldError[]): DomainError {
+  return new DomainError({
+    code: 'plan_invalid',
+    status: 422,
+    title: 'Regra de negócio não atendida',
+    detail,
+    errors,
+  });
 }
 
-/** `422` da lista de itens recusada (plano "tudo", item inexistente, lista grande demais). */
+/** `422` da lista de itens recusada (item repetido, item inexistente, lista grande demais). */
 export function planInvalidItems(detail = 'A lista de itens do plano é inválida.'): DomainError {
   return businessRule('plan_item_invalid', detail);
 }

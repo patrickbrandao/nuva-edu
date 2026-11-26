@@ -17,6 +17,7 @@ import {
   planGroupIntervalTaken,
   planInvalidItems,
   planNotFound,
+  planRule,
   planSlugTaken,
   planValidationFailed,
 } from './errors.ts';
@@ -491,7 +492,9 @@ export async function setPlanItems(
   const current = await findPlan(db, planId);
   if (!current) throw planNotFound();
   if (current.includesAll) {
-    throw planInvalidItems('Plano "tudo, inclusive futuros" não tem lista de itens.');
+    throw planRule('Plano "tudo, inclusive futuros" não tem lista de itens.', [
+      { path: 'body.items', message: 'Precisa estar vazia em plano "tudo".' },
+    ]);
   }
 
   return db.transaction().execute(async (trx) => {
@@ -622,17 +625,17 @@ function normalizePlanInput(input: PlanInput): NormalizedPlan {
   }
   const includesAll = input.includesAll ?? false;
   const includesPrivate = input.includesPrivate ?? false;
-  if (includesPrivate && !includesAll) {
-    errors.push({
-      path: 'includesPrivate',
-      message: 'só vale em plano "tudo, inclusive futuros"',
-    });
-  }
   const position = input.position ?? 0;
   if (!Number.isInteger(position) || position < 0) {
     errors.push({ path: 'position', message: 'deve ser um inteiro maior ou igual a zero' });
   }
   if (errors.length > 0) throw planValidationFailed(errors);
+  // Regra do contrato (spec 012, "Planos"): `422 plan_invalid` apontando `body.includesPrivate`.
+  if (includesPrivate && !includesAll) {
+    throw planRule('`includesPrivate` só vale em plano "tudo, inclusive futuros".', [
+      { path: 'body.includesPrivate', message: 'Exige `includesAll` verdadeiro.' },
+    ]);
+  }
   return {
     slug,
     groupKey,
@@ -653,8 +656,12 @@ async function normalizePlanItems(
   includesAll: boolean,
 ): Promise<{ productType: EntitlementProductType; productId: string }[]> {
   if (items === undefined) return [];
+  // Regra do contrato (spec 012, "Planos"): plano "tudo" não usa lista, `422 plan_invalid`
+  // apontando `body.items`.
   if (includesAll && items.length > 0) {
-    throw planInvalidItems('Plano "tudo, inclusive futuros" não tem lista de itens.');
+    throw planRule('Plano "tudo, inclusive futuros" não tem lista de itens.', [
+      { path: 'body.items', message: 'Precisa estar vazia em plano "tudo".' },
+    ]);
   }
   if (items.length > PLAN_MAX_ITEMS) {
     throw planInvalidItems('A lista de itens passa de 500.');
@@ -665,7 +672,12 @@ async function normalizePlanItems(
       throw planInvalidItems('Item de plano inválido.');
     }
     const ref = { productType: item.productType, productId: item.productId.toLowerCase() };
-    unique.set(`${ref.productType}:${ref.productId}`, ref);
+    const key = `${ref.productType}:${ref.productId}`;
+    // Item repetido é recusado, não deduplicado (contrato de `PUT /plans/{id}/items`).
+    if (unique.has(key)) {
+      throw planInvalidItems('Há item repetido na lista do plano.');
+    }
+    unique.set(key, ref);
   }
   const refs = [...unique.values()];
   for (const ref of refs) {

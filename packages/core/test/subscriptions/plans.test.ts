@@ -63,6 +63,18 @@ async function planRecalculations(planId: string): Promise<number> {
   return rows.filter((row) => (row.payload as { productId?: string }).productId === planId).length;
 }
 
+/** Erro de regra do plano com `errors` apontando o campo do corpo recusado (contrato). */
+async function expectPlanError(
+  promise: Promise<unknown>,
+  code: string,
+  path: string,
+): Promise<void> {
+  const error = await expectError(promise, 422, code);
+  expect((error as { errors?: { path: string }[] }).errors).toContainEqual(
+    expect.objectContaining({ path }),
+  );
+}
+
 describe('criar e ler planos', () => {
   it('admin cria com itens, slug gerado de group_key/interval, e o manager não cria', async () => {
     const courseId = await makeCourse(db);
@@ -111,17 +123,21 @@ describe('criar e ler planos', () => {
     expect(monthly.id).not.toBe(created.id);
   });
 
-  it('recusa entrada inválida do plano', async () => {
-    await expectError(makePlan(db, admin, { includesPrivate: true }), 400, 'validation_failed');
+  it('recusa entrada inválida, as regras do plano e o item repetido', async () => {
+    await expectPlanError(
+      makePlan(db, admin, { includesPrivate: true }),
+      'plan_invalid',
+      'body.includesPrivate',
+    );
     await expectError(makePlan(db, admin, { priceCents: 0 }), 400, 'validation_failed');
     const courseId = await makeCourse(db);
-    await expectError(
+    await expectPlanError(
       makePlan(db, admin, {
         includesAll: true,
         items: [{ productType: 'course', productId: courseId }],
       }),
-      422,
-      'plan_item_invalid',
+      'plan_invalid',
+      'body.items',
     );
     await expectError(
       makePlan(db, admin, {
@@ -130,6 +146,24 @@ describe('criar e ler planos', () => {
       422,
       'plan_item_invalid',
     );
+    // Item repetido é recusado, não deduplicado (contrato de `POST /plans`).
+    await expectError(
+      makePlan(db, admin, {
+        items: [
+          { productType: 'course', productId: courseId },
+          { productType: 'course', productId: courseId },
+        ],
+      }),
+      422,
+      'plan_item_invalid',
+    );
+    // Regressão dos válidos: lista sem repetição e plano "tudo" com a lista vazia.
+    const valid = await makePlan(db, admin, {
+      items: [{ productType: 'course', productId: courseId }],
+    });
+    expect((await findPlan(db, valid.id))?.items.map((item) => item.productId)).toEqual([courseId]);
+    const all = await makePlan(db, admin, { groupKey: 'tudo-valido', includesAll: true });
+    expect((await findPlan(db, all.id))?.items).toEqual([]);
   });
 
   it('lista com filtros e paginação por position', async () => {
@@ -267,7 +301,7 @@ describe('editar plano', () => {
     expect(await planRecalculations(plan.id)).toBe(1);
   });
 
-  it('troca itens e recalcula só quando muda; plano "tudo" recusa itens', async () => {
+  it('troca itens, recusa repetido e plano "tudo", e recalcula só quando muda', async () => {
     const courseA = await makeCourse(db);
     const courseB = await makeCourse(db);
     const plan = await makePlan(db, admin, {
@@ -285,14 +319,40 @@ describe('editar plano', () => {
     ]);
     expect(await planRecalculations(plan.id)).toBe(1);
 
-    const all = await makePlan(db, admin, { groupKey: 'tudo-itens', includesAll: true });
+    // Item repetido é recusado, não deduplicado (contrato de `PUT /plans/{id}/items`).
     await expectError(
-      setPlanItems(db, staffRequest(admin), all.id, [
-        { productType: 'course', productId: courseA },
+      setPlanItems(db, staffRequest(admin), plan.id, [
+        { productType: 'course', productId: courseB },
+        { productType: 'course', productId: courseB },
       ]),
       422,
       'plan_item_invalid',
     );
+    expect((await findPlan(db, plan.id))?.items.map((item) => item.productId)).toEqual([courseB]);
+
+    const all = await makePlan(db, admin, { groupKey: 'tudo-itens', includesAll: true });
+    await expectPlanError(
+      setPlanItems(db, staffRequest(admin), all.id, [
+        { productType: 'course', productId: courseA },
+      ]),
+      'plan_invalid',
+      'body.items',
+    );
+  });
+
+  it('PATCH recusa `includesPrivate` sem `includesAll` como `422 plan_invalid`', async () => {
+    const plan = await makePlan(db, admin);
+    await expectPlanError(
+      updatePlan(db, staffRequest(admin), plan.id, { includesPrivate: true }),
+      'plan_invalid',
+      'body.includesPrivate',
+    );
+    // Regressão: ligar os dois juntos continua valendo.
+    const updated = await updatePlan(db, staffRequest(admin), plan.id, {
+      includesAll: true,
+      includesPrivate: true,
+    });
+    expect(updated).toMatchObject({ includesAll: true, includesPrivate: true });
   });
 });
 
