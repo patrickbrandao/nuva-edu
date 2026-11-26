@@ -1,7 +1,7 @@
 import { sql } from 'kysely';
 import type { Database } from '../../db/database.ts';
 import { notFound } from '../../errors/domain-error.ts';
-import { enqueueEmail } from '../notifications/outbox.ts';
+import { notify } from '../notifications/central.ts';
 import { countCascade, expandCascade, insertCascade } from './cascade.ts';
 import {
   ENTITLEMENT_FIELDS,
@@ -143,10 +143,14 @@ export async function grantEntitlement(
     throw new Error('Cascata gravada pela metade; transação desfeita.');
   }
   if (input.notify !== false) {
-    await enqueueEmail(trx, {
-      userId: input.userId,
-      type: 'access.granted',
-      data: { productType: product.type, productTitle: product.title, expiresAt: root.expiresAt },
+    await notify(trx, 'access.granted', input.userId, {
+      targetType: product.type,
+      targetId: product.id,
+      data: {
+        productType: product.type,
+        productTitle: product.title,
+        expiresAt: root.expiresAt?.toISOString() ?? null,
+      },
     });
   }
   return { entitlement: root, created: true, cascadeCount };

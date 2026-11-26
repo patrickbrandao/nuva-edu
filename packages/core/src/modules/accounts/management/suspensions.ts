@@ -2,7 +2,7 @@ import { type SqlBool, sql } from 'kysely';
 import type { Database } from '../../../db/database.ts';
 import { conflict, type FieldError, validationFailed } from '../../../errors/domain-error.ts';
 import { type AuditContext, recordAudit } from '../../audit/record.ts';
-import { enqueueEmail } from '../../notifications/outbox.ts';
+import { notify } from '../../notifications/central.ts';
 import { assertUserManagement } from '../../permissions/management.ts';
 import { assertNotLastActiveAdmin } from '../admin.ts';
 import { revokeUserSessions } from '../sessions.ts';
@@ -100,9 +100,10 @@ export async function suspendUser(
       .where('id', '=', current.id)
       .execute();
     const sessionsRevoked = kind === 'full' ? await revokeUserSessions(trx, current.id) : 0;
-    await enqueueEmail(trx, {
-      userId: current.id,
-      type: 'moderation.suspended',
+    await notify(trx, 'moderation.suspended', current.id, {
+      actorId: request.actor.id,
+      targetType: 'user',
+      targetId: current.id,
       data: { kind, endsAt: suspension.endsAt?.toISOString() ?? null },
     });
     await recordAudit(trx, {

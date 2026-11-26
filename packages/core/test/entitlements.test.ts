@@ -332,14 +332,17 @@ describe('concessão e cascata', () => {
     expect(byProduct.get(ebookTwoLessons)?.parentEntitlementId).toBe(byProduct.get(courseB)?.id);
     expect(tree.filter((row) => row.productId === ebookAlsoDirect)).toHaveLength(1);
 
-    const outbox = await db
-      .selectFrom('emailOutbox')
-      .select(['type', 'data'])
-      .where('userId', '=', student.id)
-      .execute();
-    expect(outbox).toHaveLength(1);
-    expect(outbox[0]?.type).toBe('access.granted');
-    expect(outbox[0]?.data).toMatchObject({ productType: 'bundle', expiresAt: null });
+    const queued = await sql<{
+      payload: { type: string; data: Record<string, unknown> };
+    }>`
+      SELECT payload FROM jobs
+       WHERE type = 'notify' AND payload->>'userId' = ${student.id}`.execute(db);
+    expect(queued.rows).toHaveLength(1);
+    expect(queued.rows[0]?.payload.type).toBe('access.granted');
+    expect(queued.rows[0]?.payload.data).toMatchObject({
+      productType: 'bundle',
+      expiresAt: null,
+    });
 
     const expanded = await expandCascade(db, 'bundle', bundle);
     expect(expanded.map((node) => node.productId)).toEqual([
@@ -883,14 +886,15 @@ describe('concessão manual', () => {
       productId: course,
       cascadeCount: 1,
     });
-    const emails = await db
-      .selectFrom('emailOutbox')
-      .select('data')
-      .where('userId', '=', student.id)
-      .where('type', '=', 'access.granted')
-      .execute();
-    expect(emails).toHaveLength(1);
-    expect(emails[0]?.data).toMatchObject({
+    const emails = await sql<{
+      payload: { type: string; data: Record<string, unknown> };
+    }>`
+      SELECT payload FROM jobs
+       WHERE type = 'notify'
+         AND payload->>'userId' = ${student.id}
+         AND payload->>'type' = 'access.granted'`.execute(db);
+    expect(emails.rows).toHaveLength(1);
+    expect(emails.rows[0]?.payload.data).toMatchObject({
       productType: 'course',
       expiresAt: expiresAt.toISOString(),
     });

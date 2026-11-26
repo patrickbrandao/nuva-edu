@@ -142,6 +142,18 @@ async function outbox(userId: string, type: string) {
     .execute();
 }
 
+/** Tarefas `notify` enfileiradas para o usuário, do tipo da notificação. */
+async function notifications(userId: string, type: string) {
+  const result = await sql<{
+    payload: { type: string; data: Record<string, unknown> };
+  }>`
+    SELECT payload FROM jobs
+     WHERE type = 'notify'
+       AND payload->>'userId' = ${userId}
+       AND payload->>'type' = ${type}`.execute(db);
+  return result.rows;
+}
+
 async function login(user: TestUser, site: 'classroom' | 'admin' = 'classroom') {
   return loginWithPassword(db, { site, email: user.email, password: PASSWORD, context: ctx() });
 }
@@ -622,8 +634,8 @@ describe('suspensão e reativação', () => {
       suspendedReason: 'Motivo interno da equipe',
       suspendedBy: manager.id,
     });
-    const [mail] = await outbox(student.id, 'moderation.suspended');
-    expect(mail?.data).toEqual({
+    const [mail] = await notifications(student.id, 'moderation.suspended');
+    expect(mail?.payload.data).toEqual({
       kind: 'full',
       endsAt: (suspension.endsAt as Date).toISOString(),
     });
@@ -666,8 +678,8 @@ describe('suspensão e reativação', () => {
     });
     expect(detail.suspension).toMatchObject({ kind: 'posting', endsAt: null });
     expect(await sessionCount(student.id)).toBe(1);
-    const [mail] = await outbox(student.id, 'moderation.suspended');
-    expect(mail?.data).toEqual({ kind: 'posting', endsAt: null });
+    const [mail] = await notifications(student.id, 'moderation.suspended');
+    expect(mail?.payload.data).toEqual({ kind: 'posting', endsAt: null });
   });
 
   it('manager não suspende nem reativa equipe (403 auditado); ninguém suspende a si mesmo', async () => {

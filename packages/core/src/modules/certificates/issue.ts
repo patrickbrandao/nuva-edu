@@ -20,7 +20,7 @@ import { canAccess } from '../entitlements/access.ts';
 import { isUuid } from '../entitlements/types.ts';
 import { enqueue } from '../jobs/queue.ts';
 import { getCourseCompletion } from '../learning/completion.ts';
-import { enqueueEmail } from '../notifications/outbox.ts';
+import { notify } from '../notifications/central.ts';
 import { getSettings } from '../settings/settings.ts';
 import { generateCertificateCode } from './code.ts';
 import {
@@ -126,17 +126,18 @@ async function insertCertificate(
   throw new Error('certificates: não foi possível gerar um código único.');
 }
 
-/** O que segue a criação do registro: o PDF e o e-mail `certificate.issued` (spec 024). */
+/** O que segue a criação do registro: o PDF e a notificação `certificate.issued` (spec 024). */
 async function afterIssue(
   trx: Database,
   certificate: { id: string; code: string },
   userId: string,
   courseTitle: string,
+  courseId: string,
 ): Promise<void> {
   await enqueue(trx, 'certificate.render', { certificateId: certificate.id });
-  await enqueueEmail(trx, {
-    userId,
-    type: 'certificate.issued',
+  await notify(trx, 'certificate.issued', userId, {
+    targetType: 'course',
+    targetId: courseId,
     data: { courseTitle, code: formatCertificateCode(certificate.code) },
   });
 }
@@ -221,7 +222,7 @@ export async function issueCertificateOnCompletion(
         .executeTakeFirstOrThrow();
       return { outcome: 'already_issued', certificateId: other.id };
     }
-    await afterIssue(trx, created, userId, course.title);
+    await afterIssue(trx, created, userId, course.title, courseId);
     return { outcome: 'issued', certificateId: created.id };
   });
 }
@@ -410,7 +411,7 @@ export async function issueCertificateManually(
       manual: { issuedBy: request.actor.id, reason },
     });
     if (!created) throw exists();
-    await afterIssue(trx, created, target.id, course.title);
+    await afterIssue(trx, created, target.id, course.title, course.id);
     await recordAudit(trx, {
       context: managementAuditContext(request),
       action: 'certificate.issue',

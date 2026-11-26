@@ -208,8 +208,10 @@ async function jobs(type: string, key: string): Promise<number> {
 
 async function emails(userId: string, type: string): Promise<number> {
   const result = await sql<{ n: number }>`
-    SELECT count(*)::int AS n FROM email_outbox
-     WHERE user_id = ${userId}::uuid AND type = ${type}`.execute(db);
+    SELECT count(*)::int AS n FROM jobs
+     WHERE type = 'notify'
+       AND payload->>'userId' = ${userId}
+       AND payload->>'type' = ${type}`.execute(db);
   return result.rows[0]?.n ?? 0;
 }
 
