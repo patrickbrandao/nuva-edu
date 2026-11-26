@@ -34,6 +34,33 @@ export interface ActivityDays {
   userId: string;
 }
 
+export interface AnnouncementProducts {
+  announcementId: string;
+  createdAt: Generated<Timestamp>;
+  productId: string;
+  productType: string;
+}
+
+export interface Announcements {
+  archivedAt: Timestamp | null;
+  audience: Generated<string>;
+  authorId: string;
+  bodyHtml: string;
+  bodyMd: string;
+  coverImageId: string | null;
+  createdAt: Generated<Timestamp>;
+  id: Generated<string>;
+  linkLabel: string | null;
+  linkUrl: string | null;
+  notify: Generated<boolean>;
+  pinned: Generated<boolean>;
+  publishAt: Timestamp | null;
+  publishedAt: Timestamp | null;
+  status: Generated<string>;
+  title: string;
+  updatedAt: Generated<Timestamp>;
+}
+
 export interface AuditLog {
   action: string;
   actorRole: string | null;
@@ -257,6 +284,33 @@ export interface Entitlements {
   updatedAt: Generated<Timestamp>;
   userId: string;
   version: Generated<number>;
+}
+
+export interface EventProducts {
+  createdAt: Generated<Timestamp>;
+  eventId: string;
+  productId: string;
+  productType: string;
+}
+
+export interface Events {
+  audience: Generated<string>;
+  canceledAt: Timestamp | null;
+  courseId: string | null;
+  coverImageId: string | null;
+  createdAt: Generated<Timestamp>;
+  createdBy: string;
+  descriptionHtml: string;
+  descriptionMd: string;
+  endsAt: Timestamp;
+  id: Generated<string>;
+  kind: string;
+  recordingLessonId: string | null;
+  seriesId: string | null;
+  startsAt: Timestamp;
+  streamUrl: string | null;
+  title: string;
+  updatedAt: Generated<Timestamp>;
 }
 
 export interface ForumCategories {
@@ -560,6 +614,7 @@ export interface ProductEbooks {
 }
 
 export interface Profiles {
+  announcementsSeenAt: Timestamp | null;
   avatarImageId: string | null;
   createdAt: Generated<Timestamp>;
   updatedAt: Generated<Timestamp>;
@@ -760,6 +815,8 @@ export interface WebhookEvents {
 
 export interface DB {
   activityDays: ActivityDays;
+  announcementProducts: AnnouncementProducts;
+  announcements: Announcements;
   auditLog: AuditLog;
   bundleItems: BundleItems;
   bundles: Bundles;
@@ -776,6 +833,8 @@ export interface DB {
   emailOutbox: EmailOutbox;
   emailTokens: EmailTokens;
   entitlements: Entitlements;
+  eventProducts: EventProducts;
+  events: Events;
   forumCategories: ForumCategories;
   forumPosts: ForumPosts;
   forumTopicFollows: ForumTopicFollows;
