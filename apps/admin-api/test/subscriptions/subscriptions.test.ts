@@ -4,6 +4,7 @@ import {
   executeRefund,
   FakePaymentProvider,
   type RefundView,
+  refundExecuteKey,
   suspendExpiredSubscriptions,
 } from '@nuva-edu/core';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -417,7 +418,48 @@ describe('reembolso de cobrança recorrente', () => {
     expect(again.json()).toMatchObject({ code: 'payment_not_refundable' });
   });
 
-  it('gerente e instrutor recebem 403 (order.refund); sem CSRF: 403; chave de idempotência é aceita', async () => {
+  it('chave repetida em paralelo devolve o mesmo reembolso, com uma tarefa e uma auditoria', async () => {
+    const { subscription } = await planWithSubscription();
+    const headers = { 'Idempotency-Key': randomUUID() };
+    const submit = (amountCents: number) =>
+      requestRefund(
+        subscription.subscriptionId,
+        subscription.paymentId,
+        { reason: 'Cobrança indevida', amountCents },
+        headers,
+      );
+
+    const [first, concurrent] = await Promise.all([submit(1_000), submit(1_000)]);
+    expect(first.statusCode).toBe(202);
+    expect(concurrent.statusCode).toBe(202);
+    expect(concurrent.json()).toEqual(first.json());
+
+    const replay = await submit(1_000);
+    expect(replay.statusCode).toBe(202);
+    expect(replay.json()).toEqual(first.json());
+
+    const changed = await submit(2_000);
+    expect(changed.statusCode).toBe(422);
+    expect(changed.json()).toMatchObject({ code: 'idempotency_key_reuse' });
+
+    const { id } = first.json<RefundView>();
+    const refunds = await test.db
+      .selectFrom('refunds')
+      .select('id')
+      .where('paymentId', '=', subscription.paymentId)
+      .execute();
+    expect(refunds).toEqual([{ id }]);
+    const jobs = await test.db
+      .selectFrom('jobs')
+      .select('id')
+      .where('type', '=', 'refund.execute')
+      .where('uniqueKey', '=', refundExecuteKey(id))
+      .execute();
+    expect(jobs).toHaveLength(1);
+    expect(await auditOf(test, subscription.subscriptionId, 'refund.request')).toHaveLength(1);
+  });
+
+  it('gerente e instrutor recebem 403 (order.refund); sem CSRF: 403', async () => {
     const { subscription } = await planWithSubscription();
     for (const actor of [manager, instructor]) {
       const response = await call({
@@ -439,16 +481,5 @@ describe('reembolso de cobrança recorrente', () => {
       csrf: null,
     });
     expect(noCsrf.statusCode).toBe(403);
-
-    // `Idempotency-Key` é aceita pelo contrato; a repetição em 24 h ainda não é unificada no
-    // núcleo (sem armazenamento): relatado no fim da tarefa.
-    const keyed = await call({
-      method: 'POST',
-      url: `/api/v1/subscriptions/${subscription.subscriptionId}/payments/${subscription.paymentId}/refund`,
-      as: admin,
-      payload: { reason: 'Com chave' },
-      headers: { 'idempotency-key': randomUUID() },
-    });
-    expect(keyed.statusCode).toBe(202);
   });
 });

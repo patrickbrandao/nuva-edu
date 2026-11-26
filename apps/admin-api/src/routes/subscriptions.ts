@@ -272,17 +272,16 @@ export function registerSubscriptionRoutes(
   // `POST /api/v1/subscriptions/{id}/payments/{paymentId}/refund`: cria o reembolso em
   // `requested` e enfileira `refund.execute` (`202`); o efeito no estado da assinatura vem do
   // worker, pelo mesmo código do reembolso de pedido (specs 011 e 012).
-  //
-  // `Idempotency-Key` do contrato (spec 003) ainda não tem armazenamento no núcleo: a chave é
-  // aceita pelo contrato, mas a repetição não é unificada aqui (tarefa aberta para o dono).
   app.operation('requestSubscriptionRefund', async (raw, reply) => {
     const { id, paymentId } = raw.params as { id: string; paymentId: string };
     const body = raw.body as { reason: string; amountCents?: number | null };
+    const key = raw.headers['idempotency-key'];
     const refund = await requestSubscriptionRefund(db, request(raw), {
       subscriptionId: id,
       paymentId,
       reason: body.reason,
       amountCents: body.amountCents === undefined ? null : body.amountCents,
+      idempotencyKey: typeof key === 'string' ? key : null,
     });
     return reply.status(202).send(refundBody(refund));
   });
