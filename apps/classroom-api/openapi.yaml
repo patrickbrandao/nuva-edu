@@ -58,6 +58,8 @@ tags:
     description: Dados públicos da instalação e da marca da escola.
   - name: stream
     description: Tempo real por SSE.
+  - name: notifications
+    description: Central de notificações, preferências e descadastro (`specs/024-notificacoes-e-email.md`).
   - name: auth
     description: Cadastro, login, sessão, senha e login social (`specs/007-contas-e-autenticacao.md`).
   - name: account
@@ -2985,6 +2987,305 @@ paths:
         "503":
           $ref: "#/components/responses/ServiceUnavailable"
 
+  # --- Fase 4: central de notificações e preferências (spec 024) ---
+  /api/v1/notifications:
+    get:
+      operationId: listNotifications
+      tags: [notifications]
+      summary: Central do usuário
+      x-permission: account.self_service
+      x-nuva-pending: true
+      description: |
+        Notificações do usuário da sessão, da mais nova para a mais antiga
+        (`specs/024-notificacoes-e-email.md`, "Central"), paginadas por cursor. O item traz o
+        autor quando houver, `count` quando notificações do mesmo tipo e alvo foram fundidas
+        ("Ana e mais 3 responderam em…") e `data` com o conteúdo do tipo, definido na spec do
+        recurso. Nunca devolve notificação de outra pessoa; abrir o item é
+        `POST /api/v1/notifications/{id}/read`.
+      parameters:
+        - $ref: "#/components/parameters/NotificationLimit"
+        - $ref: "#/components/parameters/Cursor"
+      responses:
+        "200":
+          description: Uma página da central.
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/XRequestId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NotificationPage"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+    delete:
+      operationId: clearNotifications
+      tags: [notifications]
+      summary: Limpar todas
+      x-permission: account.self_service
+      x-nuva-pending: true
+      description: |
+        "Limpar todas": apaga lidas e não lidas do usuário da sessão (o histórico lido também
+        some). Nunca alcança notificação de outra pessoa; devolve quantas foram apagadas.
+      security:
+        - sessionCookie: []
+          csrfToken: []
+      responses:
+        "200":
+          description: Quantas notificações foram apagadas.
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/XRequestId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NotificationsCleared"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+  /api/v1/notifications/unread-count:
+    get:
+      operationId: getNotificationUnreadCount
+      tags: [notifications]
+      summary: Contador do sino
+      x-permission: account.self_service
+      x-nuva-pending: true
+      description: |
+        Não lidas do usuário da sessão: o número que o sino mostra e que o evento SSE
+        `notification.created` atualiza sem recarregar.
+      responses:
+        "200":
+          description: O contador.
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/XRequestId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NotificationUnreadCount"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+  /api/v1/notifications/{id}/read:
+    post:
+      operationId: markNotificationRead
+      tags: [notifications]
+      summary: Marcar uma notificação como lida
+      x-permission: account.self_service
+      x-nuva-pending: true
+      description: |
+        Marca a notificação do usuário da sessão como lida e devolve o item atualizado com o
+        contador do sino. Idempotente: já lida devolve o mesmo item. Notificação inexistente ou
+        de outra pessoa: `404 not_found`.
+      security:
+        - sessionCookie: []
+          csrfToken: []
+      parameters:
+        - $ref: "#/components/parameters/IdPath"
+      responses:
+        "200":
+          description: Item lido e o contador atualizado.
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/XRequestId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NotificationReadResult"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+  /api/v1/notifications/read-all:
+    post:
+      operationId: markAllNotificationsRead
+      tags: [notifications]
+      summary: Marcar todas como lidas
+      x-permission: account.self_service
+      x-nuva-pending: true
+      description: |
+        Marca todas as não lidas do usuário da sessão como lidas. `updated` é quantas linhas
+        mudaram; o contador do sino fica zero.
+      security:
+        - sessionCookie: []
+          csrfToken: []
+      responses:
+        "200":
+          description: Quantas notificações passaram a lidas.
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/XRequestId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NotificationsReadAllResult"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+  /api/v1/me/notification-prefs:
+    get:
+      operationId: getNotificationPrefs
+      tags: [notifications]
+      summary: Preferências por grupo
+      x-permission: account.self_service
+      x-nuva-pending: true
+      description: |
+        Canais efetivos dos onze grupos (`specs/024-notificacoes-e-email.md`, "Tipos e grupos").
+        Grupo obrigatório devolve `emailRequired: true`, com o e-mail sempre ligado; o grupo
+        `account` não tem canal plataforma (`inAppAvailable: false`, `inApp` desligado). O grupo
+        `staff` só tem efeito para a equipe.
+      responses:
+        "200":
+          description: As preferências efetivas.
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/XRequestId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NotificationPrefs"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+    put:
+      operationId: updateNotificationPrefs
+      tags: [notifications]
+      summary: Gravar preferências por grupo
+      x-permission: account.self_service
+      x-nuva-pending: true
+      description: |
+        Muda só os canais enviados; grupo omitido e canal omitido ficam como estão. Recusa com
+        `400 validation_failed` o e-mail desligado em grupo obrigatório (`account`, `purchase`,
+        `support` e `moderation`, RF-04) e o canal plataforma no grupo `account`. Devolve as
+        preferências efetivas depois da mudança.
+      security:
+        - sessionCookie: []
+          csrfToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/NotificationPrefsUpdate"
+      responses:
+        "200":
+          description: Preferências gravadas e devolvidas.
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/XRequestId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NotificationPrefs"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "413":
+          $ref: "#/components/responses/PayloadTooLarge"
+        "415":
+          $ref: "#/components/responses/UnsupportedMediaType"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+  /api/v1/unsubscribe/{token}:
+    post:
+      operationId: unsubscribe
+      tags: [notifications]
+      summary: Descadastro de um grupo pelo token
+      x-nuva-pending: true
+      description: |
+        Link de descadastro de um clique dos e-mails não obrigatórios
+        (`specs/024-notificacoes-e-email.md`, RF-07 e "Links com token"): sem login e **sem
+        CSRF**, porque quem abre vem do cliente de e-mail. O token identifica usuário e grupo,
+        não expira e vale para todos os e-mails seguintes do grupo. Desliga só o e-mail do grupo
+        do token e mantém o canal plataforma como estava; repetir a chamada não muda nada. Token
+        fora do formato ou desconhecido: `404 not_found`. Por isso a operação não declara
+        `csrfToken` e entra na lista de exceções da API.
+      security: []
+      parameters:
+        - $ref: "#/components/parameters/UnsubscribeTokenPath"
+      responses:
+        "200":
+          description: Grupo descadastrado e os canais efetivos depois da mudança.
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/XRequestId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UnsubscribeResult"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+
 components:
   securitySchemes:
     sessionCookie:
@@ -3094,6 +3395,26 @@ components:
         é um inteiro em texto: `400`.
       schema:
         $ref: "#/components/schemas/StreamEventId"
+    # --- só classroom-api: notificações (Fase 4) ---
+    NotificationLimit:
+      name: limit
+      in: query
+      description: Itens por página da central (padrão 20, máximo 50).
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 50
+        default: 20
+    UnsubscribeTokenPath:
+      name: token
+      in: path
+      required: true
+      description: |
+        Token do link de descadastro: 64 caracteres hexadecimais, gravado em
+        `notification_unsubscribe_tokens`. Outro formato ou token desconhecido responde `404`.
+      schema:
+        type: string
+        minLength: 1
     # --- comum: catálogo, aprendizado e certificados (Fase 2) ---
     SlugPath:
       name: slug
@@ -4058,6 +4379,271 @@ components:
           announcement.published: "#/components/schemas/StreamEventAnnouncementPublished"
           presence: "#/components/schemas/StreamEventPresence"
           ping: "#/components/schemas/StreamEventPing"
+    # --- Fase 4: notificações e preferências (spec 024) ---
+    NotificationGroup:
+      type: string
+      enum:
+        [
+          account,
+          purchase,
+          courses,
+          forum,
+          messages,
+          community,
+          events,
+          support,
+          announcements,
+          moderation,
+          staff,
+        ]
+      description: |
+        Grupo de preferência (`specs/024-notificacoes-e-email.md`, "Tipos e grupos"); o grupo de
+        cada tipo está na mesma tabela.
+    NotificationData:
+      type: object
+      description: |
+        Conteúdo do tipo, definido na spec do recurso (o `forum.reply` traz o tópico e a
+        resposta; o `order.approved`, o pedido). Nunca contém senha, token nem segredo.
+      additionalProperties: true
+    NotificationActor:
+      type: object
+      description: Quem gerou o fato; ausente em aviso do sistema.
+      required: [id, name, avatarUrl]
+      properties:
+        id:
+          $ref: "#/components/schemas/Uuid"
+        name:
+          type: string
+          description: Nome de exibição; `usuário removido` quando a conta foi excluída.
+        avatarUrl:
+          type: [string, "null"]
+          description: Caminho da foto de perfil na API, ou nulo.
+      additionalProperties: false
+    NotificationItem:
+      type: object
+      description: |
+        Um item da central (`specs/024-notificacoes-e-email.md`, "Central"): ícone do tipo, foto,
+        título, texto curto, tempo e link para o alvo são montados a partir de `type`, `actor`,
+        `data` e do alvo.
+      required: [id, type, group, actor, targetType, targetId, data, count, readAt, createdAt]
+      properties:
+        id:
+          $ref: "#/components/schemas/Uuid"
+        type:
+          type: string
+          pattern: "^[a-z][a-z0-9_]*(\\.[a-z][a-z0-9_]*)+$"
+          description: |
+            Tipo da notificação (`specs/024-notificacoes-e-email.md`). Fica em texto, e não em
+            `enum`, porque um worker mais novo pode gravar tipo que esta API ainda não conhece.
+          examples: [forum.reply]
+        group:
+          $ref: "#/components/schemas/NotificationGroup"
+        actor:
+          oneOf:
+            - $ref: "#/components/schemas/NotificationActor"
+            - type: "null"
+          description: Quem gerou o fato; nulo em aviso do sistema.
+        targetType:
+          type: [string, "null"]
+          description: |
+            Tipo do alvo (`topic`, `course`, `order`...), sempre junto de `targetId`; nulo quando
+            a notificação não aponta para um recurso.
+        targetId:
+          oneOf:
+            - $ref: "#/components/schemas/Uuid"
+            - type: "null"
+        data:
+          $ref: "#/components/schemas/NotificationData"
+        count:
+          type: integer
+          minimum: 1
+          description: Quantas notificações do mesmo tipo e alvo foram fundidas nesta linha.
+        readAt:
+          oneOf:
+            - $ref: "#/components/schemas/DateTime"
+            - type: "null"
+          description: Quando foi lida; nulo enquanto não lida.
+        createdAt:
+          $ref: "#/components/schemas/DateTime"
+      additionalProperties: false
+    NotificationPage:
+      allOf:
+        - $ref: "#/components/schemas/Page"
+        - type: object
+          required: [items]
+          properties:
+            items:
+              type: array
+              items:
+                $ref: "#/components/schemas/NotificationItem"
+    NotificationUnreadCount:
+      type: object
+      description: Não lidas do usuário, para o sino.
+      required: [unreadCount]
+      properties:
+        unreadCount:
+          type: integer
+          minimum: 0
+      additionalProperties: false
+    NotificationReadResult:
+      type: object
+      description: Item marcado como lido e o contador do sino depois da leitura.
+      required: [notification, unreadCount]
+      properties:
+        notification:
+          $ref: "#/components/schemas/NotificationItem"
+        unreadCount:
+          type: integer
+          minimum: 0
+      additionalProperties: false
+    NotificationsReadAllResult:
+      type: object
+      description: Resultado de "marcar todas como lidas".
+      required: [updated, unreadCount]
+      properties:
+        updated:
+          type: integer
+          minimum: 0
+          description: Quantas notificações passaram de não lidas a lidas nesta chamada.
+        unreadCount:
+          type: integer
+          const: 0
+      additionalProperties: false
+    NotificationsCleared:
+      type: object
+      description: Resultado de "limpar todas".
+      required: [deleted]
+      properties:
+        deleted:
+          type: integer
+          minimum: 0
+          description: Quantas notificações foram apagadas.
+      additionalProperties: false
+    NotificationChannelPrefs:
+      type: object
+      description: Canais efetivos de um grupo.
+      required: [inApp, email]
+      properties:
+        inApp:
+          type: boolean
+          description: Canal plataforma (central e sino).
+        email:
+          type: boolean
+          description: Canal e-mail.
+      additionalProperties: false
+    NotificationGroupPrefs:
+      type: object
+      description: |
+        Canais efetivos de um grupo e as regras que a interface precisa para desabilitar o que
+        não pode mudar.
+      required: [inApp, email, emailRequired, inAppAvailable]
+      properties:
+        inApp:
+          type: boolean
+        email:
+          type: boolean
+        emailRequired:
+          type: boolean
+          description: |
+            `true` nos grupos obrigatórios (`account`, `purchase`, `support` e `moderation`): o
+            e-mail não pode ser desligado (RF-04).
+        inAppAvailable:
+          type: boolean
+          description: "`false` só no grupo `account`, que não tem canal plataforma."
+      additionalProperties: false
+    NotificationPrefs:
+      type: object
+      description: |
+        Canais efetivos dos onze grupos (`specs/024-notificacoes-e-email.md`, "Tipos e grupos"),
+        na ordem da tabela.
+      required:
+        [
+          account,
+          purchase,
+          courses,
+          forum,
+          messages,
+          community,
+          events,
+          support,
+          announcements,
+          moderation,
+          staff,
+        ]
+      properties:
+        account:
+          $ref: "#/components/schemas/NotificationGroupPrefs"
+        purchase:
+          $ref: "#/components/schemas/NotificationGroupPrefs"
+        courses:
+          $ref: "#/components/schemas/NotificationGroupPrefs"
+        forum:
+          $ref: "#/components/schemas/NotificationGroupPrefs"
+        messages:
+          $ref: "#/components/schemas/NotificationGroupPrefs"
+        community:
+          $ref: "#/components/schemas/NotificationGroupPrefs"
+        events:
+          $ref: "#/components/schemas/NotificationGroupPrefs"
+        support:
+          $ref: "#/components/schemas/NotificationGroupPrefs"
+        announcements:
+          $ref: "#/components/schemas/NotificationGroupPrefs"
+        moderation:
+          $ref: "#/components/schemas/NotificationGroupPrefs"
+        staff:
+          $ref: "#/components/schemas/NotificationGroupPrefs"
+      additionalProperties: false
+    NotificationChannelUpdate:
+      type: object
+      description: Canais a mudar num grupo; canal omitido fica como está.
+      minProperties: 1
+      properties:
+        inApp:
+          type: boolean
+        email:
+          type: boolean
+      additionalProperties: false
+    NotificationPrefsUpdate:
+      type: object
+      description: |
+        Grupos a mudar; grupo omitido fica como está. Grupo obrigatório com `email: false` e
+        grupo `account` com `inApp: true` são recusados com `400 validation_failed`.
+      minProperties: 1
+      additionalProperties: false
+      properties:
+        account:
+          $ref: "#/components/schemas/NotificationChannelUpdate"
+        purchase:
+          $ref: "#/components/schemas/NotificationChannelUpdate"
+        courses:
+          $ref: "#/components/schemas/NotificationChannelUpdate"
+        forum:
+          $ref: "#/components/schemas/NotificationChannelUpdate"
+        messages:
+          $ref: "#/components/schemas/NotificationChannelUpdate"
+        community:
+          $ref: "#/components/schemas/NotificationChannelUpdate"
+        events:
+          $ref: "#/components/schemas/NotificationChannelUpdate"
+        support:
+          $ref: "#/components/schemas/NotificationChannelUpdate"
+        announcements:
+          $ref: "#/components/schemas/NotificationChannelUpdate"
+        moderation:
+          $ref: "#/components/schemas/NotificationChannelUpdate"
+        staff:
+          $ref: "#/components/schemas/NotificationChannelUpdate"
+    UnsubscribeResult:
+      type: object
+      description: Resultado do descadastro; só o e-mail do grupo do token muda.
+      required: [group, prefs]
+      properties:
+        group:
+          $ref: "#/components/schemas/NotificationGroup"
+        prefs:
+          $ref: "#/components/schemas/NotificationChannelPrefs"
+      additionalProperties: false
     # --- comum: catálogo, aprendizado e certificados (Fase 2) ---
     ProductType:
       type: string

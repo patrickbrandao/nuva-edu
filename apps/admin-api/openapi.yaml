@@ -78,6 +78,14 @@ tags:
     description: Pedidos, cupons, reembolso e exportação de vendas (`specs/011-vendas-e-checkout.md`).
   - name: payments
     description: Cobranças, avisos de pagamento e integração do provedor (`specs/013-pagamentos-mercado-pago.md`).
+  - name: notifications
+    description: Central da equipe e preferências (`specs/024-notificacoes-e-email.md`).
+  - name: stream
+    description: Tempo real por SSE do sino da equipe (`specs/003-admin-api.md`).
+  - name: ops
+    description: Operação da fila e dos e-mails (`specs/033-observabilidade-retencao-backup.md`).
+  - name: settings
+    description: Identidade da escola nos e-mails (`specs/024-notificacoes-e-email.md`).
 
 security:
   - sessionCookie: []
@@ -5411,6 +5419,659 @@ paths:
         "503":
           $ref: "#/components/responses/ServiceUnavailable"
 
+  # --- Fase 4: fluxo SSE da equipe (spec 003, ADR 0028) ---
+  /api/v1/stream:
+    get:
+      operationId: openStream
+      tags: [stream]
+      summary: Fluxo do sino da equipe (SSE)
+      x-permission: admin.access
+      description: |
+        Conexão `text/event-stream` do sino do admin (`specs/003-admin-api.md`, "Fluxo SSE da
+        equipe"; ADR 0028), aberta com a sessão do próprio host: uma conexão por aba e no máximo
+        três por usuário, derrubando a mais antiga na quarta. Sem sessão: `401 unauthenticated`;
+        sessão apenas `student`: `403 permission_denied`; suspensão `full` fecha a conexão.
+
+        Entrega somente `notification.created` destinado ao usuário da sessão, com o contador de
+        não lidas; nenhum evento de outro usuário, mensagem direta ou conteúdo da comunidade. Os
+        demais tipos do canal são descartados, sem entrega nem reenvio. O nome, os campos
+        `id`/`event`/`data`, o `ping` de 25 s, o limite de 3 conexões, o reenvio por
+        `Last-Event-ID` e a recarga na reconexão são os do classroom
+        (`specs/004-classroom-api.md`, "Fluxo SSE"). Resposta sem compressão.
+      parameters:
+        - $ref: "#/components/parameters/LastEventId"
+      responses:
+        "200":
+          description: Fluxo aberto; a resposta só termina quando a conexão cai.
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/XRequestId"
+            Cache-Control:
+              description: Sempre `no-store`.
+              schema:
+                type: string
+                const: no-store
+          content:
+            text/event-stream:
+              schema:
+                type: string
+                description: |
+                  Sequência de eventos SSE; cada um, depois de lido, corresponde a um
+                  `StreamEvent`.
+              x-event-schema:
+                $ref: "#/components/schemas/StreamEvent"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+
+  # --- Fase 4: central da equipe (spec 024) ---
+  /api/v1/notifications:
+    get:
+      operationId: listNotifications
+      tags: [notifications]
+      summary: Central da equipe
+      x-permission: admin.access
+      x-nuva-pending: true
+      description: |
+        Notificações do usuário da sessão, da mais nova para a mais antiga
+        (`specs/024-notificacoes-e-email.md`, "Central"), paginadas por cursor. A equipe recebe
+        aqui também as do grupo `staff` (`ticket.opened`, `report.created`, `ops.job_failed`...),
+        no mesmo sino do site admin. O item traz o autor quando houver, `count` quando
+        notificações do mesmo tipo e alvo foram fundidas e `data` com o conteúdo do tipo. Nunca
+        devolve notificação de outra pessoa.
+      parameters:
+        - $ref: "#/components/parameters/NotificationLimit"
+        - $ref: "#/components/parameters/Cursor"
+      responses:
+        "200":
+          description: Uma página da central.
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/XRequestId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NotificationPage"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+    delete:
+      operationId: clearNotifications
+      tags: [notifications]
+      summary: Limpar todas
+      x-permission: admin.access
+      x-nuva-pending: true
+      description: |
+        "Limpar todas": apaga lidas e não lidas do usuário da sessão (o histórico lido também
+        some). Nunca alcança notificação de outra pessoa; devolve quantas foram apagadas.
+      security:
+        - sessionCookie: []
+          csrfToken: []
+      responses:
+        "200":
+          description: Quantas notificações foram apagadas.
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/XRequestId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NotificationsCleared"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+  /api/v1/notifications/unread-count:
+    get:
+      operationId: getNotificationUnreadCount
+      tags: [notifications]
+      summary: Contador do sino
+      x-permission: admin.access
+      x-nuva-pending: true
+      description: |
+        Não lidas do usuário da sessão: o número que o sino do admin mostra e que o evento SSE
+        `notification.created` atualiza sem recarregar.
+      responses:
+        "200":
+          description: O contador.
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/XRequestId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NotificationUnreadCount"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+  /api/v1/notifications/{id}/read:
+    post:
+      operationId: markNotificationRead
+      tags: [notifications]
+      summary: Marcar uma notificação como lida
+      x-permission: admin.access
+      x-nuva-pending: true
+      description: |
+        Marca a notificação do usuário da sessão como lida e devolve o item atualizado com o
+        contador do sino. Idempotente: já lida devolve o mesmo item. Notificação inexistente ou
+        de outra pessoa: `404 not_found`.
+      security:
+        - sessionCookie: []
+          csrfToken: []
+      parameters:
+        - $ref: "#/components/parameters/IdPath"
+      responses:
+        "200":
+          description: Item lido e o contador atualizado.
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/XRequestId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NotificationReadResult"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+  /api/v1/notifications/read-all:
+    post:
+      operationId: markAllNotificationsRead
+      tags: [notifications]
+      summary: Marcar todas como lidas
+      x-permission: admin.access
+      x-nuva-pending: true
+      description: |
+        Marca todas as não lidas do usuário da sessão como lidas. `updated` é quantas linhas
+        mudaram; o contador do sino fica zero.
+      security:
+        - sessionCookie: []
+          csrfToken: []
+      responses:
+        "200":
+          description: Quantas notificações passaram a lidas.
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/XRequestId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NotificationsReadAllResult"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+  /api/v1/me/notification-prefs:
+    get:
+      operationId: getNotificationPrefs
+      tags: [notifications]
+      summary: Preferências da equipe por grupo
+      x-permission: admin.access
+      x-nuva-pending: true
+      description: |
+        Canais efetivos dos onze grupos (`specs/024-notificacoes-e-email.md`, "Tipos e grupos"),
+        para o usuário da sessão. Grupo obrigatório devolve `emailRequired: true`, com o e-mail
+        sempre ligado; o grupo `account` não tem canal plataforma (`inAppAvailable: false`).
+        Grupo `staff` só tem efeito para a equipe, que é quem usa esta API.
+      responses:
+        "200":
+          description: As preferências efetivas.
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/XRequestId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NotificationPrefs"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+    put:
+      operationId: updateNotificationPrefs
+      tags: [notifications]
+      summary: Gravar preferências da equipe por grupo
+      x-permission: admin.access
+      x-nuva-pending: true
+      description: |
+        Muda só os canais enviados; grupo omitido e canal omitido ficam como estão. Recusa com
+        `400 validation_failed` o e-mail desligado em grupo obrigatório (`account`, `purchase`,
+        `support` e `moderation`, RF-04) e o canal plataforma no grupo `account`. Devolve as
+        preferências efetivas depois da mudança.
+      security:
+        - sessionCookie: []
+          csrfToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/NotificationPrefsUpdate"
+      responses:
+        "200":
+          description: Preferências gravadas e devolvidas.
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/XRequestId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NotificationPrefs"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "413":
+          $ref: "#/components/responses/PayloadTooLarge"
+        "415":
+          $ref: "#/components/responses/UnsupportedMediaType"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+
+  # --- Fase 4: operação da fila, dos e-mails e identidade (specs 024 e 033) ---
+  /api/v1/ops/summary:
+    get:
+      operationId: getOpsSummary
+      tags: [ops]
+      summary: Resumo da operação
+      x-permission: ops.manage
+      x-nuva-pending: true
+      description: |
+        Números da tela "Operação" e do selo do menu
+        (`specs/033-observabilidade-retencao-backup.md`, "Tela Operação"): a fila por tipo com a
+        idade da tarefa pendente mais antiga, os e-mails pendentes e com falha, os webhooks com
+        falha e o bloco do sistema. `failures` soma o que o selo mostra; zero significa nenhuma
+        falha. Só o `admin` (`ops.manage`).
+      responses:
+        "200":
+          description: O resumo.
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/XRequestId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OpsSummary"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+  /api/v1/ops/jobs:
+    get:
+      operationId: listOpsJobs
+      tags: [ops]
+      summary: Fila por estado
+      x-permission: ops.manage
+      x-nuva-pending: true
+      description: |
+        Tarefas da fila, da mais antiga para a mais nova (`specs/005-worker-e-fila.md`,
+        "Dados"): pendentes (`queued`), em execução (`running`) e com falha (`failed`). Tarefas
+        concluídas não aparecem. `payload` e dados de trava não saem; `lastError` já vem
+        mascarado pelo worker.
+      parameters:
+        - name: status
+          in: query
+          description: Estado da tarefa; sem ele, os três aparecem.
+          schema:
+            $ref: "#/components/schemas/OpsJobStatus"
+        - name: type
+          in: query
+          description: Tipo da tarefa (por exemplo `email.send`).
+          schema:
+            $ref: "#/components/schemas/JobType"
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Cursor"
+      responses:
+        "200":
+          description: Uma página de tarefas.
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/XRequestId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OpsJobPage"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+  /api/v1/ops/jobs/{id}/retry:
+    post:
+      operationId: retryOpsJob
+      tags: [ops]
+      summary: Reenfileirar tarefa com falha
+      x-permission: ops.manage
+      x-nuva-pending: true
+      description: |
+        A tarefa `failed` volta a `queued` para agora, com `attempts = 0`; `lastError` fica como
+        registro (`specs/005-worker-e-fila.md`, "Interfaces e contratos"). A ação grava
+        auditoria. `404 not_found` se não existe; `409 job_not_failed` se não está `failed`;
+        `409 job_already_active` se já existe tarefa `queued` ou `running` com a mesma
+        `uniqueKey`.
+      security:
+        - sessionCookie: []
+          csrfToken: []
+      parameters:
+        - $ref: "#/components/parameters/IdPath"
+      responses:
+        "202":
+          description: Tarefa devolvida à fila.
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/XRequestId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OpsJob"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+  /api/v1/ops/jobs/{id}:
+    delete:
+      operationId: discardOpsJob
+      tags: [ops]
+      summary: Descartar tarefa com falha
+      x-permission: ops.manage
+      x-nuva-pending: true
+      description: |
+        Apaga a tarefa `failed` (`specs/005-worker-e-fila.md`). `404 not_found` se não existe;
+        `409 job_not_failed` se não está `failed`. A ação grava auditoria.
+      security:
+        - sessionCookie: []
+          csrfToken: []
+      parameters:
+        - $ref: "#/components/parameters/IdPath"
+      responses:
+        "204":
+          description: Tarefa apagada.
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/XRequestId"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+  /api/v1/ops/emails:
+    get:
+      operationId: listOpsEmails
+      tags: [ops]
+      summary: E-mails pendentes e com falha
+      x-permission: ops.manage
+      x-nuva-pending: true
+      description: |
+        Linhas de `email_outbox` que ainda não saíram: `queued` e `failed`
+        (`specs/024-notificacoes-e-email.md`, "E-mail"; `specs/033-observabilidade-retencao-backup.md`,
+        "Tela Operação"). O destinatário sai mascarado, e `lastError` traz o motivo do SMTP. O
+        corpo renderizado do e-mail não é guardado e não aparece aqui.
+      parameters:
+        - name: status
+          in: query
+          description: Estado do e-mail; sem ele, pendentes e com falha aparecem.
+          schema:
+            $ref: "#/components/schemas/OpsEmailStatus"
+        - name: type
+          in: query
+          description: Tipo do e-mail (por exemplo `forum.reply`).
+          schema:
+            type: string
+            minLength: 1
+            maxLength: 120
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Cursor"
+      responses:
+        "200":
+          description: Uma página de e-mails.
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/XRequestId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OpsEmailPage"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+  /api/v1/ops/emails/{id}/retry:
+    post:
+      operationId: retryOpsEmail
+      tags: [ops]
+      summary: Reenviar e-mail com falha
+      x-permission: ops.manage
+      x-nuva-pending: true
+      description: |
+        O "reenviar" da tela de operação devolve o e-mail `failed` a `queued`
+        (`specs/024-notificacoes-e-email.md`, "E-mail"): a tarefa `email.send` é enfileirada de
+        novo com as tentativas da RNF-02. A ação grava auditoria. `404 not_found` se não existe;
+        `409 email_not_failed` se a linha não está `failed`.
+      security:
+        - sessionCookie: []
+          csrfToken: []
+      parameters:
+        - $ref: "#/components/parameters/IdPath"
+      responses:
+        "202":
+          description: E-mail devolvido à fila.
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/XRequestId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OpsEmail"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+  /api/v1/settings/branding:
+    get:
+      operationId: getBranding
+      tags: [settings]
+      summary: Identidade da escola nos e-mails
+      x-permission: settings.manage
+      x-nuva-pending: true
+      description: |
+        Nome, logotipo, cor de destaque e rodapé usados nos e-mails de notificação
+        (`specs/024-notificacoes-e-email.md`, "E-mail"). O admin edita só a identidade; os
+        modelos completos ficam no código do worker e não são editáveis por aqui. Leitura e
+        escrita são do `admin` (`settings.manage`).
+      responses:
+        "200":
+          description: A identidade da escola.
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/XRequestId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SchoolBranding"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+    put:
+      operationId: saveBranding
+      tags: [settings]
+      summary: Gravar a identidade da escola nos e-mails
+      x-permission: settings.manage
+      x-nuva-pending: true
+      description: |
+        Grava os quatro campos juntos (`specs/024-notificacoes-e-email.md`): nome, logotipo, cor
+        de destaque e rodapé. O rodapé tem até 500 caracteres e aceita quebras de linha; nulo
+        remove. Nome e cor passam pelas mesmas validações do `/meta`; valor inválido é
+        `400 validation_failed` com o campo em `errors[]`. A ação grava auditoria.
+      security:
+        - sessionCookie: []
+          csrfToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SchoolBrandingInput"
+      responses:
+        "200":
+          description: Identidade gravada e devolvida.
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/XRequestId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SchoolBranding"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "413":
+          $ref: "#/components/responses/PayloadTooLarge"
+        "415":
+          $ref: "#/components/responses/UnsupportedMediaType"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+
 components:
   securitySchemes:
     sessionCookie:
@@ -5526,6 +6187,24 @@ components:
         `ETag` de uma entrega anterior. Igual ao atual, a resposta é `304`, sem corpo.
       schema:
         type: string
+    # --- Fase 4: notificações, stream e operação ---
+    LastEventId:
+      name: Last-Event-ID
+      in: header
+      description: |
+        Último `id` recebido antes da queda (`specs/004-classroom-api.md`, "Fluxo SSE"): o fluxo
+        reenvia os eventos daquele usuário com `id` maior. Ausente na primeira conexão.
+      schema:
+        $ref: "#/components/schemas/StreamEventId"
+    NotificationLimit:
+      name: limit
+      in: query
+      description: Itens por página da central (padrão 20, máximo 50).
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 50
+        default: 20
     # --- comum: catálogo, aprendizado e certificados (Fase 2) ---
     SlugPath:
       name: slug
@@ -9200,4 +9879,577 @@ components:
           description: |
             Fim da última execução bem-sucedida de `payment.reconcile_orders`; `null` quando ainda
             não houve nenhuma.
+      additionalProperties: false
+    # --- Fase 4: central, stream, operação e identidade (specs 024 e 033) ---
+    NotificationGroup:
+      type: string
+      enum:
+        [
+          account,
+          purchase,
+          courses,
+          forum,
+          messages,
+          community,
+          events,
+          support,
+          announcements,
+          moderation,
+          staff,
+        ]
+      description: |
+        Grupo de preferência (`specs/024-notificacoes-e-email.md`, "Tipos e grupos"); o grupo de
+        cada tipo está na mesma tabela.
+    NotificationData:
+      type: object
+      description: |
+        Conteúdo do tipo, definido na spec do recurso (o `ticket.opened` traz o protocolo; o
+        `ops.job_failed`, o tipo da tarefa). Nunca contém senha, token nem segredo.
+      additionalProperties: true
+    NotificationActor:
+      type: object
+      description: Quem gerou o fato; ausente em aviso do sistema.
+      required: [id, name, avatarUrl]
+      properties:
+        id:
+          $ref: "#/components/schemas/Uuid"
+        name:
+          type: string
+          description: Nome de exibição; `usuário removido` quando a conta foi excluída.
+        avatarUrl:
+          type: [string, "null"]
+          description: Caminho da foto de perfil na API, ou nulo.
+      additionalProperties: false
+    NotificationItem:
+      type: object
+      description: |
+        Um item da central (`specs/024-notificacoes-e-email.md`, "Central"): ícone do tipo, foto,
+        título, texto curto, tempo e link para o alvo são montados a partir de `type`, `actor`,
+        `data` e do alvo.
+      required: [id, type, group, actor, targetType, targetId, data, count, readAt, createdAt]
+      properties:
+        id:
+          $ref: "#/components/schemas/Uuid"
+        type:
+          type: string
+          pattern: "^[a-z][a-z0-9_]*(\\.[a-z][a-z0-9_]*)+$"
+          description: |
+            Tipo da notificação (`specs/024-notificacoes-e-email.md`). Fica em texto, e não em
+            `enum`, porque um worker mais novo pode gravar tipo que esta API ainda não conhece.
+          examples: [ticket.opened]
+        group:
+          $ref: "#/components/schemas/NotificationGroup"
+        actor:
+          oneOf:
+            - $ref: "#/components/schemas/NotificationActor"
+            - type: "null"
+          description: Quem gerou o fato; nulo em aviso do sistema.
+        targetType:
+          type: [string, "null"]
+          description: |
+            Tipo do alvo (`ticket`, `report`, `job`...), sempre junto de `targetId`; nulo quando a
+            notificação não aponta para um recurso.
+        targetId:
+          oneOf:
+            - $ref: "#/components/schemas/Uuid"
+            - type: "null"
+        data:
+          $ref: "#/components/schemas/NotificationData"
+        count:
+          type: integer
+          minimum: 1
+          description: Quantas notificações do mesmo tipo e alvo foram fundidas nesta linha.
+        readAt:
+          oneOf:
+            - $ref: "#/components/schemas/DateTime"
+            - type: "null"
+          description: Quando foi lida; nulo enquanto não lida.
+        createdAt:
+          $ref: "#/components/schemas/DateTime"
+      additionalProperties: false
+    NotificationPage:
+      allOf:
+        - $ref: "#/components/schemas/Page"
+        - type: object
+          required: [items]
+          properties:
+            items:
+              type: array
+              items:
+                $ref: "#/components/schemas/NotificationItem"
+    NotificationUnreadCount:
+      type: object
+      description: Não lidas do usuário, para o sino.
+      required: [unreadCount]
+      properties:
+        unreadCount:
+          type: integer
+          minimum: 0
+      additionalProperties: false
+    NotificationReadResult:
+      type: object
+      description: Item marcado como lido e o contador do sino depois da leitura.
+      required: [notification, unreadCount]
+      properties:
+        notification:
+          $ref: "#/components/schemas/NotificationItem"
+        unreadCount:
+          type: integer
+          minimum: 0
+      additionalProperties: false
+    NotificationsReadAllResult:
+      type: object
+      description: Resultado de "marcar todas como lidas".
+      required: [updated, unreadCount]
+      properties:
+        updated:
+          type: integer
+          minimum: 0
+          description: Quantas notificações passaram de não lidas a lidas nesta chamada.
+        unreadCount:
+          type: integer
+          const: 0
+      additionalProperties: false
+    NotificationsCleared:
+      type: object
+      description: Resultado de "limpar todas".
+      required: [deleted]
+      properties:
+        deleted:
+          type: integer
+          minimum: 0
+          description: Quantas notificações foram apagadas.
+      additionalProperties: false
+    NotificationGroupPrefs:
+      type: object
+      description: |
+        Canais efetivos de um grupo e as regras que a interface precisa para desabilitar o que
+        não pode mudar.
+      required: [inApp, email, emailRequired, inAppAvailable]
+      properties:
+        inApp:
+          type: boolean
+        email:
+          type: boolean
+        emailRequired:
+          type: boolean
+          description: |
+            `true` nos grupos obrigatórios (`account`, `purchase`, `support` e `moderation`): o
+            e-mail não pode ser desligado (RF-04).
+        inAppAvailable:
+          type: boolean
+          description: "`false` só no grupo `account`, que não tem canal plataforma."
+      additionalProperties: false
+    NotificationPrefs:
+      type: object
+      description: |
+        Canais efetivos dos onze grupos (`specs/024-notificacoes-e-email.md`, "Tipos e grupos"),
+        na ordem da tabela.
+      required:
+        [
+          account,
+          purchase,
+          courses,
+          forum,
+          messages,
+          community,
+          events,
+          support,
+          announcements,
+          moderation,
+          staff,
+        ]
+      properties:
+        account:
+          $ref: "#/components/schemas/NotificationGroupPrefs"
+        purchase:
+          $ref: "#/components/schemas/NotificationGroupPrefs"
+        courses:
+          $ref: "#/components/schemas/NotificationGroupPrefs"
+        forum:
+          $ref: "#/components/schemas/NotificationGroupPrefs"
+        messages:
+          $ref: "#/components/schemas/NotificationGroupPrefs"
+        community:
+          $ref: "#/components/schemas/NotificationGroupPrefs"
+        events:
+          $ref: "#/components/schemas/NotificationGroupPrefs"
+        support:
+          $ref: "#/components/schemas/NotificationGroupPrefs"
+        announcements:
+          $ref: "#/components/schemas/NotificationGroupPrefs"
+        moderation:
+          $ref: "#/components/schemas/NotificationGroupPrefs"
+        staff:
+          $ref: "#/components/schemas/NotificationGroupPrefs"
+      additionalProperties: false
+    NotificationChannelUpdate:
+      type: object
+      description: Canais a mudar num grupo; canal omitido fica como está.
+      minProperties: 1
+      properties:
+        inApp:
+          type: boolean
+        email:
+          type: boolean
+      additionalProperties: false
+    NotificationPrefsUpdate:
+      type: object
+      description: |
+        Grupos a mudar; grupo omitido fica como está. Grupo obrigatório com `email: false` e
+        grupo `account` com `inApp: true` são recusados com `400 validation_failed`.
+      minProperties: 1
+      additionalProperties: false
+      properties:
+        account:
+          $ref: "#/components/schemas/NotificationChannelUpdate"
+        purchase:
+          $ref: "#/components/schemas/NotificationChannelUpdate"
+        courses:
+          $ref: "#/components/schemas/NotificationChannelUpdate"
+        forum:
+          $ref: "#/components/schemas/NotificationChannelUpdate"
+        messages:
+          $ref: "#/components/schemas/NotificationChannelUpdate"
+        community:
+          $ref: "#/components/schemas/NotificationChannelUpdate"
+        events:
+          $ref: "#/components/schemas/NotificationChannelUpdate"
+        support:
+          $ref: "#/components/schemas/NotificationChannelUpdate"
+        announcements:
+          $ref: "#/components/schemas/NotificationChannelUpdate"
+        moderation:
+          $ref: "#/components/schemas/NotificationChannelUpdate"
+        staff:
+          $ref: "#/components/schemas/NotificationChannelUpdate"
+    StreamEventId:
+      type: string
+      pattern: "^[0-9]+$"
+      description: |
+        Campo `id` do SSE: inteiro em texto, tirado de uma sequência do banco. Crescente para
+        cada usuário, não consecutivo.
+      examples: ["42"]
+    StreamNotificationCreatedData:
+      type: object
+      required: [notificationId, type, unreadCount]
+      properties:
+        notificationId:
+          $ref: "#/components/schemas/Uuid"
+        type:
+          type: string
+          description: Tipo da notificação (`specs/024-notificacoes-e-email.md`).
+        unreadCount:
+          type: integer
+          minimum: 0
+          description: Notificações não lidas do usuário depois desta.
+      additionalProperties: false
+    StreamPingData:
+      type: object
+      description: Sempre vazio.
+      additionalProperties: false
+    StreamEventNotificationCreated:
+      type: object
+      description: Nova notificação para quem está conectado.
+      required: [id, event, data]
+      properties:
+        id:
+          $ref: "#/components/schemas/StreamEventId"
+        event:
+          type: string
+          const: notification.created
+        data:
+          $ref: "#/components/schemas/StreamNotificationCreatedData"
+      additionalProperties: false
+    StreamEventPing:
+      type: object
+      description: Mantém a conexão viva; enviado a cada 25 s, sem `id`.
+      required: [event, data]
+      properties:
+        event:
+          type: string
+          const: ping
+        data:
+          $ref: "#/components/schemas/StreamPingData"
+      additionalProperties: false
+    StreamEvent:
+      description: |
+        Um evento do fluxo do admin depois de lido (campos `id`, `event` e `data` do SSE). Só o
+        `notification.created` do titular e o `ping`; os demais tipos do canal são descartados
+        (ADR 0028).
+      oneOf:
+        - $ref: "#/components/schemas/StreamEventNotificationCreated"
+        - $ref: "#/components/schemas/StreamEventPing"
+      discriminator:
+        propertyName: event
+        mapping:
+          notification.created: "#/components/schemas/StreamEventNotificationCreated"
+          ping: "#/components/schemas/StreamEventPing"
+    JobType:
+      type: string
+      pattern: "^[a-z][a-z0-9_]*(\\.[a-z][a-z0-9_]*)*$"
+      description: |
+        Tipo da tarefa (`specs/005-worker-e-fila.md`), no formato `palavra.palavra` em minúsculas.
+        Fica em texto, e não em `enum`, porque o worker pode ganhar tipo que esta API ainda não
+        conhece.
+      examples: [email.send, retention.purge]
+    OpsJobStatus:
+      type: string
+      enum: [queued, running, failed]
+      description: |
+        Estado da tarefa na tela de operação: pendente, em execução ou com falha. Tarefas
+        concluídas não aparecem.
+    OpsJob:
+      type: object
+      description: |
+        Uma tarefa da fila (`specs/005-worker-e-fila.md`, "Dados"). `payload` e dados de trava não
+        saem; `lastError` já vem mascarado pelo worker.
+      required:
+        [id, type, status, priority, attempts, maxAttempts, runAt, createdAt, finishedAt, lastError]
+      properties:
+        id:
+          $ref: "#/components/schemas/Uuid"
+        type:
+          $ref: "#/components/schemas/JobType"
+        status:
+          $ref: "#/components/schemas/OpsJobStatus"
+        priority:
+          type: integer
+          description: Prioridade; maior executa antes.
+        attempts:
+          type: integer
+          minimum: 0
+          description: Tentativas já gastas; sobe quando o worker pega a tarefa.
+        maxAttempts:
+          type: integer
+          minimum: 1
+        runAt:
+          $ref: "#/components/schemas/DateTime"
+          description: Quando pode executar (ou voltar a executar).
+        createdAt:
+          $ref: "#/components/schemas/DateTime"
+        finishedAt:
+          oneOf:
+            - $ref: "#/components/schemas/DateTime"
+            - type: "null"
+          description: Fim da última execução; nulo enquanto não terminou.
+        lastError:
+          type: [string, "null"]
+          description: Motivo da última falha, mascarado; `null` quando nunca falhou.
+      additionalProperties: false
+    OpsJobPage:
+      allOf:
+        - $ref: "#/components/schemas/Page"
+        - type: object
+          required: [items]
+          properties:
+            items:
+              type: array
+              items:
+                $ref: "#/components/schemas/OpsJob"
+    OpsEmailStatus:
+      type: string
+      enum: [queued, failed]
+      description: Estado do e-mail na tela de operação; enviados não aparecem.
+    OpsEmail:
+      type: object
+      description: |
+        Uma linha de `email_outbox` ainda não enviada (`specs/024-notificacoes-e-email.md`,
+        "E-mail"). O destinatário sai mascarado e o corpo renderizado não é guardado.
+      required: [id, type, to, subject, status, attempts, lastError, createdAt]
+      properties:
+        id:
+          $ref: "#/components/schemas/Uuid"
+        type:
+          type: string
+          pattern: "^[a-z][a-z0-9_]*(\\.[a-z][a-z0-9_]*)+$"
+          description: Tipo do e-mail, no mesmo formato dos códigos do catálogo.
+          examples: [ticket.reply]
+        to:
+          type: string
+          description: Destinatário mascarado (por exemplo `a***@exemplo.com`).
+        subject:
+          type: [string, "null"]
+          description: Assunto; nulo até o envio montar o e-mail.
+        status:
+          $ref: "#/components/schemas/OpsEmailStatus"
+        attempts:
+          type: integer
+          minimum: 0
+          description: Tentativas já gastas.
+        lastError:
+          type: [string, "null"]
+          description: Motivo da última falha do SMTP; `null` quando nunca falhou.
+        createdAt:
+          $ref: "#/components/schemas/DateTime"
+      additionalProperties: false
+    OpsEmailPage:
+      allOf:
+        - $ref: "#/components/schemas/Page"
+        - type: object
+          required: [items]
+          properties:
+            items:
+              type: array
+              items:
+                $ref: "#/components/schemas/OpsEmail"
+    OpsJobTypeSummary:
+      type: object
+      description: Contagem da fila por tipo, para o resumo e o selo do menu.
+      required: [type, queued, running, failed, oldestPendingSeconds]
+      properties:
+        type:
+          $ref: "#/components/schemas/JobType"
+        queued:
+          type: integer
+          minimum: 0
+        running:
+          type: integer
+          minimum: 0
+        failed:
+          type: integer
+          minimum: 0
+        oldestPendingSeconds:
+          oneOf:
+            - type: integer
+              minimum: 0
+            - type: "null"
+          description: |
+            Idade, em segundos, da tarefa pendente mais antiga deste tipo; nulo quando não há
+            nenhuma.
+      additionalProperties: false
+    OpsSummary:
+      type: object
+      description: |
+        Números da tela "Operação" e do selo do menu
+        (`specs/033-observabilidade-retencao-backup.md`, "Tela Operação").
+      required: [jobs, emails, webhooks, system, failures]
+      properties:
+        jobs:
+          type: array
+          description: A fila por tipo, com pendentes, em execução e com falha.
+          items:
+            $ref: "#/components/schemas/OpsJobTypeSummary"
+        emails:
+          type: object
+          required: [queued, failed]
+          properties:
+            queued:
+              type: integer
+              minimum: 0
+            failed:
+              type: integer
+              minimum: 0
+          additionalProperties: false
+        webhooks:
+          type: object
+          required: [failed]
+          properties:
+            failed:
+              type: integer
+              minimum: 0
+              description: Eventos de webhook com falha de processamento, reprocessáveis.
+          additionalProperties: false
+        system:
+          $ref: "#/components/schemas/OpsSystemSummary"
+        failures:
+          type: integer
+          minimum: 0
+          description: |
+            Soma do que o selo do menu mostra: tarefas, e-mails e webhooks com falha. Zero
+            significa nenhuma falha.
+      additionalProperties: false
+    OpsSystemSummary:
+      type: object
+      description: |
+        Bloco "Sistema" da tela de operação (`specs/033-observabilidade-retencao-backup.md`).
+        Cifras em bytes.
+      required: [version, migrationVersion, databaseBytes, imageBytes, lastBackup, lastPurgeAt]
+      properties:
+        version:
+          type: string
+          description: Versão instalada do nuva-edu (SemVer).
+          examples: [0.1.0]
+        migrationVersion:
+          type: string
+          description: Última migration aplicada.
+          examples: ["0019"]
+        databaseBytes:
+          type: integer
+          minimum: 0
+        imageBytes:
+          type: integer
+          minimum: 0
+          description: Espaço ocupado pelas imagens das variantes (`specs/029-imagens.md`).
+        lastBackup:
+          oneOf:
+            - type: object
+              required: [finishedAt, sizeBytes, status]
+              properties:
+                finishedAt:
+                  $ref: "#/components/schemas/DateTime"
+                sizeBytes:
+                  type: integer
+                  minimum: 0
+                status:
+                  type: string
+                  enum: [ok, failed]
+              additionalProperties: false
+            - type: "null"
+          description: |
+            Última execução de backup; nulo quando ainda não houve. Mais de 26 horas desde
+            `finishedAt` aparece como atrasado.
+        lastPurgeAt:
+          oneOf:
+            - $ref: "#/components/schemas/DateTime"
+            - type: "null"
+          description: Fim do último expurgo (`retention.purge`); nulo quando ainda não houve.
+      additionalProperties: false
+    SchoolBranding:
+      type: object
+      description: |
+        Identidade da escola usada nos e-mails de notificação
+        (`specs/024-notificacoes-e-email.md`, "E-mail"). Todos os campos estão sempre presentes;
+        `logoUrl`, `accentColor` e `footer` podem ser `null`.
+      required: [schoolName, logoUrl, accentColor, footer]
+      properties:
+        schoolName:
+          type: string
+          description: Nome da escola, o mesmo do `/meta`.
+        logoUrl:
+          type: [string, "null"]
+          format: uri-reference
+          description: Caminho do logotipo na própria API, ou nulo sem logotipo.
+          examples: [/api/v1/images/0193a5b2-7c1e-7d3a-9f4b-2a6c8e1d5f70/256.webp, null]
+        accentColor:
+          type: [string, "null"]
+          pattern: "^#[0-9A-Fa-f]{6}$"
+          description: Cor de destaque em `#RRGGBB`, ou nulo para a cor padrão da interface.
+          examples: ["#1F6FEB", null]
+        footer:
+          type: [string, "null"]
+          maxLength: 500
+          description: Rodapé dos e-mails, com quebras de linha; nulo quando não definido.
+      additionalProperties: false
+    SchoolBrandingInput:
+      type: object
+      description: |
+        Os quatro campos gravados juntos; `logoImageId` é o identificador da imagem do logotipo
+        (`specs/029-imagens.md`), não o caminho.
+      required: [schoolName, logoImageId, accentColor, footer]
+      properties:
+        schoolName:
+          type: string
+          minLength: 1
+          maxLength: 120
+        logoImageId:
+          oneOf:
+            - $ref: "#/components/schemas/Uuid"
+            - type: "null"
+        accentColor:
+          type: [string, "null"]
+          pattern: "^#[0-9A-Fa-f]{6}$"
+        footer:
+          type: [string, "null"]
+          maxLength: 500
       additionalProperties: false
