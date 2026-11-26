@@ -371,6 +371,35 @@ export interface Notes {
   videoSeconds: number | null;
 }
 
+export interface NotificationPrefs {
+  email: boolean;
+  group: string;
+  inApp: boolean;
+  updatedAt: Generated<Timestamp>;
+  userId: string;
+}
+
+export interface Notifications {
+  actorId: string | null;
+  count: Generated<number>;
+  createdAt: Generated<Timestamp>;
+  data: Generated<Json>;
+  groupKey: Generated<string>;
+  id: Generated<string>;
+  readAt: Timestamp | null;
+  targetId: string | null;
+  targetType: string | null;
+  type: string;
+  userId: string;
+}
+
+export interface NotificationUnsubscribeTokens {
+  createdAt: Generated<Timestamp>;
+  group: string;
+  token: string;
+  userId: string;
+}
+
 export interface OauthIdentities {
   createdAt: Generated<Timestamp>;
   email: string | null;
@@ -628,6 +657,9 @@ export interface DB {
   loginAttempts: LoginAttempts;
   modules: Modules;
   notes: Notes;
+  notificationPrefs: NotificationPrefs;
+  notifications: Notifications;
+  notificationUnsubscribeTokens: NotificationUnsubscribeTokens;
   oauthIdentities: OauthIdentities;
   orderItems: OrderItems;
   orders: Orders;
