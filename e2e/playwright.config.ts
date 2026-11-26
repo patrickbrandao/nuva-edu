@@ -57,6 +57,9 @@ export default defineConfig({
       name: 'fase2',
       dependencies: ['setup'],
       testMatch: /fase2\/.*\.spec\.ts$/,
+      // Um teste por vez: a CSP dos players faz várias aulas de uma vez e deixa a API quieta
+      // antes da seguinte, para o limite de taxa por IP não misturar os testes.
+      workers: 1,
       timeout: 300_000,
       use: { ...devices['Desktop Chrome'] },
     },

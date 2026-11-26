@@ -41,14 +41,21 @@ export function videoUrl(name: string): string {
   return `${VIDEO_HOST}/${name}.webm`;
 }
 
+/** O mesmo vídeo com a extensão `.mp4`: o admin classifica pelo sufixo, sem buscar a URL. */
+export function mp4Url(name: string): string {
+  return `${VIDEO_HOST}/${name}.mp4`;
+}
+
 /** Responde aos pedidos de vídeo do contexto com o arquivo local; nada sai para a rede. */
 export async function serveVideo(context: BrowserContext): Promise<void> {
   await context.route(`${VIDEO_HOST}/**`, async (route) => {
     const range = /bytes=(\d+)-(\d*)/.exec(route.request().headers().range ?? '');
+    // O mesmo arquivo serve `.webm` e `.mp4` (só a extensão muda: o admin classifica sem buscar).
+    const contentType = route.request().url().endsWith('.mp4') ? 'video/mp4' : 'video/webm';
     if (!range) {
       await route.fulfill({
         status: 200,
-        contentType: 'video/webm',
+        contentType,
         headers: { 'accept-ranges': 'bytes', 'access-control-allow-origin': '*' },
         body: VIDEO,
       });
@@ -58,7 +65,7 @@ export async function serveVideo(context: BrowserContext): Promise<void> {
     const end = range[2] ? Math.min(Number(range[2]), VIDEO.length - 1) : VIDEO.length - 1;
     await route.fulfill({
       status: 206,
-      contentType: 'video/webm',
+      contentType,
       headers: {
         'accept-ranges': 'bytes',
         'content-range': `bytes ${start}-${end}/${VIDEO.length}`,

@@ -29,8 +29,9 @@ ambiente. Quando algo continua fora do ar, o erro traz a URL que não respondeu 
 - Fluxos do critério de saída da Fase 1 em `tests/fase1/` (projetos `fase1` e `fase1-termos`; este
   publica versão nova dos termos e roda por último). Cada execução usa e-mails novos: o banco não
   é zerado.
-- Fluxos do critério de saída da Fase 2 em `tests/fase2/` (projeto `fase2`; o `fase1-termos` espera
-  por ele, porque versão nova dos termos prenderia as sessões dos alunos na tela de aceite):
+- Fluxos do critério de saída da Fase 2 em `tests/fase2/` (projeto `fase2`, um worker por vez; o
+  `fase1-termos` espera por ele, porque versão nova dos termos prenderia as sessões dos alunos na
+  tela de aceite):
   - `curso-aberto.spec.ts`: o instrutor monta e publica um curso aberto; o visitante o vê na
     vitrine; o aluno conclui pelo fim do vídeo e pelo botão, anota, vê "certificado ainda não
     liberado"; o instrutor confere o PDF de exemplo e salva o template; o certificado chega por
@@ -43,6 +44,14 @@ ambiente. Quando algo continua fora do ar, o erro traz a URL que não respondeu 
   - O vídeo das aulas é `fixtures/aula.webm` (3 s, VP9), servido pelo próprio teste com
     `context.route` num host fictício (`support/fase2.ts`): nada sai para provedor de vídeo.
   - O texto do PDF é lido por `support/pdf.ts`, um leitor mínimo para o que o Chromium gera.
+- CSP dos players (tarefa 065): `tests/fase2/csp-players.spec.ts` abre uma aula de cada provedor da
+  spec 009 num curso aberto e falha se o documento do classroom registrar `securitypolicyviolation`
+  ou erro "Content Security Policy" no console (a vigia é `support/csp.ts`; `tests/csp-vigia.spec.ts`
+  prova que ela registra a violação do documento). As URLs de YouTube, Vimeo, Bunny e Panda são os
+  exemplos públicos dos testes do `VideoPlayer`, não links de uma escola real: o que se confere é o
+  pedido sair sem ser barrado, não o vídeo tocar. O `.mp4` é o `fixtures/aula.webm` servido pelo
+  próprio teste sob esse nome (a classificação é pela extensão) e toca até o fim. O que acontece
+  dentro do `iframe` do provedor é da política dele, não do classroom.
 - Atrás do Traefik local todo pedido do navegador chega com o mesmo IP. Por isso:
   - as operações de autenticação feitas pela tela esperam a vez em `support/pacing.ts` (abaixo
     de 10 por minuto no classroom e 20 no admin, os limites por IP das APIs);
