@@ -7,6 +7,7 @@ Detalhe das decisões em `specs/decisions/`.
 
 ### Adicionado
 - admin-api: solicitações repetidas de reembolso de assinatura com a mesma `Idempotency-Key` devolvem o reembolso original e geram uma única tarefa e auditoria (spec 003, task 712).
+- classroom: a vitrine reutiliza a chave de idempotência ao reenviar o checkout de assinatura e gera outra quando o plano, o cupom ou a validação exige nova tentativa (spec 012, task 716).
 - admin-api: cobertura HTTP alinhada ao contrato para combinações inválidas de planos e itens duplicados (spec 012, task 722).
 - classroom-api: checkout de assinatura aceita `Idempotency-Key` e devolve o checkout original quando a mesma tentativa é reenviada (spec 012, task 715).
 - core: idempotência na criação de assinatura (`createSubscriptionCheckout` com `idempotencyKey` opcional e escopo `subscription.create`), devolvendo a primeira assinatura e `checkoutUrl` por 24 h sem segunda adesão no provedor, recusando plano ou cupom divergente com `422 idempotency_key_reuse` e liberando a chave sem criar assinatura quando o provedor está indisponível (specs 003 e 012; task 718).

@@ -122,6 +122,7 @@ export function useMySubscription(id: string) {
 }
 
 export interface NewSubscription {
+  idempotencyKey: string;
   planId: string;
   couponCode: string | null;
 }
@@ -140,6 +141,7 @@ export function useCreateSubscription() {
   return useMutation({
     mutationFn: async (input: NewSubscription): Promise<SubscriptionCheckout> => {
       const { data } = await api.POST('/api/v1/subscriptions', {
+        params: { header: { 'Idempotency-Key': input.idempotencyKey } },
         body: {
           planId: input.planId,
           ...(input.couponCode ? { couponCode: input.couponCode } : {}),

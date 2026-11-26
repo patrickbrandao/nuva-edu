@@ -1,3 +1,4 @@
+import { isApiError } from '@nuva-edu/api-client/classroom';
 import {
   AdminButton,
   AdminCard,
@@ -111,6 +112,7 @@ function CheckoutPanel({ plan, onClose, onRefreshPlans }: CheckoutPanelProps) {
     taxId: billingQuery.data?.taxId ?? '',
   }));
   const hydrated = useRef(false);
+  const attempt = useRef<{ key: string; couponCode: string | null } | null>(null);
 
   // o que já está salvo em /me/billing preenche o formulário uma vez, sem apagar o que a pessoa digitou
   useEffect(() => {
@@ -156,10 +158,20 @@ function CheckoutPanel({ plan, onClose, onRefreshPlans }: CheckoutPanelProps) {
       }
     }
 
+    const couponCode = coupon.trim() || null;
+    const normalizedCoupon = couponCode?.toLowerCase() ?? null;
+    if (!attempt.current || attempt.current.couponCode !== normalizedCoupon) {
+      const key =
+        globalThis.crypto?.randomUUID?.() ??
+        `assinatura-${Date.now()}-${Math.random().toString(36).slice(2, 12)}`;
+      attempt.current = { key, couponCode: normalizedCoupon };
+    }
+    const { key } = attempt.current;
     try {
       const checkout = await create.mutateAsync({
         planId: plan.id,
-        couponCode: coupon.trim() || null,
+        couponCode,
+        idempotencyKey: key,
       });
       if (!isHttpUrl(checkout.checkoutUrl)) {
         setFailure({
@@ -181,6 +193,13 @@ function CheckoutPanel({ plan, onClose, onRefreshPlans }: CheckoutPanelProps) {
         not_found: t('subscriptions.checkout.errors.planUnavailable'),
       });
       setFailure(shown);
+      if (
+        attempt.current?.key === key &&
+        isApiError(error) &&
+        (error.status === 400 || error.status === 422 || shown.code === 'billing_required')
+      ) {
+        attempt.current = null;
+      }
       if (shown.code === 'billing_required') setNeedsBuyer(true);
       if (shown.code === 'coupon_invalid') setCouponError(shown.message);
     }
@@ -369,6 +388,7 @@ function PlansContent({
 
       {selected ? (
         <CheckoutPanel
+          key={selected.plan.id}
           plan={selected.plan}
           onClose={onCloseCheckout}
           onRefreshPlans={onRefreshPlans}

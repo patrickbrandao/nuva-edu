@@ -170,6 +170,53 @@ describe('checkout da assinatura', () => {
     expect(screen.getByText(checkout.redirecting)).toBeTruthy();
   });
 
+  it('duplo clique e nova tentativa após falha transitória usam a mesma chave', async () => {
+    const assign = spyNavigation();
+    const keys: Array<string | null> = [];
+    let unavailable = true;
+    const { user } = await openCheckout({
+      [SUBSCRIBE_URL]: (request) => {
+        keys.push(request.headers.get('Idempotency-Key'));
+        return unavailable
+          ? problemResponse(503, 'payment_provider_unavailable')
+          : jsonResponse(subscriptionCheckout(), 201);
+      },
+    });
+
+    await user.dblClick(screen.getByRole('button', { name: checkout.submit }));
+    expect(await screen.findByText(checkout.errors.providerUnavailable)).toBeTruthy();
+    expect(keys[0]).toMatch(/^.{8,128}$/);
+    unavailable = false;
+    await user.click(screen.getByRole('button', { name: checkout.submit }));
+
+    await waitFor(() => expect(assign).toHaveBeenCalledWith('https://mp.test/assinatura/abc'));
+    expect(keys.length).toBeGreaterThanOrEqual(2);
+    expect(new Set(keys).size).toBe(1);
+  });
+
+  it('recomeçar após cupom recusado gera outra chave', async () => {
+    const assign = spyNavigation();
+    const keys: Array<string | null> = [];
+    const { user } = await openCheckout({
+      [SUBSCRIBE_URL]: (request) => {
+        keys.push(request.headers.get('Idempotency-Key'));
+        return keys.length === 1
+          ? problemResponse(422, 'coupon_invalid')
+          : jsonResponse(subscriptionCheckout(), 201);
+      },
+    });
+
+    await user.type(screen.getByLabelText(checkout.coupon.label), 'PRIMEIRA10');
+    await user.click(screen.getByRole('button', { name: checkout.submit }));
+    await findAlert();
+    await user.click(screen.getByRole('button', { name: checkout.submit }));
+
+    await waitFor(() => expect(assign).toHaveBeenCalledWith('https://mp.test/assinatura/abc'));
+    expect(keys).toHaveLength(2);
+    expect(keys[1]).toMatch(/^.{8,128}$/);
+    expect(keys[1]).not.toBe(keys[0]);
+  });
+
   it('sem dados de comprador pede nome e documento, salva e segue para o pagamento', async () => {
     const assign = spyNavigation();
     const user = userEvent.setup();
