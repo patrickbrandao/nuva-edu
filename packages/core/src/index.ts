@@ -95,6 +95,7 @@ export * from './modules/oauth/index.ts';
 export * from './modules/payments/index.ts';
 export * from './modules/permissions/index.ts';
 export * from './modules/privacy/index.ts';
+export * from './modules/sales/index.ts';
 export {
   getNotificationBranding,
   NOTIFICATION_EMAIL_FOOTER_KEY,

@@ -33,6 +33,12 @@ export {
   revokeManualEntitlement,
 } from './manual.ts';
 export {
+  type FulfillOrderOptions,
+  type FulfillOrderResult,
+  fulfillOrder,
+  revokeOrderEntitlements,
+} from './order.ts';
+export {
   listMyEntitlements,
   listProductEntitlements,
   type MyEntitlement,

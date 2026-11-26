@@ -51,3 +51,14 @@ export function invalidPaymentRequest(detail: string): DomainError {
 export function invalidPaymentTransition(detail: string): DomainError {
   return businessRule(PAYMENT_ERROR_CODES.invalidTransition, detail);
 }
+
+/**
+ * `422` do pagamento aprovado cujo valor ou moeda não bate com o total congelado do pedido. O
+ * worker usa o `code` para marcar o evento como `failed` com motivo `amount_mismatch` (spec 013,
+ * "Falhas") e não libera acesso.
+ */
+export function paymentAmountMismatch(
+  detail = 'O valor pago não corresponde ao total do pedido.',
+): DomainError {
+  return businessRule('payment_amount_mismatch', detail);
+}

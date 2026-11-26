@@ -5,6 +5,7 @@ export {
   invalidWebhookSignature,
   PAYMENT_ERROR_CODES,
   PaymentWebhookSignatureError,
+  paymentAmountMismatch,
   paymentNotFound,
   paymentUnavailable,
 } from './errors.ts';
@@ -20,6 +21,12 @@ export {
   type FakeWebhookOptions,
   PAYMENT_WEBHOOK_MAX_AGE_MS,
 } from './fake.ts';
+export {
+  type AppliedOrderPayment,
+  type ApplyOrderPaymentOptions,
+  applyOrderPayment,
+  recordOrderPayment,
+} from './order-transitions.ts';
 export {
   orderExternalReference,
   parsePaymentExternalReference,

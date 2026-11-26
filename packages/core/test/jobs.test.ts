@@ -92,6 +92,12 @@ describe('registro de tipos', () => {
       'example.echo',
       'image.cleanup',
       'notify',
+      'order.fulfill',
+      'payment.reconcile_orders',
+      'payment.reconcile_refunds',
+      'payment.reconcile_subscriptions',
+      'payment.webhook',
+      'refund.execute',
       'retention.purge',
       'suspension.expire',
     ]);
@@ -169,12 +175,53 @@ describe('registro de tipos', () => {
 });
 
 describe('tipos da Fase 2 (tarefa 405)', () => {
-  it('só `notify` fica sem manipulador no worker até a tarefa 586', () => {
-    expectTypeOf<PendingHandlerJobType>().toEqualTypeOf<'notify'>();
+  it('só a central de notificações e os tipos de vendas aguardam manipulador no worker', () => {
+    expectTypeOf<PendingHandlerJobType>().toEqualTypeOf<
+      | 'notify'
+      | 'payment.webhook'
+      | 'order.fulfill'
+      | 'refund.execute'
+      | 'payment.reconcile_orders'
+      | 'payment.reconcile_subscriptions'
+      | 'payment.reconcile_refunds'
+    >();
     expectTypeOf<
       (typeof PENDING_HANDLER_JOB_TYPES)[number]
     >().toEqualTypeOf<PendingHandlerJobType>();
-    expect(PENDING_HANDLER_JOB_TYPES).toEqual(['notify']);
+    expect([...PENDING_HANDLER_JOB_TYPES].sort()).toEqual([
+      'notify',
+      'order.fulfill',
+      'payment.reconcile_orders',
+      'payment.reconcile_refunds',
+      'payment.reconcile_subscriptions',
+      'payment.webhook',
+      'refund.execute',
+    ]);
+  });
+
+  it('os tipos de vendas e pagamentos seguem a tabela da spec 005', () => {
+    const sales = [
+      'payment.webhook',
+      'order.fulfill',
+      'refund.execute',
+      'payment.reconcile_orders',
+      'payment.reconcile_subscriptions',
+      'payment.reconcile_refunds',
+    ] as const;
+    const definitions = Object.fromEntries(sales.map((type) => [type, JOB_DEFINITIONS[type]]));
+    expect(definitions).toEqual({
+      'payment.webhook': { maxAttempts: 10, priority: 10 },
+      'order.fulfill': { maxAttempts: 10, priority: 10 },
+      'refund.execute': { maxAttempts: 10, priority: 10 },
+      'payment.reconcile_orders': { maxAttempts: 3, priority: 10 },
+      'payment.reconcile_subscriptions': { maxAttempts: 3, priority: 10 },
+      'payment.reconcile_refunds': { maxAttempts: 3, priority: 10 },
+    });
+    expectTypeOf<JobPayloads['payment.webhook']>().toEqualTypeOf<{ webhookEventId: string }>();
+    expectTypeOf<JobPayloads['order.fulfill']>().toEqualTypeOf<{ orderId: string }>();
+    expectTypeOf<JobPayloads['refund.execute']>().toEqualTypeOf<{ refundId: string }>();
+    expectTypeOf<JobPayloads['payment.reconcile_orders']>().toEqualTypeOf<Record<string, never>>();
+    expectTypeOf<JobPayloads['order.fulfill']>().not.toEqualTypeOf<{ email: string }>();
   });
 
   it('seguem as tentativas da tabela da spec 005', () => {

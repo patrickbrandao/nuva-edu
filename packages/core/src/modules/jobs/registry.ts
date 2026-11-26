@@ -51,6 +51,21 @@ export interface JobPayloads {
   'certificate.backfill': { courseId: string };
   /** Renderiza o PDF de exemplo de uma linha de `certificate_previews` (015). */
   'certificate.preview': { previewId: string };
+  /**
+   * Processa um `webhook_events` já gravado: consulta o pagamento no provedor e aplica a
+   * transição do pedido ou da assinatura (013). Leva só o id da linha.
+   */
+  'payment.webhook': { webhookEventId: string };
+  /** Marca o pedido pago e cria os direitos em cascata (010, 011, 013). */
+  'order.fulfill': { orderId: string };
+  /** Estorna no provedor e revoga os direitos em cascata (011, 013). */
+  'refund.execute': { refundId: string };
+  /** Reconciliação dos pedidos `pending` a cada 5 min (013). Recorrente. */
+  'payment.reconcile_orders': Record<string, never>;
+  /** Reconciliação das assinaturas a cada 6 h (012, 013). Recorrente. */
+  'payment.reconcile_subscriptions': Record<string, never>;
+  /** Reconciliação dos reembolsos pedidos a cada 30 min (013). Recorrente. */
+  'payment.reconcile_refunds': Record<string, never>;
 }
 
 /** Produto pai do recálculo de direitos na Fase 2: só curso e pacote têm itens derivados. */
@@ -95,19 +110,39 @@ export const JOB_DEFINITIONS: { readonly [T in JobType]: JobDefinition } = {
   'certificate.render': { maxAttempts: 5, priority: 0 },
   'certificate.backfill': { maxAttempts: 3, priority: 0 },
   'certificate.preview': { maxAttempts: 1, priority: 0 },
+  'payment.webhook': { maxAttempts: 10, priority: 10 },
+  'order.fulfill': { maxAttempts: 10, priority: 10 },
+  'refund.execute': { maxAttempts: 10, priority: 10 },
+  'payment.reconcile_orders': { maxAttempts: 3, priority: 10 },
+  'payment.reconcile_subscriptions': { maxAttempts: 3, priority: 10 },
+  'payment.reconcile_refunds': { maxAttempts: 3, priority: 10 },
 };
 
 /**
  * Tipos já no registro cujo manipulador ainda não existe no worker (chega em outra tarefa).
  * `JobHandlers` exige o manipulador dos demais; estes são opcionais. Tipo novo cujo manipulador
  * venha depois entra aqui até ele chegar; tarefa sem manipulador falha como erro comum e segue
- * as tentativas do tipo.
+ * as tentativas do tipo. Hoje a central de notificações (`notify`) e os tipos de vendas e
+ * pagamentos, que o worker recebe nas tarefas 542 e 557.
  */
-export type PendingHandlerJobType = 'notify';
+export type PendingHandlerJobType =
+  | 'notify'
+  | 'payment.webhook'
+  | 'order.fulfill'
+  | 'refund.execute'
+  | 'payment.reconcile_orders'
+  | 'payment.reconcile_subscriptions'
+  | 'payment.reconcile_refunds';
 
 /** Os mesmos tipos de `PendingHandlerJobType`, para conferência em tempo de execução. */
 export const PENDING_HANDLER_JOB_TYPES = [
   'notify',
+  'payment.webhook',
+  'order.fulfill',
+  'refund.execute',
+  'payment.reconcile_orders',
+  'payment.reconcile_subscriptions',
+  'payment.reconcile_refunds',
 ] as const satisfies readonly PendingHandlerJobType[];
 
 export const JOB_STATUSES = ['queued', 'running', 'done', 'failed'] as const;
