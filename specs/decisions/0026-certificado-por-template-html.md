@@ -1,6 +1,6 @@
 # 0026 — Certificado por template HTML, renderizado pelo Chromium no worker
 
-Status: aceita (substitui o item "PDF do certificado" da [0025](0025-bibliotecas-da-fase-2.md))
+Status: aceita (substitui o item "PDF do certificado" da [0025](0025-bibliotecas-da-fase-2.md); consequência "tamanho da imagem" substituída pela [0029](0029-imagem-do-worker-com-playwright-completo.md))
 Data: 2026-11-25
 
 ## Contexto
@@ -50,7 +50,7 @@ HTML livre escrito por instrutor vira PDF dentro do servidor. Os riscos são os 
 - Tabelas novas: `certificate_templates`, `certificate_template_versions` e `certificate_previews`; `certificates` ganha `template_version_id` e `instructor_name` congelado.
 - Tipo de fila novo: `certificate.preview`; `certificate.backfill` ganha a origem "template cadastrado".
 - `pdfkit` e a conversão do logotipo para PNG com `sharp` saem da Fase 2; `qrcode` continua (SVG). Entram `playwright-core` no worker e `htmlparser2` e `css-tree` em `packages/core`, cada um pela conferência de licenças.
-- A imagem do worker cresce (estimativa: cerca de 300 MB; o número real é medido e registrado na tarefa de infraestrutura) e ganha pacotes de sistema que o Trivy passa a varrer.
+- A imagem do worker cresce e ganha pacotes de sistema que o Trivy passa a varrer. A estimativa de cerca de 300 MB foi substituída pela medição da tarefa 465, aceita na [0029](0029-imagem-do-worker-com-playwright-completo.md): 918 MB em disco e 359 MB compactado no `amd64`, 931 MB e 358 MB no `arm64`, contra 304 MB e 102 MB da base. A instalação continua pelo `--with-deps` do Playwright, com as fontes de reserva.
 - Os testes de renderização do worker precisam do Chromium headless shell instalado na máquina e no CI.
 - O risco que sobra: HTML escrito por instrutor roda num motor de navegador. Ele é mitigado em camadas (lista de permissões ao salvar e ao renderizar, JavaScript desligado, rede bloqueada, tempo e memória limitados, usuário sem privilégios), e a sandbox própria do Chromium fica desligada, como é o padrão do Playwright em contêiner.
 - Certificados emitidos são regeneráveis a partir dos dados congelados e da versão do template, que nunca é apagada enquanto houver certificado que a use.
