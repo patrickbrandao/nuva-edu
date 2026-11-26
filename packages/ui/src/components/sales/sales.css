@@ -1,0 +1,562 @@
+/*
+ * Componentes de vendas: tokens --minui-* e --adm-* das cascas, nos três temas.
+ * Sem `style` no HTML (CSP style-src 'self'). Nenhuma largura fixa além de capas e ícones:
+ * utilizável de 360 px a 1920 px, sem rolagem horizontal.
+ */
+
+.minui-cart,
+.minui-buyer,
+.minui-buyer-form,
+.minui-payment-result,
+.minui-plans,
+.minui-plan,
+.minui-price,
+.minui-totals {
+  --sale-ink: var(--adm-ink, var(--minui-text));
+  --sale-ink-2: var(--adm-ink-2, var(--minui-text-body));
+  --sale-ink-3: var(--adm-ink-3, var(--minui-text-muted));
+  --sale-card: var(--adm-card, var(--minui-surface-base));
+  --sale-sunken: var(--adm-sunken, var(--minui-panel-well));
+  --sale-hover: var(--adm-hover, var(--minui-field));
+  --sale-line: var(--adm-line, var(--minui-field-line));
+  --sale-focus: var(--adm-focus, var(--minui-focus));
+  --sale-accent: var(--minui-accent-text, var(--sale-ink));
+  --sale-green: var(--adm-green, var(--minui-text));
+  --sale-red: var(--adm-red, var(--minui-text));
+  font-family: var(--minui-font);
+  color: var(--sale-ink);
+}
+
+/* =================== Preço e totais =================== */
+
+.minui-price {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 8px;
+}
+
+.minui-price__original {
+  color: var(--sale-ink-3);
+  font-size: 0.85em;
+}
+
+.minui-price__value {
+  font-size: 18px;
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+}
+
+.minui-price__value[data-free="true"] {
+  color: var(--sale-green);
+}
+
+.minui-price__period {
+  color: var(--sale-ink-3);
+  font-size: 12.5px;
+}
+
+.minui-price__discount {
+  flex-basis: 100%;
+  color: var(--sale-green);
+  font-size: 12px;
+}
+
+.minui-totals {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+}
+
+.minui-totals__row {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 4px 16px;
+  font-size: 13.5px;
+}
+
+.minui-totals__row dt {
+  color: var(--sale-ink-2);
+}
+
+.minui-totals__row dd {
+  margin: 0;
+  font-variant-numeric: tabular-nums;
+}
+
+.minui-totals__row[data-strong="true"] {
+  padding-top: 8px;
+  border-top: 1px solid var(--sale-line);
+  font-size: 15px;
+  font-weight: 650;
+}
+
+.minui-totals__row[data-strong="true"] dt {
+  color: var(--sale-ink);
+}
+
+/* =================== Cesta =================== */
+
+.minui-cart__layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 20px;
+  align-items: start;
+}
+
+@media (min-width: 900px) {
+  .minui-cart__layout[data-with-summary="true"] {
+    grid-template-columns: minmax(0, 1fr) minmax(240px, 320px);
+  }
+}
+
+.minui-cart__items {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.minui-cart__item {
+  display: flex;
+  gap: 14px;
+  padding: 14px;
+  border: 1px solid var(--sale-line);
+  border-radius: 12px;
+  background: var(--sale-card);
+}
+
+.minui-cart__cover {
+  flex: none;
+  width: 96px;
+  aspect-ratio: 16 / 9;
+  height: auto;
+  align-self: flex-start;
+  object-fit: cover;
+  border-radius: 8px;
+}
+
+.minui-cart__body {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+}
+
+.minui-cart__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 8px 12px;
+}
+
+.minui-cart__title {
+  display: flex;
+  flex: 1 1 160px;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.minui-cart__kind {
+  color: var(--sale-ink-3);
+  font-size: 11.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.minui-cart__link,
+.minui-cart__name {
+  color: var(--sale-ink);
+  font-size: 14.5px;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.minui-cart__link {
+  text-decoration: none;
+}
+
+.minui-cart__link:hover {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.minui-cart__link:focus-visible {
+  outline: 2px solid var(--sale-focus);
+  outline-offset: 3px;
+  border-radius: 2px;
+}
+
+.minui-cart__includes-label {
+  display: block;
+  margin-bottom: 4px;
+  color: var(--sale-ink-2);
+  font-size: 12.5px;
+  font-weight: 600;
+}
+
+.minui-cart__includes ul {
+  margin: 0;
+  padding-left: 1.2em;
+  color: var(--sale-ink-2);
+  font-size: 13px;
+}
+
+.minui-cart__notices ul {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.minui-cart__notices li {
+  padding: 6px 10px;
+  border-radius: 8px;
+  background: var(--sale-sunken);
+  color: var(--sale-ink-2);
+  font-size: 12.5px;
+}
+
+.minui-cart__summary {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 16px;
+  border: 1px solid var(--sale-line);
+  border-radius: 12px;
+  background: var(--sale-card);
+}
+
+.minui-cart__action {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+/* =================== Dados do comprador =================== */
+
+.minui-buyer {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.minui-buyer__legend {
+  margin-bottom: 14px;
+  padding: 0;
+  font-size: 15px;
+  font-weight: 650;
+}
+
+.minui-buyer__types {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.minui-buyer__options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.minui-buyer__option {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 7px 14px;
+  border: 1px solid var(--sale-line);
+  border-radius: 999px;
+  color: var(--sale-ink-2);
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.minui-buyer__option:has(input:checked) {
+  border-color: var(--sale-accent);
+  color: var(--sale-ink);
+  background: var(--sale-hover);
+}
+
+.minui-buyer__option:has(input:focus-visible) {
+  outline: 2px solid var(--sale-focus);
+  outline-offset: 2px;
+}
+
+.minui-buyer-form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  align-items: flex-start;
+}
+
+.minui-buyer-form__error {
+  color: var(--sale-red);
+  font-size: 13px;
+}
+
+/* =================== Retorno do pagamento =================== */
+
+.minui-payment-result {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 24px;
+  border: 1px solid var(--sale-line);
+  border-radius: 12px;
+  background: var(--sale-card);
+}
+
+.minui-payment-result__head {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  text-align: center;
+}
+
+.minui-payment-result__icon {
+  display: inline-flex;
+  color: var(--sale-ink-2);
+}
+
+.minui-payment-result__icon > svg {
+  width: 36px;
+  height: 36px;
+}
+
+.minui-payment-result[data-status="paid"] .minui-payment-result__icon {
+  color: var(--sale-green);
+}
+
+.minui-payment-result[data-status="expired"] .minui-payment-result__icon,
+.minui-payment-result[data-status="chargeback"] .minui-payment-result__icon {
+  color: var(--sale-red);
+}
+
+.minui-payment-result__title {
+  font-size: 17px;
+}
+
+.minui-payment-result__text {
+  margin: 0;
+  color: var(--sale-ink-2);
+  font-size: 13.5px;
+}
+
+.minui-payment-result__details {
+  padding: 14px;
+  border-radius: 10px;
+  background: var(--sale-sunken);
+  overflow-wrap: anywhere;
+}
+
+.minui-payment-result__actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+}
+
+/* =================== Planos =================== */
+
+.minui-plans {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.minui-billing {
+  display: inline-flex;
+  align-self: center;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding: 4px;
+  border: 1px solid var(--sale-line);
+  border-radius: 999px;
+  background: var(--sale-sunken);
+}
+
+.minui-billing__option {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 14px;
+  border-radius: 999px;
+  color: var(--sale-ink-2);
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.minui-billing__option.is-active {
+  background: var(--sale-card);
+  color: var(--sale-ink);
+  box-shadow: 0 1px 2px rgb(0 0 0 / 0.08);
+}
+
+.minui-billing__option input {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.minui-billing__option:has(input:focus-visible) {
+  outline: 2px solid var(--sale-focus);
+  outline-offset: 2px;
+}
+
+.minui-billing__hint {
+  color: var(--sale-green);
+  font-size: 11.5px;
+  font-weight: 600;
+}
+
+.minui-plans__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(240px, 100%), 1fr));
+  gap: 16px;
+  align-items: stretch;
+}
+
+.minui-plan {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+  padding: 20px;
+  border: 1px solid var(--sale-line);
+  border-radius: 14px;
+  background: var(--sale-card);
+}
+
+.minui-plan--featured {
+  border-color: var(--sale-accent);
+}
+
+.minui-plan[data-disabled="true"] {
+  opacity: 0.65;
+}
+
+.minui-plan__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.minui-plan__head > :is(h2, h3, h4) {
+  margin: 0;
+  font-size: 16px;
+}
+
+.minui-plan__badge {
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--sale-hover);
+  color: var(--sale-accent);
+  font-size: 11px;
+  font-weight: 650;
+}
+
+.minui-plan__price .minui-price__value {
+  font-size: 26px;
+}
+
+.minui-plan__desc {
+  margin: 0;
+  color: var(--sale-ink-2);
+  font-size: 13px;
+}
+
+.minui-plan__cta {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 36px;
+  padding: 8px 14px;
+  border: 1px solid var(--sale-line);
+  border-radius: 9px;
+  background: none;
+  color: var(--sale-ink);
+  font: inherit;
+  font-size: 13.5px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.minui-plan__cta--solid {
+  border-color: var(--adm-primary, var(--minui-accent-fill, var(--sale-ink)));
+  background: var(--adm-primary, var(--minui-accent-fill, var(--sale-ink)));
+  color: var(--adm-primary-ink, var(--minui-accent-on, var(--sale-card)));
+}
+
+.minui-plan__cta:hover {
+  filter: brightness(1.05);
+}
+
+.minui-plan__cta:focus-visible {
+  outline: 2px solid var(--sale-focus);
+  outline-offset: 2px;
+}
+
+.minui-plan__cta:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.minui-plan__features {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+  padding: 12px 0 0;
+  border-top: 1px solid var(--sale-line);
+  list-style: none;
+}
+
+.minui-plan__features li {
+  display: flex;
+  gap: 8px;
+  color: var(--sale-ink-2);
+  font-size: 13px;
+}
+
+.minui-plan__features svg {
+  flex: none;
+  margin-top: 2px;
+  color: var(--sale-green);
+}
+
+.minui-plans__empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 32px 16px;
+  text-align: center;
+}
+
+.minui-plans__empty p {
+  margin: 0;
+  color: var(--sale-ink-2);
+  font-size: 13.5px;
+}

@@ -291,6 +291,45 @@ export type {
   LinkTarget,
 } from './components/link/link';
 export { isInternalHref, LinkProvider, useLinkComponent } from './components/link/link';
+// vendas: cesta, preço/desconto, dados do comprador, estados e planos (TypeScript; specs 011 e 012)
+export type {
+  BuyerData,
+  BuyerFieldsLabels,
+  BuyerFieldsProps,
+  BuyerFormLabels,
+  BuyerFormProps,
+  TaxIdType,
+} from './components/sales/BuyerForm';
+export { BuyerFields, BuyerForm } from './components/sales/BuyerForm';
+export type { CartItem, CartLabels, CartProps, CartSummaryProps } from './components/sales/Cart';
+export { Cart, CartSummary } from './components/sales/Cart';
+export type { MoneyOptions } from './components/sales/money';
+export { formatMoney } from './components/sales/money';
+export type {
+  OrderStatus,
+  OrderStatusBadgeProps,
+  PaymentResultLabels,
+  PaymentResultProps,
+  SubscriptionStatus,
+  SubscriptionStatusBadgeProps,
+} from './components/sales/OrderStatus';
+export {
+  OrderStatusBadge,
+  PaymentResult,
+  SubscriptionStatusBadge,
+} from './components/sales/OrderStatus';
+export type {
+  BillingInterval,
+  BillingToggleLabels,
+  BillingToggleProps,
+  PlanCardData,
+  PlanCardProps,
+  PlanGridLabels,
+  PlanGridProps,
+} from './components/sales/Plans';
+export { BillingToggle, PlanCard, PlanGrid } from './components/sales/Plans';
+export type { OrderTotalsProps, OrderTotalsRow, PriceTagProps } from './components/sales/PriceTag';
+export { OrderTotals, PriceTag } from './components/sales/PriceTag';
 // casca do site do aluno e rodapé das cascas (TypeScript)
 export type {
   ClassroomShellLabels,

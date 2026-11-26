@@ -11,6 +11,7 @@ const sources = import.meta.glob<string>(
     './feedback/*.tsx',
     './form/*.tsx',
     './learning/**/*.tsx',
+    './sales/*.tsx',
     '!./**/*.test.tsx',
   ],
   {
@@ -45,6 +46,11 @@ describe('sem texto fixo', () => {
       './learning/video/native.tsx',
       './learning/video/vimeo.tsx',
       './learning/video/youtube.tsx',
+      './sales/BuyerForm.tsx',
+      './sales/Cart.tsx',
+      './sales/OrderStatus.tsx',
+      './sales/Plans.tsx',
+      './sales/PriceTag.tsx',
     ]);
   });
 
