@@ -57,6 +57,12 @@ ambiente. Quando algo continua fora do ar, o erro traz a URL que não respondeu 
   pedido sair sem ser barrado, não o vídeo tocar. O `.mp4` é o `fixtures/aula.webm` servido pelo
   próprio teste sob esse nome (a classificação é pela extensão) e toca até o fim. O que acontece
   dentro do `iframe` do provedor é da política dele, não do classroom.
+- CSP do admin: o mesmo arquivo confere o cabeçalho do admin — nenhuma origem externa (host ou `*`)
+  em diretiva alguma e nenhum esquema fora de `img-src`, que aceita `https:` (as imagens do
+  Markdown saneado, ADR 0027), `data:` e `blob:`. Política que abra `script-src`, `frame-src`,
+  `connect-src` ou ponha `http:` na imagem reprova. A do classroom continua exigindo a IFrame API
+  do YouTube. Como a CSP sai do `index.html` no build da imagem, rode `pnpm dev:up` no checkout
+  principal antes do e2e: imagem antiga serve a política antiga.
 - Atrás do Traefik local todo pedido do navegador chega com o mesmo IP. Por isso:
   - as operações de autenticação feitas pela tela esperam a vez em `support/pacing.ts` (abaixo
     de 10 por minuto no classroom e 20 no admin, os limites por IP das APIs);

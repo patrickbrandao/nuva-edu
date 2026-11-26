@@ -178,13 +178,80 @@ test('cada provedor monta o player sem violação de CSP no documento do classro
   await page.context().close();
 });
 
-test('o admin continua sem origem externa na Content-Security-Policy', async ({ page }) => {
+/** Palavra-chave de CSP: não é origem, não abre host nem esquema (`'self'`, `'none'`, `'unsafe-*'`). */
+const KEYWORD = /^'(self|none|unsafe-[a-z-]+|strict-dynamic|report-sample)'$/;
+/** `'sha256-…'` / `'nonce-…'`: hash do script inline do tema e afins. */
+const HASH_OR_NONCE = /^'(sha(256|384|512)|nonce)-[A-Za-z0-9+/_=-]+'$/;
+/** Fonte de esquema (`https:`, `data:`, `wss:`); qualquer outro valor sem palavra-chave é host. */
+const SCHEME = /^([a-z][a-z0-9+.-]*):$/i;
+/** Esquemas que o `img-src` do admin aceita: as imagens `https` do Markdown (ADR 0027), `data:` do CSS e `blob:` da prévia. */
+const IMG_SCHEMES = ['https:', 'data:', 'blob:'];
+
+interface Directive {
+  name: string;
+  sources: string[];
+}
+
+function parsePolicy(policy: string): Directive[] {
+  return policy
+    .split(';')
+    .map((part) => part.trim())
+    .filter((part) => part !== '')
+    .map((part) => {
+      const [name = '', ...sources] = part.split(/\s+/);
+      return { name: name.toLowerCase(), sources };
+    });
+}
+
+/**
+ * O que a política do admin NÃO pode ter: origem externa (host, curinga) em qualquer diretiva e
+ * esquema fora de `img-src`. A única abertura é a imagem `https` do Markdown saneado (ADR 0027):
+ * `script-src`, `frame-src`, `connect-src` e o resto seguem sem host e sem esquema amplo.
+ *
+ * Exportada para o teste da política poder ser exercitado sobre as políticas geradas pelo
+ * `proxy/lighttpd/csp.mjs`, sem depender de o ambiente servido já estar reconstruído.
+ */
+export function externalOriginViolations(policy: string): string[] {
+  const problems: string[] = [];
+  if (policy.trim() === '') return ['política vazia'];
+  const seen = new Set<string>();
+  for (const { name, sources } of parsePolicy(policy)) {
+    if (name === '') problems.push('diretiva sem nome');
+    if (seen.has(name)) problems.push(`${name} aparece mais de uma vez`);
+    seen.add(name);
+    if (sources.length === 0) problems.push(`${name} sem fonte`);
+    for (const source of sources) {
+      if (KEYWORD.test(source) || HASH_OR_NONCE.test(source)) continue;
+      if (source === '*') {
+        problems.push(`${name} aceita curinga *`);
+        continue;
+      }
+      if (!SCHEME.test(source)) {
+        problems.push(`${name} aceita origem externa ${source}`);
+        continue;
+      }
+      if (name === 'img-src' && IMG_SCHEMES.includes(source.toLowerCase())) continue;
+      problems.push(`${name} aceita esquema ${source}`);
+    }
+  }
+  return problems;
+}
+
+// Tarefa 629 (ADR 0027): o admin passou a aceitar as imagens `https` do Markdown saneado no
+// `img-src`; a garantia que continua de pé é não haver origem externa (host nem curinga) e nenhum
+// esquema fora de `img-src`. Abrir `script-src`, `frame-src`, `connect-src` ou pôr `http:` na
+// imagem reprova aqui. A imagem `https` do Markdown aparecendo é da tarefa 625, e a política que o
+// gerador produz (com `https:` em `img-src`) é a que este teste confere no cabeçalho servido.
+test('o admin aceita https: só em img-src e segue sem origem externa na Content-Security-Policy', async ({
+  page,
+}) => {
   const response = await page.request.get(`${ADMIN_URL}/`);
   const policy = response.headers()['content-security-policy'] ?? '';
   expect(policy, 'o admin tem política').not.toBe('');
-  for (const directive of policy.split(';')) {
-    expect(directive.trim(), `diretiva "${directive.trim()}"`).not.toMatch(/https?:|wss?:/);
-  }
+  expect(externalOriginViolations(policy), `política do admin: ${policy}`).toEqual([]);
+
+  // O classroom continua com as origens dos players. A mesma trava de esquema só em imagem vale
+  // para ele, a menos do `media-src` do player (spec 009), coberto pelo teste dos players.
   const classroom = await page.request.get(`${CLASSROOM_URL}/`);
   expect(classroom.headers()['content-security-policy']).toContain('https://www.youtube.com');
 });
