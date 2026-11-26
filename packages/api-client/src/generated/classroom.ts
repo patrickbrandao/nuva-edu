@@ -1500,7 +1500,9 @@ export interface paths {
          *
          *     Um usuário pode ter assinaturas ativas de planos diferentes; repetir o mesmo plano em
          *     `pending`, `active`, `past_due` ou `suspended` responde `409 subscription_already_exists`
-         *     (em `canceling`, a spec manda assinar de novo para desfazer o cancelamento). O cupom
+         *     (em `canceling`, a spec manda assinar de novo para desfazer o cancelamento). A `pending`
+         *     pode ser cancelada pelo aluno em `POST /api/v1/me/subscriptions/{id}/cancel`, o que libera
+         *     assinar o mesmo plano antes dos 30 min. O cupom
          *     precisa de `appliesTo` `subscriptions` ou `both`, vale só na primeira cobrança e é
          *     contabilizado na ativação; cupom de 100% zera a primeira cobrança e a recorrência começa
          *     no período seguinte (`specs/012-assinaturas.md`, "Cupom na assinatura").
@@ -1576,17 +1578,20 @@ export interface paths {
         put?: never;
         /**
          * Cancelar a própria assinatura
-         * @description Cancela a assinatura do próprio usuário (`specs/012-assinaturas.md`, "Cancelamento"):
-         *     cancela a recorrência no provedor na hora e a assinatura vai a `canceling`; o acesso
-         *     segue até `currentPeriodEnd`, sem carência adicional, e ao fim o worker a encerra em
-         *     `ended`. Em `past_due`, o cancelamento encerra a carência: o acesso vai só até
-         *     `currentPeriodEnd`. Desfazer o cancelamento não é oferecido no MVP: o aluno assina de
-         *     novo.
+         * @description Cancela a assinatura do próprio usuário (`specs/012-assinaturas.md`, "Cancelamento").
+         *     Em `pending`, cancela a adesão no provedor e a assinatura vai a `expired` (nunca foi
+         *     paga), liberando assinar o mesmo plano de novo; o prazo de 30 min continua como rede de
+         *     segurança. Em `active` ou `past_due`, cancela a recorrência no provedor na hora e a
+         *     assinatura vai a `canceling`; o acesso segue até `currentPeriodEnd`, sem carência
+         *     adicional, e ao fim o worker a encerra em `ended`. Em `past_due`, o cancelamento encerra
+         *     a carência: o acesso vai só até `currentPeriodEnd`. Desfazer o cancelamento não é
+         *     oferecido no MVP: o aluno assina de novo.
          *
-         *     Só `active` e `past_due` aceitam o pedido; `pending`, `suspended`, `canceling`, `ended` e
-         *     `expired` respondem `409 subscription_not_cancelable`. Assinatura de outra pessoa:
-         *     `404 not_found`. Se o provedor não confirmar o cancelamento, a resposta é `503
-         *     payment_provider_unavailable` e nada muda: a tentativa pode ser repetida.
+         *     Aceitam o pedido `pending`, `active` e `past_due`; `suspended` (o aluno continua sem
+         *     poder cancelar), `canceling`, `ended` e `expired` respondem `409
+         *     subscription_not_cancelable`. Assinatura de outra pessoa: `404 not_found`. Se o provedor
+         *     não confirmar o cancelamento, a resposta é `503 payment_provider_unavailable` e nada
+         *     muda: a tentativa pode ser repetida.
          */
         post: operations["cancelMySubscription"];
         delete?: never;
@@ -3390,7 +3395,8 @@ export interface components {
          * @description Estado da assinatura (`specs/012-assinaturas.md`, "Ciclo de vida"). `pending` aguarda a
          *     primeira cobrança; `active` está em dia; `past_due` está em carência, com acesso;
          *     `suspended` perdeu o acesso; `canceling` foi cancelada e mantém o acesso até
-         *     `currentPeriodEnd`; `ended` encerrou; `expired` nunca foi paga.
+         *     `currentPeriodEnd`; `ended` encerrou; `expired` nunca foi paga, inclusive a `pending`
+         *     cancelada pelo aluno.
          * @enum {string}
          */
         SubscriptionStatus: "pending" | "active" | "past_due" | "suspended" | "canceling" | "ended" | "expired";
@@ -6015,7 +6021,10 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Assinatura em `canceling`. */
+            /**
+             * @description Assinatura cancelada: `canceling` (de `active` ou `past_due`) ou `expired` (de
+             *     `pending`).
+             */
             200: {
                 headers: {
                     "X-Request-Id": components["headers"]["XRequestId"];

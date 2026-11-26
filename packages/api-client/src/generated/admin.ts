@@ -2276,7 +2276,8 @@ export interface paths {
          *     carência e as cobranças com os reembolsos de cada uma
          *     (`specs/012-assinaturas.md`, "Interfaces e contratos"). `manager` e `admin` veem;
          *     `instructor` recebe `403`. `currentPeriodPaymentId` aponta a cobrança que abriu o período
-         *     em curso: reembolsá-la encerra a assinatura na hora. Inexistente: `404 not_found`.
+         *     em curso: reembolsá-la por inteiro encerra a assinatura na hora. Inexistente: `404
+         *     not_found`.
          *     O documento fiscal do assinante não sai aqui.
          */
         get: operations["getSubscription"];
@@ -2306,11 +2307,14 @@ export interface paths {
          *
          *     Em `active` ou `past_due`, cancela a recorrência no provedor na hora e a assinatura vai a
          *     `canceling`; o acesso segue até `currentPeriodEnd`, sem carência adicional, e o worker a
-         *     encerra em `ended`. Em `past_due`, o cancelamento encerra a carência. Não há reativação
-         *     antes do fim do período: o aluno assina de novo. Os demais estados respondem `409
-         *     subscription_not_cancelable` (em `pending`, o prazo de 30 min a expira; em `suspended`,
-         *     ela se encerra sozinha após 30 dias). Se o provedor não confirmar o cancelamento, a
-         *     resposta é `503 payment_provider_unavailable` e nada muda: a tentativa pode ser repetida.
+         *     encerra em `ended`. Em `past_due`, o cancelamento encerra a carência. Em `suspended`,
+         *     encerra a assinatura na hora (`ended`) e cancela a recorrência no provedor, sem esperar
+         *     os 30 dias. Não há reativação antes do fim do período: o aluno assina de novo.
+         *
+         *     `pending` e `expired` respondem `409 subscription_not_cancelable`: a `pending` expira em
+         *     30 min e o próprio aluno pode cancelá-la; a `expired` nunca foi paga. Se o provedor não
+         *     confirmar o cancelamento, a resposta é `503 payment_provider_unavailable` e nada muda: a
+         *     tentativa pode ser repetida.
          */
         post: operations["cancelSubscription"];
         delete?: never;
@@ -2337,10 +2341,12 @@ export interface paths {
          *     pelo worker, no detalhe da assinatura. O reembolso de cobrança recorrente tem `orderId`
          *     nulo e a lista de itens vazia.
          *
-         *     `amountCents` ausente ou nulo estorna o saldo não reembolsado da cobrança; valor parcial
-         *     é aceito, desde que não passe desse saldo. Reembolsar a cobrança do período em curso
-         *     encerra a assinatura na hora (`ended`) e revoga os direitos com motivo `refund`; a de um
-         *     período passado não altera o estado atual.
+         *     `amountCents` ausente ou nulo estorna o saldo não reembolsado da cobrança inteira; valor
+         *     parcial é aceito, desde que não passe desse saldo. Reembolsar por inteiro a cobrança do
+         *     período em curso encerra a assinatura na hora (`ended`) e revoga os direitos com motivo
+         *     `refund`; o reembolso parcial devolve o valor e a assinatura segue no estado em que está,
+         *     com acesso até o fim do período pago. A cobrança de um período passado não altera o
+         *     estado atual, qualquer que seja o valor.
          *
          *     `Idempotency-Key` é aceita: a repetição devolve o primeiro reembolso por 24 h.
          *
@@ -4468,7 +4474,8 @@ export interface components {
          * @description Estado da assinatura (`specs/012-assinaturas.md`, "Ciclo de vida"). `pending` aguarda a
          *     primeira cobrança; `active` está em dia; `past_due` está em carência, com acesso;
          *     `suspended` perdeu o acesso; `canceling` foi cancelada e mantém o acesso até
-         *     `currentPeriodEnd`; `ended` encerrou; `expired` nunca foi paga.
+         *     `currentPeriodEnd`; `ended` encerrou; `expired` nunca foi paga, inclusive a `pending`
+         *     cancelada pelo aluno.
          * @enum {string}
          */
         SubscriptionStatus: "pending" | "active" | "past_due" | "suspended" | "canceling" | "ended" | "expired";
@@ -4545,8 +4552,9 @@ export interface components {
              */
             couponCode: string | null;
             /**
-             * @description A cobrança que abriu o período em curso; reembolsá-la encerra a assinatura na hora.
-             *     `null` quando ainda não há cobrança aprovada no período (por exemplo, `pending`).
+             * @description A cobrança que abriu o período em curso; reembolsá-la por inteiro encerra a
+             *     assinatura na hora. `null` quando ainda não há cobrança aprovada no período (por
+             *     exemplo, `pending`).
              */
             currentPeriodPaymentId: components["schemas"]["Uuid"] | null;
             /** @description Cobranças da assinatura, da mais recente para a mais antiga, com reembolsos. */
@@ -4558,7 +4566,8 @@ export interface components {
             reason: string;
             /**
              * @description Valor a estornar; ausente ou `null` estorna o saldo não reembolsado da cobrança.
-             *     Acima do saldo: `422 refund_exceeds_paid`.
+             *     Acima do saldo: `422 refund_exceeds_paid`. O valor que fecha o saldo da cobrança do
+             *     período em curso encerra a assinatura; um valor menor não a encerra.
              */
             amountCents?: number | null;
         };
@@ -9377,7 +9386,10 @@ export interface operations {
             };
         };
         responses: {
-            /** @description Assinatura em `canceling`. */
+            /**
+             * @description Assinatura cancelada: `canceling` (de `active` ou `past_due`) ou `ended` (de
+             *     `suspended`).
+             */
             200: {
                 headers: {
                     "X-Request-Id": components["headers"]["XRequestId"];
