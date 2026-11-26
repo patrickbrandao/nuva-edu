@@ -15,6 +15,7 @@ import {
 import { recordAudit } from '../audit/record.ts';
 import { revokeOrderEntitlements } from '../entitlements/order.ts';
 import type { EntitlementRevokeReason } from '../entitlements/types.ts';
+import { IDEMPOTENCY_SCOPES, requestFingerprint, runIdempotent } from '../idempotency/index.ts';
 import { enqueueRefundExecute } from '../jobs/sales.ts';
 import { notify } from '../notifications/central.ts';
 import type { PaymentProvider, ProviderRefund } from '../payments/types.ts';
@@ -57,6 +58,8 @@ export interface RequestOrderRefundInput {
   /** `null`/ausente reembolsa o pedido inteiro pelo saldo de cada item. */
   items?: readonly RefundItemInput[] | null;
   now?: Date;
+  /** `Idempotency-Key` do contrato; a repetição devolve o primeiro reembolso por 24 h. */
+  idempotencyKey?: string | null;
 }
 
 export interface RequestSubscriptionRefundInput {
@@ -66,6 +69,8 @@ export interface RequestSubscriptionRefundInput {
   /** `null`/ausente estorna o saldo não reembolsado da cobrança. */
   amountCents?: number | null;
   now?: Date;
+  /** `Idempotency-Key` do contrato; a repetição devolve o primeiro reembolso por 24 h. */
+  idempotencyKey?: string | null;
 }
 
 interface RefundRow {
@@ -92,6 +97,8 @@ interface RefundViewRow extends RefundRow {
  * Pede o reembolso de um pedido inteiro ou de itens (`POST /orders/{id}/refunds`). Só o admin
  * (`order.refund`); o pedido precisa estar `paid` ou `partially_refunded` e cada valor, dentro do
  * pago e ainda não reembolsado do item. Cria uma linha `requested` e enfileira `refund.execute`.
+ * Com `idempotencyKey`, repetir devolve o primeiro reembolso por 24 h, sem segunda linha,
+ * auditoria ou tarefa; a mesma chave com outro motivo/itens é `422 idempotency_key_reuse`.
  */
 export async function requestOrderRefund(
   db: Database,
@@ -101,68 +108,90 @@ export async function requestOrderRefund(
   await requirePermission(db, request, 'order.refund', { action: 'refund.request' });
   const reason = normalizeReason(input.reason);
   const now = input.now ?? new Date();
-
-  return db.transaction().execute(async (trx) => {
-    const order = await trx
-      .selectFrom('orders')
-      .select(['id', 'userId', 'status'])
-      .where('id', '=', input.orderId.toLowerCase())
-      .forUpdate()
-      .executeTakeFirst();
-    if (!order) throw notFound('Pedido não encontrado.');
-    if (!(REFUNDABLE_ORDER_STATUSES as readonly string[]).includes(order.status)) {
-      throw orderNotRefundable();
-    }
-    const items = await loadOrderItems(trx, order.id);
-    const payment = await trx
-      .selectFrom('payments')
-      .select(['id', 'status'])
-      .where('orderId', '=', order.id)
-      .where('status', 'in', ['approved', 'partially_refunded'])
-      .orderBy('createdAt', 'desc')
-      .executeTakeFirst();
-    if (!payment) throw orderNotRefundable();
-
-    const lines = resolveRefundLines(items, input.items ?? null);
-    const amountCents = lines.reduce((total, line) => total + line.amountCents, 0);
-    if (amountCents <= 0) throw orderNotRefundable('O pedido já foi reembolsado por inteiro.');
-
-    const inserted = await trx
-      .insertInto('refunds')
-      .values({
-        orderId: order.id,
-        paymentId: payment.id,
-        items: JSON.stringify(serializeRefundItems(lines)),
-        amountCents,
-        reason,
-        status: 'requested',
-        requestedBy: request.actor.id,
-        createdAt: now,
-      })
-      .returning('id')
-      .executeTakeFirstOrThrow();
-    await enqueueRefundExecute(trx, inserted.id);
-    await recordAudit(trx, {
-      context: managementAuditContext(request),
-      action: 'refund.request',
-      targetType: 'order',
-      targetId: order.id,
-      details: {
-        refundId: inserted.id,
-        paymentId: payment.id,
-        amountCents,
-        items: lines,
-      },
-    });
-    return loadRefundView(trx, inserted.id);
+  const orderId = input.orderId.toLowerCase();
+  const { body } = await runIdempotent(db, {
+    scope: IDEMPOTENCY_SCOPES.orderRefund,
+    userId: request.actor.id,
+    key: input.idempotencyKey,
+    requestHash: requestFingerprint(IDEMPOTENCY_SCOPES.orderRefund, orderId, {
+      reason,
+      items: fingerprintItems(input.items ?? null),
+    }),
+    status: 202,
+    now,
+    execute: (trx) => createOrderRefund(trx, request, orderId, reason, input.items ?? null, now),
   });
+  return body;
+}
+
+async function createOrderRefund(
+  trx: Database,
+  request: ManagementRequest,
+  orderId: string,
+  reason: string,
+  requestedItems: readonly RefundItemInput[] | null,
+  now: Date,
+): Promise<RefundView> {
+  const order = await trx
+    .selectFrom('orders')
+    .select(['id', 'userId', 'status'])
+    .where('id', '=', orderId)
+    .forUpdate()
+    .executeTakeFirst();
+  if (!order) throw notFound('Pedido não encontrado.');
+  if (!(REFUNDABLE_ORDER_STATUSES as readonly string[]).includes(order.status)) {
+    throw orderNotRefundable();
+  }
+  const items = await loadOrderItems(trx, order.id);
+  const payment = await trx
+    .selectFrom('payments')
+    .select(['id', 'status'])
+    .where('orderId', '=', order.id)
+    .where('status', 'in', ['approved', 'partially_refunded'])
+    .orderBy('createdAt', 'desc')
+    .executeTakeFirst();
+  if (!payment) throw orderNotRefundable();
+
+  const lines = resolveRefundLines(items, requestedItems);
+  const amountCents = lines.reduce((total, line) => total + line.amountCents, 0);
+  if (amountCents <= 0) throw orderNotRefundable('O pedido já foi reembolsado por inteiro.');
+
+  const inserted = await trx
+    .insertInto('refunds')
+    .values({
+      orderId: order.id,
+      paymentId: payment.id,
+      items: JSON.stringify(serializeRefundItems(lines)),
+      amountCents,
+      reason,
+      status: 'requested',
+      requestedBy: request.actor.id,
+      createdAt: now,
+    })
+    .returning('id')
+    .executeTakeFirstOrThrow();
+  await enqueueRefundExecute(trx, inserted.id);
+  await recordAudit(trx, {
+    context: managementAuditContext(request),
+    action: 'refund.request',
+    targetType: 'order',
+    targetId: order.id,
+    details: {
+      refundId: inserted.id,
+      paymentId: payment.id,
+      amountCents,
+      items: lines,
+    },
+  });
+  return loadRefundView(trx, inserted.id);
 }
 
 /**
  * Pede o reembolso de uma cobrança recorrente (`POST /subscriptions/{id}/payments/{paymentId}/refund`).
  * Só o admin (`order.refund`). Cobrança fora de `approved`/`partially_refunded`, ou já estornada
  * por inteiro: `409`; valor acima do saldo: `422`. Reembolso de cobrança recorrente tem
- * `order_id` nulo e `items` vazio.
+ * `order_id` nulo e `items` vazio. Com `idempotencyKey`, vale a mesma repetição do reembolso de
+ * pedido.
  */
 export async function requestSubscriptionRefund(
   db: Database,
@@ -172,61 +201,94 @@ export async function requestSubscriptionRefund(
   await requirePermission(db, request, 'order.refund', { action: 'refund.request' });
   const reason = normalizeReason(input.reason);
   const now = input.now ?? new Date();
-
-  return db.transaction().execute(async (trx) => {
-    const subscription = await trx
-      .selectFrom('subscriptions')
-      .select(['id'])
-      .where('id', '=', input.subscriptionId.toLowerCase())
-      .forUpdate()
-      .executeTakeFirst();
-    if (!subscription) throw subscriptionPaymentNotFound();
-    const payment = await trx
-      .selectFrom('payments')
-      .select(['id', 'status', 'amountCents', 'refundedCents'])
-      .where('id', '=', input.paymentId.toLowerCase())
-      .where('subscriptionId', '=', subscription.id)
-      .executeTakeFirst();
-    if (!payment) throw subscriptionPaymentNotFound();
-    if (payment.status !== 'approved' && payment.status !== 'partially_refunded') {
-      throw paymentNotRefundable();
-    }
-    const balance = cents(payment.amountCents) - cents(payment.refundedCents);
-    if (balance <= 0) throw paymentNotRefundable('Esta cobrança já foi reembolsada por inteiro.');
-    const amountCents = input.amountCents ?? balance;
-    if (!Number.isSafeInteger(amountCents) || amountCents <= 0) {
-      throw validationFailed([
-        { path: 'amountCents', message: 'deve ser um inteiro positivo em centavos' },
-      ]);
-    }
-    if (amountCents > balance) {
-      throw refundExceedsPaid('O valor passa do saldo não reembolsado desta cobrança.');
-    }
-
-    const inserted = await trx
-      .insertInto('refunds')
-      .values({
-        orderId: null,
-        paymentId: payment.id,
-        items: JSON.stringify(serializeRefundItems([])),
-        amountCents,
+  const subscriptionId = input.subscriptionId.toLowerCase();
+  const paymentId = input.paymentId.toLowerCase();
+  const { body } = await runIdempotent(db, {
+    scope: IDEMPOTENCY_SCOPES.subscriptionRefund,
+    userId: request.actor.id,
+    key: input.idempotencyKey,
+    requestHash: requestFingerprint(
+      IDEMPOTENCY_SCOPES.subscriptionRefund,
+      `${subscriptionId}:${paymentId}`,
+      { amountCents: input.amountCents ?? null, reason },
+    ),
+    status: 202,
+    now,
+    execute: (trx) =>
+      createSubscriptionRefund(
+        trx,
+        request,
+        subscriptionId,
+        paymentId,
         reason,
-        status: 'requested',
-        requestedBy: request.actor.id,
-        createdAt: now,
-      })
-      .returning('id')
-      .executeTakeFirstOrThrow();
-    await enqueueRefundExecute(trx, inserted.id);
-    await recordAudit(trx, {
-      context: managementAuditContext(request),
-      action: 'refund.request',
-      targetType: 'subscription',
-      targetId: subscription.id,
-      details: { refundId: inserted.id, paymentId: payment.id, amountCents },
-    });
-    return loadRefundView(trx, inserted.id);
+        input.amountCents ?? null,
+        now,
+      ),
   });
+  return body;
+}
+
+async function createSubscriptionRefund(
+  trx: Database,
+  request: ManagementRequest,
+  subscriptionId: string,
+  paymentId: string,
+  reason: string,
+  requestedAmountCents: number | null,
+  now: Date,
+): Promise<RefundView> {
+  const subscription = await trx
+    .selectFrom('subscriptions')
+    .select(['id'])
+    .where('id', '=', subscriptionId)
+    .forUpdate()
+    .executeTakeFirst();
+  if (!subscription) throw subscriptionPaymentNotFound();
+  const payment = await trx
+    .selectFrom('payments')
+    .select(['id', 'status', 'amountCents', 'refundedCents'])
+    .where('id', '=', paymentId)
+    .where('subscriptionId', '=', subscription.id)
+    .executeTakeFirst();
+  if (!payment) throw subscriptionPaymentNotFound();
+  if (payment.status !== 'approved' && payment.status !== 'partially_refunded') {
+    throw paymentNotRefundable();
+  }
+  const balance = cents(payment.amountCents) - cents(payment.refundedCents);
+  if (balance <= 0) throw paymentNotRefundable('Esta cobrança já foi reembolsada por inteiro.');
+  const amountCents = requestedAmountCents ?? balance;
+  if (!Number.isSafeInteger(amountCents) || amountCents <= 0) {
+    throw validationFailed([
+      { path: 'amountCents', message: 'deve ser um inteiro positivo em centavos' },
+    ]);
+  }
+  if (amountCents > balance) {
+    throw refundExceedsPaid('O valor passa do saldo não reembolsado desta cobrança.');
+  }
+
+  const inserted = await trx
+    .insertInto('refunds')
+    .values({
+      orderId: null,
+      paymentId: payment.id,
+      items: JSON.stringify(serializeRefundItems([])),
+      amountCents,
+      reason,
+      status: 'requested',
+      requestedBy: request.actor.id,
+      createdAt: now,
+    })
+    .returning('id')
+    .executeTakeFirstOrThrow();
+  await enqueueRefundExecute(trx, inserted.id);
+  await recordAudit(trx, {
+    context: managementAuditContext(request),
+    action: 'refund.request',
+    targetType: 'subscription',
+    targetId: subscription.id,
+    details: { refundId: inserted.id, paymentId: payment.id, amountCents },
+  });
+  return loadRefundView(trx, inserted.id);
 }
 
 /**
@@ -753,6 +815,28 @@ async function markFailed(
     targetId: refundId,
     details: { error: truncate(message, REFUND_ERROR_MAX_LENGTH) },
   });
+}
+
+/**
+ * Itens do reembolso na forma usada pelo hash: identificador em minúsculas e em ordem estável,
+ * para a mesma seleção enviada em outra ordem continuar sendo a mesma requisição.
+ */
+function fingerprintItems(
+  items: readonly RefundItemInput[] | null,
+): { orderItemId: string; amountCents: number }[] | null {
+  if (items === null) return null;
+  return items
+    .map((item) => ({
+      orderItemId: item.orderItemId.toLowerCase(),
+      amountCents: item.amountCents,
+    }))
+    .sort((left, right) =>
+      left.orderItemId === right.orderItemId
+        ? left.amountCents - right.amountCents
+        : left.orderItemId < right.orderItemId
+          ? -1
+          : 1,
+    );
 }
 
 function resolveRefundLines(

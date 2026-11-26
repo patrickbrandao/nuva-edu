@@ -2,6 +2,7 @@ import { sql } from 'kysely';
 import type { Database } from '../../db/database.ts';
 import { isDomainError } from '../../errors/domain-error.ts';
 import { fulfillOrder } from '../entitlements/order.ts';
+import { IDEMPOTENCY_SCOPES, requestFingerprint, runIdempotent } from '../idempotency/index.ts';
 import { orderExternalReference } from '../payments/references.ts';
 import type {
   CreateCheckoutInput,
@@ -41,6 +42,11 @@ export interface CreateOrderInput {
   now?: Date;
   /** Prazo do `pending` de cartão e Pix (spec 011); padrão 30 min. */
   orderPendingMinutes?: number;
+  /**
+   * `Idempotency-Key` do contrato (`POST /orders`). A repetição com a mesma chave devolve o
+   * primeiro pedido e a primeira URL de checkout por 24 h; ausente, o comportamento é o de antes.
+   */
+  idempotencyKey?: string | null;
 }
 
 interface PreparedOrder {
@@ -62,51 +68,70 @@ export function isProviderUnavailable(error: unknown): boolean {
  * Fecha a cesta do aluno e devolve o pedido com a URL de pagamento (`POST /orders`). Recusas,
  * pelo `code`, na ordem da spec: `email_not_verified`, `billing_required`, `cart_empty`,
  * `cart_invalid`, `order_pending_limit` e `coupon_invalid`. Provedor indisponível: `503`, com o
- * pedido `draft` e a cesta preservada.
+ * pedido `draft` e a cesta preservada. Com `idempotencyKey`, a repetição devolve a primeira
+ * resposta por 24 h, sem segundo pedido nem segundo checkout no provedor (spec 003).
  */
 export async function createOrder(db: Database, input: CreateOrderInput): Promise<OrderCheckout> {
   const now = input.now ?? new Date();
-  const prepared = await db.transaction().execute((trx) => prepareOrder(trx, input));
+  const { body } = await runIdempotent(db, {
+    scope: IDEMPOTENCY_SCOPES.orderCreate,
+    userId: input.userId,
+    key: input.idempotencyKey,
+    // O alvo é a cesta do aluno e o `POST /orders` não tem corpo. A chave identifica a
+    // tentativa: repetir depois de a cesta mudar devolve o pedido que já nasceu, em vez de
+    // `idempotency_key_reuse`.
+    requestHash: requestFingerprint(IDEMPOTENCY_SCOPES.orderCreate, input.userId),
+    status: 201,
+    now,
+    // Provedor fora: o pedido `draft` fica e a chave é liberada para a próxima tentativa.
+    releaseOn: isProviderUnavailable,
+    execute: (trx) => closeCart(trx, input, now),
+  });
+  return body;
+}
+
+async function closeCart(
+  trx: Database,
+  input: CreateOrderInput,
+  now: Date,
+): Promise<OrderCheckout> {
+  const prepared = await prepareOrder(trx, input);
 
   if (prepared.built.view.totalCents === 0) {
-    return db.transaction().execute(async (trx) => {
-      const paid = await trx
-        .updateTable('orders')
-        .set({ status: 'paid', paidAt: now, expiresAt: null, provider: 'none' })
-        .where('id', '=', prepared.orderId)
-        .where('status', '=', 'draft')
-        .returning('id')
-        .executeTakeFirst();
-      await clearCart(trx, input.userId);
-      if (paid) {
-        if (prepared.couponId !== null) await incrementCouponUse(trx, prepared.couponId);
-        await fulfillOrder(trx, prepared.orderId, { now });
-      }
-      const order = await getMyOrder(trx, input.userId, prepared.orderId);
-      return { order: { ...order, checkoutUrl: null }, checkoutUrl: null };
-    });
+    const paid = await trx
+      .updateTable('orders')
+      .set({ status: 'paid', paidAt: now, expiresAt: null, provider: 'none' })
+      .where('id', '=', prepared.orderId)
+      .where('status', '=', 'draft')
+      .returning('id')
+      .executeTakeFirst();
+    await clearCart(trx, input.userId);
+    if (paid) {
+      if (prepared.couponId !== null) await incrementCouponUse(trx, prepared.couponId);
+      await fulfillOrder(trx, prepared.orderId, { now });
+    }
+    const order = await getMyOrder(trx, input.userId, prepared.orderId);
+    return { order: { ...order, checkoutUrl: null }, checkoutUrl: null };
   }
 
   const checkout = await requestCheckout(prepared, input);
   const expiresAt = new Date(now.getTime() + (input.orderPendingMinutes ?? 30) * 60_000);
 
-  return db.transaction().execute(async (trx) => {
-    await trx
-      .updateTable('orders')
-      .set({
-        status: 'pending',
-        expiresAt,
-        provider: input.provider.name,
-        checkoutUrl: checkout.checkoutUrl,
-        providerCheckoutId: checkout.providerCheckoutId,
-      })
-      .where('id', '=', prepared.orderId)
-      .where('status', '=', 'draft')
-      .execute();
-    await clearCart(trx, input.userId);
-    const order = await getMyOrder(trx, input.userId, prepared.orderId);
-    return { order, checkoutUrl: checkout.checkoutUrl };
-  });
+  await trx
+    .updateTable('orders')
+    .set({
+      status: 'pending',
+      expiresAt,
+      provider: input.provider.name,
+      checkoutUrl: checkout.checkoutUrl,
+      providerCheckoutId: checkout.providerCheckoutId,
+    })
+    .where('id', '=', prepared.orderId)
+    .where('status', '=', 'draft')
+    .execute();
+  await clearCart(trx, input.userId);
+  const order = await getMyOrder(trx, input.userId, prepared.orderId);
+  return { order, checkoutUrl: checkout.checkoutUrl };
 }
 
 async function prepareOrder(trx: Database, input: CreateOrderInput): Promise<PreparedOrder> {

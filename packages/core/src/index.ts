@@ -86,6 +86,7 @@ export * from './modules/certificates/index.ts';
 export * from './modules/entitlements/extend.ts';
 export * from './modules/entitlements/index.ts';
 export * from './modules/entitlements/subscription.ts';
+export * from './modules/idempotency/index.ts';
 export * from './modules/images/index.ts';
 export * from './modules/jobs/index.ts';
 export * from './modules/jobs/notifications.ts';
