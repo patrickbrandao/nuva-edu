@@ -6,7 +6,6 @@ import {
   type AdminLessonDetail,
   type AdminLessonSummary,
   archiveCourse,
-  type CatalogRequest,
   cancelCourseReview,
   createCourse,
   createLesson,
@@ -17,8 +16,8 @@ import {
   deleteModule,
   getAdminCourse,
   getAdminLesson,
+  getAdminModule,
   listAdminCourses,
-  notFound,
   publishCourse,
   reorderLessons,
   reorderModules,
@@ -38,7 +37,6 @@ import {
   iso,
   isoOrNull,
   pick,
-  slugFromTitle,
   withCurrentVersion,
 } from './catalog-common.ts';
 
@@ -48,7 +46,7 @@ import {
 // regras do núcleo, que também gravam a negação e a auditoria de cada escrita (spec 028).
 //
 // As regras de escrita devolvem a linha gravada; a resposta é sempre a leitura do editor
-// (`getAdminCourse`, `getAdminLesson`), montada campo a campo: a `version` que o núcleo traz não
+// (`getAdminCourse`, `getAdminModule`, `getAdminLesson`), montada campo a campo: a `version` que o núcleo traz não
 // está nos esquemas `CourseDetail`, `CourseModule` e `LessonDetail` e não sai na resposta.
 
 export interface CourseRoutesOptions {
@@ -166,49 +164,11 @@ const COURSE_FIELDS = [
   'certificateHours',
 ] as const;
 
+/** Campos de aula do corpo; `durationSeconds` `null` ("sem duração") vai ao núcleo como veio. */
 const LESSON_FIELDS = ['title', 'videoUrl', 'durationSeconds', 'isSample', 'status'] as const;
-
-/**
- * Campos de aula do corpo. No contrato `durationSeconds` aceita `null` ("sem duração"); a coluna
- * não é nula, então `null` vai ao núcleo como `0`.
- */
-function lessonFields(body: Record<string, unknown>) {
-  const fields = pick(body, LESSON_FIELDS);
-  if (fields.durationSeconds === null) {
-    fields.durationSeconds = 0;
-  }
-  return fields;
-}
 
 export function registerCourseRoutes(app: FastifyInstance, options: CourseRoutesOptions): void {
   const { db } = options;
-
-  /**
-   * O curso e a `version` de um módulo. O núcleo não tem leitura de módulo por id: a busca do
-   * curso é feita aqui, só pelas duas colunas; quem decide se o ator alcança o curso é o núcleo
-   * (`getAdminCourse` e as regras de escrita), e módulo de curso alheio continua `404`.
-   */
-  async function moduleRef(moduleId: string): Promise<{ courseId: string; version: number }> {
-    const row = await db
-      .selectFrom('modules')
-      .select(['courseId', 'version'])
-      .where('id', '=', moduleId.toLowerCase())
-      .executeTakeFirst();
-    if (!row) {
-      throw notFound('Módulo não encontrado.');
-    }
-    return row;
-  }
-
-  /** O módulo como o editor o vê, com as aulas na ordem. */
-  async function moduleView(actor: CatalogRequest, courseId: string, moduleId: string) {
-    const course = await getAdminCourse(db, actor, courseId);
-    const module = course.modules.find((item) => item.id === moduleId.toLowerCase());
-    if (!module) {
-      throw notFound('Módulo não encontrado.');
-    }
-    return moduleBody(module);
-  }
 
   // `GET /api/v1/courses`: filtros e cursor; o instrutor vê só os cursos de que é dono.
   app.operation('listCourses', async (request) => {
@@ -226,7 +186,7 @@ export function registerCourseRoutes(app: FastifyInstance, options: CourseRoutes
     return { items: page.items.map(courseSummaryBody), nextCursor: page.nextCursor };
   });
 
-  // `POST /api/v1/courses`: nasce `draft`; sem `slug`, ele sai do título.
+  // `POST /api/v1/courses`: nasce `draft`; sem `slug`, o núcleo o gera do título.
   app.operation('createCourse', async (request, reply) => {
     const actor = catalogRequest(request);
     const body = request.body as Record<string, unknown> & { title: string };
@@ -234,7 +194,6 @@ export function registerCourseRoutes(app: FastifyInstance, options: CourseRoutes
       ...pick(body, COURSE_FIELDS),
       ...pick(body, ['ownerId'] as const),
       title: body.title,
-      slug: typeof body.slug === 'string' ? body.slug : slugFromTitle(body.title),
     });
     return reply.status(201).send(courseDetailBody(await getAdminCourse(db, actor, created.id)));
   });
@@ -310,11 +269,11 @@ export function registerCourseRoutes(app: FastifyInstance, options: CourseRoutes
     const { id } = request.params as IdParams;
     const actor = catalogRequest(request);
     const { title } = request.body as { title: string };
-    const module = await withCurrentVersion(
-      async () => (await moduleRef(id)).version,
+    await withCurrentVersion(
+      async () => (await getAdminModule(db, actor, id)).version,
       (version) => updateModule(db, actor, id, { title, version }),
     );
-    return moduleView(actor, module.courseId, module.id);
+    return moduleBody(await getAdminModule(db, actor, id));
   });
 
   app.operation('deleteModule', async (request, reply) => {
@@ -329,7 +288,7 @@ export function registerCourseRoutes(app: FastifyInstance, options: CourseRoutes
     const actor = catalogRequest(request);
     const body = request.body as Record<string, unknown> & { title: string };
     const lesson = await createLesson(db, actor, id, {
-      ...lessonFields(body),
+      ...pick(body, LESSON_FIELDS),
       title: body.title,
     });
     return reply.status(201).send(lessonDetailBody(await getAdminLesson(db, actor, lesson.id)));
@@ -341,7 +300,7 @@ export function registerCourseRoutes(app: FastifyInstance, options: CourseRoutes
     const actor = catalogRequest(request);
     const { lessonIds } = request.body as { lessonIds: string[] };
     await reorderLessons(db, actor, id, { lessonIds });
-    return moduleView(actor, (await moduleRef(id)).courseId, id);
+    return moduleBody(await getAdminModule(db, actor, id));
   });
 
   app.operation('getLesson', async (request) => {
@@ -353,7 +312,7 @@ export function registerCourseRoutes(app: FastifyInstance, options: CourseRoutes
   app.operation('updateLesson', async (request) => {
     const { id } = request.params as IdParams;
     const actor = catalogRequest(request);
-    const fields = lessonFields(request.body as Record<string, unknown>);
+    const fields = pick(request.body as Record<string, unknown>, LESSON_FIELDS);
     await withCurrentVersion(
       async () => (await getAdminLesson(db, actor, id)).version,
       (version) => updateLesson(db, actor, id, { ...fields, version }),

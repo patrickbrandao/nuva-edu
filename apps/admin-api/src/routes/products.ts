@@ -34,7 +34,6 @@ import {
   iso,
   isoOrNull,
   pick,
-  slugFromTitle,
   withCurrentVersion,
 } from './catalog-common.ts';
 
@@ -173,14 +172,13 @@ export function registerProductRoutes(app: FastifyInstance, options: ProductRout
     return { items: page.items.map(ebookSummaryBody), nextCursor: page.nextCursor };
   });
 
-  // `POST /api/v1/ebooks`: nasce `draft`; sem `slug`, ele sai do título.
+  // `POST /api/v1/ebooks`: nasce `draft`; sem `slug`, o núcleo o gera do título.
   app.operation('createEbook', async (request, reply) => {
     const actor = catalogRequest(request);
     const body = request.body as Record<string, unknown> & { title: string };
     const created = await createEbook(db, actor, {
       ...pick(body, EBOOK_FIELDS),
       title: body.title,
-      slug: typeof body.slug === 'string' ? body.slug : slugFromTitle(body.title),
     });
     return reply.status(201).send(ebookDetailBody(await getAdminEbook(db, actor, created.id)));
   });
@@ -269,14 +267,13 @@ export function registerProductRoutes(app: FastifyInstance, options: ProductRout
     return { items: page.items.map(bundleSummaryBody), nextCursor: page.nextCursor };
   });
 
-  // `POST /api/v1/bundles`: nasce `draft`, sem itens; sem `slug`, ele sai do título.
+  // `POST /api/v1/bundles`: nasce `draft`, sem itens; sem `slug`, o núcleo o gera do título.
   app.operation('createBundle', async (request, reply) => {
     const actor = catalogRequest(request);
     const body = request.body as Record<string, unknown> & { title: string };
     const created = await createBundle(db, actor, {
       ...pick(body, BUNDLE_FIELDS),
       title: body.title,
-      slug: typeof body.slug === 'string' ? body.slug : slugFromTitle(body.title),
     });
     return reply.status(201).send(bundleDetailBody(await getAdminBundle(db, actor, created.id)));
   });

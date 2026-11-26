@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
+import { catalogSlugFromTitle } from '@nuva-edu/core';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { slugFromTitle } from '../src/routes/catalog-common.ts';
 import { type Actor, auditOf, type CallOptions, callAs, createActor, deniedBy } from './actors.ts';
 import { createTestApp, type TestApp } from './helpers.ts';
 
@@ -99,7 +99,8 @@ describe('ebooks: criar, ler e listar', () => {
     const ebook = response.json();
     expect(ebook).toMatchObject({
       title,
-      slug: slugFromTitle(title),
+      slug: catalogSlugFromTitle(title, 'ebook'),
+      accessMode: 'private',
       summary: 'Resumo',
       description: '# Olá',
       authorName: 'Autora',
@@ -441,7 +442,8 @@ describe('pacotes: criar, ler, listar e editar', () => {
     const bundle = response.json();
     expect(bundle).toMatchObject({
       title,
-      slug: slugFromTitle(title),
+      slug: catalogSlugFromTitle(title, 'bundle'),
+      accessMode: 'private',
       summary: 'Resumo',
       description: 'Texto',
       status: 'draft',

@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
+import { catalogSlugFromTitle } from '@nuva-edu/core';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { slugFromTitle } from '../src/routes/catalog-common.ts';
 import { type Actor, auditOf, type CallOptions, callAs, createActor, deniedBy } from './actors.ts';
 import { createTestApp, type TestApp } from './helpers.ts';
 
@@ -89,18 +89,6 @@ async function publishableCourse(as: Actor, extra: object = {}) {
   return { course, module, lesson };
 }
 
-describe('slugFromTitle', () => {
-  it('tira acentos, troca o resto por hífen e corta em 160', () => {
-    expect(slugFromTitle('  Introdução à Programação: C++ & Ação!  ')).toBe(
-      'introducao-a-programacao-c-acao',
-    );
-    expect(slugFromTitle('???')).toBe('item');
-    const long = slugFromTitle(`${'a'.repeat(159)} b`);
-    expect(long).toBe('a'.repeat(159));
-    expect(long).toMatch(/^[a-z0-9]+(-[a-z0-9]+)*$/);
-  });
-});
-
 describe('POST e GET /api/v1/courses', () => {
   it('instrutor cria: vira o dono, rascunho, slug gerado do título, com auditoria', async () => {
     const title = uniqueTitle('Introdução à Edição');
@@ -114,7 +102,7 @@ describe('POST e GET /api/v1/courses', () => {
     const course = response.json();
     expect(course).toMatchObject({
       title,
-      slug: slugFromTitle(title),
+      slug: catalogSlugFromTitle(title, 'course'),
       summary: 'Resumo',
       description: '# Olá',
       level: 'beginner',
@@ -136,6 +124,16 @@ describe('POST e GET /api/v1/courses', () => {
     const read = await call({ method: 'GET', url: `/api/v1/courses/${course.id}`, as: instructor });
     expect(read.statusCode).toBe(200);
     expect(read.json()).toEqual(course);
+  });
+
+  it('sem slug, o núcleo o gera do título; o segundo curso de mesmo título ganha o sufixo -2', async () => {
+    const title = uniqueTitle('Curso Repetido');
+    const first = await newCourse(manager, { title });
+    const second = await newCourse(instructor, { title });
+    const base = catalogSlugFromTitle(title, 'course');
+    expect(first.slug).toBe(base);
+    expect(second.slug).toBe(`${base}-2`);
+    expect(second).toMatchObject({ accessMode: 'private', priceCents: null });
   });
 
   it('gerente informa slug e dono; slug repetido: 409 slug_taken; dono que não é instrutor: 422', async () => {
@@ -360,6 +358,16 @@ describe('PATCH /api/v1/courses/{id} e a regra do instrutor', () => {
     expect(ownerOpenPrice.statusCode).toBe(403);
     expect(ownerOpenPrice.json()).toMatchObject({ code: 'permission_denied' });
     expect(await deniedBy(test, owner.id)).toHaveLength(2);
+    // Também na criação: o instrutor que envia preço recebe 403 e nada é criado.
+    const createPrice = await call({
+      method: 'POST',
+      url: '/api/v1/courses',
+      as: owner,
+      payload: { title: uniqueTitle(), priceCents: 9900 },
+    });
+    expect(createPrice.statusCode).toBe(403);
+    expect(createPrice.json()).toMatchObject({ code: 'permission_denied' });
+    expect(await deniedBy(test, owner.id)).toHaveLength(3);
     const openPrice = await call({
       method: 'PATCH',
       url: `/api/v1/courses/${course.id}`,
@@ -386,7 +394,7 @@ describe('PATCH /api/v1/courses/{id} e a regra do instrutor', () => {
     });
     expect(price.statusCode).toBe(403);
     expect(price.json()).toMatchObject({ code: 'permission_denied' });
-    expect(await deniedBy(test, owner.id)).toHaveLength(3);
+    expect(await deniedBy(test, owner.id)).toHaveLength(4);
     // O título segue editável pelo dono.
     const title = await call({
       method: 'PATCH',
@@ -798,6 +806,10 @@ describe('aulas e links de apoio', () => {
       status: 'published',
     });
     expect(await auditOf(test, created.id, 'lesson.publish')).toHaveLength(1);
+    // Sem duração na criação: o `null` vai ao núcleo, que grava `0`.
+    expect(await newLesson(instructor, module.id, { durationSeconds: null })).toMatchObject({
+      durationSeconds: 0,
+    });
 
     const sample = await call({
       method: 'PATCH',
@@ -870,7 +882,6 @@ describe('aulas e links de apoio', () => {
     expect(response.json()).toMatchObject({ code: 'permission_denied' });
   });
 
-  // Mover aula de outro módulo pela ordem (contrato) ainda não existe no núcleo: tarefa 620.
   it('reordena as aulas do módulo', async () => {
     const course = await newCourse(instructor);
     const first = await newModule(instructor, course.id, 'A');
@@ -919,6 +930,52 @@ describe('aulas e links de apoio', () => {
     });
     expect(mismatch.statusCode).toBe(422);
     expect(mismatch.json()).toMatchObject({ code: 'order_mismatch' });
+
+    // Aula de outro módulo do mesmo curso, na lista, é movida para este; a origem fecha a
+    // numeração das que ficaram.
+    const movedIn = await call({
+      method: 'PUT',
+      url: `/api/v1/modules/${second.id}/lessons/order`,
+      as: instructor,
+      payload: { lessonIds: [two.id] },
+    });
+    expect(movedIn.statusCode).toBe(200);
+    expect(movedIn.json()).toMatchObject({
+      id: second.id,
+      courseId: course.id,
+      lessons: [{ id: two.id, moduleId: second.id, position: 0 }],
+    });
+    expect(movedIn.json()).not.toHaveProperty('version');
+    const source = await call({
+      method: 'GET',
+      url: `/api/v1/courses/${course.id}`,
+      as: instructor,
+    });
+    const sourceLessons = source
+      .json()
+      .modules.find((item: { id: string }) => item.id === first.id)
+      .lessons.map((lesson: { id: string; position: number }) => [lesson.id, lesson.position]);
+    expect(sourceLessons).toEqual([
+      [three.id, 0],
+      [one.id, 1],
+    ]);
+    const moves = await auditOf(test, second.id, 'lesson.reorder');
+    expect(moves.map((row) => row.details)).toContainEqual({
+      lessonIds: [two.id],
+      moved: [{ lessonId: two.id, fromModuleId: first.id, toModuleId: second.id }],
+    });
+
+    // Aula de outro curso não entra.
+    const other = await newCourse(instructor);
+    const otherModule = await newModule(instructor, other.id);
+    const foreign = await call({
+      method: 'PUT',
+      url: `/api/v1/modules/${otherModule.id}/lessons/order`,
+      as: instructor,
+      payload: { lessonIds: [one.id] },
+    });
+    expect(foreign.statusCode).toBe(422);
+    expect(foreign.json()).toMatchObject({ code: 'order_mismatch' });
 
     const missing = await call({
       method: 'PUT',

@@ -2,8 +2,8 @@ import type { FastifyRequest } from '@nuva-edu/api-kit';
 import { type CatalogCover, type CatalogRequest, isDomainError } from '@nuva-edu/core';
 import { managementRequest } from '../session.ts';
 
-// O que as rotas do catálogo (spec 009) compartilham: quem pede, datas, capa, o slug gerado do
-// título e a `version` da edição.
+// O que as rotas do catálogo (spec 009) compartilham: quem pede, datas, capa e a `version` da
+// edição.
 
 export const iso = (value: Date): string => value.toISOString();
 export const isoOrNull = (value: Date | null): string | null =>
@@ -35,25 +35,6 @@ export function pick<K extends string>(
     }
   }
   return out;
-}
-
-const SLUG_MAX_LENGTH = 160;
-
-/**
- * Slug gerado do título quando o corpo não traz `slug` (contrato, `POST /courses`): sem acentos,
- * minúsculas, o resto vira hífen, até 160 caracteres. Título sem letra nem número vira `item`.
- * Slug repetido continua sendo `409` `slug_taken`, do núcleo.
- */
-export function slugFromTitle(title: string): string {
-  const slug = title
-    .normalize('NFD')
-    .replace(/[̀-ͯ]/g, '')
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '')
-    .slice(0, SLUG_MAX_LENGTH)
-    .replace(/-+$/, '');
-  return slug === '' ? 'item' : slug;
 }
 
 const VERSION_ATTEMPTS = 3;
