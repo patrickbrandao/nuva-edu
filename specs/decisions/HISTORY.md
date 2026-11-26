@@ -1,6 +1,6 @@
 # Registro de decisões (ADRs)
 
-Índice de `specs/decisions/`. Toda ADR criada ou substituída é registrada aqui.
+Índice de `specs/decisions/`. Toda ADR criada ou substituída é registrada aqui; decisão humana que resolve contradição entre specs sem mudar decisão aceita fica no fim, em [Decisões humanas sem ADR](#decisões-humanas-sem-adr).
 
 Antes de propor mudança de stack, arquitetura ou processo, consulte esta lista. Uma decisão aceita só é reaberta diante de fato novo, por uma ADR nova que substitui a anterior; a anterior recebe o status "substituída por nnnn".
 
@@ -35,3 +35,9 @@ Antes de propor mudança de stack, arquitetura ou processo, consulte esta lista.
 | [0027-markdown-saneado-no-servidor.md](0027-markdown-saneado-no-servidor.md) | Markdown saneado no servidor | aceita (substitui o item "Markdown" da 0025) | Pipeline isomórfico `unified`/`remark`/`rehype` no núcleo com `rehype-sanitize` e `rehype-stringify`; HTML seguro persistido nas novas escritas; imagens só `https`, links seguros e atributos comuns; React sem `dangerouslySetInnerHTML`; compatibilidade com Markdown antigo; `img-src https:` nos dois sites |
 | [0028-sse-tambem-na-admin-api.md](0028-sse-tambem-na-admin-api.md) | SSE também na admin-api | aceita (substitui o recorte de distribuição do SSE da 0004) | Sino do admin por SSE no próprio host, com sessão própria e somente notificações do titular; hub e parser comuns em `api-kit`; mesmo canal/sequência do PostgreSQL, contratos separados e proxy nos dois hosts |
 | [0029-imagem-do-worker-com-playwright-completo.md](0029-imagem-do-worker-com-playwright-completo.md) | Imagem do worker: dependências do Playwright e tamanho medido | aceita (substitui só a consequência "tamanho da imagem" da 0026) | Tamanho aceito com as medições da tarefa 465 (918 MB em disco e 359 MB compactado no `amd64`; 931/358 no `arm64`); `playwright install --with-deps --only-shell chromium` e as fontes de reserva ficam; lista manual de pacotes (o corte de ~90 MB) recusada pelo risco de envelhecer em silêncio, pelo ganho marginal em disco e pela perda de CJK/emoji; sem tarefa de `infra`; condições de revisão |
+
+## Decisões humanas sem ADR
+
+Contradição entre duas specs, resolvida pelo humano, entra aqui quando a resolução não reabre decisão aceita. Se reabrisse, seria ADR nova substituindo a anterior.
+
+- 2026-11-26 — **Operação é só do admin.** A [033](../033-observabilidade-retencao-backup.md) chamava a tela "Operação" de "admin e gerente", mas a matriz da [008](../008-papeis-e-permissoes.md) dá `ops.manage` só ao admin, e a 008 é a referência única de permissões. O humano decidiu em favor da 008: operação, trabalhos em segundo plano e e-mails ficam só do admin; o gerente não tem `ops.manage`. Sem ADR nova, porque nenhuma decisão aceita atribui a operação ao gerente — a [0001](0001-decisoes-iniciais.md), F1-25, lista os poderes do gerente sem ela, e a F4-05 fala da tela "no admin" (o site). A 033 foi corrigida na tarefa 668, alinhada à [006](../006-sites-e-interface.md) e à [027](../027-mcp.md), que já seguiam a 008.

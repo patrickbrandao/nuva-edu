@@ -12,7 +12,7 @@ Uma instalação é operada por uma escola pequena, sem equipe de infraestrutura
 - RF-01: Todos os serviços escrevem logs estruturados em JSON na saída padrão.
 - RF-02: Cada serviço expõe `/healthz` (vivo) e `/readyz` (pronto para atender).
 - RF-03: Cada serviço expõe `/metrics` no formato Prometheus, acessível só na rede interna do Compose.
-- RF-04: O site admin tem uma tela "Operação" com fila, e-mails e webhooks com falha, e ações de reprocessar.
+- RF-04: O site admin tem uma tela "Operação", só do admin (`ops.manage`, [008](008-papeis-e-permissoes.md)), com fila, e-mails e webhooks com falha, e ações de reprocessar.
 - RF-05: Um job diário do worker apaga os dados não vitais vencidos, conforme a tabela de retenção.
 - RF-06: O perfil `backup` faz `pg_dump` diário com retenção de 7 diários e 4 semanais e traz um script de restauração.
 - RF-07: A cada release, o CI restaura um dump num banco vazio e confere o resultado.
@@ -104,7 +104,9 @@ Regras:
 
 Não há tracing distribuído nem alertas embutidos. O guia em `docs/` traz um exemplo de coleta com Prometheus e três alertas sugeridos (fila parada, taxa de erro 5xx, backup atrasado).
 
-### Tela "Operação" (admin e gerente)
+### Tela "Operação" (só admin)
+
+Só o `admin` a acessa (`ops.manage`, [008](008-papeis-e-permissoes.md)); o gerente não vê a tela nem as ações de reprocessar.
 
 - **Fila**: pendentes, em execução e com falha por tipo; idade da tarefa mais antiga; ação "tentar de novo" e "descartar" nas com falha.
 - **E-mails**: pendentes e com falha, com destinatário mascarado, assunto e último erro do SMTP; "reenviar".
