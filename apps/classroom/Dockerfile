@@ -13,6 +13,7 @@ WORKDIR /app
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml .npmrc ./
 # Mesma versão do pnpm fixada em "packageManager".
 RUN npm install --global --no-fund --no-audit "$(node -p "require('./package.json').packageManager")"
+COPY packages/core/package.json packages/core/
 COPY packages/ui/package.json packages/ui/
 COPY packages/api-client/package.json packages/api-client/
 COPY apps/classroom/package.json apps/classroom/
@@ -23,6 +24,9 @@ RUN --mount=type=cache,id=nuva-edu-pnpm-store,target=/pnpm/store \
 # 2. build: gera apps/classroom/dist com o Vite.
 FROM deps AS build
 COPY tsconfig.base.json ./
+# O UI importa @nuva-edu/core (Markdown, ADR 0027): o núcleo entra na imagem, ainda que só o
+# módulo que o bundle alcança chegue ao site gerado.
+COPY packages/core packages/core
 COPY packages/ui packages/ui
 COPY packages/api-client packages/api-client
 COPY apps/classroom apps/classroom
