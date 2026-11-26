@@ -44,6 +44,7 @@ import { registerImageRoutes } from './routes/images.ts';
 import { registerLearningRoutes } from './routes/learning.ts';
 import { registerLegalRoutes } from './routes/legal.ts';
 import { registerNotesRoutes } from './routes/notes.ts';
+import { registerNotificationRoutes } from './routes/notifications.ts';
 import { registerOAuthRoutes } from './routes/oauth.ts';
 import { registerStreamRoutes } from './routes/stream.ts';
 import {
@@ -292,6 +293,7 @@ export function buildClassroomApp(options: ClassroomAppOptions): FastifyInstance
   registerCatalogRoutes(app, routes);
   registerLearningRoutes(app, routes);
   registerNotesRoutes(app, routes);
+  registerNotificationRoutes(app, routes);
   registerCertificateRoutes(app, routes);
   registerImageRoutes(app, routes, options.imageLimiter ? { limiter: options.imageLimiter } : {});
   return app;
