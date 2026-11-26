@@ -29,7 +29,7 @@ export default defineConfig({
     {
       name: 'chromium',
       dependencies: ['setup'],
-      testIgnore: /fase1\//,
+      testIgnore: /fase[12]\//,
       use: { ...devices['Desktop Chrome'] },
     },
     // Fluxos do critério de saída da Fase 1. Esperam a vez das operações de autenticação
@@ -45,8 +45,18 @@ export default defineConfig({
     },
     {
       name: 'fase1-termos',
-      dependencies: ['fase1'],
+      dependencies: ['fase1', 'fase2'],
       testMatch: /fase1\/termos\.spec\.ts$/,
+      timeout: 300_000,
+      use: { ...devices['Desktop Chrome'] },
+    },
+    // Fluxos do critério de saída da Fase 2 (catálogo, aprendizado, certificados). Esperam o
+    // worker (e-mail, PDF do certificado), por isso o prazo maior. Os termos da Fase 1 esperam
+    // por eles: versão nova no meio prenderia as sessões dos alunos na tela de aceite.
+    {
+      name: 'fase2',
+      dependencies: ['setup'],
+      testMatch: /fase2\/.*\.spec\.ts$/,
       timeout: 300_000,
       use: { ...devices['Desktop Chrome'] },
     },
