@@ -76,6 +76,8 @@ tags:
     description: Certificados, templates e signatário (`specs/015-certificados.md`).
   - name: sales
     description: Pedidos, cupons, reembolso e exportação de vendas (`specs/011-vendas-e-checkout.md`).
+  - name: subscriptions
+    description: Planos, assinaturas e reembolso de cobrança recorrente (`specs/012-assinaturas.md`).
   - name: payments
     description: Cobranças, avisos de pagamento e integração do provedor (`specs/013-pagamentos-mercado-pago.md`).
   - name: notifications
@@ -5419,6 +5421,543 @@ paths:
         "503":
           $ref: "#/components/responses/ServiceUnavailable"
 
+  # --- Fase 3: planos e assinaturas (spec 012) ---
+  /api/v1/plans:
+    get:
+      operationId: listPlans
+      tags: [subscriptions]
+      summary: Listar planos
+      x-permission: plan.manage
+      x-nuva-pending: true
+      description: |
+        Planos da escola, por `position` e depois pelo título (`specs/012-assinaturas.md`,
+        "Planos"). Só o `admin` (`plan.manage`); `manager` e `instructor` recebem `403`
+        `permission_denied`. Busca por título ou slug, filtros por situação, periodicidade e
+        `groupKey`. Cada plano traz os itens que libera e quantas assinaturas tem.
+
+        `subscriptionCount` conta todas as assinaturas do plano, inclusive `ended` e `expired`:
+        é o vínculo que impede excluir o plano, por isso ele só é desativado (`active: false`).
+      parameters:
+        - name: q
+          in: query
+          description: Trecho do título ou do slug.
+          schema:
+            type: string
+            minLength: 1
+            maxLength: 160
+        - name: active
+          in: query
+          schema:
+            type: boolean
+        - name: interval
+          in: query
+          schema:
+            $ref: "#/components/schemas/PlanInterval"
+        - name: groupKey
+          in: query
+          schema:
+            type: string
+            minLength: 1
+            maxLength: 160
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Cursor"
+      responses:
+        "200":
+          description: Uma página de planos.
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/XRequestId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PlanPage"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+    post:
+      operationId: createPlan
+      tags: [subscriptions]
+      summary: Criar plano
+      x-permission: plan.manage
+      x-nuva-pending: true
+      description: |
+        Cria um plano de assinatura (`specs/012-assinaturas.md`, "Planos"). Só o `admin`
+        (`plan.manage`); `manager` e `instructor` recebem `403` `permission_denied`. A ação é
+        registrada na auditoria (`specs/028-auditoria.md`).
+
+        `groupKey` agrupa as periodicidades do mesmo conteúdo na vitrine: os planos mensal e
+        anual do mesmo conteúdo usam a mesma chave, e `(groupKey, interval)` é única — repetida:
+        `409 plan_group_conflict`. `slug` é o identificador público e, quando ausente, é gerado de
+        `groupKey` e `interval`; repetido: `409 plan_slug_taken`. `slug`, `groupKey` e `interval`
+        não mudam depois da criação.
+
+        `includesAll` verdadeiro libera todo produto publicado `paid` ou `open`, atual e futuro,
+        e exige `items` vazia; `includesPrivate` só é aceito junto de `includesAll`. Violação:
+        `422 plan_invalid`. Item com produto inexistente, tipo que não seja curso, pacote ou
+        ebook, ou repetido: `422 plan_item_invalid`. `items` vazia com `includesAll` falso é
+        aceita: o admin pode completar a lista antes de ativar o plano.
+
+        A criação não depende do provedor (`specs/013-pagamentos-mercado-pago.md`, "Interface
+        `PaymentProvider`"): o plano é gravado e o `ensurePlan` roda em segundo plano, então
+        `providerPlanId` vem `null` até o provedor devolver o identificador. Provedor fora do ar
+        não impede criar nem editar plano.
+      security:
+        - sessionCookie: []
+          csrfToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PlanCreate"
+      responses:
+        "201":
+          description: Plano criado.
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/XRequestId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Plan"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "413":
+          $ref: "#/components/responses/PayloadTooLarge"
+        "415":
+          $ref: "#/components/responses/UnsupportedMediaType"
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+  /api/v1/plans/{id}:
+    get:
+      operationId: getPlan
+      tags: [subscriptions]
+      summary: Um plano
+      x-permission: plan.manage
+      x-nuva-pending: true
+      description: |
+        O plano com os itens e a contagem de assinaturas (`specs/012-assinaturas.md`). Só o
+        `admin` (`plan.manage`); inexistente: `404 not_found`.
+      parameters:
+        - $ref: "#/components/parameters/IdPath"
+      responses:
+        "200":
+          description: O plano.
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/XRequestId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Plan"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+    patch:
+      operationId: updatePlan
+      tags: [subscriptions]
+      summary: Editar ou desativar plano
+      x-permission: plan.manage
+      x-nuva-pending: true
+      description: |
+        Edição parcial (`specs/012-assinaturas.md`, "Planos"): só os campos enviados mudam. Só o
+        `admin` (`plan.manage`); a ação é registrada na auditoria (`specs/028-auditoria.md`).
+        `slug`, `groupKey` e `interval` não mudam depois da criação: outro conteúdo ou outra
+        periodicidade é um plano novo. Desativar é `active: false`; não há exclusão.
+
+        Mudar `priceCents` vale para novas assinaturas, e as existentes mantêm o preço contratado
+        (o `priceCents` copiado para a assinatura). Mudar `includesAll` ou `includesPrivate`
+        recalcula os direitos das assinaturas ativas pelo worker
+        (`specs/010-direitos-de-acesso.md`); passar `includesAll` a verdadeiro limpa os itens.
+        `includesPrivate` verdadeiro com `includesAll` falso: `422 plan_invalid`. O `ensurePlan`
+        no provedor roda em segundo plano quando o preço muda; provedor fora do ar não impede a
+        edição (`specs/013-pagamentos-mercado-pago.md`).
+      security:
+        - sessionCookie: []
+          csrfToken: []
+      parameters:
+        - $ref: "#/components/parameters/IdPath"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PlanUpdate"
+      responses:
+        "200":
+          description: Plano gravado.
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/XRequestId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Plan"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "413":
+          $ref: "#/components/responses/PayloadTooLarge"
+        "415":
+          $ref: "#/components/responses/UnsupportedMediaType"
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+  /api/v1/plans/{id}/items:
+    put:
+      operationId: replacePlanItems
+      tags: [subscriptions]
+      summary: Definir os itens do plano
+      x-permission: plan.manage
+      x-nuva-pending: true
+      description: |
+        Substitui a lista de cursos, pacotes e ebooks que o plano libera
+        (`specs/012-assinaturas.md`, "Planos"). Só o `admin` (`plan.manage`); a ação é registrada
+        na auditoria (`specs/028-auditoria.md`). `items: []` esvazia a lista. Os direitos das
+        assinaturas ativas são recalculados pelo worker (`specs/010-direitos-de-acesso.md`), sem
+        mudar o preço contratado.
+
+        Plano com `includesAll` verdadeiro não usa lista: `422 plan_invalid`. Produto
+        inexistente, tipo fora de curso, pacote e ebook, ou item repetido: `422
+        plan_item_invalid`. Plano inexistente: `404 not_found`.
+      security:
+        - sessionCookie: []
+          csrfToken: []
+      parameters:
+        - $ref: "#/components/parameters/IdPath"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PlanItemsUpdate"
+      responses:
+        "200":
+          description: Lista substituída.
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/XRequestId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Plan"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "413":
+          $ref: "#/components/responses/PayloadTooLarge"
+        "415":
+          $ref: "#/components/responses/UnsupportedMediaType"
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+  /api/v1/subscriptions:
+    get:
+      operationId: listSubscriptions
+      tags: [subscriptions]
+      summary: Listar assinaturas
+      x-permission: sales.view
+      x-nuva-pending: true
+      description: |
+        Assinaturas da escola, da mais nova para a mais antiga (`specs/012-assinaturas.md`,
+        "Interfaces e contratos"), com filtros por período, estado, plano, assinante e busca por
+        nome ou e-mail. `manager` e `admin` consultam (`sales.view`); `instructor` recebe `403`
+        `permission_denied` (`specs/008-papeis-e-permissoes.md`). O documento fiscal do assinante
+        não sai aqui, só na ficha do usuário.
+      parameters:
+        - name: from
+          in: query
+          description: Início do período (inclusive), sobre `createdAt`.
+          schema:
+            $ref: "#/components/schemas/DateTime"
+        - name: to
+          in: query
+          description: Fim do período (exclusive), sobre `createdAt`.
+          schema:
+            $ref: "#/components/schemas/DateTime"
+        - name: status
+          in: query
+          schema:
+            $ref: "#/components/schemas/SubscriptionStatus"
+        - name: planId
+          in: query
+          schema:
+            $ref: "#/components/schemas/Uuid"
+        - name: userId
+          in: query
+          schema:
+            $ref: "#/components/schemas/Uuid"
+        - name: q
+          in: query
+          description: Trecho do nome ou do e-mail do assinante.
+          schema:
+            type: string
+            minLength: 1
+            maxLength: 200
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Cursor"
+      responses:
+        "200":
+          description: Uma página de assinaturas.
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/XRequestId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminSubscriptionPage"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+  /api/v1/subscriptions/{id}:
+    get:
+      operationId: getSubscription
+      tags: [subscriptions]
+      summary: Uma assinatura
+      x-permission: sales.view
+      x-nuva-pending: true
+      description: |
+        A assinatura com o assinante, o plano atual (preço, itens e periodicidade), o período, a
+        carência e as cobranças com os reembolsos de cada uma
+        (`specs/012-assinaturas.md`, "Interfaces e contratos"). `manager` e `admin` veem;
+        `instructor` recebe `403`. `currentPeriodPaymentId` aponta a cobrança que abriu o período
+        em curso: reembolsá-la encerra a assinatura na hora. Inexistente: `404 not_found`.
+        O documento fiscal do assinante não sai aqui.
+      parameters:
+        - $ref: "#/components/parameters/IdPath"
+      responses:
+        "200":
+          description: A assinatura.
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/XRequestId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminSubscriptionDetail"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+  /api/v1/subscriptions/{id}/cancel:
+    post:
+      operationId: cancelSubscription
+      tags: [subscriptions]
+      summary: Cancelar assinatura de um aluno
+      x-permission: subscription.cancel
+      x-nuva-pending: true
+      description: |
+        Cancela a assinatura de um aluno (`specs/012-assinaturas.md`, "Cancelamento"). Só o
+        `admin` (`subscription.cancel`); `manager` recebe `403` `permission_denied`
+        (`specs/008-papeis-e-permissoes.md`). A ação é registrada na auditoria
+        (`specs/028-auditoria.md`), com o motivo obrigatório.
+
+        Em `active` ou `past_due`, cancela a recorrência no provedor na hora e a assinatura vai a
+        `canceling`; o acesso segue até `currentPeriodEnd`, sem carência adicional, e o worker a
+        encerra em `ended`. Em `past_due`, o cancelamento encerra a carência. Não há reativação
+        antes do fim do período: o aluno assina de novo. Os demais estados respondem `409
+        subscription_not_cancelable` (em `pending`, o prazo de 30 min a expira; em `suspended`,
+        ela se encerra sozinha após 30 dias). Se o provedor não confirmar o cancelamento, a
+        resposta é `503 payment_provider_unavailable` e nada muda: a tentativa pode ser repetida.
+      security:
+        - sessionCookie: []
+          csrfToken: []
+      parameters:
+        - $ref: "#/components/parameters/IdPath"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [reason]
+              properties:
+                reason:
+                  type: string
+                  minLength: 1
+                  maxLength: 200
+                  description: Motivo informado pelo admin; vai para a assinatura e a auditoria.
+              additionalProperties: false
+      responses:
+        "200":
+          description: Assinatura em `canceling`.
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/XRequestId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminSubscriptionDetail"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "413":
+          $ref: "#/components/responses/PayloadTooLarge"
+        "415":
+          $ref: "#/components/responses/UnsupportedMediaType"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+  /api/v1/subscriptions/{id}/payments/{paymentId}/refund:
+    post:
+      operationId: requestSubscriptionRefund
+      tags: [subscriptions]
+      summary: Reembolsar cobrança da assinatura
+      x-permission: order.refund
+      x-nuva-pending: true
+      description: |
+        Reembolsa uma cobrança recorrente (`specs/012-assinaturas.md`, "Reembolso de cobrança";
+        `specs/011-vendas-e-checkout.md`, "Reembolso"). Só o `admin` (`order.refund`); `manager`
+        recebe `403` `permission_denied`. Usa o mesmo fluxo de `refunds`: cria o reembolso em
+        `requested` e enfileira `refund.execute`; a resposta é `202` e o desfecho chega depois,
+        pelo worker, no detalhe da assinatura. O reembolso de cobrança recorrente tem `orderId`
+        nulo e a lista de itens vazia.
+
+        `amountCents` ausente ou nulo estorna o saldo não reembolsado da cobrança; valor parcial
+        é aceito, desde que não passe desse saldo. Reembolsar a cobrança do período em curso
+        encerra a assinatura na hora (`ended`) e revoga os direitos com motivo `refund`; a de um
+        período passado não altera o estado atual.
+
+        `Idempotency-Key` é aceita: a repetição devolve o primeiro reembolso por 24 h.
+
+        Recusas, pelo `code`: `404 not_found` (assinatura ou cobrança inexistente, ou cobrança de
+        outra assinatura); `409 payment_not_refundable` (cobrança que não está `approved` nem
+        `partially_refunded`, ou já reembolsada por inteiro); `422 refund_exceeds_paid` (valor
+        acima do saldo não reembolsado). Falha do estorno não é resposta desta rota: o reembolso
+        fica `failed` com a mensagem do provedor e pode ser tentado de novo. A ação é registrada
+        na auditoria (`specs/028-auditoria.md`).
+      security:
+        - sessionCookie: []
+          csrfToken: []
+      parameters:
+        - $ref: "#/components/parameters/IdPath"
+        - name: paymentId
+          in: path
+          required: true
+          description: A cobrança da assinatura.
+          schema:
+            $ref: "#/components/schemas/Uuid"
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SubscriptionRefundInput"
+      responses:
+        "202":
+          description: Reembolso pedido; o estorno é executado em segundo plano.
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/XRequestId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Refund"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "413":
+          $ref: "#/components/responses/PayloadTooLarge"
+        "415":
+          $ref: "#/components/responses/UnsupportedMediaType"
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+
   # --- Fase 4: fluxo SSE da equipe (spec 003, ADR 0028) ---
   /api/v1/stream:
     get:
@@ -9055,8 +9594,9 @@ components:
       type: string
       enum: [orders, subscriptions, both]
       description: |
-        A que o cupom se aplica (`specs/012-assinaturas.md`): pedidos avulsos, assinaturas ou os
-        dois. Nesta janela, só pedidos avulsos usam o cupom.
+        A que o cupom se aplica (`specs/012-assinaturas.md`, "Cupom na assinatura"): pedidos
+        avulsos (`orders`), assinaturas (`subscriptions`) ou os dois (`both`). Na assinatura, o
+        cupom vale só na primeira cobrança.
     CouponProductInput:
       type: object
       description: Produto restringindo o cupom; vazio é o mesmo que todos.
@@ -9879,6 +10419,434 @@ components:
           description: |
             Fim da última execução bem-sucedida de `payment.reconcile_orders`; `null` quando ainda
             não houve nenhuma.
+      additionalProperties: false
+    # --- Fase 3: planos e assinaturas (spec 012) ---
+    PlanInterval:
+      type: string
+      enum: [month, year]
+      description: Periodicidade da cobrança do plano (`specs/012-assinaturas.md`, "Planos").
+    PlanItemInput:
+      type: object
+      description: Produto liberado por um plano.
+      required: [productType, productId]
+      properties:
+        productType:
+          $ref: "#/components/schemas/ProductType"
+        productId:
+          $ref: "#/components/schemas/Uuid"
+      additionalProperties: false
+    PlanItem:
+      type: object
+      description: Produto liberado por um plano, com o título atual.
+      required: [productType, productId, title]
+      properties:
+        productType:
+          $ref: "#/components/schemas/ProductType"
+        productId:
+          $ref: "#/components/schemas/Uuid"
+        title:
+          type: string
+      additionalProperties: false
+    Plan:
+      type: object
+      description: |
+        Um plano de assinatura com os itens que libera (`specs/012-assinaturas.md`, "Planos").
+        O preço do plano vale para novas assinaturas; as existentes mantêm o preço contratado.
+      required:
+        [
+          id,
+          slug,
+          groupKey,
+          title,
+          description,
+          interval,
+          priceCents,
+          includesAll,
+          includesPrivate,
+          active,
+          position,
+          providerPlanId,
+          subscriptionCount,
+          items,
+          createdAt,
+          updatedAt,
+        ]
+      properties:
+        id:
+          $ref: "#/components/schemas/Uuid"
+        slug:
+          $ref: "#/components/schemas/Slug"
+        groupKey:
+          $ref: "#/components/schemas/Slug"
+          description: Chave que agrupa as periodicidades do mesmo conteúdo na vitrine.
+        title:
+          type: string
+        description:
+          type: [string, "null"]
+        interval:
+          $ref: "#/components/schemas/PlanInterval"
+        priceCents:
+          $ref: "#/components/schemas/MoneyCents"
+          description: Preço por período, maior que zero.
+        includesAll:
+          type: boolean
+          description: |
+            Verdadeiro = todo produto publicado `paid` ou `open`, atual e futuro; nesse caso
+            `items` vem vazia.
+        includesPrivate:
+          type: boolean
+          description: Só com `includesAll`; inclui também os produtos `private`.
+        active:
+          type: boolean
+          description: |
+            Plano inativo sai da vitrine e não aceita assinatura nova; as assinaturas existentes
+            continuam.
+        position:
+          type: integer
+          minimum: 0
+          description: Ordem na vitrine.
+        providerPlanId:
+          type: [string, "null"]
+          description: |
+            Identificador do plano no provedor (`ensurePlan`); `null` até o `ensurePlan` rodar
+            (`specs/013-pagamentos-mercado-pago.md`).
+        subscriptionCount:
+          type: integer
+          minimum: 0
+          description: |
+            Assinaturas do plano, inclusive `ended` e `expired`; é o vínculo que impede excluir o
+            plano.
+        items:
+          type: array
+          description: Produtos explícitos quando `includesAll` é falso; vazia quando verdadeiro.
+          items:
+            $ref: "#/components/schemas/PlanItem"
+        createdAt:
+          $ref: "#/components/schemas/DateTime"
+        updatedAt:
+          $ref: "#/components/schemas/DateTime"
+      additionalProperties: false
+    PlanPage:
+      allOf:
+        - $ref: "#/components/schemas/Page"
+        - type: object
+          required: [items]
+          properties:
+            items:
+              type: array
+              items:
+                $ref: "#/components/schemas/Plan"
+    PlanCreate:
+      type: object
+      description: |
+        Definição de um plano novo (`specs/012-assinaturas.md`, "Planos"). `includesAll`,
+        `includesPrivate`, `active` e `position` têm padrão falso, falso, verdadeiro e zero;
+        `items` tem padrão vazio.
+      required: [groupKey, title, interval, priceCents]
+      properties:
+        slug:
+          $ref: "#/components/schemas/Slug"
+          description: |
+            Identificador público; gerado de `groupKey` e `interval` quando ausente e imutável
+            depois da criação.
+        groupKey:
+          $ref: "#/components/schemas/Slug"
+          description: |
+            Chave que agrupa as periodicidades na vitrine: a mesma nos planos mensal e anual do
+            mesmo conteúdo. Imutável.
+        title:
+          type: string
+          minLength: 1
+          maxLength: 160
+        description:
+          type: [string, "null"]
+          maxLength: 20000
+        interval:
+          $ref: "#/components/schemas/PlanInterval"
+        priceCents:
+          type: integer
+          minimum: 1
+          description: Preço por período.
+        includesAll:
+          type: boolean
+          default: false
+        includesPrivate:
+          type: boolean
+          default: false
+        active:
+          type: boolean
+          default: true
+        position:
+          type: integer
+          minimum: 0
+          default: 0
+        items:
+          type: array
+          maxItems: 500
+          default: []
+          items:
+            $ref: "#/components/schemas/PlanItemInput"
+      additionalProperties: false
+    PlanUpdate:
+      type: object
+      description: |
+        Edição parcial do plano: só os campos enviados mudam. `slug`, `groupKey` e `interval` não
+        mudam depois da criação.
+      properties:
+        title:
+          type: string
+          minLength: 1
+          maxLength: 160
+        description:
+          type: [string, "null"]
+          maxLength: 20000
+        priceCents:
+          type: integer
+          minimum: 1
+        includesAll:
+          type: boolean
+        includesPrivate:
+          type: boolean
+        active:
+          type: boolean
+        position:
+          type: integer
+          minimum: 0
+      additionalProperties: false
+    PlanItemsUpdate:
+      type: object
+      description: Lista completa que substitui os itens do plano.
+      required: [items]
+      properties:
+        items:
+          type: array
+          maxItems: 500
+          items:
+            $ref: "#/components/schemas/PlanItemInput"
+      additionalProperties: false
+    SubscriptionStatus:
+      type: string
+      enum: [pending, active, past_due, suspended, canceling, ended, expired]
+      description: |
+        Estado da assinatura (`specs/012-assinaturas.md`, "Ciclo de vida"). `pending` aguarda a
+        primeira cobrança; `active` está em dia; `past_due` está em carência, com acesso;
+        `suspended` perdeu o acesso; `canceling` foi cancelada e mantém o acesso até
+        `currentPeriodEnd`; `ended` encerrou; `expired` nunca foi paga.
+    SubscriptionPlanRef:
+      type: object
+      description: O plano da assinatura, na forma resumida.
+      required: [id, title, interval]
+      properties:
+        id:
+          $ref: "#/components/schemas/Uuid"
+        title:
+          type: string
+        interval:
+          $ref: "#/components/schemas/PlanInterval"
+      additionalProperties: false
+    Subscriber:
+      type: object
+      description: O assinante na lista e no detalhe da assinatura.
+      required: [id, name, email]
+      properties:
+        id:
+          $ref: "#/components/schemas/Uuid"
+        name:
+          type: string
+        email:
+          $ref: "#/components/schemas/Email"
+      additionalProperties: false
+    AdminSubscriptionSummary:
+      type: object
+      description: Uma assinatura na lista do admin.
+      required:
+        [
+          id,
+          subscriber,
+          plan,
+          status,
+          priceCents,
+          currency,
+          currentPeriodStart,
+          currentPeriodEnd,
+          graceUntil,
+          nextChargeAt,
+          canceledAt,
+          cancelReason,
+          endedAt,
+          createdAt,
+        ]
+      properties:
+        id:
+          $ref: "#/components/schemas/Uuid"
+        subscriber:
+          $ref: "#/components/schemas/Subscriber"
+        plan:
+          $ref: "#/components/schemas/SubscriptionPlanRef"
+        status:
+          $ref: "#/components/schemas/SubscriptionStatus"
+        priceCents:
+          $ref: "#/components/schemas/MoneyCents"
+          description: |
+            Preço contratado, copiado do plano na criação; mudança posterior do plano não o
+            altera.
+        currency:
+          $ref: "#/components/schemas/CurrencyCode"
+        currentPeriodStart:
+          oneOf:
+            - $ref: "#/components/schemas/DateTime"
+            - type: "null"
+        currentPeriodEnd:
+          oneOf:
+            - $ref: "#/components/schemas/DateTime"
+            - type: "null"
+          description: Fim do período pago; com a carência, a referência do acesso.
+        graceUntil:
+          oneOf:
+            - $ref: "#/components/schemas/DateTime"
+            - type: "null"
+        nextChargeAt:
+          oneOf:
+            - $ref: "#/components/schemas/DateTime"
+            - type: "null"
+          description: |
+            Próxima renovação prevista: `currentPeriodEnd` em `active`; `null` nos demais.
+        canceledAt:
+          oneOf:
+            - $ref: "#/components/schemas/DateTime"
+            - type: "null"
+        cancelReason:
+          type: [string, "null"]
+          description: Motivo do cancelamento informado pelo admin ou pelo aluno.
+        endedAt:
+          oneOf:
+            - $ref: "#/components/schemas/DateTime"
+            - type: "null"
+        createdAt:
+          $ref: "#/components/schemas/DateTime"
+      additionalProperties: false
+    AdminSubscriptionPage:
+      allOf:
+        - $ref: "#/components/schemas/Page"
+        - type: object
+          required: [items]
+          properties:
+            items:
+              type: array
+              items:
+                $ref: "#/components/schemas/AdminSubscriptionSummary"
+    AdminSubscriptionDetail:
+      type: object
+      description: |
+        A assinatura com o plano atual, as cobranças e os reembolsos de cada uma
+        (`specs/012-assinaturas.md`, "Reembolso de cobrança").
+      required:
+        [
+          id,
+          subscriber,
+          plan,
+          status,
+          priceCents,
+          currency,
+          currentPeriodStart,
+          currentPeriodEnd,
+          graceUntil,
+          nextChargeAt,
+          canceledAt,
+          cancelReason,
+          endedAt,
+          createdAt,
+          provider,
+          providerSubscriptionId,
+          couponCode,
+          currentPeriodPaymentId,
+          payments,
+        ]
+      properties:
+        id:
+          $ref: "#/components/schemas/Uuid"
+        subscriber:
+          $ref: "#/components/schemas/Subscriber"
+        plan:
+          $ref: "#/components/schemas/Plan"
+          description: |
+            O plano agora, com preço e itens atuais; o preço contratado é `priceCents` desta
+            assinatura.
+        status:
+          $ref: "#/components/schemas/SubscriptionStatus"
+        priceCents:
+          $ref: "#/components/schemas/MoneyCents"
+          description: Preço contratado na criação da assinatura.
+        currency:
+          $ref: "#/components/schemas/CurrencyCode"
+        currentPeriodStart:
+          oneOf:
+            - $ref: "#/components/schemas/DateTime"
+            - type: "null"
+        currentPeriodEnd:
+          oneOf:
+            - $ref: "#/components/schemas/DateTime"
+            - type: "null"
+        graceUntil:
+          oneOf:
+            - $ref: "#/components/schemas/DateTime"
+            - type: "null"
+        nextChargeAt:
+          oneOf:
+            - $ref: "#/components/schemas/DateTime"
+            - type: "null"
+        canceledAt:
+          oneOf:
+            - $ref: "#/components/schemas/DateTime"
+            - type: "null"
+        cancelReason:
+          type: [string, "null"]
+        endedAt:
+          oneOf:
+            - $ref: "#/components/schemas/DateTime"
+            - type: "null"
+        createdAt:
+          $ref: "#/components/schemas/DateTime"
+        provider:
+          type: string
+          enum: [mercadopago, fake]
+        providerSubscriptionId:
+          type: [string, "null"]
+          description: Identificador da adesão no provedor; `null` até o provedor devolvê-lo.
+        couponCode:
+          type: [string, "null"]
+          description: |
+            Código do cupom usado na primeira cobrança; `null` sem cupom ou se o cupom foi
+            excluído.
+        currentPeriodPaymentId:
+          oneOf:
+            - $ref: "#/components/schemas/Uuid"
+            - type: "null"
+          description: |
+            A cobrança que abriu o período em curso; reembolsá-la encerra a assinatura na hora.
+            `null` quando ainda não há cobrança aprovada no período (por exemplo, `pending`).
+        payments:
+          type: array
+          description: Cobranças da assinatura, da mais recente para a mais antiga, com reembolsos.
+          items:
+            $ref: "#/components/schemas/PaymentDetail"
+      additionalProperties: false
+    SubscriptionRefundInput:
+      type: object
+      description: Pedido de reembolso de uma cobrança recorrente.
+      required: [reason]
+      properties:
+        reason:
+          type: string
+          minLength: 1
+          maxLength: 500
+          description: Motivo informado pelo admin.
+        amountCents:
+          type: [integer, "null"]
+          minimum: 1
+          description: |
+            Valor a estornar; ausente ou `null` estorna o saldo não reembolsado da cobrança.
+            Acima do saldo: `422 refund_exceeds_paid`.
       additionalProperties: false
     # --- Fase 4: central, stream, operação e identidade (specs 024 e 033) ---
     NotificationGroup:

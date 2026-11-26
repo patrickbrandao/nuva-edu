@@ -78,6 +78,8 @@ tags:
     description: Certificados e validação pública (`specs/015-certificados.md`).
   - name: sales
     description: Cesta, cupom, dados de comprador e pedidos do aluno (`specs/011-vendas-e-checkout.md`).
+  - name: subscriptions
+    description: Planos e assinaturas do aluno (`specs/012-assinaturas.md`).
   - name: webhooks
     description: Aviso de pagamento do provedor, autenticado por assinatura (`specs/013-pagamentos-mercado-pago.md`).
 
@@ -2883,6 +2885,256 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/MyOrderDetail"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+  # --- Fase 3: planos e assinaturas (spec 012) ---
+  /api/v1/plans:
+    get:
+      operationId: listPlans
+      tags: [subscriptions]
+      summary: Vitrine de planos
+      x-nuva-pending: true
+      description: |
+        Planos `active` agrupados por `groupKey`, para a página alternar mensal e anual
+        (`specs/012-assinaturas.md`, "Planos"), sem login. Plano inativo sai da vitrine e não
+        aceita assinatura nova; as assinaturas existentes continuam. Os grupos seguem a menor
+        `position` dos planos e, dentro do grupo, vêm `month` e depois `year`.
+
+        Cada plano diz o que libera: `includesAll` (todo produto publicado `paid` ou `open`,
+        atual e futuro) ou os itens explícitos. Na vitrine, item não publicado ou `private` é
+        omitido da lista; ele continua no plano e no admin, e o acesso segue a
+        `specs/010-direitos-de-acesso.md`. Segue o limite de visitante
+        (`specs/004-classroom-api.md`).
+      security: []
+      responses:
+        "200":
+          description: Os planos ativos, agrupados.
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/XRequestId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PlanCatalog"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+  /api/v1/subscriptions:
+    post:
+      operationId: createSubscription
+      tags: [subscriptions]
+      summary: Assinar um plano
+      x-permission: purchase.create
+      x-nuva-pending: true
+      description: |
+        Assina um plano em checkout próprio, fora da cesta (`specs/012-assinaturas.md`,
+        "Assinar"). Exige sessão e e-mail confirmado; o nome e o CPF/CNPJ vêm de
+        `GET /api/v1/me/billing` e, se faltarem, a resposta é `409 billing_required` antes de
+        qualquer cobrança. Cria a assinatura em `pending`, com o preço do plano copiado, e a
+        adesão no provedor; devolve a assinatura e a URL para onde o navegador vai autorizar a
+        cobrança recorrente e pagar a primeira cobrança. A ativação acontece quando a primeira
+        cobrança é aprovada, pelo worker.
+
+        Um usuário pode ter assinaturas ativas de planos diferentes; repetir o mesmo plano em
+        `pending`, `active`, `past_due` ou `suspended` responde `409 subscription_already_exists`
+        (em `canceling`, a spec manda assinar de novo para desfazer o cancelamento). O cupom
+        precisa de `appliesTo` `subscriptions` ou `both`, vale só na primeira cobrança e é
+        contabilizado na ativação; cupom de 100% zera a primeira cobrança e a recorrência começa
+        no período seguinte (`specs/012-assinaturas.md`, "Cupom na assinatura").
+
+        Recusas, pelo `code`: `403 email_not_verified`; `404 not_found` (plano inexistente ou
+        inativo — plano inativo não aceita assinatura nova); `409 billing_required`;
+        `409 subscription_already_exists`; `422 coupon_invalid` (cupom inexistente, expirado,
+        esgotado, inativo ou sem `subscriptions` em `appliesTo`); `503
+        payment_provider_unavailable` (provedor fora: nenhuma assinatura é criada e nada é
+        cobrado; a mensagem é "pagamento indisponível, tente em instantes").
+      security:
+        - sessionCookie: []
+          csrfToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [planId]
+              properties:
+                planId:
+                  $ref: "#/components/schemas/Uuid"
+                couponCode:
+                  type: [string, "null"]
+                  minLength: 3
+                  maxLength: 40
+                  description: |
+                    Código do cupom, comparado sem diferenciar maiúsculas; `null` ou ausente sem
+                    cupom.
+              additionalProperties: false
+      responses:
+        "201":
+          description: Assinatura criada; o aluno segue para o checkout do provedor.
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/XRequestId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SubscriptionCheckout"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "413":
+          $ref: "#/components/responses/PayloadTooLarge"
+        "415":
+          $ref: "#/components/responses/UnsupportedMediaType"
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+  /api/v1/me/subscriptions:
+    get:
+      operationId: listMySubscriptions
+      tags: [subscriptions]
+      summary: Assinaturas do aluno
+      x-permission: purchase.create
+      x-nuva-pending: true
+      description: |
+        As assinaturas do próprio usuário, da mais nova para a mais antiga
+        (`specs/012-assinaturas.md`, RF-08): a atual e o histórico, inclusive `ended` e `expired`.
+        Filtro por estado e paginação por cursor. "Minha assinatura" mostra plano, estado,
+        próxima cobrança e histórico a partir daqui e do detalhe.
+      parameters:
+        - name: status
+          in: query
+          schema:
+            $ref: "#/components/schemas/SubscriptionStatus"
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Cursor"
+      responses:
+        "200":
+          description: Uma página de assinaturas.
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/XRequestId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MySubscriptionPage"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+  /api/v1/me/subscriptions/{id}:
+    get:
+      operationId: getMySubscription
+      tags: [subscriptions]
+      summary: Uma assinatura do aluno
+      x-permission: purchase.create
+      x-nuva-pending: true
+      description: |
+        A assinatura do próprio usuário com o plano atual (título, periodicidade e itens que
+        libera), o preço contratado, o período, a carência e todos os estados do ciclo de vida,
+        além do histórico de cobranças, da mais recente para a mais antiga
+        (`specs/012-assinaturas.md`, RF-08). Assinatura de outra pessoa: `404 not_found`.
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: "#/components/parameters/IdPath"
+      responses:
+        "200":
+          description: A assinatura.
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/XRequestId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MySubscriptionDetail"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+  /api/v1/me/subscriptions/{id}/cancel:
+    post:
+      operationId: cancelMySubscription
+      tags: [subscriptions]
+      summary: Cancelar a própria assinatura
+      x-permission: purchase.create
+      x-nuva-pending: true
+      description: |
+        Cancela a assinatura do próprio usuário (`specs/012-assinaturas.md`, "Cancelamento"):
+        cancela a recorrência no provedor na hora e a assinatura vai a `canceling`; o acesso
+        segue até `currentPeriodEnd`, sem carência adicional, e ao fim o worker a encerra em
+        `ended`. Em `past_due`, o cancelamento encerra a carência: o acesso vai só até
+        `currentPeriodEnd`. Desfazer o cancelamento não é oferecido no MVP: o aluno assina de
+        novo.
+
+        Só `active` e `past_due` aceitam o pedido; `pending`, `suspended`, `canceling`, `ended` e
+        `expired` respondem `409 subscription_not_cancelable`. Assinatura de outra pessoa:
+        `404 not_found`. Se o provedor não confirmar o cancelamento, a resposta é `503
+        payment_provider_unavailable` e nada muda: a tentativa pode ser repetida.
+      security:
+        - sessionCookie: []
+          csrfToken: []
+      parameters:
+        - $ref: "#/components/parameters/IdPath"
+      responses:
+        "200":
+          description: Assinatura em `canceling`.
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/XRequestId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MySubscriptionDetail"
         "400":
           $ref: "#/components/responses/BadRequest"
         "401":
@@ -6685,4 +6937,320 @@ components:
           description: |
             Para onde o navegador vai pagar; `null` no pedido de total zero, já `paid` com
             `provider: none`.
+      additionalProperties: false
+    # --- Fase 3: planos e assinaturas (spec 012) ---
+    PlanInterval:
+      type: string
+      enum: [month, year]
+      description: Periodicidade da cobrança do plano (`specs/012-assinaturas.md`, "Planos").
+    PlanItem:
+      type: object
+      description: Produto liberado por um plano, com o título atual.
+      required: [productType, productId, title]
+      properties:
+        productType:
+          $ref: "#/components/schemas/ProductType"
+        productId:
+          $ref: "#/components/schemas/Uuid"
+        title:
+          type: string
+      additionalProperties: false
+    PublicPlan:
+      type: object
+      description: |
+        Um plano na vitrine (`specs/012-assinaturas.md`, "Planos"). Sem `includesPrivate`: plano
+        que inclui produtos `private` não os anuncia (`specs/009-catalogo-e-conteudo.md`).
+      required: [id, slug, title, description, interval, priceCents, includesAll, items, position]
+      properties:
+        id:
+          $ref: "#/components/schemas/Uuid"
+        slug:
+          $ref: "#/components/schemas/Slug"
+        title:
+          type: string
+        description:
+          type: [string, "null"]
+        interval:
+          $ref: "#/components/schemas/PlanInterval"
+        priceCents:
+          $ref: "#/components/schemas/MoneyCents"
+          description: Preço por período, maior que zero.
+        includesAll:
+          type: boolean
+          description: |
+            Verdadeiro = todo produto publicado `paid` ou `open`, atual e futuro; nesse caso
+            `items` vem vazia.
+        items:
+          type: array
+          description: |
+            Produtos explícitos quando `includesAll` é falso. Item não publicado ou `private` é
+            omitido.
+          items:
+            $ref: "#/components/schemas/PlanItem"
+        position:
+          type: integer
+          minimum: 0
+      additionalProperties: false
+    PlanGroup:
+      type: object
+      description: |
+        Periodicidades do mesmo conteúdo (`groupKey`), para a vitrine alternar mensal e anual.
+      required: [groupKey, plans]
+      properties:
+        groupKey:
+          type: string
+          description: Chave que agrupa os planos; a mesma nas duas periodicidades.
+        plans:
+          type: array
+          minItems: 1
+          maxItems: 2
+          description: Um plano por periodicidade, `month` antes de `year`.
+          items:
+            $ref: "#/components/schemas/PublicPlan"
+      additionalProperties: false
+    PlanCatalog:
+      type: object
+      description: A vitrine de planos, agrupada por conteúdo.
+      required: [groups, currency]
+      properties:
+        groups:
+          type: array
+          description: Grupos dos planos ativos; vazio quando não há plano ativo.
+          items:
+            $ref: "#/components/schemas/PlanGroup"
+        currency:
+          $ref: "#/components/schemas/CurrencyCode"
+      additionalProperties: false
+    SubscriptionStatus:
+      type: string
+      enum: [pending, active, past_due, suspended, canceling, ended, expired]
+      description: |
+        Estado da assinatura (`specs/012-assinaturas.md`, "Ciclo de vida"). `pending` aguarda a
+        primeira cobrança; `active` está em dia; `past_due` está em carência, com acesso;
+        `suspended` perdeu o acesso; `canceling` foi cancelada e mantém o acesso até
+        `currentPeriodEnd`; `ended` encerrou; `expired` nunca foi paga.
+    SubscriptionPlanRef:
+      type: object
+      description: O plano da assinatura, na forma resumida.
+      required: [id, slug, title, interval]
+      properties:
+        id:
+          $ref: "#/components/schemas/Uuid"
+        slug:
+          $ref: "#/components/schemas/Slug"
+        title:
+          type: string
+        interval:
+          $ref: "#/components/schemas/PlanInterval"
+      additionalProperties: false
+    MySubscriptionSummary:
+      type: object
+      description: Uma assinatura do aluno na lista.
+      required:
+        [
+          id,
+          plan,
+          status,
+          priceCents,
+          currency,
+          currentPeriodStart,
+          currentPeriodEnd,
+          graceUntil,
+          nextChargeAt,
+          canceledAt,
+          endedAt,
+          createdAt,
+        ]
+      properties:
+        id:
+          $ref: "#/components/schemas/Uuid"
+        plan:
+          $ref: "#/components/schemas/SubscriptionPlanRef"
+        status:
+          $ref: "#/components/schemas/SubscriptionStatus"
+        priceCents:
+          $ref: "#/components/schemas/MoneyCents"
+          description: |
+            Preço contratado, copiado do plano na criação; mudança posterior do plano não o
+            altera (`specs/012-assinaturas.md`, "Planos").
+        currency:
+          $ref: "#/components/schemas/CurrencyCode"
+        currentPeriodStart:
+          oneOf:
+            - $ref: "#/components/schemas/DateTime"
+            - type: "null"
+          description: "`null` em `pending` e `expired`."
+        currentPeriodEnd:
+          oneOf:
+            - $ref: "#/components/schemas/DateTime"
+            - type: "null"
+          description: |
+            Fim do período pago; com a carência, é a referência do acesso em `active`,
+            `past_due` e `canceling`. É também quando o acesso cai sozinho, mesmo com o worker
+            parado.
+        graceUntil:
+          oneOf:
+            - $ref: "#/components/schemas/DateTime"
+            - type: "null"
+          description: |
+            Fim da carência de 3 dias (`NUVA_SUBSCRIPTION_GRACE_DAYS`); preenchido em `past_due`
+            e `suspended`, `null` nos demais.
+        nextChargeAt:
+          oneOf:
+            - $ref: "#/components/schemas/DateTime"
+            - type: "null"
+          description: |
+            Próxima renovação prevista: `currentPeriodEnd` em `active`; `null` nos demais (em
+            `past_due`, o provedor tenta de novo conforme a política dele e não há data exposta;
+            em `canceling`, não há próxima cobrança).
+        canceledAt:
+          oneOf:
+            - $ref: "#/components/schemas/DateTime"
+            - type: "null"
+          description: Quando o cancelamento foi pedido; `null` sem cancelamento.
+        endedAt:
+          oneOf:
+            - $ref: "#/components/schemas/DateTime"
+            - type: "null"
+          description: "`null` fora de `ended`."
+        createdAt:
+          $ref: "#/components/schemas/DateTime"
+      additionalProperties: false
+    MySubscriptionPage:
+      allOf:
+        - $ref: "#/components/schemas/Page"
+        - type: object
+          required: [items]
+          properties:
+            items:
+              type: array
+              items:
+                $ref: "#/components/schemas/MySubscriptionSummary"
+    SubscriptionCharge:
+      type: object
+      description: |
+        Uma cobrança da assinatura (`specs/013-pagamentos-mercado-pago.md`), sem dado de cartão e
+        sem o corpo do provedor.
+      required:
+        [
+          id,
+          status,
+          method,
+          amountCents,
+          refundedCents,
+          currency,
+          provider,
+          providerPaymentId,
+          paidAt,
+          createdAt,
+        ]
+      properties:
+        id:
+          $ref: "#/components/schemas/Uuid"
+        status:
+          $ref: "#/components/schemas/PaymentStatus"
+        method:
+          $ref: "#/components/schemas/PaymentMethod"
+        amountCents:
+          $ref: "#/components/schemas/MoneyCents"
+        refundedCents:
+          $ref: "#/components/schemas/MoneyCents"
+        currency:
+          $ref: "#/components/schemas/CurrencyCode"
+        provider:
+          type: string
+          enum: [mercadopago, fake]
+        providerPaymentId:
+          type: string
+        paidAt:
+          oneOf:
+            - $ref: "#/components/schemas/DateTime"
+            - type: "null"
+        createdAt:
+          $ref: "#/components/schemas/DateTime"
+      additionalProperties: false
+    MySubscriptionDetail:
+      type: object
+      description: |
+        A assinatura do aluno com o plano atual, o período e o histórico de cobranças
+        (`specs/012-assinaturas.md`, "Minha assinatura").
+      required:
+        [
+          id,
+          plan,
+          status,
+          priceCents,
+          currency,
+          currentPeriodStart,
+          currentPeriodEnd,
+          graceUntil,
+          nextChargeAt,
+          canceledAt,
+          endedAt,
+          createdAt,
+          payments,
+        ]
+      properties:
+        id:
+          $ref: "#/components/schemas/Uuid"
+        plan:
+          $ref: "#/components/schemas/PublicPlan"
+          description: |
+            O plano agora, com os itens que ele libera; o preço contratado é `priceCents` desta
+            assinatura, não o do plano.
+        status:
+          $ref: "#/components/schemas/SubscriptionStatus"
+        priceCents:
+          $ref: "#/components/schemas/MoneyCents"
+          description: Preço contratado na criação da assinatura.
+        currency:
+          $ref: "#/components/schemas/CurrencyCode"
+        currentPeriodStart:
+          oneOf:
+            - $ref: "#/components/schemas/DateTime"
+            - type: "null"
+        currentPeriodEnd:
+          oneOf:
+            - $ref: "#/components/schemas/DateTime"
+            - type: "null"
+        graceUntil:
+          oneOf:
+            - $ref: "#/components/schemas/DateTime"
+            - type: "null"
+        nextChargeAt:
+          oneOf:
+            - $ref: "#/components/schemas/DateTime"
+            - type: "null"
+        canceledAt:
+          oneOf:
+            - $ref: "#/components/schemas/DateTime"
+            - type: "null"
+        endedAt:
+          oneOf:
+            - $ref: "#/components/schemas/DateTime"
+            - type: "null"
+        createdAt:
+          $ref: "#/components/schemas/DateTime"
+        payments:
+          type: array
+          description: Histórico de cobranças, da mais recente para a mais antiga.
+          items:
+            $ref: "#/components/schemas/SubscriptionCharge"
+      additionalProperties: false
+    SubscriptionCheckout:
+      type: object
+      description: Resultado de assinar um plano.
+      required: [subscription, checkoutUrl]
+      properties:
+        subscription:
+          $ref: "#/components/schemas/MySubscriptionDetail"
+          description: A assinatura recém-criada, em `pending`, sem cobranças ainda.
+        checkoutUrl:
+          type: string
+          format: uri
+          description: |
+            Página do provedor para o aluno autorizar a cobrança recorrente e pagar a primeira
+            cobrança. O arranjo do provedor para a primeira cobrança com cupom é interno a ele
+            (`specs/013-pagamentos-mercado-pago.md`, "Implementação Mercado Pago"); o retorno
+            leva o aluno à página da assinatura, em `/conta/compras`.
       additionalProperties: false
