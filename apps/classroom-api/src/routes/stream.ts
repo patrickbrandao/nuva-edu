@@ -1,11 +1,9 @@
-import type { FastifyInstance } from '@nuva-edu/api-kit';
-import { unauthenticated, unavailable } from '@nuva-edu/core';
+import { type FastifyInstance, parseEventId, type StreamHub } from '@nuva-edu/api-kit';
+import { type UserEventKind, unauthenticated, unavailable } from '@nuva-edu/core';
 import { session } from '../session.ts';
-import { parseEventId } from '../stream/events.ts';
-import type { StreamHub } from '../stream/hub.ts';
 
 export interface StreamRouteOptions {
-  hub: StreamHub;
+  hub: StreamHub<UserEventKind>;
   /** `true` enquanto a escuta do `nuva_user_events` está de pé. */
   isListening: () => boolean;
 }

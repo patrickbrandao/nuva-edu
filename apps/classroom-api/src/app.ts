@@ -1,6 +1,7 @@
 import {
   type Contract,
   createApiApp,
+  createUserEventPipeline,
   databaseReadiness,
   type FastifyInstance,
   type FastifyReply,
@@ -9,11 +10,12 @@ import {
   type RateLimitRule,
   type ReadinessChecks,
   registerMetaRoute,
+  type StreamHub,
+  type StreamHubOptions,
 } from '@nuva-edu/api-kit';
 import {
   assertCsrfToken,
   assertTermsGate,
-  type ChannelListener,
   type Config,
   createOAuth,
   createSettingsReader,
@@ -21,12 +23,14 @@ import {
   databasePoolStats,
   type ImageProcessingLimiter,
   isDomainError,
+  isUserEventKind,
   type Logger,
   listenChannel,
   listSessions,
   type OAuth,
   type SettingsReader,
   USER_EVENTS_CHANNEL,
+  type UserEventKind,
 } from '@nuva-edu/core';
 import { loadClassroomContract } from './contract.ts';
 import { readServiceVersion } from './meta.ts';
@@ -48,8 +52,6 @@ import {
   type SessionAuthenticator,
   session,
 } from './session.ts';
-import { parseUserEventPayload, toStreamEvent } from './stream/events.ts';
-import { createStreamHub, type StreamHub, type StreamHubOptions } from './stream/hub.ts';
 
 export const SERVICE = 'classroom-api';
 
@@ -102,7 +104,7 @@ export interface ClassroomAppOptions {
 
 /** O fluxo SSE deste processo, para a subida, os testes e quem precisar derrubar conexões. */
 export interface UserEventStream {
-  hub: StreamHub;
+  hub: StreamHub<UserEventKind>;
   /** `true` enquanto a escuta do `nuva_user_events` está de pé. */
   isListening(): boolean;
   /** Sobe o serviço, se ainda não subiu, e resolve quando a escuta fica ativa. */
@@ -164,8 +166,27 @@ export function buildClassroomApp(options: ClassroomAppOptions): FastifyInstance
     replies.set(request, reply);
   });
 
-  const hub = createStreamHub(options.stream);
-  let listener: ChannelListener | null = null;
+  // O fluxo SSE do processo: escuta do canal, filtro de tipos, conferência com o `StreamEvent`
+  // do contrato e hub das conexões. Cada API monta o seu (ADR 0028).
+  const streamEventErrors = app.contractSchema('StreamEvent');
+  const pipeline = createUserEventPipeline<UserEventKind>({
+    kinds: { acceptsKind: isUserEventKind },
+    ...(options.stream ? { hub: options.stream } : {}),
+    channel: USER_EVENTS_CHANNEL,
+    logger,
+    // O cliente gerado confia no contrato: evento que não confere com `StreamEvent` não sai.
+    validate: (body) => streamEventErrors(body).map((error) => error.path),
+    listen: ({ onNotification, onDisconnected }) =>
+      listenChannel({
+        connectionString: config.databaseUrl,
+        channel: USER_EVENTS_CHANNEL,
+        applicationName: `${SERVICE}-user-events`,
+        logger,
+        onNotification,
+        onDisconnected,
+      }),
+  });
+  const hub = pipeline.hub;
   let sessionCheck: NodeJS.Timeout | null = null;
 
   // Fecha os fluxos cujas sessões deixaram de valer (encerradas em outro processo). Suspensão
@@ -195,41 +216,12 @@ export function buildClassroomApp(options: ClassroomAppOptions): FastifyInstance
     },
   });
 
-  const streamEventErrors = app.contractSchema('StreamEvent');
-  const onNotification = (payload: string): void => {
-    const parsed = parseUserEventPayload(payload);
-    if (!parsed.ok) {
-      // Só o motivo: a carga pode trazer identificadores de usuário.
-      logger.warn(
-        { channel: USER_EVENTS_CHANNEL, reason: parsed.reason },
-        'Aviso de evento fora do formato; descartado',
-      );
-      return;
-    }
-    // O cliente gerado confia no contrato: evento que não confere com `StreamEvent` não sai.
-    const errors = streamEventErrors(toStreamEvent(parsed.event));
-    if (errors.length > 0) {
-      // Só o tipo do evento e o caminho dos campos recusados, nunca os valores.
-      logger.warn(
-        {
-          channel: USER_EVENTS_CHANNEL,
-          reason: 'contract_mismatch',
-          event: parsed.event.event,
-          fields: errors.map((error) => error.path),
-        },
-        'Aviso de evento fora do formato; descartado',
-      );
-      return;
-    }
-    hub.publish(parsed.event);
-  };
-
   streams.set(app, {
     hub,
-    isListening: () => listener?.isConnected() ?? false,
+    isListening: () => pipeline.isListening(),
     whenListening: async () => {
       await app.ready();
-      await listener?.whenConnected();
+      await pipeline.whenListening();
     },
     checkSessions: () => checkStreamSessions(),
   });
@@ -240,16 +232,7 @@ export function buildClassroomApp(options: ClassroomAppOptions): FastifyInstance
     if (options.listenUserEvents === false) {
       return;
     }
-    listener = listenChannel({
-      connectionString: config.databaseUrl,
-      channel: USER_EVENTS_CHANNEL,
-      applicationName: `${SERVICE}-user-events`,
-      logger,
-      onNotification,
-      // Banco indisponível: avisos se perdem, então as conexões SSE são fechadas e o
-      // navegador reconecta com espera crescente (spec 004, "Casos de erro").
-      onDisconnected: () => hub.closeAll(),
-    });
+    pipeline.start();
     const interval = options.streamSessionCheckMs ?? 30_000;
     if (interval > 0) {
       sessionCheck = setInterval(() => void checkStreamSessions(), interval);
@@ -262,9 +245,7 @@ export function buildClassroomApp(options: ClassroomAppOptions): FastifyInstance
       clearInterval(sessionCheck);
       sessionCheck = null;
     }
-    hub.stop();
-    await listener?.close();
-    listener = null;
+    await pipeline.close();
   });
 
   // Um leitor por processo: o `/meta` não vai ao banco a cada requisição. Com o `logger`, valor
@@ -287,7 +268,7 @@ export function buildClassroomApp(options: ClassroomAppOptions): FastifyInstance
     version: options.version ?? readServiceVersion(),
     settings,
   });
-  registerStreamRoutes(app, { hub, isListening: () => listener?.isConnected() ?? false });
+  registerStreamRoutes(app, { hub, isListening: () => pipeline.isListening() });
 
   const routes: RouteContext = { config, db, hub, ttlDays };
   registerAuthRoutes(app, routes);

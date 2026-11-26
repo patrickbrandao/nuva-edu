@@ -1,19 +1,19 @@
-import type { FastifyRequest } from '@nuva-edu/api-kit';
+import type { FastifyRequest, StreamHub } from '@nuva-edu/api-kit';
 import {
   type AuthenticatedSession,
   type Config,
   type Database,
+  type UserEventKind,
   unauthenticated,
 } from '@nuva-edu/core';
 import { session } from '../session.ts';
-import type { StreamHub } from '../stream/hub.ts';
 
 /** O que as rotas de negócio recebem de `buildClassroomApp`. */
 export interface RouteContext {
   config: Config;
   db: Database;
   /** Fluxo SSE: as rotas que encerram sessões fecham as conexões delas. */
-  hub: StreamHub;
+  hub: StreamHub<UserEventKind>;
   /** Validade da sessão, em dias (`config.retention.sessionDays`). */
   ttlDays: number;
 }
