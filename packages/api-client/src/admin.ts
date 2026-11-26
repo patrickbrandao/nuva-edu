@@ -56,6 +56,16 @@ export function uploadAdminImage(
   });
 }
 
+export {
+  ADMIN_STREAM_PATH,
+  type AdminStream,
+  type AdminStreamEvent,
+  type AdminStreamEventName,
+  type AdminStreamEventOf,
+  type AdminStreamOptions,
+  adminStreamEventNames,
+  openAdminStream,
+} from './admin-stream';
 export type { ApiClientOptions } from './client';
 export { buildOAuthStartUrl, OAUTH_START_PATH, type OAuthStartQuery } from './oauth';
 export {

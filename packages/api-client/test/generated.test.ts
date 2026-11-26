@@ -53,6 +53,15 @@ describe('verificação do código gerado', () => {
     ]);
   });
 
+  it('mudar um evento do fluxo SSE da equipe sem regenerar é detectado nos tipos e nos nomes', async () => {
+    const admin = alteredCopy('admin', 'notification.created', 'notification.new');
+
+    expect(await findStaleFiles({ contracts: { ...CONTRACTS, admin } })).toEqual([
+      'admin.ts: diferente do contrato',
+      'admin-stream.ts: diferente do contrato',
+    ]);
+  });
+
   it('recusa gerar quando o const do evento diverge do mapping do discriminador', async () => {
     const classroom = alteredCopy('classroom', 'const: presence', 'const: presence.changed');
 
@@ -69,6 +78,7 @@ describe('verificação do código gerado', () => {
     writeFileSync(join(generatedDir, 'antigo.ts'), '');
 
     expect(await findStaleFiles({ generatedDir })).toEqual([
+      'admin-stream.ts: falta gerar',
       'classroom.ts: falta gerar',
       'classroom-stream.ts: falta gerar',
       'antigo.ts: sobra (não vem de nenhum contrato)',

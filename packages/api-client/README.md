@@ -68,6 +68,25 @@ const stream = openClassroomStream({
 stream.close();
 ```
 
+Fluxo SSE da equipe, no admin (ADR 0028): mesmo formato, com a sessão do próprio host e só
+`notification.created` do titular e `ping`.
+
+```ts
+import { openAdminStream } from '@nuva-edu/api-client/admin';
+
+const stream = openAdminStream({
+  onEvent(event) {
+    if (event.event === 'notification.created') refreshBell(event.data.unreadCount);
+  },
+  onOpen: reloadLists, // a central recarrega ao reconectar
+});
+stream.close();
+```
+
+A reconexão e o `Last-Event-ID` ficam por conta do navegador; os dois auxiliares entregam o
+evento com `id`, `event` e `data` lidos do JSON e tratam o `ping` (sem `id`) sem alterar o
+contador de eventos.
+
 ## Geração
 
 `src/generated` é gerado com `openapi-typescript` e commitado. Não edite à mão.

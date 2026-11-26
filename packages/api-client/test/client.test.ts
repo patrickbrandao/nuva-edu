@@ -71,8 +71,8 @@ describe('clientes gerados', () => {
 
   it('recusa em tipo um caminho que não está no contrato', () => {
     const api = createAdminClient({ baseUrl: BASE_URL });
-    // @ts-expect-error o fluxo SSE só existe na classroom-api
-    const call = () => api.GET('/api/v1/stream');
+    // @ts-expect-error caminho fora do contrato (o fluxo SSE agora existe nas duas APIs)
+    const call = () => api.GET('/api/v1/not-a-contract-path');
     expect(call).toBeTypeOf('function');
   });
 });

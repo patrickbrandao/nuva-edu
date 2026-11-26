@@ -1,4 +1,5 @@
 export {
+  ADMIN_STREAM_PATH,
   type AdminAuthProvider,
   type AdminClient,
   type AdminComponents,
@@ -8,8 +9,15 @@ export {
   type AdminPaths,
   type AdminSchemas,
   type AdminSession,
+  type AdminStream,
+  type AdminStreamEvent,
+  type AdminStreamEventName,
+  type AdminStreamEventOf,
+  type AdminStreamOptions,
   adminOAuthStartUrl,
+  adminStreamEventNames,
   createAdminClient,
+  openAdminStream,
   uploadAdminImage,
 } from './admin';
 export {
