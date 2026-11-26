@@ -40,6 +40,7 @@ const SAMPLE_DATA: { [T in TemplateEmailType]: AnyEmailDataByType[T] } = {
     productTitle: 'Violão <do zero>',
     expiresAt: '2026-12-01T03:00:00.000Z',
   },
+  'certificate.issued': { courseTitle: 'Violão <do zero>', code: 'ABCD-EFGH-JKMN' },
 };
 
 const TEMPLATE_TYPES = [
@@ -128,8 +129,23 @@ describe('modelos de e-mail', () => {
     expect(ebook.text).not.toContain('token=');
   });
 
+  it('certificate.issued cita o curso e o código e leva ao progresso e à validação', () => {
+    const email = render('certificate.issued');
+    expect(email.subject).toBe('Certificado disponível em Escola & Cia: Violão <do zero>');
+    expect(email.text).toContain('concluir o curso "Violão <do zero>" em Escola & Cia.');
+    expect(email.text).toContain('com o código ABCD-EFGH-JKMN.');
+    expect(email.text).toContain(`Baixar meu certificado:\n${CLASSROOM}/progresso\n`);
+    expect(email.text).toContain(
+      `Validar o certificado:\n${CLASSROOM}/certificados/ABCD-EFGH-JKMN\n`,
+    );
+    expect(email.html).toContain('Violão &lt;do zero&gt;');
+    expect(email.html).not.toContain('<do zero>');
+    expect(email.text).not.toContain('token=');
+  });
+
   it('só os tipos com modelo são aceitos pelo worker', () => {
     expect(isTemplateEmailType('access.granted')).toBe(true);
+    expect(isTemplateEmailType('certificate.issued')).toBe(true);
     expect(isTemplateEmailType('account.locked')).toBe(true);
     expect(isTemplateEmailType('tipo.inexistente')).toBe(false);
   });

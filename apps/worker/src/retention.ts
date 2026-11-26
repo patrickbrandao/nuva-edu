@@ -1,4 +1,10 @@
-import { type Config, type Database, purgeAudit } from '@nuva-edu/core';
+import {
+  type Config,
+  type Database,
+  purgeAudit,
+  purgeCertificatePreviews,
+  purgeCertificateTemplateVersions,
+} from '@nuva-edu/core';
 
 /** Linhas por lote do expurgo (spec 033, RNF-05): cada `DELETE` é uma transação curta. */
 export const RETENTION_BATCH_SIZE = 5_000;
@@ -27,6 +33,10 @@ export interface RetentionReport {
   emailOutboxFailed: number;
   jobsDone: number;
   jobsFailed: number;
+  /** Pedidos de PDF de exemplo com mais de 24 horas (spec 015). */
+  certificatePreviews: number;
+  /** Versões de template sem uso com mais de 30 dias (spec 015). */
+  certificateTemplateVersions: number;
   auditLog: number;
 }
 
@@ -44,7 +54,10 @@ const DAY_MS = 24 * HOUR_MS;
 /** Um lote de uma regra: apaga até `limit` linhas e devolve quantas apagou. */
 type BatchRule = (db: Database, limit: number) => Promise<number>;
 
-type BatchRuleName = Exclude<keyof RetentionReport, 'auditLog'>;
+type BatchRuleName = Exclude<
+  keyof RetentionReport,
+  'auditLog' | 'certificatePreviews' | 'certificateTemplateVersions'
+>;
 
 function rules(settings: RetentionSettings, now: Date): Record<BatchRuleName, BatchRule> {
   const ago = (ms: number): Date => new Date(now.getTime() - ms);
@@ -233,7 +246,13 @@ export async function purgeRetention(
   for (const [name, rule] of Object.entries(rules(settings, now)) as [BatchRuleName, BatchRule][]) {
     counts[name] = await drainBatches(() => rule(db, batchSize), batchSize, options.signal);
   }
+  // Prazos fixos dos certificados (spec 033), pelas funções do núcleo, nos mesmos lotes.
+  const purgeOptions = options.signal ? { batchSize, signal: options.signal } : { batchSize };
+  throwIfAborted(options.signal);
+  const certificatePreviews = await purgeCertificatePreviews(db, purgeOptions);
+  throwIfAborted(options.signal);
+  const certificateTemplateVersions = await purgeCertificateTemplateVersions(db, purgeOptions);
   throwIfAborted(options.signal);
   const auditLog = await purgeAudit(db, settings.auditDays);
-  return { ...counts, auditLog };
+  return { ...counts, certificatePreviews, certificateTemplateVersions, auditLog };
 }

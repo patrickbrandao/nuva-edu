@@ -138,4 +138,19 @@ export const ptBR: EmailTemplates = {
       actions: [{ label: product.action, url: links.classroom(product.path) }],
     };
   },
+
+  'certificate.issued': ({ school, data, links }) => ({
+    subject: `Certificado disponível em ${school}: ${data.courseTitle}`,
+    paragraphs: [
+      `Parabéns por concluir o curso "${data.courseTitle}" em ${school}.`,
+      `Seu certificado já está disponível, com o código ${data.code}. Baixe o PDF na página do seu progresso; o endereço de validação confirma a autenticidade a quem você mostrar o certificado.`,
+    ],
+    actions: [
+      { label: 'Baixar meu certificado', url: links.classroom('/progresso') },
+      {
+        label: 'Validar o certificado',
+        url: links.classroom(`/certificados/${encodeURIComponent(data.code)}`),
+      },
+    ],
+  }),
 };

@@ -16,6 +16,7 @@ import { ptBR } from './locales/pt-BR.ts';
  */
 export const EXTRA_TEMPLATE_EMAIL_TYPES = [
   'access.granted',
+  'certificate.issued',
 ] as const satisfies readonly AnyEmailType[];
 
 /** Tipos com modelo no worker: os do núcleo e os de `EXTRA_TEMPLATE_EMAIL_TYPES`. */

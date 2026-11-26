@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { createWorkerMetrics, DURATION_BUCKETS } from '../src/metrics.ts';
+import {
+  CERTIFICATE_RENDER_BUCKETS,
+  createWorkerMetrics,
+  DURATION_BUCKETS,
+} from '../src/metrics.ts';
 
 describe('métricas do laço de consumo', () => {
   it('soma jobs_total por conjunto de rótulos, sem depender da ordem deles', () => {
@@ -38,5 +42,18 @@ describe('métricas do laço de consumo', () => {
     expect(text).toContain('jobs_duration_seconds_sum{type="a"} 400.55');
     expect(text).toContain('jobs_duration_seconds_count{type="a"} 3');
     expect(DURATION_BUCKETS.at(-1)).toBe(300);
+  });
+
+  it('certificate_render_seconds por kind, com faixas de 100 ms a 30 s (spec 033)', () => {
+    const { registry, certificateRender } = createWorkerMetrics();
+    certificateRender.observe(0.8, { kind: 'certificate' });
+    certificateRender.observe(21, { kind: 'preview' });
+    const text = registry.render();
+    expect(text).toContain('# TYPE certificate_render_seconds histogram');
+    expect(text).toContain('certificate_render_seconds_bucket{kind="certificate",le="1"} 1');
+    expect(text).toContain('certificate_render_seconds_bucket{kind="preview",le="20"} 0');
+    expect(text).toContain('certificate_render_seconds_bucket{kind="preview",le="30"} 1');
+    expect(CERTIFICATE_RENDER_BUCKETS[0]).toBe(0.1);
+    expect(CERTIFICATE_RENDER_BUCKETS.at(-1)).toBe(30);
   });
 });

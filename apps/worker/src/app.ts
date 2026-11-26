@@ -1,5 +1,6 @@
 import { databaseReadiness } from '@nuva-edu/api-kit/health';
 import { type Config, closeDatabase, createDatabase, type Logger } from '@nuva-edu/core';
+import { createCertificateRenderer } from './certificates/renderer.ts';
 import { createMailer, type Mailer } from './email/smtp.ts';
 import { createHandlers } from './handlers.ts';
 import { createHttpServer } from './http.ts';
@@ -39,6 +40,7 @@ export async function startApp(options: AppOptions): Promise<App> {
   });
   const metrics = createWorkerMetrics();
   const mailer = options.mailer ?? createMailer(config.smtp);
+  const renderer = createCertificateRenderer({ logger, histogram: metrics.certificateRender });
   const worker = createWorker({
     db,
     databaseUrl: config.databaseUrl,
@@ -51,6 +53,7 @@ export async function startApp(options: AppOptions): Promise<App> {
       adminUrl: config.adminUrl,
       locale: config.locale,
       retention: config.retention,
+      renderer,
     }),
     concurrency,
     metrics,
@@ -88,6 +91,7 @@ export async function startApp(options: AppOptions): Promise<App> {
       });
       await http.close();
       mailer.close();
+      await renderer.close();
       await closeDatabase(db);
       return result;
     },

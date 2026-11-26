@@ -6,7 +6,9 @@ import {
   type JobHandlers,
   type Logger,
 } from '@nuva-edu/core';
+import { extractText, getDocumentProxy } from 'unpdf';
 import { inject } from 'vitest';
+import { createCertificateRenderer } from '../src/certificates/renderer.ts';
 import type { Mailer, OutgoingEmail } from '../src/email/smtp.ts';
 import type { HandlerDependencies } from '../src/handlers.ts';
 
@@ -123,6 +125,17 @@ export function handlerDependencies(
       jobDoneDays: 7,
       jobFailedDays: 30,
     },
+    // O navegador só sobe na primeira renderização: quem não gera PDF não o abre.
+    renderer: createCertificateRenderer({ logger }),
     ...overrides,
   };
+}
+
+/** Páginas, tamanho da primeira (em pontos) e texto de um PDF, pelo pdf.js. */
+export async function readPdf(pdf: Uint8Array) {
+  const document = await getDocumentProxy(new Uint8Array(pdf));
+  const first = await document.getPage(1);
+  const { width, height } = first.getViewport({ scale: 1 });
+  const { text } = await extractText(document, { mergePages: true });
+  return { pages: document.numPages, width, height, text };
 }

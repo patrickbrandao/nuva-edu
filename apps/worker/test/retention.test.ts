@@ -334,6 +334,58 @@ describe('retention.purge', () => {
     expect(await exists('auditLog', recent)).toBe(true);
   });
 
+  it('certificados: apaga exemplos de 24 h e versões de template sem uso de 30 dias', async () => {
+    const userId = await createUser();
+    const preview = async (age: number) => {
+      const row = await db
+        .insertInto('certificatePreviews')
+        .values({ requestedBy: userId, html: '<p>x</p>', createdAt: ago(age) })
+        .returning('id')
+        .executeTakeFirstOrThrow();
+      return row.id;
+    };
+    const version = async (age: number) => {
+      const row = await db
+        .insertInto('certificateTemplateVersions')
+        .values({ html: '<p>x</p>', createdBy: userId, createdAt: ago(age) })
+        .returning('id')
+        .executeTakeFirstOrThrow();
+      return row.id;
+    };
+    const oldPreview = await preview(25 * HOUR);
+    const recentPreview = await preview(23 * HOUR);
+    const unused = await version(31 * DAY);
+    const recentUnused = await version(29 * DAY);
+    const inUse = await version(31 * DAY);
+    await db.deleteFrom('certificateTemplates').where('courseId', 'is', null).execute();
+    await db
+      .insertInto('certificateTemplates')
+      .values({ courseId: null, versionId: inUse, updatedBy: userId })
+      .execute();
+
+    const report = await purgeRetention(db, SETTINGS);
+    expect(report.certificatePreviews).toBeGreaterThanOrEqual(1);
+    expect(report.certificateTemplateVersions).toBeGreaterThanOrEqual(1);
+    const previewExists = async (id: string) =>
+      (await db
+        .selectFrom('certificatePreviews')
+        .select('id')
+        .where('id', '=', id)
+        .executeTakeFirst()) !== undefined;
+    const versionExists = async (id: string) =>
+      (await db
+        .selectFrom('certificateTemplateVersions')
+        .select('id')
+        .where('id', '=', id)
+        .executeTakeFirst()) !== undefined;
+    expect(await previewExists(oldPreview)).toBe(false);
+    expect(await previewExists(recentPreview)).toBe(true);
+    expect(await versionExists(unused)).toBe(false);
+    expect(await versionExists(recentUnused)).toBe(true);
+    expect(await versionExists(inUse)).toBe(true);
+    await db.deleteFrom('certificateTemplates').where('versionId', '=', inUse).execute();
+  });
+
   it('apaga em lotes até não sobrar nada vencido e repetir não apaga mais nada', async () => {
     expect(RETENTION_BATCH_SIZE).toBe(5_000);
     const ids = await Promise.all(Array.from({ length: 5 }, () => insertAttempt(ago(60 * DAY))));

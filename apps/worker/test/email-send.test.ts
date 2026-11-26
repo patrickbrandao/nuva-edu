@@ -436,18 +436,33 @@ describe('email.send', () => {
     });
   });
 
-  it('tipo do catálogo ainda sem modelo no worker falha sem nova tentativa', async () => {
+  it('certificate.issued sai pelo SMTP com o curso, o código e os links', async () => {
     const userId = await createUser();
-    const queued = await db.transaction().execute((trx) =>
-      enqueueEmail(trx, {
-        userId,
-        type: 'certificate.issued',
-        data: { courseTitle: 'Violão', code: 'ABC123' },
-      }),
-    );
-    await jobDone(queued?.jobId ?? '', 'failed');
+    const { outboxId, jobId } = await send(userId, 'certificate.issued', {
+      courseTitle: 'Violão do zero',
+      code: 'ABCD-EFGH-JKMN',
+    });
+    await jobDone(jobId);
+    expect(received).toHaveLength(1);
+    const mail = received[0] as ParsedMail;
+    expect(mail.subject).toBe(`Certificado disponível em ${SCHOOL}: Violão do zero`);
+    expect(mail.text).toContain('com o código ABCD-EFGH-JKMN.');
+    expect(mail.html).toContain(`href="${CLASSROOM_URL}/progresso"`);
+    expect(mail.html).toContain(`href="${CLASSROOM_URL}/certificados/ABCD-EFGH-JKMN"`);
+    expect(await outbox(outboxId)).toMatchObject({ status: 'sent', lastError: null });
+  });
+
+  it('tipo sem modelo no worker falha sem nova tentativa', async () => {
+    const userId = await createUser();
+    const row = await db
+      .insertInto('emailOutbox')
+      .values({ userId, to: `x-${randomUUID()}@escola.test`, type: 'tipo.sem_modelo', data: '{}' })
+      .returning('id')
+      .executeTakeFirstOrThrow();
+    const job = await enqueue(db, 'email.send', { outboxId: row.id });
+    await jobDone(job?.id ?? '', 'failed');
     expect(received).toHaveLength(0);
-    expect(await outbox(queued?.outboxId ?? '')).toMatchObject({
+    expect(await outbox(row.id)).toMatchObject({
       status: 'failed',
       lastError: 'Tipo de e-mail desconhecido',
     });

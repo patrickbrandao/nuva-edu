@@ -8,6 +8,8 @@ import {
   PermanentJobError,
   recalculateEntitlements,
 } from '@nuva-edu/core';
+import { createCertificateHandlers } from './certificates/handlers.ts';
+import type { CertificateRenderer } from './certificates/renderer.ts';
 import { createEmailSendHandler } from './email/send-email.ts';
 import type { Mailer } from './email/smtp.ts';
 import { drainBatches, purgeRetention, type RetentionSettings } from './retention.ts';
@@ -25,6 +27,8 @@ export interface HandlerDependencies {
   locale: string;
   /** Prazos de `config.retention` usados pelo `retention.purge` (spec 033). */
   retention: RetentionSettings;
+  /** Navegador dos PDFs de certificado, um por processo (spec 015, "PDF"). */
+  renderer: CertificateRenderer;
 }
 
 /**
@@ -88,5 +92,13 @@ export function createHandlers(deps: HandlerDependencies): JobHandlers {
         'Cascata de direitos recalculada',
       );
     },
+    // Conclusão de curso, certificados e PDFs (specs 014 e 015).
+    ...createCertificateHandlers({
+      db,
+      logger,
+      renderer: deps.renderer,
+      classroomUrl: deps.classroomUrl,
+      locale: deps.locale,
+    }),
   };
 }
