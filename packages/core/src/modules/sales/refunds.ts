@@ -18,6 +18,11 @@ import type { EntitlementRevokeReason } from '../entitlements/types.ts';
 import { IDEMPOTENCY_SCOPES, requestFingerprint, runIdempotent } from '../idempotency/index.ts';
 import { enqueueRefundExecute } from '../jobs/sales.ts';
 import { notify } from '../notifications/central.ts';
+import {
+  isPaymentCredentialError,
+  PAYMENT_CREDENTIAL_ATTEMPTS,
+  PAYMENT_ERROR_CODES,
+} from '../payments/errors.ts';
 import type { PaymentProvider, ProviderRefund } from '../payments/types.ts';
 import {
   paymentNotRefundable,
@@ -300,7 +305,7 @@ export async function executeRefund(
   db: Database,
   provider: PaymentProvider,
   refundId: string,
-  options: { now?: Date } = {},
+  options: { now?: Date; attempt?: number } = {},
 ): Promise<RefundView> {
   const now = options.now ?? new Date();
   const refund = await db
@@ -309,7 +314,9 @@ export async function executeRefund(
     .where('id', '=', refundId.toLowerCase())
     .executeTakeFirst();
   if (!refund) throw refundNotFound();
-  if (refund.status !== 'requested') return loadRefundView(db, refund.id);
+  if (refund.status !== 'requested' || refund.providerRefundId !== null) {
+    return loadRefundView(db, refund.id);
+  }
   const payment = await db
     .selectFrom('payments')
     .select(['id', 'providerPaymentId'])
@@ -319,8 +326,18 @@ export async function executeRefund(
 
   let result: Awaited<ReturnType<PaymentProvider['refund']>>;
   try {
-    result = await provider.refund(payment.providerPaymentId, cents(refund.amountCents));
+    // `updatedAt` fica estável durante uma tentativa incerta e gira no novo pedido explícito
+    // do admin. O worker pode repetir mesmo após perder a resposta do provedor.
+    const key = `${refund.id}-${refund.updatedAt.getTime()}`;
+    result = await provider.refund(payment.providerPaymentId, cents(refund.amountCents), key);
   } catch (error) {
+    if (
+      options.attempt !== undefined &&
+      (!isDomainError(error) || error.code === PAYMENT_ERROR_CODES.unavailable) &&
+      !(options.attempt >= PAYMENT_CREDENTIAL_ATTEMPTS && isPaymentCredentialError(error))
+    ) {
+      throw error;
+    }
     await markFailed(db, refund.id, describeError(error), now);
     return loadRefundView(db, refund.id);
   }

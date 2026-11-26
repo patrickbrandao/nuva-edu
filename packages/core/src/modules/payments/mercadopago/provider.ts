@@ -410,10 +410,13 @@ export class MercadoPagoPaymentProvider implements PaymentProvider {
     return { confirmed: true };
   }
 
-  async refund(providerPaymentId: string, amountCents: number | null): Promise<ProviderRefund> {
+  async refund(
+    providerPaymentId: string,
+    amountCents: number | null,
+    idempotencyKey = randomUUID(),
+  ): Promise<ProviderRefund> {
     const paymentId = requireText(providerPaymentId, 'providerPaymentId');
     const amount = amountCents === null ? null : validateAmount(amountCents, 'reembolso');
-    const idempotencyKey = randomUUID();
     const refund = (await this.#call(() =>
       amount === null
         ? new PaymentRefund(this.#config({ idempotencyKey })).total({ payment_id: paymentId })

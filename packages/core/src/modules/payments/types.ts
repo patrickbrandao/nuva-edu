@@ -153,8 +153,12 @@ export interface PaymentProvider {
   createSubscription(input: CreateSubscriptionInput): Promise<ProviderSubscriptionCheckout>;
   getSubscription(providerSubscriptionId: string): Promise<ProviderSubscription>;
   cancelSubscription(providerSubscriptionId: string): Promise<PaymentProviderConfirmation>;
-  /** `amountCents = null` estorna todo o saldo ainda não reembolsado. */
-  refund(providerPaymentId: string, amountCents: number | null): Promise<ProviderRefund>;
+  /** `amountCents = null` estorna o saldo. A chave identifica uma tentativa lógica de estorno. */
+  refund(
+    providerPaymentId: string,
+    amountCents: number | null,
+    idempotencyKey?: string,
+  ): Promise<ProviderRefund>;
   /**
    * Estado atual de um estorno já criado, para a reconciliação de reembolsos (spec 013). Não
    * cria nem repete o estorno; `pending` continua e é consultado de novo na próxima janela.

@@ -2,7 +2,12 @@ import { sql } from 'kysely';
 import type { Database } from '../../db/database.ts';
 import { isDomainError, notFound } from '../../errors/domain-error.ts';
 import { enqueuePaymentWebhook } from '../jobs/sales.ts';
-import { PAYMENT_ERROR_CODES, PaymentWebhookSignatureError } from './errors.ts';
+import {
+  isPaymentCredentialError,
+  PAYMENT_CREDENTIAL_ATTEMPTS,
+  PAYMENT_ERROR_CODES,
+  PaymentWebhookSignatureError,
+} from './errors.ts';
 import { applyOrderPayment } from './order-transitions.ts';
 import { parsePaymentExternalReference } from './references.ts';
 import {
@@ -158,7 +163,7 @@ export async function processPaymentWebhook(
     .set({ attempts: sql<number>`attempts + 1` })
     .where('id', '=', webhookEventId)
     .where('status', '=', 'received')
-    .returning(['id', 'provider', 'resourceType', 'resourceId'])
+    .returning(['id', 'provider', 'resourceType', 'resourceId', 'attempts'])
     .executeTakeFirst();
   if (!event) {
     const current = await db
@@ -186,7 +191,7 @@ export async function processPaymentWebhook(
     try {
       payment = await provider.getPayment(event.resourceId);
     } catch (error) {
-      return settleProviderFailure(db, event.id, error, finalAttempt, now);
+      return settleProviderFailure(db, event, error, finalAttempt, now);
     }
     try {
       const reference = parsePaymentExternalReference(payment.externalReference);
@@ -208,7 +213,7 @@ export async function processPaymentWebhook(
   try {
     subscription = await provider.getSubscription(event.resourceId);
   } catch (error) {
-    return settleProviderFailure(db, event.id, error, finalAttempt, now);
+    return settleProviderFailure(db, event, error, finalAttempt, now);
   }
   try {
     await applyProviderSubscriptionState(db, subscription, {
@@ -299,11 +304,14 @@ function webhookResourceType(value: unknown): PaymentWebhookResourceType | null 
 
 function settleProviderFailure(
   db: Database,
-  eventId: string,
+  { id: eventId, attempts }: { id: string; attempts: number },
   error: unknown,
   finalAttempt: boolean,
   now: Date,
 ): Promise<ProcessedPaymentWebhook> {
+  if (attempts >= PAYMENT_CREDENTIAL_ATTEMPTS && isPaymentCredentialError(error)) {
+    return finishFailed(db, eventId, 'payment_provider_invalid_credentials', now);
+  }
   if (isDomainError(error)) {
     if (error.code === PAYMENT_ERROR_CODES.unavailable || error.code === 'not_found') {
       if (!finalAttempt) throw error;

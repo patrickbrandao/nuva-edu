@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { createTestDatabase, loadEnvFiles, type TestDatabase } from '@nuva-edu/database';
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   applySubscriptionPayment,
   closeDatabase,
@@ -15,6 +15,7 @@ import {
   reconcileSubscriptions,
   requestSubscriptionRefund,
 } from '../../../src/index.ts';
+import { paymentUnavailable } from '../../../src/modules/payments/errors.ts';
 import { adminRequest, type TestUser } from '../../sales/fixtures.ts';
 import {
   billingStudent,
@@ -126,6 +127,30 @@ describe('eventos que o processamento recusa', () => {
     const row = await eventRow(eventId);
     expect(row).toMatchObject({ status: 'failed', error: 'provider_not_found' });
     expect(row.attempts).toBe(2);
+  });
+
+  it('credenciais inválidas falham na terceira tentativa sem expor a resposta do provedor', async () => {
+    const eventId = await seedReceivedWebhook({
+      eventId: 'evt-credencial-invalida',
+      resourceType: 'payment',
+      resourceId: 'fake_payment_999999',
+    });
+    vi.spyOn(provider, 'getPayment').mockRejectedValue(
+      paymentUnavailable({ provider: 'mercadopago', status: 401 }),
+    );
+
+    for (let attempt = 1; attempt <= 2; attempt += 1) {
+      await expect(processPaymentWebhook(db, provider, eventId)).rejects.toMatchObject({
+        code: 'payment_provider_unavailable',
+        status: 503,
+      });
+      expect(await eventRow(eventId)).toMatchObject({ status: 'received', attempts: attempt });
+    }
+    expect(await processPaymentWebhook(db, provider, eventId)).toMatchObject({ status: 'failed' });
+    expect(await eventRow(eventId)).toMatchObject({
+      attempts: 3,
+      error: 'payment_provider_invalid_credentials',
+    });
   });
 
   it('assinatura do provedor sem correspondência local é ignorada', async () => {
@@ -251,6 +276,42 @@ describe('reconciliação com falhas', () => {
     await expect(reconcileSubscriptions(db, provider)).rejects.toMatchObject({
       code: 'payment_provider_unavailable',
     });
+  });
+
+  it('repete um estorno cuja resposta foi perdida e deixa um estorno pendente para a reconciliação', async () => {
+    const subscriber = await billingStudent(db);
+    const subscription = await pendingSubscription(db, provider, admin, subscriber);
+    const payment = provider.authorizeSubscription(subscription.providerSubscriptionId);
+    await applySubscriptionPayment(db, 'fake', payment, { now: provider.now });
+    const stored = await db
+      .selectFrom('payments')
+      .select('id')
+      .where('subscriptionId', '=', subscription.subscriptionId)
+      .executeTakeFirstOrThrow();
+    const refund = await requestSubscriptionRefund(db, adminRequest(admin), {
+      subscriptionId: subscription.subscriptionId,
+      paymentId: stored.id,
+      reason: 'Resposta de estorno perdida',
+      amountCents: 1_000,
+    });
+
+    provider.setRefundOutcome('pending');
+    const applyInProvider = provider.refund.bind(provider);
+    const submit = vi.spyOn(provider, 'refund').mockImplementationOnce(async (...args) => {
+      await applyInProvider(...args);
+      throw paymentUnavailable();
+    });
+
+    await expect(executeRefund(db, provider, refund.id, { attempt: 1 })).rejects.toMatchObject({
+      code: 'payment_provider_unavailable',
+    });
+    const pending = await executeRefund(db, provider, refund.id, { attempt: 2 });
+    expect(pending.status).toBe('requested');
+    expect(pending.providerRefundId).not.toBeNull();
+    expect(submit.mock.calls[1]?.[2]).toBe(submit.mock.calls[0]?.[2]);
+    expect(await executeRefund(db, provider, refund.id, { attempt: 3 })).toEqual(pending);
+    expect(submit).toHaveBeenCalledTimes(2);
+    expect(provider.listRefunds(payment.providerPaymentId)).toHaveLength(1);
   });
 
   it('estorno desconhecido no provedor vira failed; provedor fora interrompe', async () => {

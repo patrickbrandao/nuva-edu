@@ -114,7 +114,7 @@ export const JOB_DEFINITIONS: { readonly [T in JobType]: JobDefinition } = {
   'certificate.render': { maxAttempts: 5, priority: 0 },
   'certificate.backfill': { maxAttempts: 3, priority: 0 },
   'certificate.preview': { maxAttempts: 1, priority: 0 },
-  'payment.webhook': { maxAttempts: 10, priority: 10 },
+  'payment.webhook': { maxAttempts: 8, priority: 10 },
   'order.fulfill': { maxAttempts: 10, priority: 10 },
   'refund.execute': { maxAttempts: 10, priority: 10 },
   'payment.reconcile_orders': { maxAttempts: 3, priority: 10 },

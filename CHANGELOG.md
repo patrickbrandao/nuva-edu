@@ -6,6 +6,7 @@ Detalhe das decisões em `specs/decisions/`.
 ## [Não lançado]
 
 ### Adicionado
+- core: oito tentativas de webhook em falhas transitórias, três para credenciais inválidas e chave de estorno estável ao repetir a chamada ao provedor (specs 005 e 013, task 724).
 - specs: oito tentativas do webhook de pagamento em falhas transitórias e três com credenciais inválidas (specs 005 e 013, task 723).
 - worker: manipuladores de webhook, pedidos e reembolsos, com reconciliação, expiração e retenção de eventos de pagamento (specs 005, 011 e 013, task 542).
 - admin-api: solicitações repetidas de reembolso de assinatura com a mesma `Idempotency-Key` devolvem o reembolso original e geram uma única tarefa e auditoria (spec 003, task 712).

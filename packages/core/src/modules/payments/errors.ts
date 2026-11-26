@@ -1,4 +1,10 @@
-import { businessRule, DomainError, notFound, unavailable } from '../../errors/domain-error.ts';
+import {
+  businessRule,
+  DomainError,
+  isDomainError,
+  notFound,
+  unavailable,
+} from '../../errors/domain-error.ts';
 
 /** Códigos estáveis para a API e o worker, sem mensagens ou respostas do provedor. */
 export const PAYMENT_ERROR_CODES = {
@@ -9,6 +15,20 @@ export const PAYMENT_ERROR_CODES = {
   invalidRequest: 'payment_provider_invalid_request',
   invalidTransition: 'payment_provider_invalid_transition',
 } as const;
+
+export const PAYMENT_CREDENTIAL_ATTEMPTS = 3;
+
+/** Adaptadores preservam o código público de indisponibilidade e deixam o status só na causa. */
+export function isPaymentCredentialError(error: unknown): boolean {
+  if (!isDomainError(error) || error.code !== PAYMENT_ERROR_CODES.unavailable) return false;
+  const cause = error.cause;
+  return (
+    typeof cause === 'object' &&
+    cause !== null &&
+    'status' in cause &&
+    (cause.status === 401 || cause.status === 403)
+  );
+}
 
 export function paymentNotFound(detail = 'Recurso não encontrado no provedor de pagamento.') {
   return notFound(detail);

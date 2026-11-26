@@ -210,7 +210,7 @@ describe('tipos da Fase 2 (tarefa 405)', () => {
     ] as const;
     const definitions = Object.fromEntries(sales.map((type) => [type, JOB_DEFINITIONS[type]]));
     expect(definitions).toEqual({
-      'payment.webhook': { maxAttempts: 10, priority: 10 },
+      'payment.webhook': { maxAttempts: 8, priority: 10 },
       'order.fulfill': { maxAttempts: 10, priority: 10 },
       'refund.execute': { maxAttempts: 10, priority: 10 },
       'payment.reconcile_orders': { maxAttempts: 3, priority: 10 },

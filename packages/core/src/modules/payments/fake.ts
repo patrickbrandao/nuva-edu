@@ -116,6 +116,13 @@ export class FakePaymentProvider implements PaymentProvider {
   readonly #plans = new Map<string, PlanEntry>();
   readonly #subscriptions = new Map<string, SubscriptionEntry>();
   readonly #refunds = new Map<string, RefundEntry>();
+  readonly #refundRequests = new Map<
+    string,
+    {
+      providerRefundId: string;
+      requestedAmount: number | null;
+    }
+  >();
   readonly #unavailable = new Set<FakePaymentOperation | 'all'>();
   #refundOutcome: FakeRefundOutcome = 'approved';
   #now: number;
@@ -278,9 +285,26 @@ export class FakePaymentProvider implements PaymentProvider {
     return { confirmed: true };
   }
 
-  async refund(providerPaymentId: string, amountCents: number | null): Promise<ProviderRefund> {
+  async refund(
+    providerPaymentId: string,
+    amountCents: number | null,
+    idempotencyKey?: string,
+  ): Promise<ProviderRefund> {
     this.#available('refund');
     const payment = this.#payment(providerPaymentId);
+    const replay =
+      idempotencyKey === undefined ? undefined : this.#refundRequests.get(idempotencyKey);
+    if (replay !== undefined) {
+      const refund = this.#refund(replay.providerRefundId);
+      if (refund.paymentId !== providerPaymentId || replay.requestedAmount !== amountCents) {
+        throw invalidPaymentRequest('Chave de reembolso reutilizada com outros dados.');
+      }
+      return {
+        providerRefundId: refund.providerRefundId,
+        status: refund.status,
+        amountCents: refund.amountCents,
+      };
+    }
     if (payment.status !== 'approved' && payment.status !== 'partially_refunded') {
       throw invalidPaymentTransition('Só pagamento aprovado pode ser reembolsado.');
     }
@@ -300,6 +324,9 @@ export class FakePaymentProvider implements PaymentProvider {
       paymentId: payment.providerPaymentId,
     };
     this.#refunds.set(providerRefundId, refund);
+    if (idempotencyKey !== undefined) {
+      this.#refundRequests.set(idempotencyKey, { providerRefundId, requestedAmount: amountCents });
+    }
     if (refund.status === 'approved') {
       applyRefund(payment, amount);
     }
