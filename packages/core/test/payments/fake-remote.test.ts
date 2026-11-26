@@ -7,7 +7,7 @@ import type { CreateCheckoutInput } from '../../src/modules/payments/types.ts';
 afterEach(() => vi.unstubAllGlobals());
 
 it('dois clientes do fake remoto consultam o mesmo checkout e recebem datas como Date', async () => {
-  const fake = new FakePaymentProvider({ currency: 'BRL' });
+  const fake = new FakePaymentProvider({ currency: 'BRL', now: Date.now() });
   const config = loadConfig({
     env: {
       DATABASE_URL: 'postgres://nuva_edu:pw@db:5432/nuva_edu',
@@ -40,6 +40,10 @@ it('dois clientes do fake remoto consultam o mesmo checkout e recebem datas como
   });
   const paid = fake.approveCheckout(checkout.providerCheckoutId);
   expect(await workerClient.getPayment(paid.providerPaymentId)).toEqual(paid);
+  const notice = fake.paymentWebhook(paid.providerPaymentId);
+  expect(await workerClient.parseWebhook(notice)).toMatchObject({
+    resourceId: paid.providerPaymentId,
+  });
   expect(fetchMock.mock.calls.map(([address]) => address)).toEqual([
     'http://payment-fake:8092/rpc/createCheckout',
     'http://payment-fake:8092/rpc/getPayment',

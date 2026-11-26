@@ -85,7 +85,9 @@ export class RemoteFakePaymentProvider implements PaymentProvider {
 
   parseWebhook(input: ParsePaymentWebhookInput) {
     // A assinatura continua a ser conferida localmente, sem encaminhar o corpo bruto.
-    return new FakePaymentProvider({ currency: this.#currency }).parseWebhook(input);
+    return new FakePaymentProvider({ currency: this.#currency, now: Date.now() }).parseWebhook(
+      input,
+    );
   }
 
   #call<M extends keyof RemoteMethods>(method: M, args: Parameters<RemoteMethods[M]>) {
