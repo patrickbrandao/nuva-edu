@@ -3,6 +3,7 @@ import {
   type AuthenticatedSession,
   type Config,
   type Database,
+  type PaymentProvider,
   type UserEventKind,
   unauthenticated,
 } from '@nuva-edu/core';
@@ -16,6 +17,11 @@ export interface RouteContext {
   hub: StreamHub<UserEventKind>;
   /** Validade da sessão, em dias (`config.retention.sessionDays`). */
   ttlDays: number;
+}
+
+/** Rotas que conversam com a porta de pagamento (resolvida sob demanda, spec 013 RF-09). */
+export interface PaymentRouteContext extends RouteContext {
+  paymentProvider(): PaymentProvider;
 }
 
 /** A sessão validada pelo tratador de `sessionCookie` (só em operação com sessão). */
@@ -35,4 +41,10 @@ export function bodyOf<T>(request: FastifyRequest): T {
 /** Parâmetros de caminho já validados pelo contrato. */
 export function paramsOf<T>(request: FastifyRequest): T {
   return request.params as T;
+}
+
+/** Cabeçalho opcional de texto único já validado pelo contrato. */
+export function headerOf(request: FastifyRequest, name: string): string | undefined {
+  const value = request.headers[name.toLowerCase()];
+  return typeof value === 'string' ? value : undefined;
 }

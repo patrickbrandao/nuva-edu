@@ -49,8 +49,10 @@ import { registerLegalRoutes } from './routes/legal.ts';
 import { registerNotesRoutes } from './routes/notes.ts';
 import { registerNotificationRoutes } from './routes/notifications.ts';
 import { registerOAuthRoutes } from './routes/oauth.ts';
+import { registerSalesRoutes } from './routes/sales.ts';
 import { registerStreamRoutes } from './routes/stream.ts';
 import { registerSubscriptionRoutes } from './routes/subscriptions.ts';
+import { registerWebhookRoutes } from './routes/webhooks.ts';
 import {
   createSessionAuthenticator,
   establishSession,
@@ -106,8 +108,8 @@ export interface ClassroomAppOptions {
    */
   oauth?: OAuth;
   /**
-   * Porta de pagamento (spec 013, RF-01): a assinatura e o seu cancelamento passam por ela.
-   * Padrão: a da configuração (`NUVA_PAYMENT_PROVIDER`), resolvida na primeira assinatura. Os
+   * Porta de pagamento (spec 013, RF-01): pedidos, assinaturas, cancelamentos e webhook passam por
+   * ela. Padrão: a da configuração (`NUVA_PAYMENT_PROVIDER`), resolvida na primeira chamada. Os
    * testes injetam o provedor `fake` com o próprio relógio.
    */
   paymentProvider?: PaymentProvider;
@@ -322,7 +324,9 @@ export function buildClassroomApp(options: ClassroomAppOptions): FastifyInstance
   registerAccountRoutes(app, routes);
   registerLegalRoutes(app, routes);
   registerCatalogRoutes(app, routes);
+  registerSalesRoutes(app, { ...routes, paymentProvider });
   registerSubscriptionRoutes(app, { ...routes, paymentProvider });
+  registerWebhookRoutes(app, { ...routes, paymentProvider });
   registerLearningRoutes(app, routes);
   registerNotesRoutes(app, routes);
   registerNotificationRoutes(app, routes);
