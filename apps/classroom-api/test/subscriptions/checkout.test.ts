@@ -5,7 +5,7 @@ import {
   type SubscriptionLifecycleStatus,
   saveMyBilling,
 } from '@nuva-edu/core';
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import {
   Browser,
   createUser,
@@ -264,6 +264,36 @@ describe('POST /subscriptions (spec 012, "Assinar")', () => {
       .where('id', '=', monthly.id)
       .executeTakeFirstOrThrow();
     expect(plan.providerPlanId).not.toBeNull();
+  });
+
+  it('repete o checkout original com a mesma chave e recusa corpo diferente', async () => {
+    const { user, browser: session } = await subscriber();
+    const providerCall = vi.spyOn(provider, 'createSubscription');
+    try {
+      const headers = { 'Idempotency-Key': randomUUID() };
+      const payload = { planId: monthly.id };
+      const first = await session.request('POST', '/api/v1/subscriptions', { headers, payload });
+      const replay = await session.request('POST', '/api/v1/subscriptions', { headers, payload });
+      const changed = await session.request('POST', '/api/v1/subscriptions', {
+        headers,
+        payload: { planId: yearly.id },
+      });
+
+      expect(first.statusCode).toBe(201);
+      expect(replay.statusCode).toBe(201);
+      expect(replay.json()).toEqual(first.json());
+      expect(changed.statusCode).toBe(422);
+      expect(changed.json().code).toBe('idempotency_key_reuse');
+      expect(providerCall).toHaveBeenCalledTimes(1);
+      const rows = await test.db
+        .selectFrom('subscriptions')
+        .select('id')
+        .where('userId', '=', user.id)
+        .execute();
+      expect(rows).toEqual([{ id: first.json().subscription.id }]);
+    } finally {
+      providerCall.mockRestore();
+    }
   });
 
   it('recusa o mesmo plano enquanto a assinatura está pendente', async () => {

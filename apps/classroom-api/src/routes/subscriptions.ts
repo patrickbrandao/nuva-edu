@@ -74,10 +74,12 @@ export function registerSubscriptionRoutes(
   app.operation('createSubscription', async (request, reply) => {
     const viewer = studentOf(request);
     const body = bodyOf<CreateSubscriptionBody>(request);
+    const key = request.headers['idempotency-key'];
     const checkout = await createSubscriptionCheckout(db, {
       userId: viewer.id,
       planId: body.planId,
       couponCode: body.couponCode ?? null,
+      idempotencyKey: typeof key === 'string' ? key : null,
       provider: ctx.paymentProvider(),
       currency: config.currency,
       returnUrls: subscriptionReturnUrls(config.classroomUrl),
