@@ -2126,6 +2126,328 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/stream": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Fluxo do sino da equipe (SSE)
+         * @description Conexão `text/event-stream` do sino do admin (`specs/003-admin-api.md`, "Fluxo SSE da
+         *     equipe"; ADR 0028), aberta com a sessão do próprio host: uma conexão por aba e no máximo
+         *     três por usuário, derrubando a mais antiga na quarta. Sem sessão: `401 unauthenticated`;
+         *     sessão apenas `student`: `403 permission_denied`; suspensão `full` fecha a conexão.
+         *
+         *     Entrega somente `notification.created` destinado ao usuário da sessão, com o contador de
+         *     não lidas; nenhum evento de outro usuário, mensagem direta ou conteúdo da comunidade. Os
+         *     demais tipos do canal são descartados, sem entrega nem reenvio. O nome, os campos
+         *     `id`/`event`/`data`, o `ping` de 25 s, o limite de 3 conexões, o reenvio por
+         *     `Last-Event-ID` e a recarga na reconexão são os do classroom
+         *     (`specs/004-classroom-api.md`, "Fluxo SSE"). Resposta sem compressão.
+         */
+        get: operations["openStream"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/notifications": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Central da equipe
+         * @description Notificações do usuário da sessão, da mais nova para a mais antiga
+         *     (`specs/024-notificacoes-e-email.md`, "Central"), paginadas por cursor. A equipe recebe
+         *     aqui também as do grupo `staff` (`ticket.opened`, `report.created`, `ops.job_failed`...),
+         *     no mesmo sino do site admin. O item traz o autor quando houver, `count` quando
+         *     notificações do mesmo tipo e alvo foram fundidas e `data` com o conteúdo do tipo. Nunca
+         *     devolve notificação de outra pessoa.
+         */
+        get: operations["listNotifications"];
+        put?: never;
+        post?: never;
+        /**
+         * Limpar todas
+         * @description "Limpar todas": apaga lidas e não lidas do usuário da sessão (o histórico lido também
+         *     some). Nunca alcança notificação de outra pessoa; devolve quantas foram apagadas.
+         */
+        delete: operations["clearNotifications"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/notifications/unread-count": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Contador do sino
+         * @description Não lidas do usuário da sessão: o número que o sino do admin mostra e que o evento SSE
+         *     `notification.created` atualiza sem recarregar.
+         */
+        get: operations["getNotificationUnreadCount"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/notifications/{id}/read": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Marcar uma notificação como lida
+         * @description Marca a notificação do usuário da sessão como lida e devolve o item atualizado com o
+         *     contador do sino. Idempotente: já lida devolve o mesmo item. Notificação inexistente ou
+         *     de outra pessoa: `404 not_found`.
+         */
+        post: operations["markNotificationRead"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/notifications/read-all": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Marcar todas como lidas
+         * @description Marca todas as não lidas do usuário da sessão como lidas. `updated` é quantas linhas
+         *     mudaram; o contador do sino fica zero.
+         */
+        post: operations["markAllNotificationsRead"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/me/notification-prefs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Preferências da equipe por grupo
+         * @description Canais efetivos dos onze grupos (`specs/024-notificacoes-e-email.md`, "Tipos e grupos"),
+         *     para o usuário da sessão. Grupo obrigatório devolve `emailRequired: true`, com o e-mail
+         *     sempre ligado; o grupo `account` não tem canal plataforma (`inAppAvailable: false`).
+         *     Grupo `staff` só tem efeito para a equipe, que é quem usa esta API.
+         */
+        get: operations["getNotificationPrefs"];
+        /**
+         * Gravar preferências da equipe por grupo
+         * @description Muda só os canais enviados; grupo omitido e canal omitido ficam como estão. Recusa com
+         *     `400 validation_failed` o e-mail desligado em grupo obrigatório (`account`, `purchase`,
+         *     `support` e `moderation`, RF-04) e o canal plataforma no grupo `account`. Devolve as
+         *     preferências efetivas depois da mudança.
+         */
+        put: operations["updateNotificationPrefs"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/ops/summary": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Resumo da operação
+         * @description Números da tela "Operação" e do selo do menu
+         *     (`specs/033-observabilidade-retencao-backup.md`, "Tela Operação"): a fila por tipo com a
+         *     idade da tarefa pendente mais antiga, os e-mails pendentes e com falha, os webhooks com
+         *     falha e o bloco do sistema. `failures` soma o que o selo mostra; zero significa nenhuma
+         *     falha. Só o `admin` (`ops.manage`).
+         */
+        get: operations["getOpsSummary"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/ops/jobs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Fila por estado
+         * @description Tarefas da fila, da mais antiga para a mais nova (`specs/005-worker-e-fila.md`,
+         *     "Dados"): pendentes (`queued`), em execução (`running`) e com falha (`failed`). Tarefas
+         *     concluídas não aparecem. `payload` e dados de trava não saem; `lastError` já vem
+         *     mascarado pelo worker.
+         */
+        get: operations["listOpsJobs"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/ops/jobs/{id}/retry": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Reenfileirar tarefa com falha
+         * @description A tarefa `failed` volta a `queued` para agora, com `attempts = 0`; `lastError` fica como
+         *     registro (`specs/005-worker-e-fila.md`, "Interfaces e contratos"). A ação grava
+         *     auditoria. `404 not_found` se não existe; `409 job_not_failed` se não está `failed`;
+         *     `409 job_already_active` se já existe tarefa `queued` ou `running` com a mesma
+         *     `uniqueKey`.
+         */
+        post: operations["retryOpsJob"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/ops/jobs/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Descartar tarefa com falha
+         * @description Apaga a tarefa `failed` (`specs/005-worker-e-fila.md`). `404 not_found` se não existe;
+         *     `409 job_not_failed` se não está `failed`. A ação grava auditoria.
+         */
+        delete: operations["discardOpsJob"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/ops/emails": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * E-mails pendentes e com falha
+         * @description Linhas de `email_outbox` que ainda não saíram: `queued` e `failed`
+         *     (`specs/024-notificacoes-e-email.md`, "E-mail"; `specs/033-observabilidade-retencao-backup.md`,
+         *     "Tela Operação"). O destinatário sai mascarado, e `lastError` traz o motivo do SMTP. O
+         *     corpo renderizado do e-mail não é guardado e não aparece aqui.
+         */
+        get: operations["listOpsEmails"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/ops/emails/{id}/retry": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Reenviar e-mail com falha
+         * @description O "reenviar" da tela de operação devolve o e-mail `failed` a `queued`
+         *     (`specs/024-notificacoes-e-email.md`, "E-mail"): a tarefa `email.send` é enfileirada de
+         *     novo com as tentativas da RNF-02. A ação grava auditoria. `404 not_found` se não existe;
+         *     `409 email_not_failed` se a linha não está `failed`.
+         */
+        post: operations["retryOpsEmail"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/settings/branding": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Identidade da escola nos e-mails
+         * @description Nome, logotipo, cor de destaque e rodapé usados nos e-mails de notificação
+         *     (`specs/024-notificacoes-e-email.md`, "E-mail"). O admin edita só a identidade; os
+         *     modelos completos ficam no código do worker e não são editáveis por aqui. Leitura e
+         *     escrita são do `admin` (`settings.manage`).
+         */
+        get: operations["getBranding"];
+        /**
+         * Gravar a identidade da escola nos e-mails
+         * @description Grava os quatro campos juntos (`specs/024-notificacoes-e-email.md`): nome, logotipo, cor
+         *     de destaque e rodapé. O rodapé tem até 500 caracteres e aceita quebras de linha; nulo
+         *     remove. Nome e cor passam pelas mesmas validações do `/meta`; valor inválido é
+         *     `400 validation_failed` com o campo em `errors[]`. A ação grava auditoria.
+         */
+        put: operations["saveBranding"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -3798,6 +4120,341 @@ export interface components {
              */
             lastReconciliationAt: components["schemas"]["DateTime"] | null;
         };
+        /**
+         * @description Grupo de preferência (`specs/024-notificacoes-e-email.md`, "Tipos e grupos"); o grupo de
+         *     cada tipo está na mesma tabela.
+         * @enum {string}
+         */
+        NotificationGroup: "account" | "purchase" | "courses" | "forum" | "messages" | "community" | "events" | "support" | "announcements" | "moderation" | "staff";
+        /**
+         * @description Conteúdo do tipo, definido na spec do recurso (o `ticket.opened` traz o protocolo; o
+         *     `ops.job_failed`, o tipo da tarefa). Nunca contém senha, token nem segredo.
+         */
+        NotificationData: {
+            [key: string]: unknown;
+        };
+        /** @description Quem gerou o fato; ausente em aviso do sistema. */
+        NotificationActor: {
+            id: components["schemas"]["Uuid"];
+            /** @description Nome de exibição; `usuário removido` quando a conta foi excluída. */
+            name: string;
+            /** @description Caminho da foto de perfil na API, ou nulo. */
+            avatarUrl: string | null;
+        };
+        /**
+         * @description Um item da central (`specs/024-notificacoes-e-email.md`, "Central"): ícone do tipo, foto,
+         *     título, texto curto, tempo e link para o alvo são montados a partir de `type`, `actor`,
+         *     `data` e do alvo.
+         */
+        NotificationItem: {
+            id: components["schemas"]["Uuid"];
+            /**
+             * @description Tipo da notificação (`specs/024-notificacoes-e-email.md`). Fica em texto, e não em
+             *     `enum`, porque um worker mais novo pode gravar tipo que esta API ainda não conhece.
+             * @example ticket.opened
+             */
+            type: string;
+            group: components["schemas"]["NotificationGroup"];
+            /** @description Quem gerou o fato; nulo em aviso do sistema. */
+            actor: components["schemas"]["NotificationActor"] | null;
+            /**
+             * @description Tipo do alvo (`ticket`, `report`, `job`...), sempre junto de `targetId`; nulo quando a
+             *     notificação não aponta para um recurso.
+             */
+            targetType: string | null;
+            targetId: components["schemas"]["Uuid"] | null;
+            data: components["schemas"]["NotificationData"];
+            /** @description Quantas notificações do mesmo tipo e alvo foram fundidas nesta linha. */
+            count: number;
+            /** @description Quando foi lida; nulo enquanto não lida. */
+            readAt: components["schemas"]["DateTime"] | null;
+            createdAt: components["schemas"]["DateTime"];
+        };
+        NotificationPage: components["schemas"]["Page"] & {
+            items: components["schemas"]["NotificationItem"][];
+        };
+        /** @description Não lidas do usuário, para o sino. */
+        NotificationUnreadCount: {
+            unreadCount: number;
+        };
+        /** @description Item marcado como lido e o contador do sino depois da leitura. */
+        NotificationReadResult: {
+            notification: components["schemas"]["NotificationItem"];
+            unreadCount: number;
+        };
+        /** @description Resultado de "marcar todas como lidas". */
+        NotificationsReadAllResult: {
+            /** @description Quantas notificações passaram de não lidas a lidas nesta chamada. */
+            updated: number;
+            /** @constant */
+            unreadCount: 0;
+        };
+        /** @description Resultado de "limpar todas". */
+        NotificationsCleared: {
+            /** @description Quantas notificações foram apagadas. */
+            deleted: number;
+        };
+        /**
+         * @description Canais efetivos de um grupo e as regras que a interface precisa para desabilitar o que
+         *     não pode mudar.
+         */
+        NotificationGroupPrefs: {
+            inApp: boolean;
+            email: boolean;
+            /**
+             * @description `true` nos grupos obrigatórios (`account`, `purchase`, `support` e `moderation`): o
+             *     e-mail não pode ser desligado (RF-04).
+             */
+            emailRequired: boolean;
+            /** @description `false` só no grupo `account`, que não tem canal plataforma. */
+            inAppAvailable: boolean;
+        };
+        /**
+         * @description Canais efetivos dos onze grupos (`specs/024-notificacoes-e-email.md`, "Tipos e grupos"),
+         *     na ordem da tabela.
+         */
+        NotificationPrefs: {
+            account: components["schemas"]["NotificationGroupPrefs"];
+            purchase: components["schemas"]["NotificationGroupPrefs"];
+            courses: components["schemas"]["NotificationGroupPrefs"];
+            forum: components["schemas"]["NotificationGroupPrefs"];
+            messages: components["schemas"]["NotificationGroupPrefs"];
+            community: components["schemas"]["NotificationGroupPrefs"];
+            events: components["schemas"]["NotificationGroupPrefs"];
+            support: components["schemas"]["NotificationGroupPrefs"];
+            announcements: components["schemas"]["NotificationGroupPrefs"];
+            moderation: components["schemas"]["NotificationGroupPrefs"];
+            staff: components["schemas"]["NotificationGroupPrefs"];
+        };
+        /** @description Canais a mudar num grupo; canal omitido fica como está. */
+        NotificationChannelUpdate: {
+            inApp?: boolean;
+            email?: boolean;
+        };
+        /**
+         * @description Grupos a mudar; grupo omitido fica como está. Grupo obrigatório com `email: false` e
+         *     grupo `account` com `inApp: true` são recusados com `400 validation_failed`.
+         */
+        NotificationPrefsUpdate: {
+            account?: components["schemas"]["NotificationChannelUpdate"];
+            purchase?: components["schemas"]["NotificationChannelUpdate"];
+            courses?: components["schemas"]["NotificationChannelUpdate"];
+            forum?: components["schemas"]["NotificationChannelUpdate"];
+            messages?: components["schemas"]["NotificationChannelUpdate"];
+            community?: components["schemas"]["NotificationChannelUpdate"];
+            events?: components["schemas"]["NotificationChannelUpdate"];
+            support?: components["schemas"]["NotificationChannelUpdate"];
+            announcements?: components["schemas"]["NotificationChannelUpdate"];
+            moderation?: components["schemas"]["NotificationChannelUpdate"];
+            staff?: components["schemas"]["NotificationChannelUpdate"];
+        };
+        /**
+         * @description Campo `id` do SSE: inteiro em texto, tirado de uma sequência do banco. Crescente para
+         *     cada usuário, não consecutivo.
+         * @example 42
+         */
+        StreamEventId: string;
+        StreamNotificationCreatedData: {
+            notificationId: components["schemas"]["Uuid"];
+            /** @description Tipo da notificação (`specs/024-notificacoes-e-email.md`). */
+            type: string;
+            /** @description Notificações não lidas do usuário depois desta. */
+            unreadCount: number;
+        };
+        /** @description Sempre vazio. */
+        StreamPingData: Record<string, never>;
+        /** @description Nova notificação para quem está conectado. */
+        StreamEventNotificationCreated: {
+            id: components["schemas"]["StreamEventId"];
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            event: "notification.created";
+            data: components["schemas"]["StreamNotificationCreatedData"];
+        };
+        /** @description Mantém a conexão viva; enviado a cada 25 s, sem `id`. */
+        StreamEventPing: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            event: "ping";
+            data: components["schemas"]["StreamPingData"];
+        };
+        /**
+         * @description Um evento do fluxo do admin depois de lido (campos `id`, `event` e `data` do SSE). Só o
+         *     `notification.created` do titular e o `ping`; os demais tipos do canal são descartados
+         *     (ADR 0028).
+         */
+        StreamEvent: components["schemas"]["StreamEventNotificationCreated"] | components["schemas"]["StreamEventPing"];
+        /**
+         * @description Tipo da tarefa (`specs/005-worker-e-fila.md`), no formato `palavra.palavra` em minúsculas.
+         *     Fica em texto, e não em `enum`, porque o worker pode ganhar tipo que esta API ainda não
+         *     conhece.
+         * @example email.send
+         * @example retention.purge
+         */
+        JobType: string;
+        /**
+         * @description Estado da tarefa na tela de operação: pendente, em execução ou com falha. Tarefas
+         *     concluídas não aparecem.
+         * @enum {string}
+         */
+        OpsJobStatus: "queued" | "running" | "failed";
+        /**
+         * @description Uma tarefa da fila (`specs/005-worker-e-fila.md`, "Dados"). `payload` e dados de trava não
+         *     saem; `lastError` já vem mascarado pelo worker.
+         */
+        OpsJob: {
+            id: components["schemas"]["Uuid"];
+            type: components["schemas"]["JobType"];
+            status: components["schemas"]["OpsJobStatus"];
+            /** @description Prioridade; maior executa antes. */
+            priority: number;
+            /** @description Tentativas já gastas; sobe quando o worker pega a tarefa. */
+            attempts: number;
+            maxAttempts: number;
+            /** @description Quando pode executar (ou voltar a executar). */
+            runAt: components["schemas"]["DateTime"];
+            createdAt: components["schemas"]["DateTime"];
+            /** @description Fim da última execução; nulo enquanto não terminou. */
+            finishedAt: components["schemas"]["DateTime"] | null;
+            /** @description Motivo da última falha, mascarado; `null` quando nunca falhou. */
+            lastError: string | null;
+        };
+        OpsJobPage: components["schemas"]["Page"] & {
+            items: components["schemas"]["OpsJob"][];
+        };
+        /**
+         * @description Estado do e-mail na tela de operação; enviados não aparecem.
+         * @enum {string}
+         */
+        OpsEmailStatus: "queued" | "failed";
+        /**
+         * @description Uma linha de `email_outbox` ainda não enviada (`specs/024-notificacoes-e-email.md`,
+         *     "E-mail"). O destinatário sai mascarado e o corpo renderizado não é guardado.
+         */
+        OpsEmail: {
+            id: components["schemas"]["Uuid"];
+            /**
+             * @description Tipo do e-mail, no mesmo formato dos códigos do catálogo.
+             * @example ticket.reply
+             */
+            type: string;
+            /** @description Destinatário mascarado (por exemplo `a***@exemplo.com`). */
+            to: string;
+            /** @description Assunto; nulo até o envio montar o e-mail. */
+            subject: string | null;
+            status: components["schemas"]["OpsEmailStatus"];
+            /** @description Tentativas já gastas. */
+            attempts: number;
+            /** @description Motivo da última falha do SMTP; `null` quando nunca falhou. */
+            lastError: string | null;
+            createdAt: components["schemas"]["DateTime"];
+        };
+        OpsEmailPage: components["schemas"]["Page"] & {
+            items: components["schemas"]["OpsEmail"][];
+        };
+        /** @description Contagem da fila por tipo, para o resumo e o selo do menu. */
+        OpsJobTypeSummary: {
+            type: components["schemas"]["JobType"];
+            queued: number;
+            running: number;
+            failed: number;
+            /**
+             * @description Idade, em segundos, da tarefa pendente mais antiga deste tipo; nulo quando não há
+             *     nenhuma.
+             */
+            oldestPendingSeconds: number | null;
+        };
+        /**
+         * @description Números da tela "Operação" e do selo do menu
+         *     (`specs/033-observabilidade-retencao-backup.md`, "Tela Operação").
+         */
+        OpsSummary: {
+            /** @description A fila por tipo, com pendentes, em execução e com falha. */
+            jobs: components["schemas"]["OpsJobTypeSummary"][];
+            emails: {
+                queued: number;
+                failed: number;
+            };
+            webhooks: {
+                /** @description Eventos de webhook com falha de processamento, reprocessáveis. */
+                failed: number;
+            };
+            system: components["schemas"]["OpsSystemSummary"];
+            /**
+             * @description Soma do que o selo do menu mostra: tarefas, e-mails e webhooks com falha. Zero
+             *     significa nenhuma falha.
+             */
+            failures: number;
+        };
+        /**
+         * @description Bloco "Sistema" da tela de operação (`specs/033-observabilidade-retencao-backup.md`).
+         *     Cifras em bytes.
+         */
+        OpsSystemSummary: {
+            /**
+             * @description Versão instalada do nuva-edu (SemVer).
+             * @example 0.1.0
+             */
+            version: string;
+            /**
+             * @description Última migration aplicada.
+             * @example 0019
+             */
+            migrationVersion: string;
+            databaseBytes: number;
+            /** @description Espaço ocupado pelas imagens das variantes (`specs/029-imagens.md`). */
+            imageBytes: number;
+            /**
+             * @description Última execução de backup; nulo quando ainda não houve. Mais de 26 horas desde
+             *     `finishedAt` aparece como atrasado.
+             */
+            lastBackup: {
+                finishedAt: components["schemas"]["DateTime"];
+                sizeBytes: number;
+                /** @enum {string} */
+                status: "ok" | "failed";
+            } | null;
+            /** @description Fim do último expurgo (`retention.purge`); nulo quando ainda não houve. */
+            lastPurgeAt: components["schemas"]["DateTime"] | null;
+        };
+        /**
+         * @description Identidade da escola usada nos e-mails de notificação
+         *     (`specs/024-notificacoes-e-email.md`, "E-mail"). Todos os campos estão sempre presentes;
+         *     `logoUrl`, `accentColor` e `footer` podem ser `null`.
+         */
+        SchoolBranding: {
+            /** @description Nome da escola, o mesmo do `/meta`. */
+            schoolName: string;
+            /**
+             * Format: uri-reference
+             * @description Caminho do logotipo na própria API, ou nulo sem logotipo.
+             * @example /api/v1/images/0193a5b2-7c1e-7d3a-9f4b-2a6c8e1d5f70/256.webp
+             * @example null
+             */
+            logoUrl: string | null;
+            /**
+             * @description Cor de destaque em `#RRGGBB`, ou nulo para a cor padrão da interface.
+             * @example #1F6FEB
+             * @example null
+             */
+            accentColor: string | null;
+            /** @description Rodapé dos e-mails, com quebras de linha; nulo quando não definido. */
+            footer: string | null;
+        };
+        /**
+         * @description Os quatro campos gravados juntos; `logoImageId` é o identificador da imagem do logotipo
+         *     (`specs/029-imagens.md`), não o caminho.
+         */
+        SchoolBrandingInput: {
+            schoolName: string;
+            logoImageId: components["schemas"]["Uuid"] | null;
+            accentColor: string | null;
+            footer: string | null;
+        };
     };
     responses: {
         /**
@@ -4056,6 +4713,13 @@ export interface components {
         ImageVariantPath: components["schemas"]["ImageVariantWidth"];
         /** @description `ETag` de uma entrega anterior. Igual ao atual, a resposta é `304`, sem corpo. */
         IfNoneMatch: string;
+        /**
+         * @description Último `id` recebido antes da queda (`specs/004-classroom-api.md`, "Fluxo SSE"): o fluxo
+         *     reenvia os eventos daquele usuário com `id` maior. Ausente na primeira conexão.
+         */
+        LastEventId: components["schemas"]["StreamEventId"];
+        /** @description Itens por página da central (padrão 20, máximo 50). */
+        NotificationLimit: number;
         /** @description Identificador legível do produto na URL (único por tipo de produto). */
         SlugPath: components["schemas"]["Slug"];
     };
@@ -7996,6 +8660,498 @@ export interface operations {
             400: components["responses"]["BadRequest"];
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
+            429: components["responses"]["TooManyRequests"];
+            500: components["responses"]["InternalError"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    openStream: {
+        parameters: {
+            query?: never;
+            header?: {
+                /**
+                 * @description Último `id` recebido antes da queda (`specs/004-classroom-api.md`, "Fluxo SSE"): o fluxo
+                 *     reenvia os eventos daquele usuário com `id` maior. Ausente na primeira conexão.
+                 */
+                "Last-Event-ID"?: components["parameters"]["LastEventId"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Fluxo aberto; a resposta só termina quando a conexão cai. */
+            200: {
+                headers: {
+                    "X-Request-Id": components["headers"]["XRequestId"];
+                    /** @description Sempre `no-store`. */
+                    "Cache-Control"?: "no-store";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/event-stream": string;
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            429: components["responses"]["TooManyRequests"];
+            500: components["responses"]["InternalError"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    listNotifications: {
+        parameters: {
+            query?: {
+                /** @description Itens por página da central (padrão 20, máximo 50). */
+                limit?: components["parameters"]["NotificationLimit"];
+                /** @description Valor de `nextCursor` da página anterior. Ausente na primeira página. */
+                cursor?: components["parameters"]["Cursor"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Uma página da central. */
+            200: {
+                headers: {
+                    "X-Request-Id": components["headers"]["XRequestId"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NotificationPage"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            429: components["responses"]["TooManyRequests"];
+            500: components["responses"]["InternalError"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    clearNotifications: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Quantas notificações foram apagadas. */
+            200: {
+                headers: {
+                    "X-Request-Id": components["headers"]["XRequestId"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NotificationsCleared"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            429: components["responses"]["TooManyRequests"];
+            500: components["responses"]["InternalError"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    getNotificationUnreadCount: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description O contador. */
+            200: {
+                headers: {
+                    "X-Request-Id": components["headers"]["XRequestId"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NotificationUnreadCount"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            429: components["responses"]["TooManyRequests"];
+            500: components["responses"]["InternalError"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    markNotificationRead: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Identificador do recurso. */
+                id: components["parameters"]["IdPath"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Item lido e o contador atualizado. */
+            200: {
+                headers: {
+                    "X-Request-Id": components["headers"]["XRequestId"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NotificationReadResult"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            429: components["responses"]["TooManyRequests"];
+            500: components["responses"]["InternalError"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    markAllNotificationsRead: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Quantas notificações passaram a lidas. */
+            200: {
+                headers: {
+                    "X-Request-Id": components["headers"]["XRequestId"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NotificationsReadAllResult"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            429: components["responses"]["TooManyRequests"];
+            500: components["responses"]["InternalError"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    getNotificationPrefs: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description As preferências efetivas. */
+            200: {
+                headers: {
+                    "X-Request-Id": components["headers"]["XRequestId"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NotificationPrefs"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            429: components["responses"]["TooManyRequests"];
+            500: components["responses"]["InternalError"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    updateNotificationPrefs: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["NotificationPrefsUpdate"];
+            };
+        };
+        responses: {
+            /** @description Preferências gravadas e devolvidas. */
+            200: {
+                headers: {
+                    "X-Request-Id": components["headers"]["XRequestId"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NotificationPrefs"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            413: components["responses"]["PayloadTooLarge"];
+            415: components["responses"]["UnsupportedMediaType"];
+            429: components["responses"]["TooManyRequests"];
+            500: components["responses"]["InternalError"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    getOpsSummary: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description O resumo. */
+            200: {
+                headers: {
+                    "X-Request-Id": components["headers"]["XRequestId"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OpsSummary"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            429: components["responses"]["TooManyRequests"];
+            500: components["responses"]["InternalError"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    listOpsJobs: {
+        parameters: {
+            query?: {
+                /** @description Estado da tarefa; sem ele, os três aparecem. */
+                status?: components["schemas"]["OpsJobStatus"];
+                /** @description Tipo da tarefa (por exemplo `email.send`). */
+                type?: components["schemas"]["JobType"];
+                /** @description Quantidade de itens por página. */
+                limit?: components["parameters"]["Limit"];
+                /** @description Valor de `nextCursor` da página anterior. Ausente na primeira página. */
+                cursor?: components["parameters"]["Cursor"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Uma página de tarefas. */
+            200: {
+                headers: {
+                    "X-Request-Id": components["headers"]["XRequestId"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OpsJobPage"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            429: components["responses"]["TooManyRequests"];
+            500: components["responses"]["InternalError"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    retryOpsJob: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Identificador do recurso. */
+                id: components["parameters"]["IdPath"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Tarefa devolvida à fila. */
+            202: {
+                headers: {
+                    "X-Request-Id": components["headers"]["XRequestId"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OpsJob"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            429: components["responses"]["TooManyRequests"];
+            500: components["responses"]["InternalError"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    discardOpsJob: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Identificador do recurso. */
+                id: components["parameters"]["IdPath"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Tarefa apagada. */
+            204: {
+                headers: {
+                    "X-Request-Id": components["headers"]["XRequestId"];
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            429: components["responses"]["TooManyRequests"];
+            500: components["responses"]["InternalError"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    listOpsEmails: {
+        parameters: {
+            query?: {
+                /** @description Estado do e-mail; sem ele, pendentes e com falha aparecem. */
+                status?: components["schemas"]["OpsEmailStatus"];
+                /** @description Tipo do e-mail (por exemplo `forum.reply`). */
+                type?: string;
+                /** @description Quantidade de itens por página. */
+                limit?: components["parameters"]["Limit"];
+                /** @description Valor de `nextCursor` da página anterior. Ausente na primeira página. */
+                cursor?: components["parameters"]["Cursor"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Uma página de e-mails. */
+            200: {
+                headers: {
+                    "X-Request-Id": components["headers"]["XRequestId"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OpsEmailPage"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            429: components["responses"]["TooManyRequests"];
+            500: components["responses"]["InternalError"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    retryOpsEmail: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Identificador do recurso. */
+                id: components["parameters"]["IdPath"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description E-mail devolvido à fila. */
+            202: {
+                headers: {
+                    "X-Request-Id": components["headers"]["XRequestId"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OpsEmail"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            429: components["responses"]["TooManyRequests"];
+            500: components["responses"]["InternalError"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    getBranding: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description A identidade da escola. */
+            200: {
+                headers: {
+                    "X-Request-Id": components["headers"]["XRequestId"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SchoolBranding"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            429: components["responses"]["TooManyRequests"];
+            500: components["responses"]["InternalError"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    saveBranding: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SchoolBrandingInput"];
+            };
+        };
+        responses: {
+            /** @description Identidade gravada e devolvida. */
+            200: {
+                headers: {
+                    "X-Request-Id": components["headers"]["XRequestId"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SchoolBranding"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            413: components["responses"]["PayloadTooLarge"];
+            415: components["responses"]["UnsupportedMediaType"];
             429: components["responses"]["TooManyRequests"];
             500: components["responses"]["InternalError"];
             503: components["responses"]["ServiceUnavailable"];

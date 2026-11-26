@@ -1492,6 +1492,156 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/notifications": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Central do usuário
+         * @description Notificações do usuário da sessão, da mais nova para a mais antiga
+         *     (`specs/024-notificacoes-e-email.md`, "Central"), paginadas por cursor. O item traz o
+         *     autor quando houver, `count` quando notificações do mesmo tipo e alvo foram fundidas
+         *     ("Ana e mais 3 responderam em…") e `data` com o conteúdo do tipo, definido na spec do
+         *     recurso. Nunca devolve notificação de outra pessoa; abrir o item é
+         *     `POST /api/v1/notifications/{id}/read`.
+         */
+        get: operations["listNotifications"];
+        put?: never;
+        post?: never;
+        /**
+         * Limpar todas
+         * @description "Limpar todas": apaga lidas e não lidas do usuário da sessão (o histórico lido também
+         *     some). Nunca alcança notificação de outra pessoa; devolve quantas foram apagadas.
+         */
+        delete: operations["clearNotifications"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/notifications/unread-count": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Contador do sino
+         * @description Não lidas do usuário da sessão: o número que o sino mostra e que o evento SSE
+         *     `notification.created` atualiza sem recarregar.
+         */
+        get: operations["getNotificationUnreadCount"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/notifications/{id}/read": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Marcar uma notificação como lida
+         * @description Marca a notificação do usuário da sessão como lida e devolve o item atualizado com o
+         *     contador do sino. Idempotente: já lida devolve o mesmo item. Notificação inexistente ou
+         *     de outra pessoa: `404 not_found`.
+         */
+        post: operations["markNotificationRead"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/notifications/read-all": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Marcar todas como lidas
+         * @description Marca todas as não lidas do usuário da sessão como lidas. `updated` é quantas linhas
+         *     mudaram; o contador do sino fica zero.
+         */
+        post: operations["markAllNotificationsRead"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/me/notification-prefs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Preferências por grupo
+         * @description Canais efetivos dos onze grupos (`specs/024-notificacoes-e-email.md`, "Tipos e grupos").
+         *     Grupo obrigatório devolve `emailRequired: true`, com o e-mail sempre ligado; o grupo
+         *     `account` não tem canal plataforma (`inAppAvailable: false`, `inApp` desligado). O grupo
+         *     `staff` só tem efeito para a equipe.
+         */
+        get: operations["getNotificationPrefs"];
+        /**
+         * Gravar preferências por grupo
+         * @description Muda só os canais enviados; grupo omitido e canal omitido ficam como estão. Recusa com
+         *     `400 validation_failed` o e-mail desligado em grupo obrigatório (`account`, `purchase`,
+         *     `support` e `moderation`, RF-04) e o canal plataforma no grupo `account`. Devolve as
+         *     preferências efetivas depois da mudança.
+         */
+        put: operations["updateNotificationPrefs"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/unsubscribe/{token}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Descadastro de um grupo pelo token
+         * @description Link de descadastro de um clique dos e-mails não obrigatórios
+         *     (`specs/024-notificacoes-e-email.md`, RF-07 e "Links com token"): sem login e **sem
+         *     CSRF**, porque quem abre vem do cliente de e-mail. O token identifica usuário e grupo,
+         *     não expira e vale para todos os e-mails seguintes do grupo. Desliga só o e-mail do grupo
+         *     do token e mantém o canal plataforma como estava; repetir a chamada não muda nada. Token
+         *     fora do formato ou desconhecido: `404 not_found`. Por isso a operação não declara
+         *     `csrfToken` e entra na lista de exceções da API.
+         */
+        post: operations["unsubscribe"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -1984,6 +2134,146 @@ export interface components {
         };
         /** @description Um evento do fluxo depois de lido (campos `id`, `event` e `data` do SSE). */
         StreamEvent: components["schemas"]["StreamEventDmMessageCreated"] | components["schemas"]["StreamEventDmMessageRead"] | components["schemas"]["StreamEventDmMessageDeleted"] | components["schemas"]["StreamEventNotificationCreated"] | components["schemas"]["StreamEventForumPostCreated"] | components["schemas"]["StreamEventAnnouncementPublished"] | components["schemas"]["StreamEventPresence"] | components["schemas"]["StreamEventPing"];
+        /**
+         * @description Grupo de preferência (`specs/024-notificacoes-e-email.md`, "Tipos e grupos"); o grupo de
+         *     cada tipo está na mesma tabela.
+         * @enum {string}
+         */
+        NotificationGroup: "account" | "purchase" | "courses" | "forum" | "messages" | "community" | "events" | "support" | "announcements" | "moderation" | "staff";
+        /**
+         * @description Conteúdo do tipo, definido na spec do recurso (o `forum.reply` traz o tópico e a
+         *     resposta; o `order.approved`, o pedido). Nunca contém senha, token nem segredo.
+         */
+        NotificationData: {
+            [key: string]: unknown;
+        };
+        /** @description Quem gerou o fato; ausente em aviso do sistema. */
+        NotificationActor: {
+            id: components["schemas"]["Uuid"];
+            /** @description Nome de exibição; `usuário removido` quando a conta foi excluída. */
+            name: string;
+            /** @description Caminho da foto de perfil na API, ou nulo. */
+            avatarUrl: string | null;
+        };
+        /**
+         * @description Um item da central (`specs/024-notificacoes-e-email.md`, "Central"): ícone do tipo, foto,
+         *     título, texto curto, tempo e link para o alvo são montados a partir de `type`, `actor`,
+         *     `data` e do alvo.
+         */
+        NotificationItem: {
+            id: components["schemas"]["Uuid"];
+            /**
+             * @description Tipo da notificação (`specs/024-notificacoes-e-email.md`). Fica em texto, e não em
+             *     `enum`, porque um worker mais novo pode gravar tipo que esta API ainda não conhece.
+             * @example forum.reply
+             */
+            type: string;
+            group: components["schemas"]["NotificationGroup"];
+            /** @description Quem gerou o fato; nulo em aviso do sistema. */
+            actor: components["schemas"]["NotificationActor"] | null;
+            /**
+             * @description Tipo do alvo (`topic`, `course`, `order`...), sempre junto de `targetId`; nulo quando
+             *     a notificação não aponta para um recurso.
+             */
+            targetType: string | null;
+            targetId: components["schemas"]["Uuid"] | null;
+            data: components["schemas"]["NotificationData"];
+            /** @description Quantas notificações do mesmo tipo e alvo foram fundidas nesta linha. */
+            count: number;
+            /** @description Quando foi lida; nulo enquanto não lida. */
+            readAt: components["schemas"]["DateTime"] | null;
+            createdAt: components["schemas"]["DateTime"];
+        };
+        NotificationPage: components["schemas"]["Page"] & {
+            items: components["schemas"]["NotificationItem"][];
+        };
+        /** @description Não lidas do usuário, para o sino. */
+        NotificationUnreadCount: {
+            unreadCount: number;
+        };
+        /** @description Item marcado como lido e o contador do sino depois da leitura. */
+        NotificationReadResult: {
+            notification: components["schemas"]["NotificationItem"];
+            unreadCount: number;
+        };
+        /** @description Resultado de "marcar todas como lidas". */
+        NotificationsReadAllResult: {
+            /** @description Quantas notificações passaram de não lidas a lidas nesta chamada. */
+            updated: number;
+            /** @constant */
+            unreadCount: 0;
+        };
+        /** @description Resultado de "limpar todas". */
+        NotificationsCleared: {
+            /** @description Quantas notificações foram apagadas. */
+            deleted: number;
+        };
+        /** @description Canais efetivos de um grupo. */
+        NotificationChannelPrefs: {
+            /** @description Canal plataforma (central e sino). */
+            inApp: boolean;
+            /** @description Canal e-mail. */
+            email: boolean;
+        };
+        /**
+         * @description Canais efetivos de um grupo e as regras que a interface precisa para desabilitar o que
+         *     não pode mudar.
+         */
+        NotificationGroupPrefs: {
+            inApp: boolean;
+            email: boolean;
+            /**
+             * @description `true` nos grupos obrigatórios (`account`, `purchase`, `support` e `moderation`): o
+             *     e-mail não pode ser desligado (RF-04).
+             */
+            emailRequired: boolean;
+            /** @description `false` só no grupo `account`, que não tem canal plataforma. */
+            inAppAvailable: boolean;
+        };
+        /**
+         * @description Canais efetivos dos onze grupos (`specs/024-notificacoes-e-email.md`, "Tipos e grupos"),
+         *     na ordem da tabela.
+         */
+        NotificationPrefs: {
+            account: components["schemas"]["NotificationGroupPrefs"];
+            purchase: components["schemas"]["NotificationGroupPrefs"];
+            courses: components["schemas"]["NotificationGroupPrefs"];
+            forum: components["schemas"]["NotificationGroupPrefs"];
+            messages: components["schemas"]["NotificationGroupPrefs"];
+            community: components["schemas"]["NotificationGroupPrefs"];
+            events: components["schemas"]["NotificationGroupPrefs"];
+            support: components["schemas"]["NotificationGroupPrefs"];
+            announcements: components["schemas"]["NotificationGroupPrefs"];
+            moderation: components["schemas"]["NotificationGroupPrefs"];
+            staff: components["schemas"]["NotificationGroupPrefs"];
+        };
+        /** @description Canais a mudar num grupo; canal omitido fica como está. */
+        NotificationChannelUpdate: {
+            inApp?: boolean;
+            email?: boolean;
+        };
+        /**
+         * @description Grupos a mudar; grupo omitido fica como está. Grupo obrigatório com `email: false` e
+         *     grupo `account` com `inApp: true` são recusados com `400 validation_failed`.
+         */
+        NotificationPrefsUpdate: {
+            account?: components["schemas"]["NotificationChannelUpdate"];
+            purchase?: components["schemas"]["NotificationChannelUpdate"];
+            courses?: components["schemas"]["NotificationChannelUpdate"];
+            forum?: components["schemas"]["NotificationChannelUpdate"];
+            messages?: components["schemas"]["NotificationChannelUpdate"];
+            community?: components["schemas"]["NotificationChannelUpdate"];
+            events?: components["schemas"]["NotificationChannelUpdate"];
+            support?: components["schemas"]["NotificationChannelUpdate"];
+            announcements?: components["schemas"]["NotificationChannelUpdate"];
+            moderation?: components["schemas"]["NotificationChannelUpdate"];
+            staff?: components["schemas"]["NotificationChannelUpdate"];
+        };
+        /** @description Resultado do descadastro; só o e-mail do grupo do token muda. */
+        UnsubscribeResult: {
+            group: components["schemas"]["NotificationGroup"];
+            prefs: components["schemas"]["NotificationChannelPrefs"];
+        };
         /**
          * @description Tipo de produto do catálogo (`specs/009-catalogo-e-conteudo.md`).
          * @enum {string}
@@ -3163,6 +3453,13 @@ export interface components {
          *     é um inteiro em texto: `400`.
          */
         LastEventId: components["schemas"]["StreamEventId"];
+        /** @description Itens por página da central (padrão 20, máximo 50). */
+        NotificationLimit: number;
+        /**
+         * @description Token do link de descadastro: 64 caracteres hexadecimais, gravado em
+         *     `notification_unsubscribe_tokens`. Outro formato ou token desconhecido responde `404`.
+         */
+        UnsubscribeTokenPath: string;
         /** @description Identificador legível do produto na URL (único por tipo de produto). */
         SlugPath: components["schemas"]["Slug"];
     };
@@ -5320,6 +5617,242 @@ export interface operations {
             413: components["responses"]["PayloadTooLarge"];
             415: components["responses"]["UnsupportedMediaType"];
             422: components["responses"]["UnprocessableEntity"];
+            429: components["responses"]["TooManyRequests"];
+            500: components["responses"]["InternalError"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    listNotifications: {
+        parameters: {
+            query?: {
+                /** @description Itens por página da central (padrão 20, máximo 50). */
+                limit?: components["parameters"]["NotificationLimit"];
+                /** @description Valor de `nextCursor` da página anterior. Ausente na primeira página. */
+                cursor?: components["parameters"]["Cursor"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Uma página da central. */
+            200: {
+                headers: {
+                    "X-Request-Id": components["headers"]["XRequestId"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NotificationPage"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            429: components["responses"]["TooManyRequests"];
+            500: components["responses"]["InternalError"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    clearNotifications: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Quantas notificações foram apagadas. */
+            200: {
+                headers: {
+                    "X-Request-Id": components["headers"]["XRequestId"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NotificationsCleared"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            429: components["responses"]["TooManyRequests"];
+            500: components["responses"]["InternalError"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    getNotificationUnreadCount: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description O contador. */
+            200: {
+                headers: {
+                    "X-Request-Id": components["headers"]["XRequestId"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NotificationUnreadCount"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            429: components["responses"]["TooManyRequests"];
+            500: components["responses"]["InternalError"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    markNotificationRead: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Identificador do recurso. */
+                id: components["parameters"]["IdPath"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Item lido e o contador atualizado. */
+            200: {
+                headers: {
+                    "X-Request-Id": components["headers"]["XRequestId"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NotificationReadResult"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            429: components["responses"]["TooManyRequests"];
+            500: components["responses"]["InternalError"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    markAllNotificationsRead: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Quantas notificações passaram a lidas. */
+            200: {
+                headers: {
+                    "X-Request-Id": components["headers"]["XRequestId"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NotificationsReadAllResult"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            429: components["responses"]["TooManyRequests"];
+            500: components["responses"]["InternalError"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    getNotificationPrefs: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description As preferências efetivas. */
+            200: {
+                headers: {
+                    "X-Request-Id": components["headers"]["XRequestId"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NotificationPrefs"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            429: components["responses"]["TooManyRequests"];
+            500: components["responses"]["InternalError"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    updateNotificationPrefs: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["NotificationPrefsUpdate"];
+            };
+        };
+        responses: {
+            /** @description Preferências gravadas e devolvidas. */
+            200: {
+                headers: {
+                    "X-Request-Id": components["headers"]["XRequestId"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NotificationPrefs"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            413: components["responses"]["PayloadTooLarge"];
+            415: components["responses"]["UnsupportedMediaType"];
+            429: components["responses"]["TooManyRequests"];
+            500: components["responses"]["InternalError"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    unsubscribe: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /**
+                 * @description Token do link de descadastro: 64 caracteres hexadecimais, gravado em
+                 *     `notification_unsubscribe_tokens`. Outro formato ou token desconhecido responde `404`.
+                 */
+                token: components["parameters"]["UnsubscribeTokenPath"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Grupo descadastrado e os canais efetivos depois da mudança. */
+            200: {
+                headers: {
+                    "X-Request-Id": components["headers"]["XRequestId"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UnsubscribeResult"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            404: components["responses"]["NotFound"];
             429: components["responses"]["TooManyRequests"];
             500: components["responses"]["InternalError"];
             503: components["responses"]["ServiceUnavailable"];
