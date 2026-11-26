@@ -81,16 +81,25 @@ async function auditFor(action: string, entitlementId: string) {
   );
 }
 
-const accessEmails = (userId: string) =>
-  test.db
-    .selectFrom('emailOutbox')
-    .selectAll()
-    .where('userId', '=', userId)
-    .where('type', '=', 'access.granted')
+/**
+ * Tarefas `notify` do `access.granted` na fila para o aluno. O aviso sai pela central
+ * (spec 024): `grantEntitlement` enfileira uma tarefa por destinatário e a linha de
+ * `email_outbox` só nasce quando o worker entrega.
+ */
+const accessNotices = async (userId: string) => {
+  const rows = await test.db
+    .selectFrom('jobs')
+    .select(['id', 'payload'])
+    .where('type', '=', 'notify')
     .execute();
+  return rows.filter((row) => {
+    const payload = row.payload as { type?: string; userId?: string };
+    return payload.type === 'access.granted' && payload.userId === userId;
+  });
+};
 
 describe('concessão manual', () => {
-  it('gerente concede um pacote: 201 com a cascata, auditoria e e-mail; repetir responde 200 sem gravar', async () => {
+  it('gerente concede um pacote: 201 com a cascata, auditoria e aviso ao aluno; repetir responde 200 sem gravar', async () => {
     const student = await createActor(test, 'student');
     const { bundle, course, ebook } = await bundleWithItems();
     const expiresAt = new Date(Date.now() + 30 * 86_400_000).toISOString();
@@ -132,9 +141,16 @@ describe('concessão manual', () => {
     expect(audit[0]).toMatchObject({ actorUserId: manager.id, targetId: student.id });
     expect(audit[0]?.details).toMatchObject({ reason: 'Bolsa de estudos', productId: bundle.id });
 
-    const emails = await accessEmails(student.id);
-    expect(emails).toHaveLength(1);
-    expect(emails[0]?.data).toMatchObject({ productType: 'bundle', productTitle: bundle.title });
+    const notices = await accessNotices(student.id);
+    expect(notices).toHaveLength(1);
+    expect(notices[0]?.payload).toMatchObject({
+      type: 'access.granted',
+      userId: student.id,
+      actorId: null,
+      targetType: 'bundle',
+      targetId: bundle.id,
+      data: { productType: 'bundle', productTitle: bundle.title },
+    });
 
     // A mesma concessão (usuário, quem concede, produto), ainda ativa: nada novo.
     const again = await grant(manager, student.id, {
@@ -145,7 +161,7 @@ describe('concessão manual', () => {
     expect(again.statusCode).toBe(200);
     expect(again.json()).toEqual(node);
     expect(await auditFor('entitlement.grant', node.id)).toHaveLength(1);
-    expect(await accessEmails(student.id)).toHaveLength(1);
+    expect(await accessNotices(student.id)).toHaveLength(1);
 
     // Outro membro da equipe concede o mesmo produto: é outra raiz.
     const other = await grant(admin, student.id, {
@@ -242,9 +258,9 @@ describe('concessão manual', () => {
     });
     expect(anonymous.statusCode).toBe(401);
 
-    // Nenhuma das tentativas concedeu nada nem enfileirou e-mail.
+    // Nenhuma das tentativas concedeu nada nem enfileirou o aviso.
     expect((await tree(manager, student.id)).json()).toEqual({ items: [] });
-    expect(await accessEmails(student.id)).toHaveLength(0);
+    expect(await accessNotices(student.id)).toHaveLength(0);
   });
 });
 
