@@ -1,0 +1,1413 @@
+/*
+ * Componentes da comunidade: fórum, chamados, calendário, novidades, notificações e
+ * moderação (specs 017, 018, 023, 024, 025 e 026).
+ *
+ * Usam os tokens --adm-* da casca (com os --minui-* de reserva), nos três temas. Sem
+ * `style` no HTML (CSP style-src 'self'); nenhuma largura fixa além de capas, avatares e
+ * ícones, para funcionar de 360 px a 1920 px sem rolagem horizontal.
+ */
+
+.minui-md-editor,
+.minui-mentions,
+.minui-reactions,
+.minui-topics,
+.minui-topic,
+.minui-topic-head,
+.minui-post,
+.minui-post-composer,
+.minui-report-dialog,
+.minui-reported,
+.minui-mod-history,
+.minui-ticket-talk,
+.minui-ticket-composer,
+.minui-tickets,
+.minui-ticket-row,
+.minui-report-link,
+.minui-event,
+.minui-event-banner,
+.minui-calendar,
+.minui-announcements,
+.minui-announcement,
+.minui-bell,
+.minui-notification-list,
+.minui-notprefs {
+  --com-ink: var(--adm-ink, var(--minui-text));
+  --com-ink-2: var(--adm-ink-2, var(--minui-text-body));
+  --com-ink-3: var(--adm-ink-3, var(--minui-text-muted));
+  --com-card: var(--adm-card, var(--minui-surface-base));
+  --com-sunken: var(--adm-sunken, var(--minui-panel-well));
+  --com-pop: var(--adm-pop, var(--minui-surface-top));
+  --com-hover: var(--adm-hover, var(--minui-field));
+  --com-line: var(--adm-line, var(--minui-field-line));
+  --com-line-soft: var(--adm-line-soft, var(--minui-field-line));
+  --com-focus: var(--adm-focus, var(--minui-focus));
+  --com-accent: var(--minui-accent-text, var(--com-ink));
+  --com-green: var(--adm-green, var(--minui-green));
+  --com-red: var(--adm-red, var(--minui-red));
+  --com-amber: var(--adm-amber, var(--minui-text));
+  font-family: var(--minui-font);
+  color: var(--com-ink);
+}
+
+.minui-sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  border: 0;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/* =================== Editor de Markdown =================== */
+
+.minui-md-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.minui-md-editor__label {
+  color: var(--com-ink-2);
+  font-size: 12.5px;
+  font-weight: 600;
+}
+
+.minui-md-editor__required {
+  color: var(--com-red);
+}
+
+.minui-md-editor__input {
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 96px;
+  padding: 10px 12px;
+  border: 1px solid var(--com-line);
+  border-radius: var(--adm-r-ctl, 8px);
+  background: var(--com-card);
+  color: var(--com-ink);
+  font: inherit;
+  font-size: 13.5px;
+  line-height: 1.55;
+  resize: vertical;
+}
+
+.minui-md-editor__input:focus-visible {
+  outline: 2px solid var(--com-focus);
+  outline-offset: 1px;
+}
+
+.minui-md-editor__input[aria-invalid="true"] {
+  border-color: var(--com-red);
+}
+
+.minui-md-editor__preview {
+  box-sizing: border-box;
+  min-height: 96px;
+  max-height: 420px;
+  padding: 10px 12px;
+  overflow: auto;
+  border: 1px dashed var(--com-line);
+  border-radius: var(--adm-r-ctl, 8px);
+  background: var(--com-sunken);
+}
+
+.minui-md-editor__empty,
+.minui-calendar__empty,
+.minui-notprefs__none {
+  margin: 0;
+  color: var(--com-ink-3);
+  font-size: 13px;
+}
+
+.minui-md-editor__foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px 12px;
+}
+
+.minui-md-editor__counter {
+  color: var(--com-ink-3);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+.minui-md-editor__counter[data-over="true"] {
+  color: var(--com-red);
+  font-weight: 600;
+}
+
+.minui-md-editor__toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 10px;
+  border: 1px solid var(--com-line);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--com-ink-2);
+  font: inherit;
+  font-size: 12.5px;
+  cursor: pointer;
+}
+
+.minui-md-editor__toggle:hover {
+  background: var(--com-hover);
+  color: var(--com-ink);
+}
+
+.minui-md-editor__toggle:focus-visible {
+  outline: 2px solid var(--com-focus);
+  outline-offset: 2px;
+}
+
+.minui-md-editor__toggle svg {
+  width: 14px;
+  height: 14px;
+}
+
+.minui-md-editor__hint,
+.minui-md-editor__error,
+.minui-post-composer__error,
+.minui-ticket-composer__error,
+.minui-report-dialog__hint,
+.minui-report-dialog__error,
+.minui-report-link__hint,
+.minui-report-link__error,
+.minui-ticket-composer__hint {
+  margin: 0;
+  font-size: 12.5px;
+}
+
+.minui-md-editor__hint,
+.minui-ticket-composer__hint,
+.minui-report-dialog__hint,
+.minui-report-link__hint {
+  color: var(--com-ink-3);
+}
+
+.minui-md-editor__error,
+.minui-post-composer__error,
+.minui-ticket-composer__error,
+.minui-report-dialog__error,
+.minui-report-link__error {
+  color: var(--com-red);
+}
+
+/* =================== Menções =================== */
+
+.minui-mentions__wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.minui-mentions {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  max-height: 220px;
+  margin: 0;
+  padding: 4px;
+  overflow: auto;
+  border: 1px solid var(--com-line);
+  border-radius: var(--adm-r-ctl, 8px);
+  background: var(--com-pop);
+  box-shadow: var(--adm-shadow-pop, 0 8px 24px rgb(0 0 0 / 18%));
+  list-style: none;
+}
+
+.minui-mentions__option {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 6px 8px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--com-ink-2);
+  font: inherit;
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.minui-mentions__option[data-active="true"],
+.minui-mentions__option:hover {
+  background: var(--com-hover);
+  color: var(--com-ink);
+}
+
+.minui-mentions__option:focus-visible {
+  outline: 2px solid var(--com-focus);
+  outline-offset: -2px;
+}
+
+.minui-mentions__name {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 6px;
+}
+
+.minui-mentions__handle {
+  color: var(--com-ink-3);
+  font-size: 12px;
+}
+
+.minui-mentions__empty {
+  margin: 0;
+  padding: 6px 2px;
+  color: var(--com-ink-3);
+  font-size: 12.5px;
+}
+
+/* =================== Reações =================== */
+
+.minui-reactions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.minui-reactions__button {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 30px;
+  padding: 3px 9px;
+  border: 1px solid var(--com-line);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--com-ink-2);
+  font: inherit;
+  font-size: 12.5px;
+  cursor: pointer;
+}
+
+.minui-reactions__button[data-reacted="true"] {
+  border-color: var(--com-accent);
+  background: var(--com-hover);
+  color: var(--com-ink);
+}
+
+.minui-reactions__button:focus-visible {
+  outline: 2px solid var(--com-focus);
+  outline-offset: 2px;
+}
+
+.minui-reactions__button:disabled {
+  cursor: default;
+  opacity: 0.6;
+}
+
+.minui-reactions__count {
+  font-variant-numeric: tabular-nums;
+}
+
+/* =================== Tópicos =================== */
+
+.minui-topics,
+.minui-topic {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+
+.minui-topics__list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.minui-topic {
+  padding: 12px 14px;
+  border: 1px solid var(--com-line);
+  border-radius: var(--adm-r-card, 9px);
+  background: var(--com-card);
+}
+
+.minui-topic[data-status="hidden"] {
+  opacity: 0.75;
+}
+
+.minui-topic__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 6px 12px;
+}
+
+.minui-topic__title {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 650;
+}
+
+.minui-topic__badges {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.minui-topic__badges svg,
+.minui-post__solution svg {
+  vertical-align: -2px;
+}
+
+.minui-topic__meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 14px;
+  color: var(--com-ink-3);
+  font-size: 12.5px;
+}
+
+.minui-topic__posts,
+.minui-topic__activity,
+.minui-ticket-row__wait,
+.minui-ticket-row__reports {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.minui-topic-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px 16px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--com-line-soft);
+}
+
+.minui-topic-head__title {
+  margin: 0 0 6px;
+  font-size: 20px;
+  line-height: 1.25;
+}
+
+.minui-topic-head__meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 14px;
+  color: var(--com-ink-3);
+  font-size: 12.5px;
+}
+
+.minui-topic-head__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+/* =================== Publicações =================== */
+
+.minui-post {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 14px;
+  border: 1px solid var(--com-line);
+  border-radius: var(--adm-r-card, 9px);
+  background: var(--com-card);
+}
+
+.minui-post[data-solution="true"] {
+  border-color: var(--com-green);
+}
+
+.minui-post[data-hidden="true"] {
+  border-style: dashed;
+}
+
+.minui-post__head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.minui-post__avatar {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  object-fit: cover;
+}
+
+.minui-post__who {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+
+.minui-post__author {
+  font-size: 13.5px;
+}
+
+.minui-post__when {
+  color: var(--com-ink-3);
+  font-size: 12px;
+}
+
+.minui-post__solution {
+  margin-left: auto;
+}
+
+.minui-post__notice {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  padding: 7px 10px;
+  border-radius: 8px;
+  background: var(--com-sunken);
+  color: var(--com-amber);
+  font-size: 12.5px;
+}
+
+.minui-post__deleted {
+  margin: 0;
+  color: var(--com-ink-3);
+  font-size: 13px;
+  font-style: italic;
+}
+
+.minui-post__body {
+  overflow-wrap: anywhere;
+}
+
+.minui-post__foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.minui-post__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-left: auto;
+}
+
+.minui-post-composer,
+.minui-ticket-composer {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.minui-post-composer__foot,
+.minui-ticket-composer__foot {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.minui-ticket-composer__internal {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+/* =================== Denúncia e moderação =================== */
+
+.minui-report-dialog__target {
+  margin-bottom: 12px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: var(--com-sunken);
+  color: var(--com-ink-2);
+  font-size: 13px;
+}
+
+.minui-report-dialog__reasons {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0 0 14px;
+  padding: 0;
+  border: 0;
+}
+
+.minui-report-dialog__legend {
+  margin-bottom: 6px;
+  padding: 0;
+  color: var(--com-ink-2);
+  font-size: 12.5px;
+  font-weight: 600;
+}
+
+.minui-report-dialog__reason {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  border-radius: 6px;
+  color: var(--com-ink-2);
+  font-size: 13.5px;
+  cursor: pointer;
+}
+
+.minui-report-dialog__reason:hover {
+  background: var(--com-hover);
+}
+
+.minui-report-dialog__reason:has(input:focus-visible) {
+  outline: 2px solid var(--com-focus);
+  outline-offset: 1px;
+}
+
+.minui-report-dialog__details,
+.minui-report-link__message {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.minui-reported,
+.minui-mod-history {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px;
+  border: 1px solid var(--com-line);
+  border-radius: var(--adm-r-card, 9px);
+  background: var(--com-card);
+}
+
+.minui-reported__head {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.minui-reported__kind {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  color: var(--com-ink-3);
+  font-size: 12px;
+}
+
+.minui-reported__title {
+  margin: 0;
+  font-size: 15px;
+}
+
+.minui-reported__body {
+  overflow-wrap: anywhere;
+}
+
+.minui-reported__caption {
+  display: block;
+  color: var(--com-ink-3);
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.minui-reported__context {
+  padding: 8px 10px;
+  border-left: 3px solid var(--com-line-strong, var(--com-line));
+  background: var(--com-sunken);
+  font-size: 13px;
+}
+
+.minui-reported__meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 20px;
+  color: var(--com-ink-2);
+  font-size: 13px;
+}
+
+.minui-reported__author,
+.minui-reported__reporters {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.minui-reported__faces {
+  display: inline-flex;
+}
+
+.minui-reported__faces > * {
+  margin-left: -4px;
+}
+
+.minui-reported__reasons ul {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  margin: 4px 0 0;
+  padding: 0;
+  list-style: none;
+  color: var(--com-ink-2);
+  font-size: 13px;
+}
+
+.minui-reported__count {
+  color: var(--com-ink-3);
+}
+
+.minui-reported__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding-top: 8px;
+  border-top: 1px solid var(--com-line-soft);
+}
+
+.minui-mod-history__list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.minui-mod-history__item {
+  display: flex;
+  gap: 10px;
+}
+
+.minui-mod-history__icon {
+  display: inline-flex;
+  color: var(--com-amber);
+}
+
+.minui-mod-history__text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 13px;
+}
+
+.minui-mod-history__text time,
+.minui-mod-history__detail {
+  color: var(--com-ink-3);
+  font-size: 12.5px;
+}
+
+/* =================== Chamados =================== */
+
+.minui-ticket-talk {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.minui-ticket-talk__list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.minui-ticket-msg {
+  padding: 12px 14px;
+  border: 1px solid var(--com-line);
+  border-radius: var(--adm-r-card, 9px);
+  background: var(--com-card);
+}
+
+.minui-ticket-msg[data-internal="true"] {
+  border-left: 3px solid var(--com-amber);
+  background: var(--com-sunken);
+}
+
+.minui-ticket-msg__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 10px;
+  margin-bottom: 6px;
+}
+
+.minui-ticket-msg__author {
+  font-size: 13.5px;
+}
+
+.minui-ticket-msg__time {
+  color: var(--com-ink-3);
+  font-size: 12px;
+}
+
+.minui-ticket-msg__internal {
+  margin-left: auto;
+}
+
+.minui-ticket-msg__body {
+  overflow-wrap: anywhere;
+}
+
+.minui-tickets,
+.minui-announcements {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.minui-tickets__list,
+.minui-announcements__list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.minui-ticket-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px 16px;
+  padding: 10px 12px;
+  border: 1px solid var(--com-line);
+  border-radius: var(--adm-r-card, 9px);
+  background: var(--com-card);
+}
+
+.minui-ticket-row__main {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 10px;
+  min-width: 0;
+}
+
+.minui-ticket-row__number {
+  color: var(--com-ink-3);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+.minui-ticket-row__subject {
+  font-size: 13.5px;
+  font-weight: 600;
+}
+
+.minui-ticket-row__kind {
+  color: var(--com-ink-3);
+  font-size: 12px;
+}
+
+.minui-ticket-row__meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 14px;
+  color: var(--com-ink-3);
+  font-size: 12px;
+}
+
+.minui-ticket-row__assignee {
+  display: inline-flex;
+  align-items: center;
+}
+
+.minui-report-link__summary {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0 0 14px;
+  font-size: 13px;
+}
+
+.minui-report-link__summary div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 10px;
+}
+
+.minui-report-link__summary dt {
+  color: var(--com-ink-3);
+  font-size: 12px;
+}
+
+.minui-report-link__summary dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.minui-report-link__url {
+  font-family: var(--minui-mono);
+  font-size: 12px;
+}
+
+/* =================== Eventos =================== */
+
+.minui-event {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 14px;
+  border: 1px solid var(--com-line);
+  border-radius: var(--adm-r-card, 9px);
+  background: var(--com-card);
+}
+
+.minui-event[data-status="live"] {
+  border-color: var(--com-green);
+}
+
+.minui-event[data-status="canceled"] .minui-event__title {
+  text-decoration: line-through;
+  color: var(--com-ink-3);
+}
+
+.minui-event__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px 12px;
+}
+
+.minui-event__type {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--com-ink-3);
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.minui-event__title {
+  margin: 0;
+  font-size: 16px;
+}
+
+.minui-event__when {
+  margin: 0;
+  color: var(--com-ink-2);
+  font-size: 13px;
+}
+
+.minui-event__body {
+  overflow-wrap: anywhere;
+}
+
+.minui-event__blocked {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: var(--com-sunken);
+  color: var(--com-ink-2);
+  font-size: 13px;
+}
+
+.minui-event__blocked p {
+  margin: 0;
+}
+
+.minui-event__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 14px;
+}
+
+.minui-event-banner__inner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 12px;
+  padding: 8px 12px;
+  border: 1px solid var(--com-green);
+  border-radius: 8px;
+  background: var(--com-sunken);
+  font-size: 13px;
+}
+
+.minui-event-banner__live {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--com-green);
+  font-weight: 650;
+  font-size: 12px;
+  text-transform: uppercase;
+}
+
+.minui-event-banner__title {
+  font-size: 14px;
+}
+
+/* =================== Calendário =================== */
+
+.minui-calendar {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+
+.minui-calendar__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.minui-calendar__title {
+  margin: 0;
+  font-size: 16px;
+  text-transform: capitalize;
+}
+
+.minui-calendar__nav {
+  display: inline-flex;
+  gap: 2px;
+}
+
+.minui-calendar__grid {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+}
+
+.minui-calendar__weekday {
+  padding: 4px 2px;
+  color: var(--com-ink-3);
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.minui-calendar__cell {
+  padding: 1px;
+  vertical-align: top;
+}
+
+.minui-calendar__day {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 2px;
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 42px;
+  padding: 4px 2px;
+  border: 1px solid transparent;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--com-ink-2);
+  font: inherit;
+  font-size: 12.5px;
+  cursor: pointer;
+}
+
+.minui-calendar__day:hover {
+  background: var(--com-hover);
+}
+
+.minui-calendar__day:focus-visible {
+  outline: 2px solid var(--com-focus);
+  outline-offset: 1px;
+}
+
+.minui-calendar__cell[data-outside="true"] .minui-calendar__day {
+  color: var(--com-ink-3);
+  opacity: 0.55;
+}
+
+.minui-calendar__cell[data-today="true"] .minui-calendar__day {
+  color: var(--com-accent);
+  font-weight: 700;
+}
+
+.minui-calendar__cell[data-selected="true"] .minui-calendar__day {
+  border-color: var(--com-accent);
+  background: var(--com-hover);
+  color: var(--com-ink);
+}
+
+.minui-calendar__dots {
+  display: inline-flex;
+  gap: 2px;
+}
+
+.minui-calendar__dot {
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: var(--com-accent);
+}
+
+/* =================== Novidades =================== */
+
+.minui-announcement {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  padding: 14px;
+  border: 1px solid var(--com-line);
+  border-radius: var(--adm-r-card, 9px);
+  background: var(--com-card);
+}
+
+.minui-announcement__cover {
+  flex: 0 1 240px;
+  width: 240px;
+  max-width: 100%;
+  height: auto;
+  border-radius: 8px;
+  object-fit: cover;
+}
+
+.minui-announcement__text {
+  display: flex;
+  flex: 1 1 260px;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.minui-announcement__meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 10px;
+  color: var(--com-ink-3);
+  font-size: 12px;
+}
+
+.minui-announcement__pin svg {
+  vertical-align: -2px;
+}
+
+.minui-announcement__dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--com-accent);
+}
+
+.minui-announcement__title {
+  margin: 0;
+  font-size: 16px;
+}
+
+.minui-announcement__body {
+  overflow-wrap: anywhere;
+}
+
+.minui-announcement__link {
+  margin: 0;
+}
+
+/* =================== Sino e central =================== */
+
+.minui-bell {
+  position: relative;
+  display: inline-flex;
+}
+
+.minui-bell__button {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--com-ink-2);
+  cursor: pointer;
+}
+
+.minui-bell__button:hover {
+  background: var(--com-hover);
+  color: var(--com-ink);
+}
+
+.minui-bell__button:focus-visible {
+  outline: 2px solid var(--com-focus);
+  outline-offset: 1px;
+}
+
+.minui-bell__count {
+  position: absolute;
+  top: 1px;
+  right: 1px;
+  min-width: 16px;
+  padding: 0 4px;
+  border-radius: 999px;
+  background: var(--com-red);
+  color: #fff;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 16px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+.minui-bell__panel {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 40;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  box-sizing: border-box;
+  width: min(420px, calc(100vw - 24px));
+  max-height: min(70vh, 560px);
+  padding: 12px;
+  overflow: auto;
+  border: 1px solid var(--com-line);
+  border-radius: var(--adm-r-panel, 12px);
+  background: var(--com-pop);
+  box-shadow: var(--adm-shadow-pop, 0 12px 32px rgb(0 0 0 / 20%));
+}
+
+.minui-bell__panel:focus-visible {
+  outline: 2px solid var(--com-focus);
+  outline-offset: -2px;
+}
+
+.minui-bell__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.minui-bell__title {
+  margin: 0;
+  font-size: 14px;
+}
+
+.minui-notification-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+
+.minui-notification-list__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.minui-notifications {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.minui-notification {
+  position: relative;
+  border-radius: 8px;
+}
+
+.minui-notification[data-unread="true"] {
+  background: var(--com-sunken);
+}
+
+.minui-notification__link {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  width: 100%;
+  padding: 8px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--com-ink-2);
+  font: inherit;
+  text-align: left;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.minui-notification__link:hover {
+  background: var(--com-hover);
+}
+
+.minui-notification__link:focus-visible {
+  outline: 2px solid var(--com-focus);
+  outline-offset: -2px;
+}
+
+.minui-notification__icon {
+  display: inline-flex;
+  color: var(--com-ink-3);
+}
+
+.minui-notification__text {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+  font-size: 13px;
+}
+
+.minui-notification__title {
+  font-weight: 600;
+}
+
+.minui-notification__body,
+.minui-notification__grouped,
+.minui-notification__time {
+  color: var(--com-ink-3);
+  font-size: 12.5px;
+}
+
+.minui-notification__time {
+  font-size: 11.5px;
+}
+
+/* =================== Preferências =================== */
+
+.minui-notprefs {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.minui-notprefs__title {
+  margin: 0;
+  font-size: 16px;
+}
+
+.minui-notprefs__description {
+  margin: 0;
+  color: var(--com-ink-2);
+  font-size: 13px;
+}
+
+.minui-notprefs__groups {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.minui-notprefs__group {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 16px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--com-line-soft);
+}
+
+.minui-notprefs__text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  font-size: 13.5px;
+}
+
+.minui-notprefs__text span {
+  color: var(--com-ink-3);
+  font-size: 12.5px;
+}
+
+.minui-notprefs__channels {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 18px;
+}
+
+.minui-notprefs__channel {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 3px;
+  min-width: 92px;
+}
+
+.minui-notprefs__channel-label {
+  color: var(--com-ink-3);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.minui-notprefs__locked {
+  color: var(--com-ink-3);
+  font-size: 11.5px;
+}
+
+.minui-notprefs__saved {
+  min-height: 0;
+  margin: 0;
+  color: var(--com-green);
+  font-size: 12.5px;
+}
+
+/* =================== Estreito =================== */
+
+@media (max-width: 640px) {
+  .minui-announcement__cover {
+    flex-basis: 100%;
+    width: 100%;
+  }
+
+  .minui-topic-head,
+  .minui-ticket-row {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .minui-calendar__day {
+    min-height: 38px;
+    font-size: 11.5px;
+  }
+
+  .minui-bell__panel {
+    position: fixed;
+    top: 56px;
+    right: 12px;
+    left: 12px;
+    width: auto;
+  }
+}

@@ -223,6 +223,158 @@ export type { SortableListLabels, SortableListProps } from './components/catalog
 export { SortableList } from './components/catalog/SortableList';
 export type { TabItem, TabsProps } from './components/catalog/Tabs';
 export { Tabs } from './components/catalog/Tabs';
+// comunidade: editor, fórum, reações, menções, moderação, chamados, calendário, novidades e notificações (Fase 4; specs 017, 018, 023, 024, 025 e 026)
+export type {
+  Announcement,
+  AnnouncementCardLabels,
+  AnnouncementCardProps,
+  AnnouncementLink,
+  AnnouncementListLabels,
+  AnnouncementListProps,
+} from './components/community/Announcements';
+export { AnnouncementCard, AnnouncementList } from './components/community/Announcements';
+export type {
+  CalendarEvent,
+  EventBannerLabels,
+  EventBannerProps,
+  EventCardLabels,
+  EventCardProps,
+  EventKind,
+  EventStatusLabels,
+  EventTimeProps,
+  MonthCalendarLabels,
+  MonthCalendarProps,
+} from './components/community/Calendar';
+export {
+  EventBanner,
+  EventCard,
+  EventStatusBadge,
+  EventTime,
+  MonthCalendar,
+} from './components/community/Calendar';
+export type { MarkdownEditorLabels, MarkdownEditorProps } from './components/community/Editor';
+export { MarkdownEditor } from './components/community/Editor';
+export type {
+  ForumAuthor,
+  ForumPost,
+  ForumTopic,
+  ForumTopicStatus,
+  PostCardLabels,
+  PostCardProps,
+  PostComposerProps,
+  TopicBadgesLabels,
+  TopicCardLabels,
+  TopicCardProps,
+  TopicHeaderProps,
+  TopicListLabels,
+  TopicListProps,
+} from './components/community/Forum';
+export {
+  PostCard,
+  PostComposer,
+  TopicBadges,
+  TopicCard,
+  TopicHeader,
+  TopicList,
+} from './components/community/Forum';
+export type {
+  MentionCandidate,
+  MentionKeyAction,
+  MentionListLabels,
+  MentionListProps,
+  MentionQuery,
+} from './components/community/Mentions';
+export {
+  insertMention,
+  MentionList,
+  mentionKey,
+  mentionOptionId,
+  mentionQueryBeforeCaret,
+} from './components/community/Mentions';
+export type {
+  ModerationHistoryItem,
+  ModerationHistoryLabels,
+  ModerationHistoryProps,
+  ReportDialogLabels,
+  ReportDialogProps,
+  ReportedContentLabels,
+  ReportedContentProps,
+  ReportedTarget,
+  ReportInput,
+  ReportReason,
+} from './components/community/Moderation';
+export {
+  ModerationHistory,
+  REPORT_REASONS,
+  ReportDialog,
+  ReportedContent,
+} from './components/community/Moderation';
+export type {
+  NotificationBellLabels,
+  NotificationBellProps,
+  NotificationChannel,
+  NotificationEntry,
+  NotificationGroupPreference,
+  NotificationListLabels,
+  NotificationListProps,
+  NotificationPreferencesLabels,
+  NotificationPreferencesProps,
+} from './components/community/Notifications';
+export {
+  NotificationBell,
+  NotificationList,
+  NotificationPreferences,
+} from './components/community/Notifications';
+export type {
+  Reaction,
+  ReactionEmoji,
+  ReactionKey,
+  ReactionLabels,
+  ReactionsProps,
+} from './components/community/Reactions';
+export { REACTION_EMOJIS, REACTION_KEYS, Reactions } from './components/community/Reactions';
+export type {
+  ReportLinkDialogLabels,
+  ReportLinkDialogProps,
+  TicketComposerProps,
+  TicketConversationLabels,
+  TicketConversationProps,
+  TicketListLabels,
+  TicketListProps,
+  TicketMessage,
+  TicketStatus,
+  TicketStatusBadgeProps,
+  TicketSummary,
+} from './components/community/Support';
+export {
+  ReportLinkDialog,
+  TicketComposer,
+  TicketConversation,
+  TicketList,
+  TicketStatusBadge,
+} from './components/community/Support';
+export type {
+  CalendarDay,
+  EventJoinState,
+  EventStatus,
+  ZonedParts,
+} from './components/community/time';
+export {
+  addMonths,
+  buildMonthGrid,
+  civilWeekday,
+  EVENT_JOIN_WINDOW_MS,
+  eventJoinState,
+  eventStatus,
+  formatCivilDate,
+  formatMonthLabel,
+  todayKey,
+  toInstant,
+  weekdayLabels,
+  zonedDateKey,
+  zonedMonthKey,
+  zonedParts,
+} from './components/community/time';
 export { ICON_PATHS } from './components/core/iconPaths.js';
 // avisos e diálogos: Dialog, ConfirmDialog, Toast com provedor, Alert (TypeScript)
 export type { AlertProps, AlertTone } from './components/feedback/Alert';
