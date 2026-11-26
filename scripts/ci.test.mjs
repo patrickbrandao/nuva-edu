@@ -437,6 +437,49 @@ test('imagens: o estágio final dos backends sai sem npm e o dos sites aplica o 
   }
 });
 
+test('imagem do worker: Chromium headless shell e Inter no runtime, como root, sem lista do apt', () => {
+  // ADR 0026; spec 031, "Dockerfiles".
+  const dockerfile = read('apps/worker/Dockerfile');
+  const runtime = dockerfile.split(/^FROM /m).at(-1);
+  const lines = runtime
+    .replace(/\\\n\s*/g, '')
+    .split('\n')
+    .filter((line) => !line.startsWith('#'));
+  assert.ok(lines.includes('ENV PLAYWRIGHT_BROWSERS_PATH=/ms-playwright'));
+  const install = lines.find((line) => /playwright-core\/cli\.js install /.test(line));
+  assert.ok(install, 'falta instalar o Chromium');
+  // A CLI do `playwright-core` do lockfile, chamada pelo node (a imagem não tem npm nem npx).
+  assert.match(install, /^RUN --mount=type=bind,from=deps,source=\/app,target=\/deps /);
+  assert.match(
+    install,
+    / node \/deps\/apps\/worker\/node_modules\/playwright-core\/cli\.js install --with-deps --only-shell chromium /,
+  );
+  assert.doesNotMatch(install, /\bnpx\b|\bnpm\b/);
+  // O ffmpeg que o Playwright baixa junto só grava vídeo: não fica na imagem.
+  assert.match(install, / rm -rf \/ms-playwright\/ffmpeg-\* /);
+  // Fonte Inter do Debian (licença OFL-1.1 junto, em /usr/share/doc), no mesmo passo que apaga a
+  // lista do apt.
+  assert.match(install, /apt-get install -y --no-install-recommends fonts-inter-variable/);
+  assert.match(install, /apt-get upgrade -y/);
+  assert.match(install, /rm -rf \/var\/lib\/apt\/lists\/\* /);
+  assert.ok(install.indexOf('fc-cache') > install.indexOf('fonts-inter-variable'));
+  // Como root: antes da troca para o usuário sem privilégio.
+  assert.ok(lines.indexOf(install) < lines.indexOf('USER node'));
+  // Inter como fonte padrão no fontconfig, também para os nomes que o Chromium usa no Linux.
+  const conf = /^COPY <<'EOF' \/etc\/fonts\/local\.conf\n([\s\S]*?)\nEOF$/m.exec(runtime);
+  assert.ok(conf, 'falta o /etc/fonts/local.conf');
+  for (const family of ['Inter', 'Times New Roman', 'Arial', 'serif', 'sans-serif', 'system-ui']) {
+    assert.match(
+      conf[1],
+      new RegExp(
+        `<alias binding="same">\\s*<family>${family}</family>\\s*<prefer><family>Inter Variable</family></prefer>`,
+      ),
+      family,
+    );
+  }
+  assert.ok(runtime.indexOf('local.conf') < runtime.indexOf(install.slice(0, 40)));
+});
+
 test('security: push na main e semanal; audit, licenças e CodeQL', () => {
   assert.deepEqual(security.on.push, { branches: ['main'] });
   assert.equal(security.on.schedule.length, 1);

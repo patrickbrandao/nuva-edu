@@ -166,7 +166,7 @@ test('as aplicações seguem o padrão completo e os limites da spec', { skip },
     migrate: { memory: 256, nofile: 4096 },
     'admin-api': { memory: 384, nofile: 65536 },
     'classroom-api': { memory: 512, nofile: 65536 },
-    worker: { memory: 384, nofile: 4096 },
+    worker: { memory: 640, nofile: 4096 },
     admin: { memory: 64, nofile: 4096 },
     classroom: { memory: 64, nofile: 4096 },
   };
@@ -190,6 +190,18 @@ test('as aplicações seguem o padrão completo e os limites da spec', { skip },
     .map((name) => Number(services[name].deploy.resources.limits.memory))
     .reduce((sum, value) => sum + value, 0);
   assert.ok(total <= 3 * 1024 * MB, `soma dos limites de memória: ${total / MB} MB`);
+});
+
+test('worker: 640 MB por padrão e /tmp de 128 MB para o Chromium do certificado', { skip }, () => {
+  // Variável vazia no ambiente: vale o padrão do compose, não o do .env.
+  const { services } = config({ NUVA_WORKER_MEMORY: '' });
+  assert.equal(Number(services.worker.deploy.resources.limits.memory), 640 * MB);
+  assert.equal(services.worker.read_only, true);
+  assert.deepEqual(services.worker.tmpfs, ['/run', '/tmp:size=128m']);
+  // Só o worker abre um navegador; os demais seguem o tmpfs padrão.
+  for (const name of ['admin-api', 'classroom-api']) {
+    assert.deepEqual(services[name].tmpfs, ['/run', '/tmp'], name);
+  }
 });
 
 test('postgres, traefik e mailpit seguem o padrão completo e os limites da spec', { skip }, () => {

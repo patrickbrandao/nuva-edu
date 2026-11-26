@@ -34,9 +34,11 @@ services:
     networks:
       - internal
     read_only: true
+    # O Chromium do PDF do certificado guarda o perfil em /tmp e roda com --disable-dev-shm-usage,
+    # que também escreve ali; 128 MB bastam para um PDF por vez (spec 031, ADR 0026).
     tmpfs:
       - /run
-      - /tmp
+      - /tmp:size=128m
     cap_drop:
       - ALL
     security_opt:
@@ -49,7 +51,8 @@ services:
       resources:
         limits:
           cpus: "${NUVA_WORKER_CPUS:-1}"
-          memory: ${NUVA_WORKER_MEMORY:-384m}
+          # Node mais um Chromium renderizando um PDF por vez (spec 031, ADR 0026).
+          memory: ${NUVA_WORKER_MEMORY:-640m}
     healthcheck:
       test:
         - CMD

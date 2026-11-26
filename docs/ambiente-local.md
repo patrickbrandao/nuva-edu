@@ -111,7 +111,8 @@ O `docker-compose.yml` da raiz só inclui o compose de cada sistema.
 Todo contêiner (aplicações, `postgres`, `traefik`, `mailpit` e `oauth-mock`) roda com raiz somente leitura,
 `/run` e `/tmp` em tmpfs, sem capacidades (`cap_drop: ALL`, sem `cap_add`), `no-new-privileges`,
 `healthcheck`, limites de CPU e memória (`NUVA_<SERVICO>_CPUS` e `NUVA_<SERVICO>_MEMORY`) e
-`ulimits.nofile` (65536 no `postgres`, no `traefik` e nas APIs; 4096 nos demais). O teste
+`ulimits.nofile` (65536 no `postgres`, no `traefik` e nas APIs; 4096 nos demais). O worker tem
+`/tmp` de 128 MB, para o perfil do Chromium do certificado. O teste
 `scripts/compose.test.mjs` confere isso lendo o `docker compose config`.
 
 ## Volumes e a migração do nome
@@ -179,7 +180,8 @@ Navegador ausente ou de outra versão aparece no teste como
 `browserType.launch: Executable doesn't exist at .../chromium_headless_shell-NNNN/...`,
 seguido de "Looks like Playwright ... was just installed or updated". O número da pasta é a
 revisão do Chromium da versão do Playwright em uso; a correção é rodar `pnpm browsers:worker`.
-A imagem do worker traz o próprio navegador e não depende deste passo.
+A imagem do worker traz o próprio navegador e não depende deste passo
+([imagem-do-worker.md](imagem-do-worker.md)).
 
 ## Imagens
 

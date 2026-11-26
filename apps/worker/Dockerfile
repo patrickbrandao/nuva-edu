@@ -46,6 +46,61 @@ FROM ${NODE_IMAGE} AS runtime
 # onde o Trivy acusa as vulnerabilidades da base.
 RUN rm -rf /usr/local/lib/node_modules/npm /usr/local/lib/node_modules/corepack \
       /usr/local/bin/npm /usr/local/bin/npx /usr/local/bin/corepack
+
+# PDF do certificado (ADR 0026; spec 031, "Dockerfiles"): o Chromium headless shell na versão do
+# `playwright-core` do lockfile, com as bibliotecas de sistema dele. O `playwright-core` instalado
+# vem do estágio `deps` por montagem, sem ficar na camada: a camada só muda com o lockfile, não
+# com o código. A CLI roda com `node` (a imagem não tem npm). O ffmpeg que vem junto só grava
+# vídeo de teste e sai (é LGPL e não é usado). Fora o que o Playwright instala,
+# entram a fonte Inter (OFL-1.1; licença em /usr/share/doc/fonts-inter-variable/copyright) e as
+# correções dos pacotes da base (`apt-get upgrade`), para o Trivy não acusar o que já tem correção.
+# A lista do `apt` sai no mesmo passo. Licenças do Chromium: docs/imagem-do-worker.md.
+ENV PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
+# Inter é a fonte padrão: as famílias genéricas e as que o Chromium usa como padrão no Linux
+# (Times New Roman, Arial) resolvem para ela; "Inter" no CSS também. Outras fontes, só embutidas
+# no template por `data:`, e as que o Playwright instala servem de reserva (acentos, CJK, emoji).
+COPY <<'EOF' /etc/fonts/local.conf
+<?xml version="1.0"?>
+<!DOCTYPE fontconfig SYSTEM "urn:fontconfig:fonts.dtd">
+<fontconfig>
+  <alias binding="same">
+    <family>Inter</family>
+    <prefer><family>Inter Variable</family></prefer>
+  </alias>
+  <alias binding="same">
+    <family>Times New Roman</family>
+    <prefer><family>Inter Variable</family></prefer>
+  </alias>
+  <alias binding="same">
+    <family>Arial</family>
+    <prefer><family>Inter Variable</family></prefer>
+  </alias>
+  <alias binding="same">
+    <family>serif</family>
+    <prefer><family>Inter Variable</family></prefer>
+  </alias>
+  <alias binding="same">
+    <family>sans-serif</family>
+    <prefer><family>Inter Variable</family></prefer>
+  </alias>
+  <alias binding="same">
+    <family>system-ui</family>
+    <prefer><family>Inter Variable</family></prefer>
+  </alias>
+</fontconfig>
+EOF
+RUN --mount=type=bind,from=deps,source=/app,target=/deps \
+    export DEBIAN_FRONTEND=noninteractive \
+    && node /deps/apps/worker/node_modules/playwright-core/cli.js \
+         install --with-deps --only-shell chromium \
+    && rm -rf /ms-playwright/ffmpeg-* \
+    && apt-get install -y --no-install-recommends fonts-inter-variable \
+    && apt-get upgrade -y --no-install-recommends \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/* /var/cache/apt/* /var/log/apt /var/log/dpkg.log /tmp/* \
+    && fc-cache -f \
+    && fc-match -f '%{family[0]}\n' sans-serif | grep -qx 'Inter Variable'
+
 # PORT não é definida: dentro do contêiner a porta é sempre a padrão, 3000 (spec 031).
 ENV NODE_ENV=production
 COPY --from=build /app /app

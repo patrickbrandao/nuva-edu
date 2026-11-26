@@ -64,6 +64,9 @@ dessas entradas. Para a imagem não carregar vulnerabilidade da base que o servi
 - `admin-api`, `classroom-api` e `worker`: o estágio final remove o npm (e o corepack, quando a
   base o traz) de `node:26-slim`. Em execução só o `node` é chamado: serviço, healthcheck,
   `migrate` e `check-contract`.
+- `worker`: o mesmo passo que instala o Chromium e a fonte Inter roda `apt-get upgrade`, para as
+  correções do Debian entrarem a cada build. Tamanho e contagem do Trivy antes e depois do
+  Chromium: [imagem-do-worker.md](imagem-do-worker.md).
 - `admin` e `classroom`: o estágio final parte do `alpine` puro, roda `apk upgrade --no-cache`
   e instala o `lighttpd` do próprio Alpine (`apk add --no-cache lighttpd`). Não há imagem de
   servidor de terceiros: a correção de um pacote chega pelo repositório do Alpine.
