@@ -56,6 +56,7 @@ Regras:
 - Um usuário pode ter mais de uma assinatura ativa, desde que de planos diferentes; assinar duas vezes o mesmo plano é recusado.
 - Trocar de plano no MVP = cancelar o atual e assinar outro; não há cálculo proporcional.
 - Assinatura `pending` sem pagamento em 30 min vira `expired`.
+- O aluno pode cancelar a própria assinatura `pending` antes dos 30 min: ela vira `expired` e o mesmo plano pode ser assinado de novo.
 
 ### Ciclo de vida
 
@@ -74,7 +75,7 @@ pending ──> active ──> past_due ──> suspended ──> ended
 | `suspended` | carência vencida sem pagamento | não |
 | `canceling` | cancelada pelo aluno ou admin, período pago em curso | sim, até `current_period_end` |
 | `ended` | encerrada | não |
-| `expired` | nunca foi paga | não |
+| `expired` | nunca foi paga, inclusive a `pending` cancelada pelo aluno | não |
 
 Transições e efeitos:
 
@@ -85,7 +86,8 @@ Transições e efeitos:
 - **Fim da carência** (`past_due` → `suspended`): `revoke` de todos os direitos da assinatura com motivo `subscription_ended`; notifica. O worker verifica a cada 15 min.
 - **Pagamento após suspensão** (`suspended` → `active`): novo período a partir do pagamento; direitos concedidos de novo.
 - **Suspensa há 30 dias** (`suspended` → `ended`): cancela a recorrência no provedor.
-- **Cancelamento** (`active` ou `past_due` → `canceling`): cancela a recorrência no provedor na hora; o acesso segue até `current_period_end`, sem carência adicional; ao fim, `ended` e direitos expirados naturalmente pelo `expires_at`, ajustado no cancelamento para `current_period_end`.
+- **Cancelamento pelo aluno** (`pending` → `expired`; `active` ou `past_due` → `canceling`): em `pending`, cancela a adesão no provedor na hora e libera assinar o mesmo plano de novo, sem esperar os 30 min; em `active` ou `past_due`, cancela a recorrência no provedor na hora, e o acesso segue até `current_period_end`, sem carência adicional; ao fim, `ended` e direitos expirados naturalmente pelo `expires_at`, ajustado no cancelamento para `current_period_end`. Em `past_due`, o cancelamento encerra a carência. O aluno não cancela `suspended`.
+- **Cancelamento pelo admin** (`active` ou `past_due` → `canceling`; `suspended` → `ended`): mesma regra do aluno para as assinaturas em dia ou em carência; em `suspended`, encerra na hora e cancela a recorrência no provedor, sem esperar os 30 dias, com o motivo registrado na assinatura e na auditoria ([028](028-auditoria.md)).
 - Desfazer o cancelamento antes do fim do período não é oferecido no MVP: o aluno assina de novo.
 
 Como o `expires_at` do direito é sempre `current_period_end` + carência, o acesso cai sozinho mesmo que o worker esteja parado; o worker só confirma o estado ([010](010-direitos-de-acesso.md), RF-09).
@@ -106,8 +108,9 @@ Como o `expires_at` do direito é sempre `current_period_end` + carência, o ace
 ### Reembolso de cobrança
 
 - Só o admin, na tela da assinatura, por cobrança ([011](011-vendas-e-checkout.md), mesmo fluxo de `refunds`).
-- Reembolsar a cobrança do período em curso encerra a assinatura na hora (`ended`) e revoga os direitos com motivo `refund`.
-- Reembolsar cobrança de período passado não altera o estado atual.
+- Reembolsar **por inteiro** a cobrança do período em curso encerra a assinatura na hora (`ended`) e revoga os direitos com motivo `refund`.
+- Reembolso **parcial** da cobrança do período em curso devolve o valor e não altera o estado: a assinatura segue ativa até o fim do período pago.
+- Reembolsar cobrança de período passado não altera o estado atual, qualquer que seja o valor.
 
 ### Convivência com compra avulsa
 
@@ -124,6 +127,9 @@ Como o `expires_at` do direito é sempre `current_period_end` + carência, o ace
 | Cupom sem `subscriptions` em `applies_to` | `422` |
 | E-mail não confirmado | `403` |
 | Provedor indisponível | `503`; a assinatura não é criada |
+| Cancelar assinatura `canceling`, `ended` ou `expired`; aluno cancelando `suspended` | `409` |
+| Reembolsar cobrança que não está aprovada ou já reembolsada por inteiro | `409` |
+| Reembolso acima do saldo não reembolsado da cobrança | `422` |
 | Gerente tentando cancelar assinatura de aluno ou criar plano | `403` |
 
 ## Interfaces e contratos
@@ -161,11 +167,14 @@ Retenção: assinaturas e cobranças seguem o prazo fiscal de vendas ([011](011-
 - [ ] Cobrança recusada: acesso mantido por 3 dias; no quarto, assinatura `suspended` e acesso negado.
 - [ ] Com o worker parado, o acesso cai sozinho ao passar de `expires_at`.
 - [ ] Cancelar mantém o acesso até o fim do período pago e encerra depois.
+- [ ] Cancelar a assinatura `pending` a leva a `expired` e libera assinar o mesmo plano de novo.
+- [ ] Admin cancelando `suspended` encerra na hora e cancela a recorrência.
 - [ ] Curso comprado avulso continua acessível após o fim da assinatura que também o cobria.
 - [ ] Plano "tudo": publicar um curso novo libera-o aos assinantes ativos.
 - [ ] Cupom de assinatura reduz só a primeira cobrança.
 - [ ] Alterar o preço do plano não muda o valor das assinaturas existentes.
-- [ ] Reembolso da cobrança do período em curso encerra a assinatura e revoga o acesso.
+- [ ] Reembolso total da cobrança do período em curso encerra a assinatura e revoga o acesso.
+- [ ] Reembolso parcial da cobrança do período em curso devolve o valor sem alterar o estado.
 - [ ] Segunda assinatura do mesmo plano responde `409`.
 
 ## Fora de escopo
