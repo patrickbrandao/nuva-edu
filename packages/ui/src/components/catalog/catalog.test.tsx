@@ -1,3 +1,4 @@
+import { renderLegacyMarkdown, renderMarkdownToHtml } from '@nuva-edu/core/markdown';
 import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import { useState } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -5,6 +6,7 @@ import {
   Accordion,
   type LinkComponent,
   Markdown,
+  MarkdownPreview,
   ProductCard,
   ProductCardList,
   ProgressBar,
@@ -14,20 +16,46 @@ import {
   Tabs,
 } from '../../index';
 import { expectNoAxeViolations } from '../../test/axe';
+import markdownSource from './Markdown.tsx?raw';
 
 const tick = () =>
   act(async () => {
     await new Promise((resolve) => setTimeout(resolve, 0));
   });
 
+/**
+ * Assinatura estrutural (elementos, atributos e texto), indiferente a ordem e entidades. O
+ * contêiner do componente e os textos só para leitores de tela ficam de fora: eles são da
+ * exibição, não do HTML persistido.
+ */
+function structure(node: ParentNode): string[] {
+  return [...node.querySelectorAll('*')]
+    .filter((element) => !element.classList.contains('minui-sr-only'))
+    .filter((element) => !element.classList.contains('minui-markdown'))
+    .map((element) => {
+      const attributes = [...element.attributes]
+        .map((attribute) => `${attribute.name}=${attribute.value}`)
+        .sort()
+        .join(',');
+      const clone = element.cloneNode(true) as Element;
+      for (const hidden of clone.querySelectorAll('.minui-sr-only')) hidden.remove();
+      return `${element.tagName.toLowerCase()}[${attributes}]{${clone.textContent ?? ''}}`;
+    });
+}
+
+/** A mesma assinatura do HTML saneado, lido por um analisador independente do componente. */
+function structureOfHtml(html: string): string[] {
+  const document = new DOMParser().parseFromString(`<div>${html}</div>`, 'text/html');
+  return structure(document.body.firstElementChild ?? document.body);
+}
+
+const MARKDOWN_HTML =
+  'Texto com **negrito**, *itálico* e `código`.\n\n- um\n- dois\n\n1. primeiro\n\n> citação\n\n[site](https://example.com) e [e-mail](mailto:a@example.com)\n\n![foto](https://example.com/foto.png)';
+
 describe('Markdown', () => {
-  it('desenha os elementos permitidos', async () => {
+  it('desenha o HTML saneado devolvido pela API', async () => {
     const { container } = render(
-      <Markdown newTabLabel="(abre em nova aba)">
-        {
-          'Texto com **negrito**, *itálico* e `código`.\n\n- um\n- dois\n\n1. primeiro\n\n> citação\n\n[site](https://example.com) e [e-mail](mailto:a@example.com)'
-        }
-      </Markdown>,
+      <Markdown html={renderMarkdownToHtml(MARKDOWN_HTML)} newTabLabel="(abre em nova aba)" />,
     );
     expect(container.querySelector('strong')?.textContent).toBe('negrito');
     expect(container.querySelector('em')?.textContent).toBe('itálico');
@@ -38,54 +66,135 @@ describe('Markdown', () => {
     const link = screen.getByRole('link', { name: /site/ });
     expect(link.getAttribute('href')).toBe('https://example.com');
     expect(link.getAttribute('target')).toBe('_blank');
-    expect(link.getAttribute('rel')).toBe('noopener noreferrer');
+    expect(link.getAttribute('rel')).toBe('nofollow noopener noreferrer');
     expect(within(link).getByText(/abre em nova aba/)).toBeTruthy();
     expect(screen.getByRole('link', { name: /e-mail/ }).getAttribute('href')).toBe(
       'mailto:a@example.com',
     );
+    const image = container.querySelector('img');
+    expect(image?.getAttribute('src')).toBe('https://example.com/foto.png');
+    expect(image?.getAttribute('alt')).toBe('foto');
+    expect(image?.getAttribute('loading')).toBe('lazy');
+    expect(image?.getAttribute('referrerpolicy')).toBe('no-referrer');
     await expectNoAxeViolations(container);
   });
 
-  it('não interpreta HTML bruto: <script> e <img onerror> viram texto', () => {
-    const onerror = vi.fn();
-    (window as unknown as { pwned: () => void }).pwned = onerror;
-    const { container } = render(
-      <Markdown>
-        {
-          'antes <script>window.pwned()</script>\n\n<img src="x" onerror="window.pwned()">\n\n<b>negrito?</b>'
-        }
-      </Markdown>,
-    );
-    expect(container.querySelector('script')).toBeNull();
-    expect(container.querySelector('img')).toBeNull();
-    expect(container.querySelector('b')).toBeNull();
-    expect(container.querySelector('[onerror]')).toBeNull();
-    expect(container.textContent).toContain('<script>');
-    expect(container.textContent).toContain('<img');
-    expect(onerror).not.toHaveBeenCalled();
-  });
-
-  it('link javascript:, data: ou relativo não vira link', () => {
-    const { container } = render(
-      <Markdown>
-        {
-          '[a](javascript:alert(1)) [b](JaVaScRiPt:alert(1)) [c](data:text/html,oi) [d](/interno) <javascript:alert(1)>'
-        }
-      </Markdown>,
-    );
-    expect(container.querySelectorAll('a')).toHaveLength(0);
-    expect(container.querySelector('[href]')).toBeNull();
+  it('higieniza de novo o HTML recebido: cargas de XSS não viram elemento nem atributo', () => {
+    const pwned = vi.fn();
+    (window as unknown as { pwned: () => void }).pwned = pwned;
+    const tampered = [
+      '<p onclick="window.pwned()">clique</p>',
+      '<p><script>window.pwned()</script>fim</p>',
+      '<p><img src="https://x.test/i.png" alt="foto" onerror="window.pwned()" style="position:fixed"></p>',
+      '<p><a href="javascript:window.pwned()" rel="opener" target="_self">a</a></p>',
+      '<p><a href="data:text/html,<b>x</b>" rel="opener">b</a></p>',
+      '<p><iframe src="https://x.test"></iframe>fim</p>',
+      '<p><style>*{display:none}</style>fim</p>',
+      '<p><form action="https://x.test"><input value="x"></form>fim</p>',
+    ].join('');
+    const { container } = render(<Markdown html={tampered} />);
+    for (const selector of [
+      'script',
+      'iframe',
+      'style',
+      'form',
+      'input',
+      '[onclick]',
+      '[onerror]',
+      '[style]',
+      'a[href^="javascript:"]',
+      'a[href^="data:"]',
+    ]) {
+      expect(container.querySelector(selector), selector).toBeNull();
+    }
+    expect(container.textContent).toContain('clique');
+    expect(container.textContent).toContain('fim');
     expect(container.textContent).toContain('a');
+    expect(pwned).not.toHaveBeenCalled();
   });
 
-  it('elementos fora da lista são desembrulhados (fica o texto)', () => {
+  it('fixa os atributos do link mesmo quando o HTML traz outros', () => {
+    const href = 'https://ok.test/a?b=1&amp;c=2';
     const { container } = render(
-      <Markdown>{'# Título\n\n![foto](https://example.com/x.png)\n\n---\n\nfim'}</Markdown>,
+      <Markdown html={`<p><a href="${href}" rel="opener" target="_self" class="x">ok</a></p>`} />,
     );
-    expect(container.querySelector('h1')).toBeNull();
+    const link = screen.getByRole('link', { name: 'ok' });
+    expect(link.getAttribute('href')).toBe('https://ok.test/a?b=1&c=2');
+    expect(link.getAttribute('target')).toBe('_blank');
+    expect(link.getAttribute('rel')).toBe('nofollow noopener noreferrer');
+    expect(link.hasAttribute('class')).toBe(false);
+    expect(container.querySelectorAll('a')).toHaveLength(1);
+  });
+
+  it('imagem fora do https absoluto é descartada e o alt fica como texto', () => {
+    const { container } = render(
+      <Markdown
+        html={
+          '<p><img src="http://x.test/i.png" alt="foto"><img src="data:image/png,x" alt="dado"></p>'
+        }
+      />,
+    );
     expect(container.querySelector('img')).toBeNull();
-    expect(container.querySelector('hr')).toBeNull();
-    expect(container.textContent).toContain('Título');
+    expect(container.textContent).toContain('foto');
+    expect(container.textContent).toContain('dado');
+  });
+
+  it('imagem decorativa mantém alt vazio; sem alt usa o texto acessível do site', () => {
+    const { container } = render(
+      <Markdown html={'<p><img src="https://x.test/i.png" alt=""></p>'} />,
+    );
+    expect(container.querySelector('img')?.getAttribute('alt')).toBe('');
+
+    const missing = render(
+      <Markdown
+        html={'<p><img src="https://x.test/j.png"></p>'}
+        missingAltLabel="Imagem sem descrição"
+      />,
+    );
+    expect(missing.container.querySelector('img')?.getAttribute('alt')).toBe(
+      'Imagem sem descrição',
+    );
+    // sem o texto do site, nunca se usa o endereço como alternativa
+    const fallback = render(<Markdown html={'<p><img src="https://x.test/k.png"></p>'} />);
+    expect(fallback.container.querySelector('img')?.getAttribute('alt')).toBe('');
+  });
+
+  it('a prévia é idêntica ao HTML que a API persiste', () => {
+    const cases = [
+      '**negrito** _itálico_ `código`',
+      '[site](https://example.com/a?b=1&c=2) e [e-mail](mailto:a@example.com)',
+      '![foto](https://example.com/foto.png)',
+      '- a\n- b\n\n> citação\n\n```js\nx\n```',
+      '1. um\n2. dois',
+      'texto <script>alert(1)</script> fim',
+      '[x](javascript:alert(1)) ![i](http://x.test/i.png)',
+      MARKDOWN_HTML,
+    ];
+    for (const markdown of cases) {
+      const persisted = renderMarkdownToHtml(markdown);
+      const saved = render(<Markdown html={persisted} newTabLabel="(abre em nova aba)" />);
+      const preview = render(
+        <MarkdownPreview markdown={markdown} newTabLabel="(abre em nova aba)" />,
+      );
+      expect(preview.container.innerHTML, markdown).toBe(saved.container.innerHTML);
+      expect(structure(saved.container), markdown).toEqual(structureOfHtml(persisted));
+    }
+  });
+
+  it('o Markdown anterior à ADR é desenhado pelo módulo comum, sem imagem externa', async () => {
+    const markdown =
+      '**negrito** [a](https://x.test) `c`\n\n![foto](https://x.test/i.png)\n\n<b>html</b>';
+    const { container } = render(<Markdown newTabLabel="(abre em nova aba)">{markdown}</Markdown>);
+    expect(structure(container)).toEqual(structureOfHtml(renderLegacyMarkdown(markdown)));
+    expect(container.querySelector('img')).toBeNull();
+    expect(container.textContent).toContain('<b>html</b>');
+    expect(container.textContent).toContain('foto');
+    await expectNoAxeViolations(container);
+  });
+
+  it('não usa escrita direta de HTML no nó', () => {
+    expect(markdownSource).not.toContain('dangerouslySetInnerHTML');
+    expect(markdownSource).not.toContain('innerHTML');
   });
 
   it('safeMarkdownUrl aceita só https, http e mailto', () => {
@@ -101,6 +210,8 @@ describe('Markdown', () => {
   it('texto vazio não quebra', () => {
     const { container } = render(<Markdown>{null}</Markdown>);
     expect(container.textContent).toBe('');
+    const emptyHtml = render(<Markdown html="" />);
+    expect(emptyHtml.container.textContent).toBe('');
   });
 });
 

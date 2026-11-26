@@ -32,6 +32,7 @@ describe('ponto de entrada do pacote', () => {
       'ImagePicker',
       'Alert',
       'Markdown',
+      'MarkdownPreview',
       'SortableList',
       'Accordion',
       'Tabs',

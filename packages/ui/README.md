@@ -121,13 +121,21 @@ Cada componente também aceita `linkComponent`, que vale mais que o do provedor.
 
 ## Catálogo (TypeScript)
 
-Bibliotecas da ADR 0025. Nenhum texto fixo: tudo chega por props, já traduzido. Dentro das
-cascas usam `--adm-*`; fora delas caem nos `--minui-*`.
+Bibliotecas da ADR 0025; o Markdown segue a ADR 0027. Nenhum texto fixo: tudo chega por props, já
+traduzido. Dentro das cascas usam `--adm-*`; fora delas caem nos `--minui-*`.
 
-- `Markdown`: `react-markdown` sem `rehype-raw`. Só `p`, `strong`, `em`, listas, `a`, `code`,
-  `pre`, `blockquote` e `br` (`MARKDOWN_ELEMENTS`); o resto é desembrulhado. HTML bruto aparece
-  como texto. Link só `https`, `http` e `mailto` (`safeMarkdownUrl`), em outra aba com
-  `rel="noopener noreferrer"`; os demais viram texto comum. `newTabLabel` é lido depois do link.
+- `Markdown`: recebe o HTML saneado que a API persiste (`html`, o `body_html`), higieniza de novo
+  pela política do `@nuva-edu/core/markdown` e o converte em React com `rehype-parse` e
+  `hast-util-to-jsx-runtime`, sem escrever marcação direto no nó. Elementos: `p`, `strong`, `em`,
+  listas, `a`, `code`, `pre`, `blockquote`, `br` e `img` (`MARKDOWN_ELEMENTS`). Link só `https`,
+  `http` e `mailto` (`safeMarkdownUrl`), em outra aba com `rel="nofollow noopener noreferrer"`;
+  `newTabLabel` é lido depois do link. Imagem só `https` absoluto, com `alt` (vazio quando
+  decorativa), `loading="lazy"` e `referrerpolicy="no-referrer"`; sem `alt`, usa `missingAltLabel`
+  e nunca o endereço. `children` continua recebendo o Markdown anterior à ADR 0027 (sem imagem
+  externa e com o HTML escrito pela pessoa aparecendo como texto).
+- `MarkdownPreview`: prévia do editor pelo mesmo pipeline da gravação (`markdown`); prévia e
+  conteúdo salvo não podem divergir. `countMarkdownCharacters` e `MARKDOWN_BODY_MAX_LENGTH` vêm do
+  mesmo módulo para o contador do editor.
 - `SortableList`: `@dnd-kit/core` e `@dnd-kit/sortable`. Arrasta pela alça com mouse, toque e
   teclado (espaço pega, setas movem, espaço solta, Esc cancela); `onReorder` recebe a ordem
   inteira. `labels` (obrigatório) traz instruções, rótulo da alça e os anúncios com a posição.
@@ -137,6 +145,8 @@ cascas usam `--adm-*`; fora delas caem nos `--minui-*`.
   End; só o painel da aba selecionada é montado.
 - `ProgressBar`: `role="progressbar"` com `aria-valuenow` de 0 a 100 (`clampPercent`),
   `valueText` e `caption`.
+- O Markdown usa `rehype-parse`, `rehype-sanitize`, `hast-util-to-jsx-runtime` e `unified`
+  (todos MIT, versões fixas no `package.json`), além do módulo isomórfico do `@nuva-edu/core`.
 - `ProductCard` e `ProductCardList`: capa 16:9, título com link (o cartão inteiro é clicável),
   resumo, nível, totais, preço ou `freeLabel`, selo, validade (`meta`), progresso e `action`;
   `layout` `grid` ou `list`.

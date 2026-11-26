@@ -179,6 +179,11 @@ export { TAG_HUES, tagHue } from './components/snippets/GlowTag.jsx';
 export const SnippetCard = rawSnippetCard.SnippetCard as Loose<typeof rawSnippetCard.SnippetCard>;
 export const SnippetGrid = rawSnippetCard.SnippetGrid as Loose<typeof rawSnippetCard.SnippetGrid>;
 
+// limites do Markdown para o editor e a prévia (o mesmo módulo do núcleo)
+export {
+  countMarkdownCharacters,
+  MARKDOWN_BODY_MAX_LENGTH,
+} from '@nuva-edu/core/markdown';
 // cor de destaque da escola: as contas de contraste dos tokens --minui-accent-* (TypeScript)
 export type { AccentTheme } from './accent/accent';
 export {
@@ -192,11 +197,17 @@ export {
 // catálogo: Markdown restrito, lista reordenável, acordeão, abas, progresso e cartão (TypeScript)
 export type { AccordionItem, AccordionProps } from './components/catalog/Accordion';
 export { Accordion } from './components/catalog/Accordion';
-export type { MarkdownProps } from './components/catalog/Markdown';
+export type {
+  LegacyMarkdownElement,
+  MarkdownElement,
+  MarkdownPreviewProps,
+  MarkdownProps,
+} from './components/catalog/Markdown';
 export {
   MARKDOWN_ELEMENTS,
   MARKDOWN_PROTOCOLS,
   Markdown,
+  MarkdownPreview,
   safeMarkdownUrl,
 } from './components/catalog/Markdown';
 export type {

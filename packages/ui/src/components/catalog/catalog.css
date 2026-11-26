@@ -107,6 +107,15 @@
   color: var(--cat-ink-3);
 }
 
+/* Imagem externa da ADR 0027: nunca maior que a coluna e sem estourar a altura. */
+.minui-markdown img {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  margin: 0.5em 0;
+  border-radius: 8px;
+}
+
 /* =================== Lista reordenável =================== */
 .minui-sortable {
   display: grid;
