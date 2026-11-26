@@ -60,6 +60,7 @@
       "dashboard": "Painel",
       "students": "Alunos",
       "team": "Equipe",
+      "certificates": "Certificados",
       "courses": "Cursos",
       "ebooks": "Ebooks",
       "bundles": "Pacotes",
@@ -457,7 +458,19 @@
   "settings": {
     "subtitle": "Ajustes da escola.",
     "legal": "Documentos legais",
-    "legalText": "Versões dos Termos de Uso e da Política de Privacidade que o site do aluno exibe e pede para aceitar."
+    "legalText": "Versões dos Termos de Uso e da Política de Privacidade que o site do aluno exibe e pede para aceitar.",
+    "certificate": {
+      "title": "Certificado",
+      "text": "Quem assina os certificados da escola. O nome e o cargo entram no template pelas palavras-chave de assinatura.",
+      "loading": "Carregando as configurações do certificado…",
+      "errorTitle": "Não foi possível carregar as configurações do certificado",
+      "schoolName": "Nome da escola",
+      "schoolNameHint": "Definido na instalação. Só leitura aqui.",
+      "signerName": "Nome de quem assina",
+      "signerRole": "Cargo de quem assina",
+      "emptyHint": "Em branco, a palavra-chave fica vazia no certificado.",
+      "saved": "Configurações do certificado salvas."
+    }
   },
   "audit": {
     "subtitle": "Registro imutável das ações feitas no painel, no MCP, no site do aluno e pelo sistema.",
@@ -1238,6 +1251,126 @@
         "upTo99": "De 76% a 99%",
         "completed": "Concluíram"
       }
+    }
+  },
+  "certificates": {
+    "subtitle": "Certificados emitidos, com emissão manual, reemissão e revogação.",
+    "loading": "Carregando os certificados…",
+    "errorTitle": "Não foi possível carregar os certificados",
+    "loadMoreError": "Não foi possível carregar mais certificados.",
+    "empty": "Nenhum certificado emitido",
+    "emptyText": "Os certificados aparecem aqui quando os alunos concluem um curso com template.",
+    "emptyFiltered": "Nenhum certificado encontrado",
+    "emptyFilteredText": "Nenhum certificado atende aos filtros.",
+    "accountRemoved": "Titular removeu a conta",
+    "manual": "Emissão manual",
+    "preparing": "Em preparação",
+    "noPdf": "PDF indisponível",
+    "hours_one": "{{count}} hora",
+    "hours_other": "{{count}} horas",
+    "revokedOn": "Revogado em {{date}}",
+    "states": {
+      "preparing": "Em preparação",
+      "issued": "Emitido",
+      "revoked": "Revogado"
+    },
+    "columns": {
+      "student": "Aluno",
+      "course": "Curso",
+      "code": "Código",
+      "state": "Situação",
+      "issuedAt": "Emitido em",
+      "actions": "Ações"
+    },
+    "filters": {
+      "search": "Buscar pelo código",
+      "searchPlaceholder": "Código do certificado",
+      "searchButton": "Buscar",
+      "allStates": "Todas as situações",
+      "stateLabel": "Situação: {{value}}",
+      "course": "Curso: {{title}}",
+      "oneCourse": "Só um curso",
+      "removeCourse": "Remover o filtro de curso",
+      "student": "Aluno: {{name}}",
+      "oneStudent": "Só um aluno",
+      "removeStudent": "Remover o filtro de aluno",
+      "clear": "Limpar filtros"
+    },
+    "download": {
+      "open": "Baixar PDF",
+      "openOf": "Baixar o PDF do certificado {{code}}",
+      "busy": "Baixando…",
+      "preparing": "O PDF do certificado {{code}} ainda está em preparação. Tente de novo em instantes.",
+      "notFound": "O PDF do certificado {{code}} não está mais disponível.",
+      "failed": "Não foi possível baixar o PDF do certificado {{code}}."
+    },
+    "templateMissing": {
+      "title": "O curso não tem template de certificado",
+      "text": "“{{title}}” não tem template próprio e a escola não tem um template padrão. Sem template o certificado não é emitido.",
+      "link": "Abrir o template do curso"
+    },
+    "issue": {
+      "open": "Emitir certificado",
+      "title": "Emitir certificado manualmente",
+      "description": "Para um aluno que não concluiu o curso pelo sistema. A emissão fica na auditoria e o aluno recebe o certificado por e-mail.",
+      "student": "Aluno",
+      "studentSearch": "Buscar aluno por nome ou e-mail",
+      "studentPlaceholder": "Nome ou e-mail",
+      "studentResults": "Alunos encontrados",
+      "studentRequired": "Escolha o aluno.",
+      "studentChange": "Trocar o aluno",
+      "studentSearchError": "Não foi possível buscar os alunos",
+      "studentNoResults": "Nenhum aluno encontrado.",
+      "course": "Curso",
+      "courseSearch": "Buscar curso por título ou resumo",
+      "courseRequired": "Escolha o curso.",
+      "courseChange": "Trocar o curso",
+      "search": "Buscar",
+      "loading": "Buscando…",
+      "choose": "Escolher",
+      "chooseOf": "Escolher {{name}}",
+      "reason": "Motivo",
+      "reasonHint": "Obrigatório. Vai para a auditoria.",
+      "submit": "Emitir",
+      "busy": "Emitindo…",
+      "done": "Certificado {{code}} emitido para {{name}}. O PDF fica pronto em instantes."
+    },
+    "reissue": {
+      "open": "Reemitir",
+      "openOf": "Reemitir o certificado {{code}}",
+      "title": "Reemitir o certificado?",
+      "text": "O certificado passa a usar o nome atual do aluno e o template atual do curso. O código continua o mesmo e o PDF é gerado de novo.",
+      "busy": "Reemitindo…",
+      "done": "Certificado {{code}} reemitido. O PDF novo fica pronto em instantes."
+    },
+    "revoke": {
+      "open": "Revogar",
+      "openOf": "Revogar o certificado {{code}}",
+      "title": "Revogar o certificado {{code}}?",
+      "description": "A página pública de validação passa a mostrar “certificado revogado” e {{name}} deixa de baixar o PDF. O aluno é avisado.",
+      "reason": "Motivo",
+      "reasonHint": "Obrigatório. Vai para a auditoria; a página pública não mostra o motivo.",
+      "submit": "Revogar",
+      "busy": "Revogando…",
+      "done": "Certificado {{code}} revogado."
+    },
+    "restore": {
+      "open": "Desfazer revogação",
+      "openOf": "Desfazer a revogação do certificado {{code}}",
+      "title": "Desfazer a revogação?",
+      "text": "O certificado volta a valer na página pública de validação e o aluno volta a baixar o PDF.",
+      "submit": "Desfazer revogação",
+      "busy": "Restaurando…",
+      "done": "Revogação do certificado {{code}} desfeita."
+    },
+    "errors": {
+      "certificate_template_missing": "O curso não tem template de certificado, nem próprio nem o padrão da escola.",
+      "certificate_exists": "Este aluno já tem certificado deste curso.",
+      "certificate_already_revoked": "Este certificado já está revogado.",
+      "certificate_not_revoked": "Este certificado não está revogado.",
+      "certificate_preparing": "O PDF ainda está em preparação.",
+      "not_found": "Aluno, curso ou certificado não encontrado.",
+      "validation_failed": "Confira os campos e tente de novo."
     }
   }
 }

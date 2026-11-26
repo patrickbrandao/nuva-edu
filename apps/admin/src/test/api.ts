@@ -56,6 +56,7 @@ export const PERMISSIONS = {
     'badge.award',
     'ticket.handle',
     'progress.view',
+    'certificate.issue',
     'mcp_key.own',
   ],
   admin: [
@@ -96,6 +97,7 @@ export const PERMISSIONS = {
     'gamification.configure',
     'ticket.handle',
     'progress.view',
+    'certificate.issue',
     'certificate.revoke',
     'mcp_key.own',
     'mcp_key.manage_all',

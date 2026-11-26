@@ -1,6 +1,7 @@
 import {
   Activity,
   Award,
+  BadgeCheck,
   BookOpen,
   CalendarDays,
   Flag,
@@ -41,6 +42,7 @@ export type MenuItemId =
   | 'dashboard'
   | 'students'
   | 'team'
+  | 'certificates'
   | 'courses'
   | 'ebooks'
   | 'bundles'
@@ -95,6 +97,13 @@ export const MENU: readonly MenuGroup[] = [
         permission: 'users.view_private',
       },
       { id: 'team', path: '/equipe', icon: ShieldCheck, permission: 'staff.manage' },
+      // o instrutor vê os certificados dos próprios cursos (◐, spec 006 e 015)
+      {
+        id: 'certificates',
+        path: '/certificados',
+        icon: BadgeCheck,
+        permission: 'progress.view',
+      },
     ],
   },
   {

@@ -1,10 +1,11 @@
 import { AdminCard, AdminPageHeader, AdminSection, TextLink } from '@nuva-edu/ui';
 import { useTranslation } from 'react-i18next';
 import { TERMS_PATH } from '../api/terms';
+import { CertificateSettingsSection } from './certificates/CertificateSettingsSection';
 
 /**
- * Configurações (spec 006, mapa de telas). Nesta fase só há os termos (spec 030); escola e marca,
- * pagamento, login social e e-mail chegam com as próprias specs.
+ * Configurações (spec 006, mapa de telas): os termos (spec 030) e o signatário do certificado
+ * (spec 015); escola e marca, pagamento, login social e e-mail chegam com as próprias specs.
  */
 export function SettingsPage() {
   const { t } = useTranslation();
@@ -17,6 +18,7 @@ export function SettingsPage() {
           <span className="text-sm text-ink-3">{t('settings.legalText')}</span>
         </AdminCard>
       </AdminSection>
+      <CertificateSettingsSection />
     </>
   );
 }

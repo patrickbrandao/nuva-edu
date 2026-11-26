@@ -2,11 +2,13 @@ import { LoadingState } from '@nuva-edu/ui';
 import { lazy, type ReactNode, Suspense } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { RouteObject } from 'react-router';
+import { CERTIFICATES_PATH } from './api/certificates';
 import { COURSES_PATH } from './api/courses';
 import { BUNDLES_PATH, EBOOKS_PATH } from './api/products';
 import { TERMS_PATH } from './api/terms';
 import { AuditEntryPage } from './pages/audit/AuditEntryPage';
 import { AUDIT_PATH, AuditPage } from './pages/audit/AuditPage';
+import { CertificatesPage } from './pages/certificates/CertificatesPage';
 import { CoursesPage } from './pages/courses/CoursesPage';
 import { HomePage } from './pages/HomePage';
 import { LoginPage } from './pages/LoginPage';
@@ -69,6 +71,7 @@ const PAGES: Partial<Record<MenuItemId, RouteObject[]>> = {
     { path: `${STUDENTS_PATH}/:id`, element: <UserDetailPage /> },
   ],
   team: [{ path: '/equipe', element: <TeamPage /> }],
+  certificates: [{ path: CERTIFICATES_PATH, element: <CertificatesPage /> }],
   courses: [
     { path: COURSES_PATH, element: <CoursesPage /> },
     { path: `${COURSES_PATH}/:id`, element: onDemand(<CourseEditorPage />) },
