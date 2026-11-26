@@ -370,6 +370,17 @@ export interface ForumTopics {
   updatedAt: Generated<Timestamp>;
 }
 
+export interface IdempotencyKeys {
+  completedAt: Timestamp | null;
+  createdAt: Generated<Timestamp>;
+  key: string;
+  requestHash: string;
+  responseBody: Json | null;
+  responseStatus: number | null;
+  scope: string;
+  userId: string;
+}
+
 export interface Images {
   createdAt: Generated<Timestamp>;
   hiddenAt: Timestamp | null;
@@ -841,6 +852,7 @@ export interface DB {
   forumPosts: ForumPosts;
   forumTopicFollows: ForumTopicFollows;
   forumTopics: ForumTopics;
+  idempotencyKeys: IdempotencyKeys;
   images: Images;
   imageVariants: ImageVariants;
   jobs: Jobs;
