@@ -13,7 +13,10 @@ export type AdminClient = Client<paths>;
 export type AdminSession = components['schemas']['Session'];
 export type AdminAuthProvider = components['schemas']['AuthProvider'];
 export type AdminOAuthStartQuery = NonNullable<operations['startOAuth']['parameters']['query']>;
-/** Finalidade de imagem do admin (`product_cover`); difere da `ImagePurpose` da classroom-api. */
+/**
+ * Finalidade de imagem do admin (`product_cover` ou `school_logo`); difere da `ImagePurpose` da
+ * classroom-api.
+ */
 export type AdminImagePurpose = components['schemas']['ImagePurpose'];
 
 /** Cliente da admin-api (`apps/admin-api/openapi.yaml`), para o site admin. */
@@ -35,8 +38,9 @@ export function adminOAuthStartUrl(
 
 /**
  * Envia uma imagem do admin (`uploadImage`, `POST /api/v1/images`) em `multipart/form-data`,
- * como a capa de um produto. Mesmo formato do `uploadImage` do classroom: recebe o `File`/`Blob`
- * e monta o `FormData`; o `Content-Type`, com o `boundary`, fica por conta do `fetch`.
+ * como a capa de um produto ou o logotipo da escola. Mesmo formato do `uploadImage` do classroom:
+ * recebe o `File`/`Blob` e monta o `FormData`; o `Content-Type`, com o `boundary`, fica por conta
+ * do `fetch`.
  */
 export function uploadAdminImage(
   client: AdminClient,

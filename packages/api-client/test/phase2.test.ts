@@ -14,8 +14,13 @@ const BASE_URL = 'http://api.test';
 
 describe('tipos da Fase 2', () => {
   it('o admin tem finalidade de imagem própria, diferente da classroom', () => {
-    expectTypeOf<AdminImagePurpose>().toEqualTypeOf<'product_cover'>();
+    expectTypeOf<AdminImagePurpose>().toEqualTypeOf<'product_cover' | 'school_logo'>();
     expectTypeOf<AdminImagePurpose>().not.toEqualTypeOf<ImagePurpose>();
+  });
+
+  it('aceita `school_logo` como finalidade do admin (janela 705)', () => {
+    const purpose: AdminImagePurpose = 'school_logo';
+    expect(purpose).toBe('school_logo');
   });
 
   it('o programa da vitrine não expõe URL de conteúdo', () => {

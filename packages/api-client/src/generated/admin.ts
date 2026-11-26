@@ -1306,10 +1306,17 @@ export interface paths {
         /**
          * Envio de imagem
          * @description Recebe uma imagem em `multipart/form-data` (`specs/029-imagens.md`, "Fluxo de envio"):
-         *     `purpose` primeiro, depois `file` (um arquivo só). No admin a única finalidade é
-         *     `product_cover` (16:9, variantes 480 e 1280), de `instructor`, `manager` e `admin`. A imagem
-         *     passa a ter referência quando vira capa (`coverImageId` de curso, ebook ou pacote); sem
-         *     referência, o expurgo a apaga em 24 h.
+         *     `purpose` primeiro, depois `file` (um arquivo só). No admin há duas finalidades:
+         *     `product_cover` (16:9, cortada, variantes 480 e 1280), de `instructor`, `manager` e `admin`,
+         *     e `school_logo` (proporção original, sem corte, variantes 64, 256 e 512), só do `admin`. A
+         *     imagem passa a ter referência quando vira capa (`coverImageId` de curso, ebook ou pacote)
+         *     ou o logotipo da escola (`settings` `school.logo_image_id`, gravado por
+         *     `PUT /api/v1/settings/branding`); sem referência, o expurgo a apaga em 24 h.
+         *
+         *     Nas finalidades de proporção original a imagem não é cortada: o nome da variante é o
+         *     maior lado do arquivo gerado, então `width` é o nome e `height` a altura real. Nenhuma
+         *     variante gravada passa de 1600 px no maior lado nem de 400 KB (RNF-03). O `logoUrl` do
+         *     `/meta` e a marca dos e-mails usam a variante de 256.
          *
          *     - Campo a mais, segundo arquivo ou `purpose` ausente: `400` `validation_failed`.
          *     - Corpo acima de 5 MB: `413` `payload_too_large`. Tipo que não é JPEG, PNG nem WebP: `415`
@@ -2676,7 +2683,13 @@ export interface paths {
          * @description Grava os quatro campos juntos (`specs/024-notificacoes-e-email.md`): nome, logotipo, cor
          *     de destaque e rodapé. O rodapé tem até 500 caracteres e aceita quebras de linha; nulo
          *     remove. Nome e cor passam pelas mesmas validações do `/meta`; valor inválido é
-         *     `400 validation_failed` com o campo em `errors[]`. A ação grava auditoria.
+         *     `400 validation_failed` com o campo em `errors[]`.
+         *
+         *     O logotipo é enviado antes por `POST /api/v1/images` com `purpose` `school_logo`, e
+         *     `logoImageId` é o identificador devolvido, não o caminho; o `logoUrl` da leitura aponta
+         *     para a variante de 256. `logoImageId` precisa ser uma imagem existente, não oculta e de
+         *     finalidade `school_logo` (ou nulo): outro valor é `422` `image_purpose_mismatch` e nada é
+         *     gravado. A ação grava auditoria.
          */
         put: operations["saveBranding"];
         post?: never;
@@ -2968,7 +2981,8 @@ export interface components {
          */
         TermsDocument: "terms" | "privacy";
         /**
-         * @description Largura de uma variante de imagem, em pixels (`specs/029-imagens.md`).
+         * @description Nome da variante na URL (`specs/029-imagens.md`): a largura do arquivo gerado nas
+         *     finalidades com corte e o maior lado nas de proporção original.
          * @enum {integer}
          */
         ImageVariantWidth: 64 | 256 | 480 | 512 | 1280 | 1600;
@@ -3222,13 +3236,24 @@ export interface components {
          */
         Slug: string;
         /**
-         * @description Finalidade da imagem enviada pelo admin (`specs/029-imagens.md`). Na Fase 2 só existe
-         *     `product_cover`.
+         * @description Finalidade da imagem enviada pelo admin (`specs/029-imagens.md`). `product_cover` é a capa
+         *     de curso, ebook e pacote, de `instructor`, `manager` e `admin`; `school_logo` é o logotipo
+         *     da escola, só do `admin`, enviado antes de `PUT /api/v1/settings/branding`.
          * @enum {string}
          */
-        ImagePurpose: "product_cover";
+        ImagePurpose: "product_cover" | "school_logo";
+        /**
+         * @description Uma variante gerada da imagem enviada. `width` é o nome da variante — a largura nas
+         *     finalidades com corte e o maior lado do arquivo gerado nas de proporção original —, e
+         *     `height` é a altura real gravada.
+         */
         ImageVariantInfo: {
             width: components["schemas"]["ImageVariantWidth"];
+            /**
+             * @description Altura real do arquivo gerado. Na variante retrato de finalidade de proporção
+             *     original, a largura real não é gravada: sai da proporção de `width`/`height` da
+             *     imagem enviada.
+             */
             height: number;
             /**
              * Format: uri-reference
@@ -9942,6 +9967,7 @@ export interface operations {
             403: components["responses"]["Forbidden"];
             413: components["responses"]["PayloadTooLarge"];
             415: components["responses"]["UnsupportedMediaType"];
+            422: components["responses"]["UnprocessableEntity"];
             429: components["responses"]["TooManyRequests"];
             500: components["responses"]["InternalError"];
             503: components["responses"]["ServiceUnavailable"];

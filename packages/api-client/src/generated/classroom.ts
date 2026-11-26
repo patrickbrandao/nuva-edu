@@ -2074,7 +2074,8 @@ export interface components {
          */
         TermsDocument: "terms" | "privacy";
         /**
-         * @description Largura de uma variante de imagem, em pixels (`specs/029-imagens.md`).
+         * @description Nome da variante na URL (`specs/029-imagens.md`): a largura do arquivo gerado nas
+         *     finalidades com corte e o maior lado nas de proporção original.
          * @enum {integer}
          */
         ImageVariantWidth: 64 | 256 | 480 | 512 | 1280 | 1600;
