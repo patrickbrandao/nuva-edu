@@ -432,6 +432,29 @@ export interface Payments {
   updatedAt: Generated<Timestamp>;
 }
 
+export interface PlanItems {
+  planId: string;
+  productId: string;
+  productType: string;
+}
+
+export interface Plans {
+  active: Generated<boolean>;
+  createdAt: Generated<Timestamp>;
+  description: string | null;
+  groupKey: string;
+  id: Generated<string>;
+  includesAll: Generated<boolean>;
+  includesPrivate: Generated<boolean>;
+  interval: string;
+  position: Generated<number>;
+  priceCents: Int8;
+  providerPlanId: string | null;
+  slug: string;
+  title: string;
+  updatedAt: Generated<Timestamp>;
+}
+
 export interface ProductEbooks {
   createdAt: Generated<Timestamp>;
   ebookId: string;
@@ -481,6 +504,26 @@ export interface Settings {
   key: string;
   updatedAt: Generated<Timestamp>;
   value: Json;
+}
+
+export interface Subscriptions {
+  canceledAt: Timestamp | null;
+  cancelReason: string | null;
+  couponId: string | null;
+  createdAt: Generated<Timestamp>;
+  currency: string;
+  currentPeriodEnd: Timestamp | null;
+  currentPeriodStart: Timestamp | null;
+  endedAt: Timestamp | null;
+  graceUntil: Timestamp | null;
+  id: Generated<string>;
+  planId: string;
+  priceCents: Int8;
+  provider: string;
+  providerSubscriptionId: string | null;
+  status: Generated<string>;
+  updatedAt: Generated<Timestamp>;
+  userId: string;
 }
 
 export interface TermsAcceptances {
@@ -589,11 +632,14 @@ export interface DB {
   orderItems: OrderItems;
   orders: Orders;
   payments: Payments;
+  planItems: PlanItems;
+  plans: Plans;
   productEbooks: ProductEbooks;
   profiles: Profiles;
   refunds: Refunds;
   sessions: Sessions;
   settings: Settings;
+  subscriptions: Subscriptions;
   termsAcceptances: TermsAcceptances;
   termsVersions: TermsVersions;
   userDevices: UserDevices;
