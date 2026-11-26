@@ -13,7 +13,7 @@ const skip = hasCompose ? false : 'docker compose indisponível';
 
 const APPS = ['admin-api', 'classroom-api', 'worker', 'admin', 'classroom'];
 const MB = 1024 * 1024;
-const PROFILES = ['traefik', 'mailpit', 'oauth-mock'];
+const PROFILES = ['traefik', 'mailpit', 'oauth-mock', 'payment-fake'];
 
 /** Segredos exigidos (spec 031, "Segredos exigidos"), com valores só do teste. */
 const SECRETS = {
@@ -521,9 +521,8 @@ const published = (services) =>
     .sort();
 
 test('sem o arquivo de desenvolvimento, o Postgres não publica porta', { skip }, () => {
-  // Com os perfis do desenvolvimento, só o proxy e a tela do Mailpit publicam (o simulador entra
-  // pelo proxy).
-  assert.deepEqual(published(config().services), ['mailpit', 'traefik']);
+  // Em desenvolvimento, o controle do fake de pagamentos também publica em loopback.
+  assert.deepEqual(published(config().services), ['mailpit', 'payment-fake', 'traefik']);
   // Como no servidor de testes: sem perfil, com o Traefik que já existe lá.
   const result = spawnSync(
     'docker',
@@ -554,7 +553,7 @@ test('com o docker-compose.dev.yml, o Postgres publica só em 127.0.0.1', { skip
   assert.equal(result.status, 0, result.stderr);
   const { name, services } = JSON.parse(result.stdout);
   assert.equal(name, 'nuva-edu');
-  assert.deepEqual(published(services), ['mailpit', 'postgres', 'traefik']);
+  assert.deepEqual(published(services), ['mailpit', 'payment-fake', 'postgres', 'traefik']);
   assert.equal(services.postgres.ports.length, 1);
   const [port] = services.postgres.ports;
   assert.equal(port.host_ip, '127.0.0.1');
@@ -606,4 +605,26 @@ test('volumes nomeados com o prefixo do projeto; o do banco é o que a migraçã
   }
   assert.equal(postgresVolume, 'nuva-edu-postgres-data');
   assert.equal(volumes.traefik_letsencrypt.name, 'nuva-edu-traefik-acme');
+});
+
+test('fake de pagamentos usa a rede interna e publica o controle só no loopback', { skip }, () => {
+  const env = {
+    NUVA_PAYMENT_PROVIDER: 'fake',
+    NUVA_PAYMENT_FAKE_URL: 'http://payment-fake:8092',
+    PAYMENT_FAKE_PORT: '18092',
+  };
+  const { services } = config(env);
+  assert.deepEqual(services['payment-fake'].profiles, ['payment-fake']);
+  assert.deepEqual(Object.keys(services['payment-fake'].networks), ['internal']);
+  assert.equal(services['payment-fake'].ports[0].host_ip, '127.0.0.1');
+  assert.equal(services['payment-fake'].ports[0].published, '18092');
+  for (const name of ['admin-api', 'classroom-api', 'worker']) {
+    assert.equal(services[name].environment.NUVA_PAYMENT_PROVIDER, 'fake');
+    assert.equal(services[name].environment.NUVA_PAYMENT_FAKE_URL, env.NUVA_PAYMENT_FAKE_URL);
+  }
+  const prod = config().services;
+  for (const name of ['admin-api', 'classroom-api', 'worker']) {
+    assert.equal(prod[name].environment.NUVA_PAYMENT_PROVIDER, 'mercadopago');
+    assert.equal(prod[name].environment.NUVA_PAYMENT_FAKE_URL, '');
+  }
 });

@@ -1,0 +1,43 @@
+services:
+  payment-fake:
+    image: node:26-slim
+    profiles: [payment-fake]
+    command: ["node", "/app/scripts/payment-fake/server.mjs"]
+    user: "1000:1000"
+    read_only: true
+    tmpfs: [/run, /tmp]
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    networks: [internal]
+    ports:
+      - "127.0.0.1:${PAYMENT_FAKE_PORT:-8092}:8092"
+    environment:
+      NUVA_ENV: ${NUVA_ENV:-development}
+      NUVA_CURRENCY: ${NUVA_CURRENCY:-BRL}
+      PAYMENT_FAKE_PUBLIC_URL: http://127.0.0.1:${PAYMENT_FAKE_PORT:-8092}
+    volumes:
+      - .:/app/scripts/payment-fake:ro
+      - ../../packages/core/src:/app/packages/core/src:ro
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://127.0.0.1:8092/healthz').then(r => process.exit(r.ok ? 0 : 1), () => process.exit(1))",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+      start_interval: 2s
+    ulimits:
+      nofile: { soft: 4096, hard: 4096 }
+    deploy:
+      resources:
+        limits: { cpus: "0.25", memory: 128m }
+    logging:
+      driver: json-file
+      options:
+        max-size: ${NUVA_LOG_MAX_SIZE:-10m}
+        max-file: "${NUVA_LOG_MAX_FILE:-5}"

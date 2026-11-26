@@ -29,6 +29,8 @@ services:
       # desenvolvimento e no CI; vazios, o simulador fica desligado (servidor e produção).
       NUVA_OAUTH_MOCK_URL: ${NUVA_OAUTH_MOCK_URL:-}
       NUVA_OAUTH_MOCK_INTERNAL_URL: ${NUVA_OAUTH_MOCK_INTERNAL_URL:-}
+      NUVA_PAYMENT_PROVIDER: ${NUVA_PAYMENT_PROVIDER:-mercadopago}
+      NUVA_PAYMENT_FAKE_URL: ${NUVA_PAYMENT_FAKE_URL:-}
     depends_on:
       postgres:
         condition: service_healthy

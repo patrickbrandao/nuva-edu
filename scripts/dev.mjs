@@ -88,6 +88,22 @@ export function oauthMockEnv(env = {}, defined = {}) {
   return extra;
 }
 
+export const PAYMENT_FAKE_INTERNAL_URL = 'http://payment-fake:8092';
+
+export function paymentFakeEnv(env = {}, defined = {}) {
+  if (
+    (env.NUVA_DOMAIN || 'localhost').trim().toLowerCase() !== 'localhost' ||
+    env.NUVA_ENV === 'production' ||
+    (env.NUVA_PAYMENT_PROVIDER && env.NUVA_PAYMENT_PROVIDER !== 'fake')
+  ) {
+    return {};
+  }
+  return {
+    NUVA_PAYMENT_PROVIDER: 'fake',
+    NUVA_PAYMENT_FAKE_URL: defined.NUVA_PAYMENT_FAKE_URL ?? PAYMENT_FAKE_INTERNAL_URL,
+  };
+}
+
 function readEnvFile(path) {
   return existsSync(path) ? parseEnv(readFileSync(path, 'utf8')) : {};
 }
@@ -96,12 +112,17 @@ function readEnvFile(path) {
  * Argumentos do `docker compose` para cada comando. Devolve `null` quando o comando não existe.
  * Sem `.env.local` o Compose ainda roda e falha citando a variável que falta (`${VAR:?}`).
  */
-export function composeArgs(command, extra = [], { hasLocal = true, publish = false } = {}) {
+export function composeArgs(
+  command,
+  extra = [],
+  { hasLocal = true, publish = false, paymentFake = false } = {},
+) {
   // Quem passa `-f` por conta própria escolhe os arquivos; aí o de desenvolvimento não entra.
   const ownFiles = extra.some((arg) => /^(-f|--file)(=|$)/.test(arg));
   const files = publish && !ownFiles ? DEV_COMPOSE_FILES.flatMap((file) => ['-f', file]) : [];
   const base = [...envFileArgs(hasLocal), ...files];
-  const profiles = DEV_PROFILES.flatMap((profile) => ['--profile', profile]);
+  const enabledProfiles = paymentFake ? [...DEV_PROFILES, 'payment-fake'] : DEV_PROFILES;
+  const profiles = enabledProfiles.flatMap((profile) => ['--profile', profile]);
   switch (command) {
     case 'compose':
       return [...base, ...extra];
@@ -138,10 +159,13 @@ function main(argv) {
     console.error(error.message);
     return 1;
   }
-  const env = { ...process.env, ...oauthMockEnv(merged, { ...local, ...process.env }) };
+  const defined = { ...local, ...process.env };
+  const payment = paymentFakeEnv(merged, defined);
+  const env = { ...process.env, ...oauthMockEnv(merged, defined), ...payment };
   const args = composeArgs(command, extra, {
     hasLocal: existsSync(join(root, '.env.local')),
     publish,
+    paymentFake: payment.NUVA_PAYMENT_FAKE_URL === PAYMENT_FAKE_INTERNAL_URL,
   });
   if (args === null || (command === 'compose' && extra.length === 0)) {
     console.error(USAGE);

@@ -26,6 +26,8 @@ services:
       POSTGRES_DB: ${POSTGRES_DB:-nuva_edu}
       POSTGRES_USER: ${POSTGRES_USER:-nuva_edu}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?defina POSTGRES_PASSWORD em .env.local}
+      NUVA_PAYMENT_PROVIDER: ${NUVA_PAYMENT_PROVIDER:-mercadopago}
+      NUVA_PAYMENT_FAKE_URL: ${NUVA_PAYMENT_FAKE_URL:-}
     depends_on:
       postgres:
         condition: service_healthy

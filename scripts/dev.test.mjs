@@ -9,6 +9,8 @@ import {
   envFileArgs,
   mergeEnv,
   oauthMockEnv,
+  PAYMENT_FAKE_INTERNAL_URL,
+  paymentFakeEnv,
   publishPostgres,
   volumeMigrateArgs,
 } from './dev.mjs';
@@ -215,4 +217,17 @@ test('dev:up não sobe nada quando a migração de volume falha', () => {
   assert.notEqual(result.status, 0);
   assert.ok(!result.log.some((line) => / up /.test(line)), result.log.join('\n'));
   assert.match(result.stderr, /migração de volume falhou/);
+});
+
+test('pagamentos locais ativam a instância compartilhada e habilitam seu perfil', () => {
+  assert.deepEqual(paymentFakeEnv(), {
+    NUVA_PAYMENT_PROVIDER: 'fake',
+    NUVA_PAYMENT_FAKE_URL: PAYMENT_FAKE_INTERNAL_URL,
+  });
+  const args = composeArgs('up', [], { paymentFake: true });
+  assert.ok(args.includes('payment-fake'));
+  assert.deepEqual(paymentFakeEnv({ NUVA_DOMAIN: 'escola.example' }), {});
+  assert.deepEqual(paymentFakeEnv({ NUVA_ENV: 'production' }), {});
+  assert.deepEqual(paymentFakeEnv({ NUVA_PAYMENT_PROVIDER: 'mercadopago' }), {});
+  assert.equal(paymentFakeEnv({}, { NUVA_PAYMENT_FAKE_URL: '' }).NUVA_PAYMENT_FAKE_URL, '');
 });

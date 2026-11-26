@@ -7,6 +7,7 @@ Detalhe das decisões em `specs/decisions/`.
 
 ### Adicionado
 - core: o registro da fila exige os manipuladores de pagamentos e pedidos já integrados ao worker (spec 005, task 566).
+- infra: desenvolvimento e e2e usam um simulador de pagamentos compartilhado, com controle publicado só em loopback (spec 013, task 565).
 - worker: os testes de certificados verificam a notificação gerada pela emissão e sua unicidade (spec 024, task 728).
 - classroom: o teste de navegação aguarda o menu e a trilha refletirem a rota exibida (spec 006, task 727).
 - core: a configuração seleciona o adaptador real de Mercado Pago e pode conectar APIs e worker ao mesmo simulador HTTP em desenvolvimento e teste (spec 013, task 725).

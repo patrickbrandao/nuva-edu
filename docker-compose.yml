@@ -9,6 +9,7 @@
 #   traefik     proxy reverso próprio (desligue onde já existe um Traefik e aponte TRAEFIK_NETWORK para a rede dele)
 #   mailpit     captura de e-mail para desenvolvimento
 #   oauth-mock  provedor OAuth simulado (Google, Facebook e Apple), só desenvolvimento e e2e
+#   payment-fake  pagamentos simulados para desenvolvimento e e2e
 
 name: nuva-edu
 
@@ -17,6 +18,7 @@ include:
   - path: proxy/traefik/docker-compose.yml
   - path: mail/mailpit/docker-compose.yml
   - path: scripts/oauth-mock/docker-compose.yml
+  - path: scripts/payment-fake/docker-compose.yml
   - path: apps/admin-api/docker-compose.yml
   - path: apps/classroom-api/docker-compose.yml
   - path: apps/worker/docker-compose.yml
