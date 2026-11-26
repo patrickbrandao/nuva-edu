@@ -2126,6 +2126,238 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/plans": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Listar planos
+         * @description Planos da escola, por `position` e depois pelo título (`specs/012-assinaturas.md`,
+         *     "Planos"). Só o `admin` (`plan.manage`); `manager` e `instructor` recebem `403`
+         *     `permission_denied`. Busca por título ou slug, filtros por situação, periodicidade e
+         *     `groupKey`. Cada plano traz os itens que libera e quantas assinaturas tem.
+         *
+         *     `subscriptionCount` conta todas as assinaturas do plano, inclusive `ended` e `expired`:
+         *     é o vínculo que impede excluir o plano, por isso ele só é desativado (`active: false`).
+         */
+        get: operations["listPlans"];
+        put?: never;
+        /**
+         * Criar plano
+         * @description Cria um plano de assinatura (`specs/012-assinaturas.md`, "Planos"). Só o `admin`
+         *     (`plan.manage`); `manager` e `instructor` recebem `403` `permission_denied`. A ação é
+         *     registrada na auditoria (`specs/028-auditoria.md`).
+         *
+         *     `groupKey` agrupa as periodicidades do mesmo conteúdo na vitrine: os planos mensal e
+         *     anual do mesmo conteúdo usam a mesma chave, e `(groupKey, interval)` é única — repetida:
+         *     `409 plan_group_conflict`. `slug` é o identificador público e, quando ausente, é gerado de
+         *     `groupKey` e `interval`; repetido: `409 plan_slug_taken`. `slug`, `groupKey` e `interval`
+         *     não mudam depois da criação.
+         *
+         *     `includesAll` verdadeiro libera todo produto publicado `paid` ou `open`, atual e futuro,
+         *     e exige `items` vazia; `includesPrivate` só é aceito junto de `includesAll`. Violação:
+         *     `422 plan_invalid`. Item com produto inexistente, tipo que não seja curso, pacote ou
+         *     ebook, ou repetido: `422 plan_item_invalid`. `items` vazia com `includesAll` falso é
+         *     aceita: o admin pode completar a lista antes de ativar o plano.
+         *
+         *     A criação não depende do provedor (`specs/013-pagamentos-mercado-pago.md`, "Interface
+         *     `PaymentProvider`"): o plano é gravado e o `ensurePlan` roda em segundo plano, então
+         *     `providerPlanId` vem `null` até o provedor devolver o identificador. Provedor fora do ar
+         *     não impede criar nem editar plano.
+         */
+        post: operations["createPlan"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/plans/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Um plano
+         * @description O plano com os itens e a contagem de assinaturas (`specs/012-assinaturas.md`). Só o
+         *     `admin` (`plan.manage`); inexistente: `404 not_found`.
+         */
+        get: operations["getPlan"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Editar ou desativar plano
+         * @description Edição parcial (`specs/012-assinaturas.md`, "Planos"): só os campos enviados mudam. Só o
+         *     `admin` (`plan.manage`); a ação é registrada na auditoria (`specs/028-auditoria.md`).
+         *     `slug`, `groupKey` e `interval` não mudam depois da criação: outro conteúdo ou outra
+         *     periodicidade é um plano novo. Desativar é `active: false`; não há exclusão.
+         *
+         *     Mudar `priceCents` vale para novas assinaturas, e as existentes mantêm o preço contratado
+         *     (o `priceCents` copiado para a assinatura). Mudar `includesAll` ou `includesPrivate`
+         *     recalcula os direitos das assinaturas ativas pelo worker
+         *     (`specs/010-direitos-de-acesso.md`); passar `includesAll` a verdadeiro limpa os itens.
+         *     `includesPrivate` verdadeiro com `includesAll` falso: `422 plan_invalid`. O `ensurePlan`
+         *     no provedor roda em segundo plano quando o preço muda; provedor fora do ar não impede a
+         *     edição (`specs/013-pagamentos-mercado-pago.md`).
+         */
+        patch: operations["updatePlan"];
+        trace?: never;
+    };
+    "/api/v1/plans/{id}/items": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Definir os itens do plano
+         * @description Substitui a lista de cursos, pacotes e ebooks que o plano libera
+         *     (`specs/012-assinaturas.md`, "Planos"). Só o `admin` (`plan.manage`); a ação é registrada
+         *     na auditoria (`specs/028-auditoria.md`). `items: []` esvazia a lista. Os direitos das
+         *     assinaturas ativas são recalculados pelo worker (`specs/010-direitos-de-acesso.md`), sem
+         *     mudar o preço contratado.
+         *
+         *     Plano com `includesAll` verdadeiro não usa lista: `422 plan_invalid`. Produto
+         *     inexistente, tipo fora de curso, pacote e ebook, ou item repetido: `422
+         *     plan_item_invalid`. Plano inexistente: `404 not_found`.
+         */
+        put: operations["replacePlanItems"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/subscriptions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Listar assinaturas
+         * @description Assinaturas da escola, da mais nova para a mais antiga (`specs/012-assinaturas.md`,
+         *     "Interfaces e contratos"), com filtros por período, estado, plano, assinante e busca por
+         *     nome ou e-mail. `manager` e `admin` consultam (`sales.view`); `instructor` recebe `403`
+         *     `permission_denied` (`specs/008-papeis-e-permissoes.md`). O documento fiscal do assinante
+         *     não sai aqui, só na ficha do usuário.
+         */
+        get: operations["listSubscriptions"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/subscriptions/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Uma assinatura
+         * @description A assinatura com o assinante, o plano atual (preço, itens e periodicidade), o período, a
+         *     carência e as cobranças com os reembolsos de cada uma
+         *     (`specs/012-assinaturas.md`, "Interfaces e contratos"). `manager` e `admin` veem;
+         *     `instructor` recebe `403`. `currentPeriodPaymentId` aponta a cobrança que abriu o período
+         *     em curso: reembolsá-la encerra a assinatura na hora. Inexistente: `404 not_found`.
+         *     O documento fiscal do assinante não sai aqui.
+         */
+        get: operations["getSubscription"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/subscriptions/{id}/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Cancelar assinatura de um aluno
+         * @description Cancela a assinatura de um aluno (`specs/012-assinaturas.md`, "Cancelamento"). Só o
+         *     `admin` (`subscription.cancel`); `manager` recebe `403` `permission_denied`
+         *     (`specs/008-papeis-e-permissoes.md`). A ação é registrada na auditoria
+         *     (`specs/028-auditoria.md`), com o motivo obrigatório.
+         *
+         *     Em `active` ou `past_due`, cancela a recorrência no provedor na hora e a assinatura vai a
+         *     `canceling`; o acesso segue até `currentPeriodEnd`, sem carência adicional, e o worker a
+         *     encerra em `ended`. Em `past_due`, o cancelamento encerra a carência. Não há reativação
+         *     antes do fim do período: o aluno assina de novo. Os demais estados respondem `409
+         *     subscription_not_cancelable` (em `pending`, o prazo de 30 min a expira; em `suspended`,
+         *     ela se encerra sozinha após 30 dias). Se o provedor não confirmar o cancelamento, a
+         *     resposta é `503 payment_provider_unavailable` e nada muda: a tentativa pode ser repetida.
+         */
+        post: operations["cancelSubscription"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/subscriptions/{id}/payments/{paymentId}/refund": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Reembolsar cobrança da assinatura
+         * @description Reembolsa uma cobrança recorrente (`specs/012-assinaturas.md`, "Reembolso de cobrança";
+         *     `specs/011-vendas-e-checkout.md`, "Reembolso"). Só o `admin` (`order.refund`); `manager`
+         *     recebe `403` `permission_denied`. Usa o mesmo fluxo de `refunds`: cria o reembolso em
+         *     `requested` e enfileira `refund.execute`; a resposta é `202` e o desfecho chega depois,
+         *     pelo worker, no detalhe da assinatura. O reembolso de cobrança recorrente tem `orderId`
+         *     nulo e a lista de itens vazia.
+         *
+         *     `amountCents` ausente ou nulo estorna o saldo não reembolsado da cobrança; valor parcial
+         *     é aceito, desde que não passe desse saldo. Reembolsar a cobrança do período em curso
+         *     encerra a assinatura na hora (`ended`) e revoga os direitos com motivo `refund`; a de um
+         *     período passado não altera o estado atual.
+         *
+         *     `Idempotency-Key` é aceita: a repetição devolve o primeiro reembolso por 24 h.
+         *
+         *     Recusas, pelo `code`: `404 not_found` (assinatura ou cobrança inexistente, ou cobrança de
+         *     outra assinatura); `409 payment_not_refundable` (cobrança que não está `approved` nem
+         *     `partially_refunded`, ou já reembolsada por inteiro); `422 refund_exceeds_paid` (valor
+         *     acima do saldo não reembolsado). Falha do estorno não é resposta desta rota: o reembolso
+         *     fica `failed` com a mensagem do provedor e pode ser tentado de novo. A ação é registrada
+         *     na auditoria (`specs/028-auditoria.md`).
+         */
+        post: operations["requestSubscriptionRefund"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/stream": {
         parameters: {
             query?: never;
@@ -3751,8 +3983,9 @@ export interface components {
          */
         CouponKind: "percent" | "fixed";
         /**
-         * @description A que o cupom se aplica (`specs/012-assinaturas.md`): pedidos avulsos, assinaturas ou os
-         *     dois. Nesta janela, só pedidos avulsos usam o cupom.
+         * @description A que o cupom se aplica (`specs/012-assinaturas.md`, "Cupom na assinatura"): pedidos
+         *     avulsos (`orders`), assinaturas (`subscriptions`) ou os dois (`both`). Na assinatura, o
+         *     cupom vale só na primeira cobrança.
          * @enum {string}
          */
         CouponAppliesTo: "orders" | "subscriptions" | "both";
@@ -4119,6 +4352,215 @@ export interface components {
              *     não houve nenhuma.
              */
             lastReconciliationAt: components["schemas"]["DateTime"] | null;
+        };
+        /**
+         * @description Periodicidade da cobrança do plano (`specs/012-assinaturas.md`, "Planos").
+         * @enum {string}
+         */
+        PlanInterval: "month" | "year";
+        /** @description Produto liberado por um plano. */
+        PlanItemInput: {
+            productType: components["schemas"]["ProductType"];
+            productId: components["schemas"]["Uuid"];
+        };
+        /** @description Produto liberado por um plano, com o título atual. */
+        PlanItem: {
+            productType: components["schemas"]["ProductType"];
+            productId: components["schemas"]["Uuid"];
+            title: string;
+        };
+        /**
+         * @description Um plano de assinatura com os itens que libera (`specs/012-assinaturas.md`, "Planos").
+         *     O preço do plano vale para novas assinaturas; as existentes mantêm o preço contratado.
+         */
+        Plan: {
+            id: components["schemas"]["Uuid"];
+            slug: components["schemas"]["Slug"];
+            /** @description Chave que agrupa as periodicidades do mesmo conteúdo na vitrine. */
+            groupKey: components["schemas"]["Slug"];
+            title: string;
+            description: string | null;
+            interval: components["schemas"]["PlanInterval"];
+            /** @description Preço por período, maior que zero. */
+            priceCents: components["schemas"]["MoneyCents"];
+            /**
+             * @description Verdadeiro = todo produto publicado `paid` ou `open`, atual e futuro; nesse caso
+             *     `items` vem vazia.
+             */
+            includesAll: boolean;
+            /** @description Só com `includesAll`; inclui também os produtos `private`. */
+            includesPrivate: boolean;
+            /**
+             * @description Plano inativo sai da vitrine e não aceita assinatura nova; as assinaturas existentes
+             *     continuam.
+             */
+            active: boolean;
+            /** @description Ordem na vitrine. */
+            position: number;
+            /**
+             * @description Identificador do plano no provedor (`ensurePlan`); `null` até o `ensurePlan` rodar
+             *     (`specs/013-pagamentos-mercado-pago.md`).
+             */
+            providerPlanId: string | null;
+            /**
+             * @description Assinaturas do plano, inclusive `ended` e `expired`; é o vínculo que impede excluir o
+             *     plano.
+             */
+            subscriptionCount: number;
+            /** @description Produtos explícitos quando `includesAll` é falso; vazia quando verdadeiro. */
+            items: components["schemas"]["PlanItem"][];
+            createdAt: components["schemas"]["DateTime"];
+            updatedAt: components["schemas"]["DateTime"];
+        };
+        PlanPage: components["schemas"]["Page"] & {
+            items: components["schemas"]["Plan"][];
+        };
+        /**
+         * @description Definição de um plano novo (`specs/012-assinaturas.md`, "Planos"). `includesAll`,
+         *     `includesPrivate`, `active` e `position` têm padrão falso, falso, verdadeiro e zero;
+         *     `items` tem padrão vazio.
+         */
+        PlanCreate: {
+            /**
+             * @description Identificador público; gerado de `groupKey` e `interval` quando ausente e imutável
+             *     depois da criação.
+             */
+            slug?: components["schemas"]["Slug"];
+            /**
+             * @description Chave que agrupa as periodicidades na vitrine: a mesma nos planos mensal e anual do
+             *     mesmo conteúdo. Imutável.
+             */
+            groupKey: components["schemas"]["Slug"];
+            title: string;
+            description?: string | null;
+            interval: components["schemas"]["PlanInterval"];
+            /** @description Preço por período. */
+            priceCents: number;
+            /** @default false */
+            includesAll: boolean;
+            /** @default false */
+            includesPrivate: boolean;
+            /** @default true */
+            active: boolean;
+            /** @default 0 */
+            position: number;
+            /** @default [] */
+            items: components["schemas"]["PlanItemInput"][];
+        };
+        /**
+         * @description Edição parcial do plano: só os campos enviados mudam. `slug`, `groupKey` e `interval` não
+         *     mudam depois da criação.
+         */
+        PlanUpdate: {
+            title?: string;
+            description?: string | null;
+            priceCents?: number;
+            includesAll?: boolean;
+            includesPrivate?: boolean;
+            active?: boolean;
+            position?: number;
+        };
+        /** @description Lista completa que substitui os itens do plano. */
+        PlanItemsUpdate: {
+            items: components["schemas"]["PlanItemInput"][];
+        };
+        /**
+         * @description Estado da assinatura (`specs/012-assinaturas.md`, "Ciclo de vida"). `pending` aguarda a
+         *     primeira cobrança; `active` está em dia; `past_due` está em carência, com acesso;
+         *     `suspended` perdeu o acesso; `canceling` foi cancelada e mantém o acesso até
+         *     `currentPeriodEnd`; `ended` encerrou; `expired` nunca foi paga.
+         * @enum {string}
+         */
+        SubscriptionStatus: "pending" | "active" | "past_due" | "suspended" | "canceling" | "ended" | "expired";
+        /** @description O plano da assinatura, na forma resumida. */
+        SubscriptionPlanRef: {
+            id: components["schemas"]["Uuid"];
+            title: string;
+            interval: components["schemas"]["PlanInterval"];
+        };
+        /** @description O assinante na lista e no detalhe da assinatura. */
+        Subscriber: {
+            id: components["schemas"]["Uuid"];
+            name: string;
+            email: components["schemas"]["Email"];
+        };
+        /** @description Uma assinatura na lista do admin. */
+        AdminSubscriptionSummary: {
+            id: components["schemas"]["Uuid"];
+            subscriber: components["schemas"]["Subscriber"];
+            plan: components["schemas"]["SubscriptionPlanRef"];
+            status: components["schemas"]["SubscriptionStatus"];
+            /**
+             * @description Preço contratado, copiado do plano na criação; mudança posterior do plano não o
+             *     altera.
+             */
+            priceCents: components["schemas"]["MoneyCents"];
+            currency: components["schemas"]["CurrencyCode"];
+            currentPeriodStart: components["schemas"]["DateTime"] | null;
+            /** @description Fim do período pago; com a carência, a referência do acesso. */
+            currentPeriodEnd: components["schemas"]["DateTime"] | null;
+            graceUntil: components["schemas"]["DateTime"] | null;
+            /** @description Próxima renovação prevista: `currentPeriodEnd` em `active`; `null` nos demais. */
+            nextChargeAt: components["schemas"]["DateTime"] | null;
+            canceledAt: components["schemas"]["DateTime"] | null;
+            /** @description Motivo do cancelamento informado pelo admin ou pelo aluno. */
+            cancelReason: string | null;
+            endedAt: components["schemas"]["DateTime"] | null;
+            createdAt: components["schemas"]["DateTime"];
+        };
+        AdminSubscriptionPage: components["schemas"]["Page"] & {
+            items: components["schemas"]["AdminSubscriptionSummary"][];
+        };
+        /**
+         * @description A assinatura com o plano atual, as cobranças e os reembolsos de cada uma
+         *     (`specs/012-assinaturas.md`, "Reembolso de cobrança").
+         */
+        AdminSubscriptionDetail: {
+            id: components["schemas"]["Uuid"];
+            subscriber: components["schemas"]["Subscriber"];
+            /**
+             * @description O plano agora, com preço e itens atuais; o preço contratado é `priceCents` desta
+             *     assinatura.
+             */
+            plan: components["schemas"]["Plan"];
+            status: components["schemas"]["SubscriptionStatus"];
+            /** @description Preço contratado na criação da assinatura. */
+            priceCents: components["schemas"]["MoneyCents"];
+            currency: components["schemas"]["CurrencyCode"];
+            currentPeriodStart: components["schemas"]["DateTime"] | null;
+            currentPeriodEnd: components["schemas"]["DateTime"] | null;
+            graceUntil: components["schemas"]["DateTime"] | null;
+            nextChargeAt: components["schemas"]["DateTime"] | null;
+            canceledAt: components["schemas"]["DateTime"] | null;
+            cancelReason: string | null;
+            endedAt: components["schemas"]["DateTime"] | null;
+            createdAt: components["schemas"]["DateTime"];
+            /** @enum {string} */
+            provider: "mercadopago" | "fake";
+            /** @description Identificador da adesão no provedor; `null` até o provedor devolvê-lo. */
+            providerSubscriptionId: string | null;
+            /**
+             * @description Código do cupom usado na primeira cobrança; `null` sem cupom ou se o cupom foi
+             *     excluído.
+             */
+            couponCode: string | null;
+            /**
+             * @description A cobrança que abriu o período em curso; reembolsá-la encerra a assinatura na hora.
+             *     `null` quando ainda não há cobrança aprovada no período (por exemplo, `pending`).
+             */
+            currentPeriodPaymentId: components["schemas"]["Uuid"] | null;
+            /** @description Cobranças da assinatura, da mais recente para a mais antiga, com reembolsos. */
+            payments: components["schemas"]["PaymentDetail"][];
+        };
+        /** @description Pedido de reembolso de uma cobrança recorrente. */
+        SubscriptionRefundInput: {
+            /** @description Motivo informado pelo admin. */
+            reason: string;
+            /**
+             * @description Valor a estornar; ausente ou `null` estorna o saldo não reembolsado da cobrança.
+             *     Acima do saldo: `422 refund_exceeds_paid`.
+             */
+            amountCents?: number | null;
         };
         /**
          * @description Grupo de preferência (`specs/024-notificacoes-e-email.md`, "Tipos e grupos"); o grupo de
@@ -8660,6 +9102,342 @@ export interface operations {
             400: components["responses"]["BadRequest"];
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
+            429: components["responses"]["TooManyRequests"];
+            500: components["responses"]["InternalError"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    listPlans: {
+        parameters: {
+            query?: {
+                /** @description Trecho do título ou do slug. */
+                q?: string;
+                active?: boolean;
+                interval?: components["schemas"]["PlanInterval"];
+                groupKey?: string;
+                /** @description Quantidade de itens por página. */
+                limit?: components["parameters"]["Limit"];
+                /** @description Valor de `nextCursor` da página anterior. Ausente na primeira página. */
+                cursor?: components["parameters"]["Cursor"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Uma página de planos. */
+            200: {
+                headers: {
+                    "X-Request-Id": components["headers"]["XRequestId"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlanPage"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            429: components["responses"]["TooManyRequests"];
+            500: components["responses"]["InternalError"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    createPlan: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PlanCreate"];
+            };
+        };
+        responses: {
+            /** @description Plano criado. */
+            201: {
+                headers: {
+                    "X-Request-Id": components["headers"]["XRequestId"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Plan"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            409: components["responses"]["Conflict"];
+            413: components["responses"]["PayloadTooLarge"];
+            415: components["responses"]["UnsupportedMediaType"];
+            422: components["responses"]["UnprocessableEntity"];
+            429: components["responses"]["TooManyRequests"];
+            500: components["responses"]["InternalError"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    getPlan: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Identificador do recurso. */
+                id: components["parameters"]["IdPath"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description O plano. */
+            200: {
+                headers: {
+                    "X-Request-Id": components["headers"]["XRequestId"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Plan"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            429: components["responses"]["TooManyRequests"];
+            500: components["responses"]["InternalError"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    updatePlan: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Identificador do recurso. */
+                id: components["parameters"]["IdPath"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PlanUpdate"];
+            };
+        };
+        responses: {
+            /** @description Plano gravado. */
+            200: {
+                headers: {
+                    "X-Request-Id": components["headers"]["XRequestId"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Plan"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            413: components["responses"]["PayloadTooLarge"];
+            415: components["responses"]["UnsupportedMediaType"];
+            422: components["responses"]["UnprocessableEntity"];
+            429: components["responses"]["TooManyRequests"];
+            500: components["responses"]["InternalError"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    replacePlanItems: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Identificador do recurso. */
+                id: components["parameters"]["IdPath"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PlanItemsUpdate"];
+            };
+        };
+        responses: {
+            /** @description Lista substituída. */
+            200: {
+                headers: {
+                    "X-Request-Id": components["headers"]["XRequestId"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Plan"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            413: components["responses"]["PayloadTooLarge"];
+            415: components["responses"]["UnsupportedMediaType"];
+            422: components["responses"]["UnprocessableEntity"];
+            429: components["responses"]["TooManyRequests"];
+            500: components["responses"]["InternalError"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    listSubscriptions: {
+        parameters: {
+            query?: {
+                /** @description Início do período (inclusive), sobre `createdAt`. */
+                from?: components["schemas"]["DateTime"];
+                /** @description Fim do período (exclusive), sobre `createdAt`. */
+                to?: components["schemas"]["DateTime"];
+                status?: components["schemas"]["SubscriptionStatus"];
+                planId?: components["schemas"]["Uuid"];
+                userId?: components["schemas"]["Uuid"];
+                /** @description Trecho do nome ou do e-mail do assinante. */
+                q?: string;
+                /** @description Quantidade de itens por página. */
+                limit?: components["parameters"]["Limit"];
+                /** @description Valor de `nextCursor` da página anterior. Ausente na primeira página. */
+                cursor?: components["parameters"]["Cursor"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Uma página de assinaturas. */
+            200: {
+                headers: {
+                    "X-Request-Id": components["headers"]["XRequestId"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminSubscriptionPage"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            429: components["responses"]["TooManyRequests"];
+            500: components["responses"]["InternalError"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    getSubscription: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Identificador do recurso. */
+                id: components["parameters"]["IdPath"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description A assinatura. */
+            200: {
+                headers: {
+                    "X-Request-Id": components["headers"]["XRequestId"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminSubscriptionDetail"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            429: components["responses"]["TooManyRequests"];
+            500: components["responses"]["InternalError"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    cancelSubscription: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Identificador do recurso. */
+                id: components["parameters"]["IdPath"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** @description Motivo informado pelo admin; vai para a assinatura e a auditoria. */
+                    reason: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Assinatura em `canceling`. */
+            200: {
+                headers: {
+                    "X-Request-Id": components["headers"]["XRequestId"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminSubscriptionDetail"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            413: components["responses"]["PayloadTooLarge"];
+            415: components["responses"]["UnsupportedMediaType"];
+            429: components["responses"]["TooManyRequests"];
+            500: components["responses"]["InternalError"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    requestSubscriptionRefund: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Chave escolhida pelo cliente; a repetição devolve a primeira resposta por 24 h. */
+                "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
+            };
+            path: {
+                /** @description Identificador do recurso. */
+                id: components["parameters"]["IdPath"];
+                /** @description A cobrança da assinatura. */
+                paymentId: components["schemas"]["Uuid"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SubscriptionRefundInput"];
+            };
+        };
+        responses: {
+            /** @description Reembolso pedido; o estorno é executado em segundo plano. */
+            202: {
+                headers: {
+                    "X-Request-Id": components["headers"]["XRequestId"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Refund"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            413: components["responses"]["PayloadTooLarge"];
+            415: components["responses"]["UnsupportedMediaType"];
+            422: components["responses"]["UnprocessableEntity"];
             429: components["responses"]["TooManyRequests"];
             500: components["responses"]["InternalError"];
             503: components["responses"]["ServiceUnavailable"];

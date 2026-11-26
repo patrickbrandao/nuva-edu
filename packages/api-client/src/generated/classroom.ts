@@ -1450,6 +1450,151 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/plans": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Vitrine de planos
+         * @description Planos `active` agrupados por `groupKey`, para a página alternar mensal e anual
+         *     (`specs/012-assinaturas.md`, "Planos"), sem login. Plano inativo sai da vitrine e não
+         *     aceita assinatura nova; as assinaturas existentes continuam. Os grupos seguem a menor
+         *     `position` dos planos e, dentro do grupo, vêm `month` e depois `year`.
+         *
+         *     Cada plano diz o que libera: `includesAll` (todo produto publicado `paid` ou `open`,
+         *     atual e futuro) ou os itens explícitos. Na vitrine, item não publicado ou `private` é
+         *     omitido da lista; ele continua no plano e no admin, e o acesso segue a
+         *     `specs/010-direitos-de-acesso.md`. Segue o limite de visitante
+         *     (`specs/004-classroom-api.md`).
+         */
+        get: operations["listPlans"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/subscriptions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Assinar um plano
+         * @description Assina um plano em checkout próprio, fora da cesta (`specs/012-assinaturas.md`,
+         *     "Assinar"). Exige sessão e e-mail confirmado; o nome e o CPF/CNPJ vêm de
+         *     `GET /api/v1/me/billing` e, se faltarem, a resposta é `409 billing_required` antes de
+         *     qualquer cobrança. Cria a assinatura em `pending`, com o preço do plano copiado, e a
+         *     adesão no provedor; devolve a assinatura e a URL para onde o navegador vai autorizar a
+         *     cobrança recorrente e pagar a primeira cobrança. A ativação acontece quando a primeira
+         *     cobrança é aprovada, pelo worker.
+         *
+         *     Um usuário pode ter assinaturas ativas de planos diferentes; repetir o mesmo plano em
+         *     `pending`, `active`, `past_due` ou `suspended` responde `409 subscription_already_exists`
+         *     (em `canceling`, a spec manda assinar de novo para desfazer o cancelamento). O cupom
+         *     precisa de `appliesTo` `subscriptions` ou `both`, vale só na primeira cobrança e é
+         *     contabilizado na ativação; cupom de 100% zera a primeira cobrança e a recorrência começa
+         *     no período seguinte (`specs/012-assinaturas.md`, "Cupom na assinatura").
+         *
+         *     Recusas, pelo `code`: `403 email_not_verified`; `404 not_found` (plano inexistente ou
+         *     inativo — plano inativo não aceita assinatura nova); `409 billing_required`;
+         *     `409 subscription_already_exists`; `422 coupon_invalid` (cupom inexistente, expirado,
+         *     esgotado, inativo ou sem `subscriptions` em `appliesTo`); `503
+         *     payment_provider_unavailable` (provedor fora: nenhuma assinatura é criada e nada é
+         *     cobrado; a mensagem é "pagamento indisponível, tente em instantes").
+         */
+        post: operations["createSubscription"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/me/subscriptions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Assinaturas do aluno
+         * @description As assinaturas do próprio usuário, da mais nova para a mais antiga
+         *     (`specs/012-assinaturas.md`, RF-08): a atual e o histórico, inclusive `ended` e `expired`.
+         *     Filtro por estado e paginação por cursor. "Minha assinatura" mostra plano, estado,
+         *     próxima cobrança e histórico a partir daqui e do detalhe.
+         */
+        get: operations["listMySubscriptions"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/me/subscriptions/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Uma assinatura do aluno
+         * @description A assinatura do próprio usuário com o plano atual (título, periodicidade e itens que
+         *     libera), o preço contratado, o período, a carência e todos os estados do ciclo de vida,
+         *     além do histórico de cobranças, da mais recente para a mais antiga
+         *     (`specs/012-assinaturas.md`, RF-08). Assinatura de outra pessoa: `404 not_found`.
+         */
+        get: operations["getMySubscription"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/me/subscriptions/{id}/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Cancelar a própria assinatura
+         * @description Cancela a assinatura do próprio usuário (`specs/012-assinaturas.md`, "Cancelamento"):
+         *     cancela a recorrência no provedor na hora e a assinatura vai a `canceling`; o acesso
+         *     segue até `currentPeriodEnd`, sem carência adicional, e ao fim o worker a encerra em
+         *     `ended`. Em `past_due`, o cancelamento encerra a carência: o acesso vai só até
+         *     `currentPeriodEnd`. Desfazer o cancelamento não é oferecido no MVP: o aluno assina de
+         *     novo.
+         *
+         *     Só `active` e `past_due` aceitam o pedido; `pending`, `suspended`, `canceling`, `ended` e
+         *     `expired` respondem `409 subscription_not_cancelable`. Assinatura de outra pessoa:
+         *     `404 not_found`. Se o provedor não confirmar o cancelamento, a resposta é `503
+         *     payment_provider_unavailable` e nada muda: a tentativa pode ser repetida.
+         */
+        post: operations["cancelMySubscription"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/webhooks/mercadopago": {
         parameters: {
             query?: never;
@@ -3192,6 +3337,163 @@ export interface components {
              *     `provider: none`.
              */
             checkoutUrl: string | null;
+        };
+        /**
+         * @description Periodicidade da cobrança do plano (`specs/012-assinaturas.md`, "Planos").
+         * @enum {string}
+         */
+        PlanInterval: "month" | "year";
+        /** @description Produto liberado por um plano, com o título atual. */
+        PlanItem: {
+            productType: components["schemas"]["ProductType"];
+            productId: components["schemas"]["Uuid"];
+            title: string;
+        };
+        /**
+         * @description Um plano na vitrine (`specs/012-assinaturas.md`, "Planos"). Sem `includesPrivate`: plano
+         *     que inclui produtos `private` não os anuncia (`specs/009-catalogo-e-conteudo.md`).
+         */
+        PublicPlan: {
+            id: components["schemas"]["Uuid"];
+            slug: components["schemas"]["Slug"];
+            title: string;
+            description: string | null;
+            interval: components["schemas"]["PlanInterval"];
+            /** @description Preço por período, maior que zero. */
+            priceCents: components["schemas"]["MoneyCents"];
+            /**
+             * @description Verdadeiro = todo produto publicado `paid` ou `open`, atual e futuro; nesse caso
+             *     `items` vem vazia.
+             */
+            includesAll: boolean;
+            /**
+             * @description Produtos explícitos quando `includesAll` é falso. Item não publicado ou `private` é
+             *     omitido.
+             */
+            items: components["schemas"]["PlanItem"][];
+            position: number;
+        };
+        /** @description Periodicidades do mesmo conteúdo (`groupKey`), para a vitrine alternar mensal e anual. */
+        PlanGroup: {
+            /** @description Chave que agrupa os planos; a mesma nas duas periodicidades. */
+            groupKey: string;
+            /** @description Um plano por periodicidade, `month` antes de `year`. */
+            plans: components["schemas"]["PublicPlan"][];
+        };
+        /** @description A vitrine de planos, agrupada por conteúdo. */
+        PlanCatalog: {
+            /** @description Grupos dos planos ativos; vazio quando não há plano ativo. */
+            groups: components["schemas"]["PlanGroup"][];
+            currency: components["schemas"]["CurrencyCode"];
+        };
+        /**
+         * @description Estado da assinatura (`specs/012-assinaturas.md`, "Ciclo de vida"). `pending` aguarda a
+         *     primeira cobrança; `active` está em dia; `past_due` está em carência, com acesso;
+         *     `suspended` perdeu o acesso; `canceling` foi cancelada e mantém o acesso até
+         *     `currentPeriodEnd`; `ended` encerrou; `expired` nunca foi paga.
+         * @enum {string}
+         */
+        SubscriptionStatus: "pending" | "active" | "past_due" | "suspended" | "canceling" | "ended" | "expired";
+        /** @description O plano da assinatura, na forma resumida. */
+        SubscriptionPlanRef: {
+            id: components["schemas"]["Uuid"];
+            slug: components["schemas"]["Slug"];
+            title: string;
+            interval: components["schemas"]["PlanInterval"];
+        };
+        /** @description Uma assinatura do aluno na lista. */
+        MySubscriptionSummary: {
+            id: components["schemas"]["Uuid"];
+            plan: components["schemas"]["SubscriptionPlanRef"];
+            status: components["schemas"]["SubscriptionStatus"];
+            /**
+             * @description Preço contratado, copiado do plano na criação; mudança posterior do plano não o
+             *     altera (`specs/012-assinaturas.md`, "Planos").
+             */
+            priceCents: components["schemas"]["MoneyCents"];
+            currency: components["schemas"]["CurrencyCode"];
+            /** @description `null` em `pending` e `expired`. */
+            currentPeriodStart: components["schemas"]["DateTime"] | null;
+            /**
+             * @description Fim do período pago; com a carência, é a referência do acesso em `active`,
+             *     `past_due` e `canceling`. É também quando o acesso cai sozinho, mesmo com o worker
+             *     parado.
+             */
+            currentPeriodEnd: components["schemas"]["DateTime"] | null;
+            /**
+             * @description Fim da carência de 3 dias (`NUVA_SUBSCRIPTION_GRACE_DAYS`); preenchido em `past_due`
+             *     e `suspended`, `null` nos demais.
+             */
+            graceUntil: components["schemas"]["DateTime"] | null;
+            /**
+             * @description Próxima renovação prevista: `currentPeriodEnd` em `active`; `null` nos demais (em
+             *     `past_due`, o provedor tenta de novo conforme a política dele e não há data exposta;
+             *     em `canceling`, não há próxima cobrança).
+             */
+            nextChargeAt: components["schemas"]["DateTime"] | null;
+            /** @description Quando o cancelamento foi pedido; `null` sem cancelamento. */
+            canceledAt: components["schemas"]["DateTime"] | null;
+            /** @description `null` fora de `ended`. */
+            endedAt: components["schemas"]["DateTime"] | null;
+            createdAt: components["schemas"]["DateTime"];
+        };
+        MySubscriptionPage: components["schemas"]["Page"] & {
+            items: components["schemas"]["MySubscriptionSummary"][];
+        };
+        /**
+         * @description Uma cobrança da assinatura (`specs/013-pagamentos-mercado-pago.md`), sem dado de cartão e
+         *     sem o corpo do provedor.
+         */
+        SubscriptionCharge: {
+            id: components["schemas"]["Uuid"];
+            status: components["schemas"]["PaymentStatus"];
+            method: components["schemas"]["PaymentMethod"];
+            amountCents: components["schemas"]["MoneyCents"];
+            refundedCents: components["schemas"]["MoneyCents"];
+            currency: components["schemas"]["CurrencyCode"];
+            /** @enum {string} */
+            provider: "mercadopago" | "fake";
+            providerPaymentId: string;
+            paidAt: components["schemas"]["DateTime"] | null;
+            createdAt: components["schemas"]["DateTime"];
+        };
+        /**
+         * @description A assinatura do aluno com o plano atual, o período e o histórico de cobranças
+         *     (`specs/012-assinaturas.md`, "Minha assinatura").
+         */
+        MySubscriptionDetail: {
+            id: components["schemas"]["Uuid"];
+            /**
+             * @description O plano agora, com os itens que ele libera; o preço contratado é `priceCents` desta
+             *     assinatura, não o do plano.
+             */
+            plan: components["schemas"]["PublicPlan"];
+            status: components["schemas"]["SubscriptionStatus"];
+            /** @description Preço contratado na criação da assinatura. */
+            priceCents: components["schemas"]["MoneyCents"];
+            currency: components["schemas"]["CurrencyCode"];
+            currentPeriodStart: components["schemas"]["DateTime"] | null;
+            currentPeriodEnd: components["schemas"]["DateTime"] | null;
+            graceUntil: components["schemas"]["DateTime"] | null;
+            nextChargeAt: components["schemas"]["DateTime"] | null;
+            canceledAt: components["schemas"]["DateTime"] | null;
+            endedAt: components["schemas"]["DateTime"] | null;
+            createdAt: components["schemas"]["DateTime"];
+            /** @description Histórico de cobranças, da mais recente para a mais antiga. */
+            payments: components["schemas"]["SubscriptionCharge"][];
+        };
+        /** @description Resultado de assinar um plano. */
+        SubscriptionCheckout: {
+            /** @description A assinatura recém-criada, em `pending`, sem cobranças ainda. */
+            subscription: components["schemas"]["MySubscriptionDetail"];
+            /**
+             * Format: uri
+             * @description Página do provedor para o aluno autorizar a cobrança recorrente e pagar a primeira
+             *     cobrança. O arranjo do provedor para a primeira cobrança com cupom é interno a ele
+             *     (`specs/013-pagamentos-mercado-pago.md`, "Implementação Mercado Pago"); o retorno
+             *     leva o aluno à página da assinatura, em `/conta/compras`.
+             */
+            checkoutUrl: string;
         };
     };
     responses: {
@@ -5557,6 +5859,170 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["MyOrderDetail"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            429: components["responses"]["TooManyRequests"];
+            500: components["responses"]["InternalError"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    listPlans: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Os planos ativos, agrupados. */
+            200: {
+                headers: {
+                    "X-Request-Id": components["headers"]["XRequestId"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlanCatalog"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            429: components["responses"]["TooManyRequests"];
+            500: components["responses"]["InternalError"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    createSubscription: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    planId: components["schemas"]["Uuid"];
+                    /**
+                     * @description Código do cupom, comparado sem diferenciar maiúsculas; `null` ou ausente sem
+                     *     cupom.
+                     */
+                    couponCode?: string | null;
+                };
+            };
+        };
+        responses: {
+            /** @description Assinatura criada; o aluno segue para o checkout do provedor. */
+            201: {
+                headers: {
+                    "X-Request-Id": components["headers"]["XRequestId"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SubscriptionCheckout"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            413: components["responses"]["PayloadTooLarge"];
+            415: components["responses"]["UnsupportedMediaType"];
+            422: components["responses"]["UnprocessableEntity"];
+            429: components["responses"]["TooManyRequests"];
+            500: components["responses"]["InternalError"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    listMySubscriptions: {
+        parameters: {
+            query?: {
+                status?: components["schemas"]["SubscriptionStatus"];
+                /** @description Quantidade de itens por página. */
+                limit?: components["parameters"]["Limit"];
+                /** @description Valor de `nextCursor` da página anterior. Ausente na primeira página. */
+                cursor?: components["parameters"]["Cursor"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Uma página de assinaturas. */
+            200: {
+                headers: {
+                    "X-Request-Id": components["headers"]["XRequestId"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MySubscriptionPage"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            429: components["responses"]["TooManyRequests"];
+            500: components["responses"]["InternalError"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    getMySubscription: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Identificador do recurso. */
+                id: components["parameters"]["IdPath"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description A assinatura. */
+            200: {
+                headers: {
+                    "X-Request-Id": components["headers"]["XRequestId"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MySubscriptionDetail"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            429: components["responses"]["TooManyRequests"];
+            500: components["responses"]["InternalError"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    cancelMySubscription: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Identificador do recurso. */
+                id: components["parameters"]["IdPath"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Assinatura em `canceling`. */
+            200: {
+                headers: {
+                    "X-Request-Id": components["headers"]["XRequestId"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MySubscriptionDetail"];
                 };
             };
             400: components["responses"]["BadRequest"];
