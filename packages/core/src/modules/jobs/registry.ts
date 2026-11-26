@@ -33,9 +33,10 @@ export interface JobPayloads {
   /** Apaga imagens sem referência há mais de 24 horas (spec 029). Diária, sem parâmetros. */
   'image.cleanup': Record<string, never>;
   /**
-   * Recalcula a cascata dos direitos de um produto pai cuja composição mudou (`bundle_items` ou
-   * `product_ebooks`; spec 010, "Recalcular a cascata"). Enfileirada pela `admin-api`. Ebook
-   * vinculado a uma aula recalcula o curso da aula. Os planos (`plan_items`) entram na Fase 3.
+   * Recalcula a cascata dos direitos de um produto pai cuja composição mudou (`bundle_items`,
+   * `product_ebooks` ou os itens de um plano; spec 010, "Recalcular a cascata"). Enfileirada pela
+   * `admin-api`. Ebook vinculado a uma aula recalcula o curso da aula. `plan` recalcula as
+   * assinaturas do plano (spec 012).
    */
   'entitlement.recompute': { productType: EntitlementRecomputeProductType; productId: string };
   /**
@@ -68,8 +69,11 @@ export interface JobPayloads {
   'payment.reconcile_refunds': Record<string, never>;
 }
 
-/** Produto pai do recálculo de direitos na Fase 2: só curso e pacote têm itens derivados. */
-export const ENTITLEMENT_RECOMPUTE_PRODUCT_TYPES = ['course', 'bundle'] as const;
+/**
+ * Produto pai do recálculo de direitos: curso e pacote têm itens derivados; o plano recalcula as
+ * assinaturas quando a composição muda (`plan_items`, `includes_all`, `includes_private`).
+ */
+export const ENTITLEMENT_RECOMPUTE_PRODUCT_TYPES = ['course', 'bundle', 'plan'] as const;
 export type EntitlementRecomputeProductType = (typeof ENTITLEMENT_RECOMPUTE_PRODUCT_TYPES)[number];
 
 export type JobType = keyof JobPayloads;

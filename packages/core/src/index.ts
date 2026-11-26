@@ -83,19 +83,24 @@ export * from './modules/accounts/index.ts';
 export * from './modules/audit/index.ts';
 export * from './modules/catalog/index.ts';
 export * from './modules/certificates/index.ts';
+export * from './modules/entitlements/extend.ts';
 export * from './modules/entitlements/index.ts';
+export * from './modules/entitlements/subscription.ts';
 export * from './modules/images/index.ts';
 export * from './modules/jobs/index.ts';
 export * from './modules/jobs/notifications.ts';
+export * from './modules/jobs/subscriptions.ts';
 export * from './modules/learning/index.ts';
 export * from './modules/markdown/index.ts';
 export * from './modules/notes/index.ts';
 export * from './modules/notifications/index.ts';
 export * from './modules/oauth/index.ts';
 export * from './modules/payments/index.ts';
+export * from './modules/payments/subscription-transitions.ts';
 export * from './modules/permissions/index.ts';
 export * from './modules/privacy/index.ts';
 export * from './modules/sales/index.ts';
+export * from './modules/sales/refunds.ts';
 export {
   getNotificationBranding,
   NOTIFICATION_EMAIL_FOOTER_KEY,
@@ -141,3 +146,4 @@ export {
   type UserEventInput,
   type UserEventKind,
 } from './modules/stream/user-events.ts';
+export * from './modules/subscriptions/index.ts';

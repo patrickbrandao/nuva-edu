@@ -246,7 +246,7 @@ describe('tipos da Fase 2 (tarefa 405)', () => {
 
   it('o payload leva só identificadores, tipado por tipo', () => {
     expectTypeOf<JobPayloads['entitlement.recompute']>().toEqualTypeOf<{
-      productType: 'course' | 'bundle';
+      productType: 'course' | 'bundle' | 'plan';
       productId: string;
     }>();
     expectTypeOf<JobPayloads['course.completed']>().toEqualTypeOf<{
