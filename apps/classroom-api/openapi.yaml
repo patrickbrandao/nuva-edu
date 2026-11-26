@@ -74,6 +74,11 @@ tags:
     description: Anotações privadas (`specs/016-anotacoes.md`).
   - name: certificates
     description: Certificados e validação pública (`specs/015-certificados.md`).
+  - name: sales
+    description: Cesta, cupom, dados de comprador e pedidos do aluno (`specs/011-vendas-e-checkout.md`).
+  - name: webhooks
+    description: Aviso de pagamento do provedor, autenticado por assinatura (`specs/013-pagamentos-mercado-pago.md`).
+
 security:
   - sessionCookie: []
 paths:
@@ -2382,6 +2387,604 @@ paths:
           $ref: "#/components/responses/InternalError"
         "503":
           $ref: "#/components/responses/ServiceUnavailable"
+
+  # --- Fase 3: vendas e pagamentos (specs 011 e 013) ---
+  /api/v1/cart:
+    get:
+      operationId: getCart
+      tags: [sales]
+      summary: Cesta do aluno
+      x-permission: purchase.create
+      x-nuva-pending: true
+      description: |
+        A cesta aberta do próprio usuário (`specs/011-vendas-e-checkout.md`, "Cesta"), vazia quando
+        ele ainda não acrescentou nada. Traz, por item, o preço atual do produto, o desconto do cupom rateado
+        nele, os avisos que não bloqueiam a compra e a cascata que a compra libera. O preço da cesta
+        é sempre o do produto agora: como o pedido é que congela os preços, reabrir a cesta depois
+        de uma alteração mostra o preço novo. Produto despublicado, arquivado ou fora do modo `paid`
+        continua na cesta com `sellable: false` e o motivo; quem recusa a compra é a finalização.
+        Cupom que deixou de valer também continua na cesta, com `valid: false` e o motivo.
+
+        Os totais da cesta somam só os itens vendáveis (`sellable: true`). Item cobrado por
+        assinatura ativa, coberto por pacote já comprado ou com direito a prazo vem com aviso e
+        continua sendo cobrado: a compra é permitida.
+      responses:
+        "200":
+          description: A cesta aberta.
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/XRequestId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Cart"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+  /api/v1/cart/items:
+    post:
+      operationId: addCartItem
+      tags: [sales]
+      summary: Acrescentar produto à cesta
+      x-permission: purchase.create
+      x-nuva-pending: true
+      description: |
+        Acrescenta um produto avulso `paid` e publicado (`specs/011-vendas-e-checkout.md`,
+        "Cesta"). Devolve a cesta inteira, já com o rateio do cupom e a cascata do item novo.
+
+        Recusas, pelo `code`: `403` `email_not_verified` (e-mail da conta não confirmado);
+        `409` `product_not_sellable` (inexistente, despublicado, arquivado, `open` ou `private`);
+        `409` `product_already_in_cart`; `409` `product_already_owned` (direito ativo e vitalício
+        ao produto); `409` `cart_full` (a cesta já tem 50 itens).
+      security:
+        - sessionCookie: []
+          csrfToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [productType, productId]
+              properties:
+                productType:
+                  $ref: "#/components/schemas/ProductType"
+                productId:
+                  $ref: "#/components/schemas/Uuid"
+              additionalProperties: false
+      responses:
+        "201":
+          description: Item acrescentado; a resposta é a cesta inteira.
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/XRequestId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Cart"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "413":
+          $ref: "#/components/responses/PayloadTooLarge"
+        "415":
+          $ref: "#/components/responses/UnsupportedMediaType"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+  /api/v1/cart/items/{id}:
+    delete:
+      operationId: removeCartItem
+      tags: [sales]
+      summary: Remover produto da cesta
+      x-permission: purchase.create
+      x-nuva-pending: true
+      description: |
+        Remove o item da própria cesta. Item de outra cesta ou já removido: `404` `not_found`.
+      security:
+        - sessionCookie: []
+          csrfToken: []
+      parameters:
+        - $ref: "#/components/parameters/IdPath"
+      responses:
+        "204":
+          description: Item removido; a cesta fica sem ele.
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/XRequestId"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+  /api/v1/cart/coupon:
+    put:
+      operationId: setCartCoupon
+      tags: [sales]
+      summary: Aplicar cupom à cesta
+      x-permission: purchase.create
+      x-nuva-pending: true
+      description: |
+        Um cupom por cesta (`specs/011-vendas-e-checkout.md`, "Cupons"). O código é comparado sem
+        diferenciar maiúsculas e substitui o cupom anterior. Devolve a cesta com o desconto
+        rateado nos itens elegíveis.
+
+        `422` `coupon_invalid` quando o código não existe, está fora da janela, esgotado, inativo,
+        não vale para pedidos avulsos (`applies_to` sem `orders`) ou não tem item elegível. A
+        mensagem é a mesma em todos os casos, para não revelar se o código existe em outro
+        contexto (`specs/011-vendas-e-checkout.md`, "Casos de erro"). Cupom recusado não altera a
+        cesta: o cupom anterior continua aplicado.
+      security:
+        - sessionCookie: []
+          csrfToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [code]
+              properties:
+                code:
+                  type: string
+                  minLength: 3
+                  maxLength: 40
+                  pattern: "^[A-Za-z0-9-]+$"
+              additionalProperties: false
+      responses:
+        "200":
+          description: Cupom aplicado; a resposta é a cesta recalculada.
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/XRequestId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Cart"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "413":
+          $ref: "#/components/responses/PayloadTooLarge"
+        "415":
+          $ref: "#/components/responses/UnsupportedMediaType"
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+    delete:
+      operationId: clearCartCoupon
+      tags: [sales]
+      summary: Remover o cupom da cesta
+      x-permission: purchase.create
+      x-nuva-pending: true
+      description: |
+        Tira o cupom da cesta e devolve a cesta recalculada. Sem cupom aplicado, responde `200` com
+        a cesta como está.
+      security:
+        - sessionCookie: []
+          csrfToken: []
+      responses:
+        "200":
+          description: Cesta sem cupom.
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/XRequestId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Cart"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+  /api/v1/me/billing:
+    get:
+      operationId: getMyBilling
+      tags: [sales]
+      summary: Dados de comprador
+      x-permission: purchase.create
+      x-nuva-pending: true
+      description: |
+        Nome completo e CPF/CNPJ já informados (`specs/011-vendas-e-checkout.md`, "Dados do
+        comprador"), para o formulário do primeiro checkout vir preenchido e os seguintes
+        reutilizarem o que foi informado (RF-05). A spec 011 lista só a escrita; esta leitura é o
+        que permite reutilizar os dados sem pedi-los de novo. O documento fiscal só aparece para o
+        próprio usuário e nunca vai para logs.
+      responses:
+        "200":
+          description: Os dados guardados; campos nulos enquanto não informados.
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/XRequestId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Billing"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+    put:
+      operationId: saveMyBilling
+      tags: [sales]
+      summary: Gravar dados de comprador
+      x-permission: purchase.create
+      x-nuva-pending: true
+      description: |
+        Grava nome completo, tipo e número do documento no próprio usuário; o pedido copia os
+        valores na finalização. CPF/CNPJ validado por dígito verificador e guardado só com os
+        dígitos, como a conta (`specs/007-contas-e-autenticacao.md`); o CNPJ alfanumérico é aceito,
+        em maiúsculas. Nome fora de 1 a 200 caracteres: `400` `validation_failed`. Documento
+        inválido: `422` `tax_id_invalid`. O documento nunca vai para logs.
+      security:
+        - sessionCookie: []
+          csrfToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [fullName, taxIdType, taxId]
+              properties:
+                fullName:
+                  type: string
+                  minLength: 1
+                  maxLength: 200
+                taxIdType:
+                  $ref: "#/components/schemas/TaxIdType"
+                taxId:
+                  type: string
+                  minLength: 11
+                  maxLength: 32
+                  description: |
+                    CPF (11 dígitos) ou CNPJ (14 caracteres, podendo ser alfanumérico), com ou sem
+                    pontuação; a API guarda só os caracteres, sem pontos, traços ou barras.
+              additionalProperties: false
+      responses:
+        "200":
+          description: Dados gravados.
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/XRequestId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Billing"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "413":
+          $ref: "#/components/responses/PayloadTooLarge"
+        "415":
+          $ref: "#/components/responses/UnsupportedMediaType"
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+  /api/v1/orders:
+    get:
+      operationId: listMyOrders
+      tags: [sales]
+      summary: Pedidos do aluno
+      x-permission: purchase.create
+      x-nuva-pending: true
+      description: |
+        Os pedidos do próprio usuário, do mais recente ao mais antigo (`specs/011-vendas-e-checkout.md`,
+        RF-08), sem os `draft` (restos de tentativa que não chegaram ao provedor). Filtro por
+        estado e paginação por cursor.
+      parameters:
+        - name: status
+          in: query
+          schema:
+            $ref: "#/components/schemas/OrderStatus"
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Cursor"
+      responses:
+        "200":
+          description: Uma página de pedidos.
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/XRequestId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MyOrderPage"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+    post:
+      operationId: createOrder
+      tags: [sales]
+      summary: Fechar a cesta e criar o pedido
+      x-permission: purchase.create
+      x-nuva-pending: true
+      description: |
+        Fecha a cesta do próprio usuário (`specs/011-vendas-e-checkout.md`, "Pedido e seus
+        estados"). Numa transação, valida a cesta e o cupom, cria o pedido e os itens com preços,
+        desconto e total congelados, esvazia a cesta e cria o checkout no provedor; devolve o pedido
+        e a `checkoutUrl` para onde o navegador vai.
+
+        `Idempotency-Key` é aceita: a repetição devolve o primeiro pedido por 24 h. Sem cupom
+        válido, a cesta e o pedido não mudam.
+
+        Recusas, pelo `code`: `403` `email_not_verified`; `409` `billing_required` (falta nome ou
+        documento de comprador); `409` `cart_empty`; `409` `cart_invalid` (item que deixou de ser
+        vendável; a cesta continua, com o item marcado); `409` `order_pending_limit` (o aluno já tem
+        3 pedidos `pending`; precisa cancelar um); `422` `coupon_invalid`; `503`
+        `payment_provider_unavailable` (provedor fora; o pedido fica `draft`, a cesta é restaurada e
+        a mensagem é "pagamento indisponível, tente em instantes").
+
+        Pedido de total zero (cupom de 100% ou produto `paid` de preço 0) já nasce `paid`, com
+        `provider: none` e `checkoutUrl: null`, sem chamar o provedor.
+      security:
+        - sessionCookie: []
+          csrfToken: []
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKey"
+      responses:
+        "201":
+          description: Pedido criado.
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/XRequestId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OrderCheckout"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+  /api/v1/orders/{id}:
+    get:
+      operationId: getMyOrder
+      tags: [sales]
+      summary: Um pedido do aluno
+      x-permission: purchase.create
+      x-nuva-pending: true
+      description: |
+        O pedido do próprio usuário, com itens, valores congelados, estado e a cobrança conhecida
+        (`specs/011-vendas-e-checkout.md`, "Retorno do checkout"). Pedido de outra pessoa ou `draft`:
+        `404` `not_found`. Enquanto `pending` em provedor, `checkoutUrl` permite voltar à página de
+        pagamento; `payment` é nulo até o worker gravar a primeira cobrança.
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: "#/components/parameters/IdPath"
+      responses:
+        "200":
+          description: O pedido.
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/XRequestId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MyOrderDetail"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+  /api/v1/orders/{id}/cancel:
+    post:
+      operationId: cancelMyOrder
+      tags: [sales]
+      summary: Cancelar pedido pendente
+      x-permission: purchase.create
+      x-nuva-pending: true
+      description: |
+        Cancela um pedido `pending` do próprio usuário antes do pagamento (`specs/011-vendas-e-checkout.md`,
+        "Pedido e seus estados") e pede o cancelamento do checkout ao provedor. Pedido pago,
+        reembolsado, expirado ou já cancelado: `409` `order_not_cancelable`. Pedido de outra pessoa
+        ou `draft`: `404` `not_found`. Devolve o pedido já com `status: canceled`.
+      security:
+        - sessionCookie: []
+          csrfToken: []
+      parameters:
+        - $ref: "#/components/parameters/IdPath"
+      responses:
+        "200":
+          description: Pedido cancelado.
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/XRequestId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MyOrderDetail"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+  /api/v1/webhooks/mercadopago:
+    post:
+      operationId: receiveMercadoPagoWebhook
+      tags: [webhooks]
+      summary: Aviso de pagamento do Mercado Pago
+      x-nuva-pending: true
+      description: |
+        Endpoint público do aviso de pagamento (`specs/013-pagamentos-mercado-pago.md`, "Webhook"),
+        sem sessão e **sem CSRF**: quem chama é o provedor, não um navegador com a sessão do aluno; a
+        autenticação é a assinatura do cabeçalho `x-signature`. Por isso a operação não declara
+        `csrfToken` e entra na lista de exceções da API.
+
+        Lê o corpo bruto (limite de 64 KB) e valida a assinatura HMAC-SHA256 com
+        `MP_WEBHOOK_SECRET` sobre o manifesto do provedor, em tempo constante, recusando carimbo com
+        mais de 5 minutos. Assinatura inválida ou ausente: `401` `payment_webhook_invalid_signature`,
+        grava `webhook_events` com `status: rejected` e `error: invalid_signature`, conta a métrica
+        de rejeição e registra log sem corpo, assinatura ou segredo; **não** enfileira
+        `payment.webhook` nem consulta o provedor. A rejeição não ocupa a chave idempotente
+        (`provider`, `event_id`), então um evento válido posterior com o mesmo identificador é
+        gravado e processado normalmente. A trilha `rejected` fica 90 dias
+        (`NUVA_RETENTION_WEBHOOK_DAYS`) e não aceita reprocessamento.
+
+        Assinatura válida: grava em `webhook_events` com a chave única; evento já recebido e não
+        rejeitado responde `200` sem enfileirar de novo; evento novo enfileira `payment.webhook` e
+        responde `200`. A resposta não espera o processamento (p95 < 200 ms). O conteúdo do aviso
+        não é confiável: o worker usa só o identificador e consulta o estado real no provedor.
+
+        Assinatura válida com aviso fora do formato esperado: `422` `payment_webhook_invalid`.
+        Limite de 300 requisições por minuto por IP, contando também a gravação da rejeição; o IP
+        real respeita `TRUSTED_PROXIES`.
+      security: []
+      parameters:
+        - name: x-signature
+          in: header
+          required: false
+          description: |
+            Assinatura do provedor (`ts`, `v1`). Ausente ou diferente do manifesto: `401`
+            `payment_webhook_invalid_signature`.
+          schema:
+            type: string
+        - name: x-request-id
+          in: header
+          required: false
+          description: Identificador da entrega, parte do manifesto assinado.
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              description: |
+                O aviso do provedor, lido como corpo bruto para a assinatura. O conteúdo nunca é
+                executado; só os identificadores do evento e do recurso são extraídos.
+              additionalProperties: true
+      responses:
+        "200":
+          description: Aviso autenticado; recebido agora ou já recebido antes.
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/XRequestId"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          description: |
+            Assinatura do aviso inválida, ausente ou com carimbo fora dos 5 minutos
+            (`payment_webhook_invalid_signature`); o evento é gravado como `rejected`.
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/XRequestId"
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "413":
+          $ref: "#/components/responses/PayloadTooLarge"
+        "415":
+          $ref: "#/components/responses/UnsupportedMediaType"
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+
 components:
   securitySchemes:
     sessionCookie:
@@ -5033,4 +5636,467 @@ components:
             - $ref: "#/components/schemas/DateTime"
             - type: "null"
           description: Só em `revoked`.
+      additionalProperties: false
+    # --- só classroom-api: vendas e pagamentos (Fase 3) ---
+    TaxIdType:
+      type: string
+      enum: [cpf, cnpj]
+      description: Tipo do documento fiscal do comprador (`specs/011-vendas-e-checkout.md`).
+    PaymentProviderName:
+      type: string
+      enum: [mercadopago, fake, none]
+      description: |
+        Provedor de pagamento do pedido ou da cobrança (`NUVA_PAYMENT_PROVIDER`); `none` no pedido de
+        total zero, que não passa pelo provedor.
+    PaymentStatus:
+      type: string
+      enum: [pending, approved, rejected, canceled, refunded, partially_refunded, charged_back]
+      description: Estado normalizado da cobrança no provedor (`specs/013-pagamentos-mercado-pago.md`).
+    PaymentMethod:
+      type: string
+      enum: [card, pix, boleto, other]
+      description: Meio de pagamento informado pelo provedor; `other` quando não é um dos três.
+    OrderStatus:
+      type: string
+      enum: [pending, paid, partially_refunded, refunded, canceled, expired, chargeback]
+      description: |
+        Estado do pedido do comprador (`specs/011-vendas-e-checkout.md`, "Pedido e seus estados").
+        `draft` não aparece aqui: é resto de tentativa que não chegou ao provedor e não é pedido do
+        aluno. `chargeback` revoga o acesso.
+    CartItemWarning:
+      type: string
+      enum: [bundle_item_owned, subscription_covered, time_limited_access]
+      description: |
+        Aviso que não bloqueia a compra (`specs/011-vendas-e-checkout.md`, "Cesta"):
+        `bundle_item_owned` (o aluno já tem um dos itens do pacote), `subscription_covered` (o
+        produto já é coberto por assinatura ativa; o avulso sobrevive ao fim dela) ou
+        `time_limited_access` (o aluno já tem o produto com validade; a compra estende o acesso).
+    CartItemUnsellableReason:
+      type: string
+      enum: [unpublished, archived, not_paid]
+      description: |
+        Por que o item não pode ser comprado agora: despublicado, arquivado ou fora do modo `paid`.
+        O item continua na cesta para o aluno decidir entre remover ou esperar a republicação.
+    CartUnlockVia:
+      type: object
+      description: Produto de onde o direito em cascata vem, para explicar a árvore na cesta.
+      required: [productType, title]
+      properties:
+        productType:
+          $ref: "#/components/schemas/ProductType"
+        title:
+          type: string
+      additionalProperties: false
+    CartUnlock:
+      type: object
+      description: Produto que a compra do item libera, além do próprio item (`specs/010-direitos-de-acesso.md`, "Algoritmo de concessão").
+      required: [productType, productId, title, via]
+      properties:
+        productType:
+          $ref: "#/components/schemas/ProductType"
+        productId:
+          $ref: "#/components/schemas/Uuid"
+        title:
+          type: string
+        via:
+          oneOf:
+            - $ref: "#/components/schemas/CartUnlockVia"
+            - type: "null"
+          description: |
+            Curso do pacote de onde vem o ebook, quando é o caso; `null` para o próprio item e para
+            os filhos diretos dele (cursos e ebooks do pacote, ebooks do curso).
+      additionalProperties: false
+    CartItem:
+      type: object
+      description: Um produto na cesta, com o preço atual e o que a compra libera.
+      required:
+        [
+          id,
+          productType,
+          productId,
+          title,
+          cover,
+          accessMode,
+          accessDays,
+          unitPriceCents,
+          discountCents,
+          couponEligible,
+          sellable,
+          unsellableReason,
+          warnings,
+          unlocks,
+          addedAt,
+        ]
+      properties:
+        id:
+          $ref: "#/components/schemas/Uuid"
+        productType:
+          $ref: "#/components/schemas/ProductType"
+        productId:
+          $ref: "#/components/schemas/Uuid"
+        title:
+          type: string
+        cover:
+          oneOf:
+            - $ref: "#/components/schemas/ProductCover"
+            - type: "null"
+        accessMode:
+          $ref: "#/components/schemas/AccessMode"
+        accessDays:
+          type: [integer, "null"]
+          minimum: 1
+          description: Dias de acesso a partir da compra; `null` é vitalício.
+        unitPriceCents:
+          type: [integer, "null"]
+          minimum: 0
+          description: Preço atual do produto; `null` quando o produto deixou de ter preço.
+        discountCents:
+          type: integer
+          minimum: 0
+          description: |
+            Parte do desconto do cupom rateada neste item, pela regra de `specs/011-vendas-e-checkout.md`
+            ("Cupons"); zero sem cupom válido ou com item fora da restrição de produtos.
+        couponEligible:
+          type: boolean
+          description: O cupom aplicado vale para este produto.
+        sellable:
+          type: boolean
+          description: O item pode ser comprado agora.
+        unsellableReason:
+          oneOf:
+            - $ref: "#/components/schemas/CartItemUnsellableReason"
+            - type: "null"
+          description: "`null` quando `sellable`."
+        warnings:
+          type: array
+          description: Avisos que não impedem a compra; vazio quando não há.
+          items:
+            $ref: "#/components/schemas/CartItemWarning"
+        unlocks:
+          type: array
+          description: |
+            O que a compra libera além do item, na ordem do algoritmo de concessão; vazio em ebook.
+          items:
+            $ref: "#/components/schemas/CartUnlock"
+        addedAt:
+          $ref: "#/components/schemas/DateTime"
+      additionalProperties: false
+    CartCoupon:
+      type: object
+      description: Cupom aplicado à cesta, com o estado atual da validade.
+      required: [code, kind, percentOff, amountOffCents, valid, invalidReason]
+      properties:
+        code:
+          type: string
+        kind:
+          type: string
+          enum: [percent, fixed]
+        percentOff:
+          type: [integer, "null"]
+          minimum: 1
+          maximum: 100
+        amountOffCents:
+          type: [integer, "null"]
+          minimum: 1
+        valid:
+          type: boolean
+          description: O cupom ainda vale para esta cesta; quando falso, nenhum desconto é aplicado.
+        invalidReason:
+          oneOf:
+            - type: string
+              enum: [expired, exhausted, inactive, not_eligible]
+            - type: "null"
+          description: "`null` quando `valid`."
+      additionalProperties: false
+    Cart:
+      type: object
+      description: A cesta aberta do aluno.
+      required:
+        [items, coupon, itemCount, subtotalCents, discountCents, totalCents, currency, updatedAt]
+      properties:
+        items:
+          type: array
+          maxItems: 50
+          items:
+            $ref: "#/components/schemas/CartItem"
+        coupon:
+          oneOf:
+            - $ref: "#/components/schemas/CartCoupon"
+            - type: "null"
+          description: "`null` sem cupom aplicado."
+        itemCount:
+          type: integer
+          minimum: 0
+          maximum: 50
+        subtotalCents:
+          $ref: "#/components/schemas/MoneyCents"
+        discountCents:
+          $ref: "#/components/schemas/MoneyCents"
+        totalCents:
+          $ref: "#/components/schemas/MoneyCents"
+        currency:
+          $ref: "#/components/schemas/CurrencyCode"
+        updatedAt:
+          $ref: "#/components/schemas/DateTime"
+      additionalProperties: false
+    Billing:
+      type: object
+      description: Dados de comprador guardados no usuário (`specs/011-vendas-e-checkout.md`, "Dados do comprador").
+      required: [fullName, taxIdType, taxId, complete]
+      properties:
+        fullName:
+          type: [string, "null"]
+        taxIdType:
+          oneOf:
+            - $ref: "#/components/schemas/TaxIdType"
+            - type: "null"
+        taxId:
+          type: [string, "null"]
+          description: Só os caracteres do documento, sem pontuação; nunca vai para logs.
+        complete:
+          type: boolean
+          description: Nome e documento válidos guardados; a finalização exige `true`.
+      additionalProperties: false
+    OrderProductRef:
+      type: object
+      description: Um item do pedido, só com o necessário para a lista.
+      required: [productType, productId, title]
+      properties:
+        productType:
+          $ref: "#/components/schemas/ProductType"
+        productId:
+          $ref: "#/components/schemas/Uuid"
+        title:
+          type: string
+          description: Título congelado no fechamento do pedido.
+      additionalProperties: false
+    OrderItem:
+      type: object
+      description: Um item do pedido, com os valores congelados no fechamento.
+      required:
+        [
+          id,
+          productType,
+          productId,
+          title,
+          accessDays,
+          unitPriceCents,
+          discountCents,
+          paidCents,
+          refundedCents,
+        ]
+      properties:
+        id:
+          $ref: "#/components/schemas/Uuid"
+        productType:
+          $ref: "#/components/schemas/ProductType"
+        productId:
+          $ref: "#/components/schemas/Uuid"
+        title:
+          type: string
+        accessDays:
+          type: [integer, "null"]
+          minimum: 1
+          description: Dias de acesso congelados; `null` é vitalício.
+        unitPriceCents:
+          $ref: "#/components/schemas/MoneyCents"
+        discountCents:
+          $ref: "#/components/schemas/MoneyCents"
+        paidCents:
+          $ref: "#/components/schemas/MoneyCents"
+          description: Preço menos o desconto rateado; o valor efetivamente pago.
+        refundedCents:
+          $ref: "#/components/schemas/MoneyCents"
+      additionalProperties: false
+    MyPayment:
+      type: object
+      description: A cobrança conhecida do pedido (a mais recente).
+      required:
+        [method, status, amountCents, refundedCents, currency, provider, providerPaymentId, paidAt]
+      properties:
+        method:
+          $ref: "#/components/schemas/PaymentMethod"
+        status:
+          $ref: "#/components/schemas/PaymentStatus"
+        amountCents:
+          $ref: "#/components/schemas/MoneyCents"
+        refundedCents:
+          $ref: "#/components/schemas/MoneyCents"
+        currency:
+          $ref: "#/components/schemas/CurrencyCode"
+        provider:
+          type: string
+          enum: [mercadopago, fake]
+        providerPaymentId:
+          type: string
+          description: Identificador da cobrança no provedor; serve de comprovante junto da página dele.
+        paidAt:
+          oneOf:
+            - $ref: "#/components/schemas/DateTime"
+            - type: "null"
+      additionalProperties: false
+    MyOrderSummary:
+      type: object
+      description: Um pedido do aluno na lista.
+      required:
+        [
+          id,
+          number,
+          status,
+          itemCount,
+          items,
+          subtotalCents,
+          discountCents,
+          totalCents,
+          currency,
+          createdAt,
+          paidAt,
+          expiresAt,
+          paymentMethod,
+        ]
+      properties:
+        id:
+          $ref: "#/components/schemas/Uuid"
+        number:
+          type: integer
+          minimum: 1
+          description: Número legível e sequencial do pedido, com saltos aceitos.
+        status:
+          $ref: "#/components/schemas/OrderStatus"
+        itemCount:
+          type: integer
+          minimum: 1
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/OrderProductRef"
+        subtotalCents:
+          $ref: "#/components/schemas/MoneyCents"
+        discountCents:
+          $ref: "#/components/schemas/MoneyCents"
+        totalCents:
+          $ref: "#/components/schemas/MoneyCents"
+        currency:
+          $ref: "#/components/schemas/CurrencyCode"
+        createdAt:
+          $ref: "#/components/schemas/DateTime"
+        paidAt:
+          oneOf:
+            - $ref: "#/components/schemas/DateTime"
+            - type: "null"
+        expiresAt:
+          oneOf:
+            - $ref: "#/components/schemas/DateTime"
+            - type: "null"
+          description: Prazo do `pending`; `null` fora dele.
+        paymentMethod:
+          oneOf:
+            - $ref: "#/components/schemas/PaymentMethod"
+            - type: "null"
+          description: Meio da cobrança conhecida; `null` antes da primeira cobrança.
+      additionalProperties: false
+    MyOrderPage:
+      allOf:
+        - $ref: "#/components/schemas/Page"
+        - type: object
+          required: [items]
+          properties:
+            items:
+              type: array
+              items:
+                $ref: "#/components/schemas/MyOrderSummary"
+    MyOrderDetail:
+      type: object
+      description: O pedido do aluno, com os valores congelados e a cobrança conhecida.
+      required:
+        [
+          id,
+          number,
+          status,
+          subtotalCents,
+          discountCents,
+          totalCents,
+          currency,
+          couponCode,
+          buyerName,
+          buyerTaxIdType,
+          buyerTaxId,
+          provider,
+          checkoutUrl,
+          createdAt,
+          paidAt,
+          expiresAt,
+          items,
+          payment,
+        ]
+      properties:
+        id:
+          $ref: "#/components/schemas/Uuid"
+        number:
+          type: integer
+          minimum: 1
+        status:
+          $ref: "#/components/schemas/OrderStatus"
+        subtotalCents:
+          $ref: "#/components/schemas/MoneyCents"
+        discountCents:
+          $ref: "#/components/schemas/MoneyCents"
+        totalCents:
+          $ref: "#/components/schemas/MoneyCents"
+        currency:
+          $ref: "#/components/schemas/CurrencyCode"
+        couponCode:
+          type: [string, "null"]
+          description: Código do cupom congelado no pedido; `null` sem cupom.
+        buyerName:
+          type: string
+        buyerTaxIdType:
+          $ref: "#/components/schemas/TaxIdType"
+        buyerTaxId:
+          type: string
+          description: Documento do próprio comprador, sem pontuação; nunca vai para logs.
+        provider:
+          $ref: "#/components/schemas/PaymentProviderName"
+        checkoutUrl:
+          type: [string, "null"]
+          format: uri
+          description: |
+            Página de pagamento do provedor enquanto o pedido está `pending` e o provedor não é
+            `none`; `null` depois de pago, reembolsado, cancelado, expirado ou em pedido de total
+            zero. Com Checkout Pro, Pix e boleto são pagos nessa página: a API não recebe QR nem
+            código de barras.
+        createdAt:
+          $ref: "#/components/schemas/DateTime"
+        paidAt:
+          oneOf:
+            - $ref: "#/components/schemas/DateTime"
+            - type: "null"
+        expiresAt:
+          oneOf:
+            - $ref: "#/components/schemas/DateTime"
+            - type: "null"
+          description: Prazo do `pending` (30 min no cartão e no Pix, 3 dias no boleto); `null` fora dele.
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/OrderItem"
+        payment:
+          oneOf:
+            - $ref: "#/components/schemas/MyPayment"
+            - type: "null"
+          description: "`null` até a primeira cobrança ser conhecida."
+      additionalProperties: false
+    OrderCheckout:
+      type: object
+      description: Resultado de fechar a cesta.
+      required: [order, checkoutUrl]
+      properties:
+        order:
+          $ref: "#/components/schemas/MyOrderDetail"
+        checkoutUrl:
+          type: [string, "null"]
+          format: uri
+          description: |
+            Para onde o navegador vai pagar; `null` no pedido de total zero, já `paid` com
+            `provider: none`.
       additionalProperties: false

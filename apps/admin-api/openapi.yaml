@@ -74,6 +74,11 @@ tags:
     description: Progresso dos alunos (`specs/014-aprendizado-e-progresso.md`).
   - name: certificates
     description: Certificados, templates e signatário (`specs/015-certificados.md`).
+  - name: sales
+    description: Pedidos, cupons, reembolso e exportação de vendas (`specs/011-vendas-e-checkout.md`).
+  - name: payments
+    description: Cobranças, avisos de pagamento e integração do provedor (`specs/013-pagamentos-mercado-pago.md`).
+
 security:
   - sessionCookie: []
 paths:
@@ -4664,6 +4669,748 @@ paths:
           $ref: "#/components/responses/InternalError"
         "503":
           $ref: "#/components/responses/ServiceUnavailable"
+
+  # --- Fase 3: vendas e pagamentos (specs 011 e 013) ---
+  /api/v1/orders:
+    get:
+      operationId: listOrders
+      tags: [sales]
+      summary: Listar pedidos
+      x-permission: sales.view
+      x-nuva-pending: true
+      description: |
+        Pedidos da escola, do mais novo para o mais antigo (`specs/011-vendas-e-checkout.md`,
+        "Consulta e exportação"), com filtros por período, estado, produto, cupom e comprador. Os
+        `draft` aparecem para quem filtra por `status=draft`; sem filtro de estado, a lista traz
+        todos, inclusive eles. `manager` e `admin` consultam; `instructor` recebe `403`
+        `permission_denied` (`specs/008-papeis-e-permissoes.md`).
+
+        `totals` soma todos os pedidos que casam com o filtro, não só a página: `subtotalCents`
+        (bruto), `discountCents`, `refundedCents` e `totalCents` (cobrado); `netCents` é o cobrado
+        menos os reembolsos. O documento fiscal do comprador não sai na lista, só no detalhe e no
+        CSV.
+      parameters:
+        - name: from
+          in: query
+          description: Início do período (inclusive), sobre `createdAt`.
+          schema:
+            $ref: "#/components/schemas/DateTime"
+        - name: to
+          in: query
+          description: Fim do período (exclusive), sobre `createdAt`.
+          schema:
+            $ref: "#/components/schemas/DateTime"
+        - name: status
+          in: query
+          schema:
+            $ref: "#/components/schemas/OrderStatus"
+        - name: productType
+          in: query
+          description: Filtro por produto; exige `productId`.
+          schema:
+            $ref: "#/components/schemas/ProductType"
+        - name: productId
+          in: query
+          description: Filtro por produto; exige `productType`.
+          schema:
+            $ref: "#/components/schemas/Uuid"
+        - name: couponId
+          in: query
+          schema:
+            $ref: "#/components/schemas/Uuid"
+        - name: q
+          in: query
+          description: Trecho do nome ou do e-mail do comprador.
+          schema:
+            type: string
+            minLength: 1
+            maxLength: 200
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Cursor"
+      responses:
+        "200":
+          description: Uma página de pedidos, com os totais do filtro.
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/XRequestId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OrderSummaryPage"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+  /api/v1/orders/export.csv:
+    get:
+      operationId: exportOrdersCsv
+      tags: [sales]
+      summary: Exportar vendas em CSV
+      x-permission: sales.export
+      x-nuva-pending: true
+      description: |
+        Exportação de vendas (`specs/011-vendas-e-checkout.md`, "Consulta e exportação"), só do
+        `admin`: `sales.export` é exclusiva dele e o `manager` recebe `403` `permission_denied` e
+        não vê a ação no menu (`specs/008-papeis-e-permissoes.md`). A tentativa recusada também é
+        auditada (`specs/028-auditoria.md`).
+
+        Uma linha por item de pedido, em fluxo contínuo (sem carregar tudo em memória; 50.000 itens
+        em menos de 30 s). UTF-8 com BOM, separador `;`, CRLF e cabeçalho com as colunas, nesta
+        ordem: `order_id`, `order_number`, `created_at`, `paid_at`, `status`, `buyer_name`,
+        `buyer_email`, `tax_id_type`, `tax_id`, `product_type`, `product_title`, `unit_price`,
+        `discount`, `paid_amount`, `refunded_amount`, `coupon_code`, `payment_method`, `provider`,
+        `provider_payment_id`. Datas em ISO 8601 UTC; valores monetários com duas casas e vírgula
+        decimal (`199,00`); campos vazios quando o dado não existe. Filtros iguais aos da lista. O
+        conteúdo e os filtros não vão para logs.
+      parameters:
+        - name: from
+          in: query
+          description: Início do período (inclusive), sobre `createdAt`.
+          schema:
+            $ref: "#/components/schemas/DateTime"
+        - name: to
+          in: query
+          description: Fim do período (exclusive), sobre `createdAt`.
+          schema:
+            $ref: "#/components/schemas/DateTime"
+        - name: status
+          in: query
+          schema:
+            $ref: "#/components/schemas/OrderStatus"
+        - name: productType
+          in: query
+          description: Filtro por produto; exige `productId`.
+          schema:
+            $ref: "#/components/schemas/ProductType"
+        - name: productId
+          in: query
+          description: Filtro por produto; exige `productType`.
+          schema:
+            $ref: "#/components/schemas/Uuid"
+        - name: couponId
+          in: query
+          schema:
+            $ref: "#/components/schemas/Uuid"
+        - name: q
+          in: query
+          description: Trecho do nome ou do e-mail do comprador.
+          schema:
+            type: string
+            minLength: 1
+            maxLength: 200
+      responses:
+        "200":
+          $ref: "#/components/responses/SalesCsv"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+  /api/v1/orders/{id}:
+    get:
+      operationId: getOrder
+      tags: [sales]
+      summary: Um pedido
+      x-permission: sales.view
+      x-nuva-pending: true
+      description: |
+        O pedido com comprador (nome, e-mail e documento fiscal), itens e valores congelados,
+        cobranças e reembolsos (`specs/011-vendas-e-checkout.md`). `manager` e `admin` veem;
+        `instructor` recebe `403`. O documento fiscal só sai aqui e no CSV, nunca nos logs.
+      parameters:
+        - $ref: "#/components/parameters/IdPath"
+      responses:
+        "200":
+          description: O pedido.
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/XRequestId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OrderDetail"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+  /api/v1/orders/{id}/refunds:
+    post:
+      operationId: requestOrderRefund
+      tags: [sales]
+      summary: Pedir reembolso do pedido
+      x-permission: order.refund
+      x-nuva-pending: true
+      description: |
+        Só o `admin` reembolsa (`specs/011-vendas-e-checkout.md`, "Reembolso"); `manager` recebe
+        `403` `permission_denied`. O pedido inteiro (`items` ausente ou nulo) ou itens escolhidos,
+        sempre com motivo. Cria o `refunds` em `requested` e enfileira `refund.execute`; a resposta
+        é `202` e o desfecho (estorno no provedor, revogação da cascata e estado do pedido) chega
+        depois, pelo worker, e aparece no detalhe do pedido. O valor de cada item é o pago por ele
+        (preço menos o desconto rateado), e um item pode ser reembolsado em parte, desde que a soma
+        não passe do valor pago e ainda não reembolsado.
+
+        `Idempotency-Key` é aceita: a repetição devolve o primeiro reembolso por 24 h.
+
+        Recusas, pelo `code`: `409` `order_not_refundable` (pedido que não está `paid` nem
+        `partially_refunded`); `422` `refund_exceeds_paid` (valor acima do pago e não reembolsado do
+        item, ou item de outro pedido). Falha do estorno não é resposta desta rota: o reembolso
+        fica `failed` com a mensagem do provedor e pode ser tentado de novo.
+      security:
+        - sessionCookie: []
+          csrfToken: []
+      parameters:
+        - $ref: "#/components/parameters/IdPath"
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [reason]
+              properties:
+                reason:
+                  type: string
+                  minLength: 1
+                  maxLength: 500
+                  description: Motivo informado pelo admin.
+                items:
+                  oneOf:
+                    - type: array
+                      minItems: 1
+                      maxItems: 50
+                      items:
+                        $ref: "#/components/schemas/RefundItemInput"
+                    - type: "null"
+                  description: |
+                    Itens e valores do pedido; ausente ou `null` reembolsa o pedido inteiro, pelo
+                    saldo não reembolsado de cada item.
+              additionalProperties: false
+      responses:
+        "202":
+          description: Reembolso pedido; o estorno é executado em segundo plano.
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/XRequestId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Refund"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "413":
+          $ref: "#/components/responses/PayloadTooLarge"
+        "415":
+          $ref: "#/components/responses/UnsupportedMediaType"
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+  /api/v1/refunds/{id}/retry:
+    post:
+      operationId: retryRefund
+      tags: [sales]
+      summary: Tentar o reembolso de novo
+      x-permission: order.refund
+      x-nuva-pending: true
+      description: |
+        Repete o estorno de um reembolso `failed` (`specs/011-vendas-e-checkout.md`, "Reembolso"),
+        com a mesma cobrança e os mesmos itens; volta a `requested` e enfileira `refund.execute`.
+        Só o `admin` (`order.refund`). Reembolso em `requested` ou `done`: `409`
+        `refund_not_retryable`.
+      security:
+        - sessionCookie: []
+          csrfToken: []
+      parameters:
+        - $ref: "#/components/parameters/IdPath"
+      responses:
+        "202":
+          description: Reembolso devolvido à fila.
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/XRequestId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Refund"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+  /api/v1/coupons:
+    get:
+      operationId: listCoupons
+      tags: [sales]
+      summary: Listar cupons
+      x-permission: coupon.manage
+      x-nuva-pending: true
+      description: |
+        Cupons da escola, do mais novo para o mais antigo (`specs/011-vendas-e-checkout.md`,
+        "Cupons"). Só o `admin` (`coupon.manage`); `manager` e `instructor` recebem `403`
+        `permission_denied`. Busca pelo código (sem diferenciar maiúsculas) e filtros por situação
+        e por `appliesTo`.
+      parameters:
+        - name: q
+          in: query
+          description: Trecho do código.
+          schema:
+            type: string
+            minLength: 1
+            maxLength: 40
+        - name: active
+          in: query
+          schema:
+            type: boolean
+        - name: appliesTo
+          in: query
+          schema:
+            $ref: "#/components/schemas/CouponAppliesTo"
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Cursor"
+      responses:
+        "200":
+          description: Uma página de cupons.
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/XRequestId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CouponPage"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+    post:
+      operationId: createCoupon
+      tags: [sales]
+      summary: Criar cupom
+      x-permission: coupon.manage
+      x-nuva-pending: true
+      description: |
+        Só o `admin` (`specs/011-vendas-e-checkout.md`, "Cupons"). O código é único sem diferenciar
+        maiúsculas: repetido, `409` `coupon_code_taken`. `percent` exige `percentOff` de 1 a 100 e
+        `fixed` exige `amountOffCents` maior que zero; combinação diferente disso, inclusive os dois
+        ou nenhum campo: `422` `coupon_invalid`. `maxUses` nulo é ilimitado e `maxUsesPerUser` tem
+        padrão 1; `appliesTo` tem padrão `orders` e `active` tem padrão `true`. `products` vazia ou
+        ausente vale para todos os produtos; produtos inexistentes: `422` `coupon_invalid`.
+      security:
+        - sessionCookie: []
+          csrfToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CouponInput"
+      responses:
+        "201":
+          description: Cupom criado.
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/XRequestId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Coupon"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "413":
+          $ref: "#/components/responses/PayloadTooLarge"
+        "415":
+          $ref: "#/components/responses/UnsupportedMediaType"
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+  /api/v1/coupons/{id}:
+    get:
+      operationId: getCoupon
+      tags: [sales]
+      summary: Um cupom
+      x-permission: coupon.manage
+      x-nuva-pending: true
+      description: |
+        Só o `admin` (`coupon.manage`); inexistente: `404` `not_found`.
+      parameters:
+        - $ref: "#/components/parameters/IdPath"
+      responses:
+        "200":
+          description: O cupom.
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/XRequestId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Coupon"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+    patch:
+      operationId: updateCoupon
+      tags: [sales]
+      summary: Editar ou desativar cupom
+      x-permission: coupon.manage
+      x-nuva-pending: true
+      description: |
+        Só o `admin` (`specs/011-vendas-e-checkout.md`); a desativação é `active: false`, não há
+        exclusão. Só os campos enviados mudam; `products` enviada substitui a lista inteira e
+        `products: []` volta a valer para todos. O código novo é único sem diferenciar maiúsculas:
+        repetido, `409` `coupon_code_taken`. A combinação resultante precisa continuar válida
+        (desconto casando com `kind`, `endsAt` depois de `startsAt`, limites dentro da faixa):
+        senão, `422` `coupon_invalid`. Baixar `maxUses` abaixo do já usado é permitido: os pedidos
+        pagos são honrados e o excesso fica registrado.
+      security:
+        - sessionCookie: []
+          csrfToken: []
+      parameters:
+        - $ref: "#/components/parameters/IdPath"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CouponUpdate"
+      responses:
+        "200":
+          description: Cupom gravado.
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/XRequestId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Coupon"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "413":
+          $ref: "#/components/responses/PayloadTooLarge"
+        "415":
+          $ref: "#/components/responses/UnsupportedMediaType"
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+  /api/v1/payments:
+    get:
+      operationId: listPayments
+      tags: [payments]
+      summary: Listar cobranças
+      x-permission: sales.view
+      x-nuva-pending: true
+      description: |
+        Cobranças conhecidas (`specs/013-pagamentos-mercado-pago.md`), do mais recente ao mais
+        antigo, de pedidos e de assinaturas; `manager` e `admin` consultam (`specs/008-papeis-e-permissoes.md`).
+        Cada item traz `orderId`/`orderNumber` quando é de pedido e `subscriptionId` quando é de
+        assinatura, nunca os dois. Nenhum dado de cartão, token ou corpo do provedor.
+      parameters:
+        - name: status
+          in: query
+          schema:
+            $ref: "#/components/schemas/PaymentStatus"
+        - name: method
+          in: query
+          schema:
+            $ref: "#/components/schemas/PaymentMethod"
+        - name: provider
+          in: query
+          schema:
+            type: string
+            enum: [mercadopago, fake]
+        - name: from
+          in: query
+          description: Início do período (inclusive), sobre `createdAt`.
+          schema:
+            $ref: "#/components/schemas/DateTime"
+        - name: to
+          in: query
+          description: Fim do período (exclusive), sobre `createdAt`.
+          schema:
+            $ref: "#/components/schemas/DateTime"
+        - name: orderId
+          in: query
+          schema:
+            $ref: "#/components/schemas/Uuid"
+        - name: subscriptionId
+          in: query
+          schema:
+            $ref: "#/components/schemas/Uuid"
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Cursor"
+      responses:
+        "200":
+          description: Uma página de cobranças.
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/XRequestId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PaymentPage"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+  /api/v1/payments/{id}:
+    get:
+      operationId: getPayment
+      tags: [payments]
+      summary: Uma cobrança
+      x-permission: sales.view
+      x-nuva-pending: true
+      description: |
+        A cobrança, com o estado normalizado, o estado original do provedor e os reembolsos
+        relacionados (`specs/013-pagamentos-mercado-pago.md`). `manager` e `admin`; inexistente:
+        `404` `not_found`.
+      parameters:
+        - $ref: "#/components/parameters/IdPath"
+      responses:
+        "200":
+          description: A cobrança.
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/XRequestId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PaymentDetail"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+  /api/v1/webhook-events:
+    get:
+      operationId: listWebhookEvents
+      tags: [payments]
+      summary: Avisos de pagamento com falha
+      x-permission: ops.manage
+      x-nuva-pending: true
+      description: |
+        Só o `admin` (`ops.manage`, `specs/008-papeis-e-permissoes.md`; `specs/013-pagamentos-mercado-pago.md`,
+        "Webhook"). `status=failed` (padrão) é a fila de falhas operacionais, cujo evento pode ser
+        reprocessado. `status=rejected` mostra a trilha de segurança das assinaturas recusadas,
+        somente leitura: sem corpo, sem cabeçalhos e sem assinatura, e sem ação de reprocessar. Um
+        evento `rejected` não entra na fila de falhas. Os dois filtros trazem do mais recente ao
+        mais antigo e a trilha `rejected` fica retida por 90 dias.
+      parameters:
+        - name: status
+          in: query
+          description: "`failed`: fila operacional; `rejected`: trilha de segurança, só leitura."
+          schema:
+            type: string
+            enum: [failed, rejected]
+            default: failed
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Cursor"
+      responses:
+        "200":
+          description: Uma página de avisos.
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/XRequestId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WebhookEventPage"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+  /api/v1/webhook-events/{id}/retry:
+    post:
+      operationId: retryWebhookEvent
+      tags: [payments]
+      summary: Reprocessar aviso com falha
+      x-permission: ops.manage
+      x-nuva-pending: true
+      description: |
+        Só o `admin` (`ops.manage`) e somente evento `failed` (`specs/013-pagamentos-mercado-pago.md`):
+        volta a `received` e enfileira `payment.webhook` de novo. Evento `rejected` nunca é
+        reprocessado, e `processed`, `ignored` ou `received` também não: `409`
+        `webhook_event_not_retryable`. O evento volta com o estado novo.
+      security:
+        - sessionCookie: []
+          csrfToken: []
+      parameters:
+        - $ref: "#/components/parameters/IdPath"
+      responses:
+        "202":
+          description: Aviso devolvido à fila.
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/XRequestId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WebhookEvent"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+  /api/v1/settings/payments:
+    get:
+      operationId: getPaymentSettings
+      tags: [payments]
+      summary: Estado da integração de pagamento
+      x-permission: settings.manage
+      x-nuva-pending: true
+      description: |
+        Só o `admin` (`settings.manage`, `specs/007-contas-e-autenticacao.md` e
+        `specs/013-pagamentos-mercado-pago.md`, "Modo de teste"): o provedor em uso, se o token é de
+        teste, o aviso de produção com token de teste e a última reconciliação. Nunca devolve
+        token, chave pública, segredo do webhook nem URL com credencial.
+      responses:
+        "200":
+          description: O estado da integração.
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/XRequestId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PaymentSettings"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+
 components:
   securitySchemes:
     sessionCookie:
@@ -5029,6 +5776,31 @@ components:
         application/problem+json:
           schema:
             $ref: "#/components/schemas/CertificateTemplateInvalidProblem"
+    SalesCsv:
+      description: |
+        As vendas em CSV, uma linha por item de pedido (`specs/011-vendas-e-checkout.md`,
+        "Consulta e exportação"), em fluxo contínuo: a resposta começa antes de ler todos os
+        pedidos e não é guardada em memória. UTF-8 com BOM, separador `;`, CRLF, decimais com
+        vírgula; o nome sugerido do arquivo é `vendas-AAAA-MM-DD.csv`. O conteúdo e os filtros não
+        vão para logs.
+      headers:
+        X-Request-Id:
+          $ref: "#/components/headers/XRequestId"
+        Cache-Control:
+          $ref: "#/components/headers/NoStore"
+        Content-Disposition:
+          $ref: "#/components/headers/ContentDisposition"
+        X-Content-Type-Options:
+          $ref: "#/components/headers/ContentTypeOptions"
+      content:
+        text/csv:
+          schema:
+            type: string
+            contentMediaType: text/csv
+            description: |
+              Cabeçalho `order_id;order_number;created_at;paid_at;status;buyer_name;buyer_email;tax_id_type;tax_id;product_type;product_title;unit_price;discount;paid_amount;refunded_amount;coupon_code;payment_method;provider;provider_payment_id`,
+              seguido de uma linha por item de pedido.
+
   schemas:
     # --- comum ---
     Uuid:
@@ -7588,4 +8360,844 @@ components:
         schoolName:
           type: string
           description: "`school.name`, só leitura aqui."
+      additionalProperties: false
+    # --- só admin-api: vendas e pagamentos (specs 011 e 013) ---
+    TaxIdType:
+      type: string
+      enum: [cpf, cnpj]
+      description: Tipo do documento fiscal do comprador (`specs/011-vendas-e-checkout.md`).
+    CouponKind:
+      type: string
+      enum: [percent, fixed]
+      description: |
+        `percent` desconta uma porcentagem de cada item elegível; `fixed` desconta um valor em
+        centavos rateado entre os itens elegíveis (`specs/011-vendas-e-checkout.md`, "Cupons").
+    CouponAppliesTo:
+      type: string
+      enum: [orders, subscriptions, both]
+      description: |
+        A que o cupom se aplica (`specs/012-assinaturas.md`): pedidos avulsos, assinaturas ou os
+        dois. Nesta janela, só pedidos avulsos usam o cupom.
+    CouponProductInput:
+      type: object
+      description: Produto restringindo o cupom; vazio é o mesmo que todos.
+      required: [productType, productId]
+      properties:
+        productType:
+          $ref: "#/components/schemas/ProductType"
+        productId:
+          $ref: "#/components/schemas/Uuid"
+      additionalProperties: false
+    CouponProduct:
+      type: object
+      description: Produto elegível do cupom, com o título atual.
+      required: [productType, productId, title]
+      properties:
+        productType:
+          $ref: "#/components/schemas/ProductType"
+        productId:
+          $ref: "#/components/schemas/Uuid"
+        title:
+          type: string
+      additionalProperties: false
+    CouponInput:
+      type: object
+      description: |
+        Definição de um cupom novo (`specs/011-vendas-e-checkout.md`, "Cupons"). `appliesTo` tem
+        padrão `orders` e `active`, `true`.
+      required: [code, kind]
+      properties:
+        code:
+          type: string
+          minLength: 3
+          maxLength: 40
+          pattern: "^[A-Za-z0-9-]+$"
+          description: Comparado sem diferenciar maiúsculas.
+        kind:
+          $ref: "#/components/schemas/CouponKind"
+        percentOff:
+          type: [integer, "null"]
+          minimum: 1
+          maximum: 100
+          description: Obrigatório em `percent`; proibido em `fixed`.
+        amountOffCents:
+          type: [integer, "null"]
+          minimum: 1
+          description: Obrigatório em `fixed`; proibido em `percent`.
+        startsAt:
+          oneOf:
+            - $ref: "#/components/schemas/DateTime"
+            - type: "null"
+          description: Início da validade; `null` sem prazo para começar.
+        endsAt:
+          oneOf:
+            - $ref: "#/components/schemas/DateTime"
+            - type: "null"
+          description: Fim da validade; `null` sem prazo para acabar.
+        maxUses:
+          type: [integer, "null"]
+          minimum: 1
+          description: Total de usos; `null` ilimitado.
+        maxUsesPerUser:
+          type: integer
+          minimum: 1
+          default: 1
+        appliesTo:
+          $ref: "#/components/schemas/CouponAppliesTo"
+        products:
+          type: array
+          maxItems: 500
+          default: []
+          description: Restrição de produtos; vazia vale para todos.
+          items:
+            $ref: "#/components/schemas/CouponProductInput"
+        active:
+          type: boolean
+          default: true
+      additionalProperties: false
+    CouponUpdate:
+      type: object
+      description: |
+        Edição parcial: só os campos enviados mudam. `products` enviada substitui a lista inteira
+        e `products: []` volta a valer para todos (`specs/011-vendas-e-checkout.md`).
+      properties:
+        code:
+          type: string
+          minLength: 3
+          maxLength: 40
+          pattern: "^[A-Za-z0-9-]+$"
+        kind:
+          $ref: "#/components/schemas/CouponKind"
+        percentOff:
+          type: [integer, "null"]
+          minimum: 1
+          maximum: 100
+        amountOffCents:
+          type: [integer, "null"]
+          minimum: 1
+        startsAt:
+          oneOf:
+            - $ref: "#/components/schemas/DateTime"
+            - type: "null"
+        endsAt:
+          oneOf:
+            - $ref: "#/components/schemas/DateTime"
+            - type: "null"
+        maxUses:
+          type: [integer, "null"]
+          minimum: 1
+        maxUsesPerUser:
+          type: integer
+          minimum: 1
+        appliesTo:
+          $ref: "#/components/schemas/CouponAppliesTo"
+        products:
+          type: array
+          maxItems: 500
+          items:
+            $ref: "#/components/schemas/CouponProductInput"
+        active:
+          type: boolean
+      additionalProperties: false
+    Coupon:
+      type: object
+      description: Um cupom da escola (`specs/011-vendas-e-checkout.md`, "Cupons").
+      required:
+        [
+          id,
+          code,
+          kind,
+          percentOff,
+          amountOffCents,
+          startsAt,
+          endsAt,
+          maxUses,
+          maxUsesPerUser,
+          usesCount,
+          appliesTo,
+          products,
+          active,
+          createdBy,
+          createdAt,
+          updatedAt,
+        ]
+      properties:
+        id:
+          $ref: "#/components/schemas/Uuid"
+        code:
+          type: string
+        kind:
+          $ref: "#/components/schemas/CouponKind"
+        percentOff:
+          type: [integer, "null"]
+          minimum: 1
+          maximum: 100
+        amountOffCents:
+          type: [integer, "null"]
+          minimum: 1
+        startsAt:
+          oneOf:
+            - $ref: "#/components/schemas/DateTime"
+            - type: "null"
+        endsAt:
+          oneOf:
+            - $ref: "#/components/schemas/DateTime"
+            - type: "null"
+        maxUses:
+          type: [integer, "null"]
+          minimum: 1
+          description: "`null` ilimitado."
+        maxUsesPerUser:
+          type: integer
+          minimum: 1
+        usesCount:
+          type: integer
+          minimum: 0
+          description: |
+            Usos contabilizados. Pode passar de `maxUses`: pedido pago com o limite estourado é
+            honrado e o excesso fica registrado (spec 011).
+        appliesTo:
+          $ref: "#/components/schemas/CouponAppliesTo"
+        products:
+          type: array
+          items:
+            $ref: "#/components/schemas/CouponProduct"
+        active:
+          type: boolean
+        createdBy:
+          $ref: "#/components/schemas/UserRef"
+        createdAt:
+          $ref: "#/components/schemas/DateTime"
+        updatedAt:
+          $ref: "#/components/schemas/DateTime"
+      additionalProperties: false
+    CouponPage:
+      allOf:
+        - $ref: "#/components/schemas/Page"
+        - type: object
+          required: [items]
+          properties:
+            items:
+              type: array
+              items:
+                $ref: "#/components/schemas/Coupon"
+    OrderStatus:
+      type: string
+      enum: [draft, pending, paid, partially_refunded, refunded, canceled, expired, chargeback]
+      description: |
+        Estado do pedido (`specs/011-vendas-e-checkout.md`, "Pedido e seus estados"). `draft` é
+        resto de tentativa que não chegou ao provedor: aparece na consulta do admin, não na do
+        aluno.
+    PaymentStatus:
+      type: string
+      enum: [pending, approved, rejected, canceled, refunded, partially_refunded, charged_back]
+      description: Estado normalizado da cobrança no provedor (`specs/013-pagamentos-mercado-pago.md`).
+    PaymentMethod:
+      type: string
+      enum: [card, pix, boleto, other]
+      description: Meio de pagamento informado pelo provedor; `other` quando não é um dos três.
+    PaymentProviderName:
+      type: string
+      enum: [mercadopago, fake, none]
+      description: |
+        Provedor da cobrança; `none` no pedido de total zero, que não passa pelo provedor
+        (`NUVA_PAYMENT_PROVIDER`).
+    RefundStatus:
+      type: string
+      enum: [requested, done, failed]
+      description: |
+        `requested` enquanto o estorno não voltou; `done` com o estorno confirmado; `failed` com o
+        motivo em `error`, podendo ser tentado de novo (`specs/011-vendas-e-checkout.md`).
+    WebhookEventStatus:
+      type: string
+      enum: [received, rejected, processed, ignored, failed]
+      description: |
+        Estado do aviso em `webhook_events` (`specs/013-pagamentos-mercado-pago.md`). `rejected` é
+        a trilha de assinatura recusada, só leitura; `failed` é a falha operacional que aceita
+        reprocessamento.
+    WebhookResourceType:
+      type: string
+      enum: [payment, subscription]
+      description: Tipo do recurso citado no aviso.
+    OrderBuyer:
+      type: object
+      description: O comprador na lista de pedidos, sem o documento fiscal.
+      required: [id, name, email]
+      properties:
+        id:
+          $ref: "#/components/schemas/Uuid"
+        name:
+          type: string
+        email:
+          $ref: "#/components/schemas/Email"
+      additionalProperties: false
+    OrderBuyerDetail:
+      type: object
+      description: |
+        O comprador no detalhe do pedido. O documento fiscal só aparece aqui e no CSV, nunca nos
+        logs (`specs/011-vendas-e-checkout.md`).
+      required: [id, name, email, taxIdType, taxId]
+      properties:
+        id:
+          $ref: "#/components/schemas/Uuid"
+        name:
+          type: string
+        email:
+          $ref: "#/components/schemas/Email"
+        taxIdType:
+          $ref: "#/components/schemas/TaxIdType"
+        taxId:
+          type: string
+          description: Só os caracteres do documento, sem pontuação.
+      additionalProperties: false
+    OrderProductRef:
+      type: object
+      description: Um item do pedido, só com o necessário para a lista.
+      required: [productType, productId, title]
+      properties:
+        productType:
+          $ref: "#/components/schemas/ProductType"
+        productId:
+          $ref: "#/components/schemas/Uuid"
+        title:
+          type: string
+          description: Título congelado no fechamento do pedido.
+      additionalProperties: false
+    OrderItem:
+      type: object
+      description: Um item do pedido, com os valores congelados no fechamento.
+      required:
+        [
+          id,
+          productType,
+          productId,
+          title,
+          accessDays,
+          unitPriceCents,
+          discountCents,
+          paidCents,
+          refundedCents,
+        ]
+      properties:
+        id:
+          $ref: "#/components/schemas/Uuid"
+        productType:
+          $ref: "#/components/schemas/ProductType"
+        productId:
+          $ref: "#/components/schemas/Uuid"
+        title:
+          type: string
+        accessDays:
+          type: [integer, "null"]
+          minimum: 1
+          description: Dias de acesso congelados; `null` é vitalício.
+        unitPriceCents:
+          $ref: "#/components/schemas/MoneyCents"
+        discountCents:
+          $ref: "#/components/schemas/MoneyCents"
+        paidCents:
+          $ref: "#/components/schemas/MoneyCents"
+          description: Preço menos o desconto rateado; o valor efetivamente pago.
+        refundedCents:
+          $ref: "#/components/schemas/MoneyCents"
+      additionalProperties: false
+    OrderTotals:
+      type: object
+      description: |
+        Somas de todos os pedidos que casam com o filtro, não só da página
+        (`specs/011-vendas-e-checkout.md`, "Consulta e exportação").
+      required: [subtotalCents, discountCents, refundedCents, totalCents, netCents]
+      properties:
+        subtotalCents:
+          $ref: "#/components/schemas/MoneyCents"
+          description: Bruto, antes dos descontos.
+        discountCents:
+          $ref: "#/components/schemas/MoneyCents"
+        refundedCents:
+          $ref: "#/components/schemas/MoneyCents"
+        totalCents:
+          $ref: "#/components/schemas/MoneyCents"
+          description: Cobrado, depois dos descontos.
+        netCents:
+          $ref: "#/components/schemas/MoneyCents"
+          description: Cobrado menos os reembolsos.
+      additionalProperties: false
+    OrderSummary:
+      type: object
+      description: Um pedido na lista do admin, sem o documento fiscal.
+      required:
+        [
+          id,
+          number,
+          status,
+          buyer,
+          itemCount,
+          items,
+          subtotalCents,
+          discountCents,
+          refundedCents,
+          totalCents,
+          currency,
+          couponCode,
+          provider,
+          paymentMethod,
+          createdAt,
+          paidAt,
+          expiresAt,
+        ]
+      properties:
+        id:
+          $ref: "#/components/schemas/Uuid"
+        number:
+          type: integer
+          minimum: 1
+          description: Número legível e sequencial do pedido, com saltos aceitos.
+        status:
+          $ref: "#/components/schemas/OrderStatus"
+        buyer:
+          $ref: "#/components/schemas/OrderBuyer"
+        itemCount:
+          type: integer
+          minimum: 1
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/OrderProductRef"
+        subtotalCents:
+          $ref: "#/components/schemas/MoneyCents"
+        discountCents:
+          $ref: "#/components/schemas/MoneyCents"
+        refundedCents:
+          $ref: "#/components/schemas/MoneyCents"
+        totalCents:
+          $ref: "#/components/schemas/MoneyCents"
+        currency:
+          $ref: "#/components/schemas/CurrencyCode"
+        couponCode:
+          type: [string, "null"]
+          description: Código do cupom congelado no pedido; `null` sem cupom.
+        provider:
+          $ref: "#/components/schemas/PaymentProviderName"
+        paymentMethod:
+          oneOf:
+            - $ref: "#/components/schemas/PaymentMethod"
+            - type: "null"
+          description: Meio da cobrança conhecida; `null` antes da primeira cobrança.
+        createdAt:
+          $ref: "#/components/schemas/DateTime"
+        paidAt:
+          oneOf:
+            - $ref: "#/components/schemas/DateTime"
+            - type: "null"
+        expiresAt:
+          oneOf:
+            - $ref: "#/components/schemas/DateTime"
+            - type: "null"
+          description: Prazo do `pending`; `null` fora dele.
+      additionalProperties: false
+    OrderSummaryPage:
+      allOf:
+        - $ref: "#/components/schemas/Page"
+        - type: object
+          required: [items, totals]
+          properties:
+            items:
+              type: array
+              items:
+                $ref: "#/components/schemas/OrderSummary"
+            totals:
+              $ref: "#/components/schemas/OrderTotals"
+    OrderDetail:
+      type: object
+      description: |
+        O pedido completo, com comprador, valores congelados, cobranças e reembolsos
+        (`specs/011-vendas-e-checkout.md`). O documento fiscal só sai aqui e no CSV.
+      required:
+        [
+          id,
+          number,
+          status,
+          buyer,
+          itemCount,
+          subtotalCents,
+          discountCents,
+          refundedCents,
+          totalCents,
+          currency,
+          couponCode,
+          provider,
+          createdAt,
+          paidAt,
+          expiresAt,
+          items,
+          payments,
+          refunds,
+        ]
+      properties:
+        id:
+          $ref: "#/components/schemas/Uuid"
+        number:
+          type: integer
+          minimum: 1
+        status:
+          $ref: "#/components/schemas/OrderStatus"
+        buyer:
+          $ref: "#/components/schemas/OrderBuyerDetail"
+        itemCount:
+          type: integer
+          minimum: 1
+        subtotalCents:
+          $ref: "#/components/schemas/MoneyCents"
+        discountCents:
+          $ref: "#/components/schemas/MoneyCents"
+        refundedCents:
+          $ref: "#/components/schemas/MoneyCents"
+        totalCents:
+          $ref: "#/components/schemas/MoneyCents"
+        currency:
+          $ref: "#/components/schemas/CurrencyCode"
+        couponCode:
+          type: [string, "null"]
+          description: Código do cupom congelado no pedido; `null` sem cupom.
+        provider:
+          $ref: "#/components/schemas/PaymentProviderName"
+        createdAt:
+          $ref: "#/components/schemas/DateTime"
+        paidAt:
+          oneOf:
+            - $ref: "#/components/schemas/DateTime"
+            - type: "null"
+        expiresAt:
+          oneOf:
+            - $ref: "#/components/schemas/DateTime"
+            - type: "null"
+          description: Prazo do `pending` (30 min no cartão e no Pix, 3 dias no boleto); `null` fora dele.
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/OrderItem"
+        payments:
+          type: array
+          description: Cobranças conhecidas do pedido, da mais recente à mais antiga.
+          items:
+            $ref: "#/components/schemas/Payment"
+        refunds:
+          type: array
+          description: Reembolsos do pedido, do mais recente ao mais antigo.
+          items:
+            $ref: "#/components/schemas/Refund"
+      additionalProperties: false
+    RefundItemInput:
+      type: object
+      description: Item e valor a reembolsar (`specs/011-vendas-e-checkout.md`, "Reembolso").
+      required: [orderItemId, amountCents]
+      properties:
+        orderItemId:
+          $ref: "#/components/schemas/Uuid"
+        amountCents:
+          type: integer
+          minimum: 1
+          description: Em centavos; no máximo o pago e ainda não reembolsado do item.
+      additionalProperties: false
+    RefundItem:
+      type: object
+      description: Item reembolsado, com o título congelado do pedido.
+      required: [orderItemId, title, amountCents]
+      properties:
+        orderItemId:
+          $ref: "#/components/schemas/Uuid"
+        title:
+          type: string
+        amountCents:
+          $ref: "#/components/schemas/MoneyCents"
+      additionalProperties: false
+    Refund:
+      type: object
+      description: Um reembolso pedido, em execução ou concluído.
+      required:
+        [
+          id,
+          paymentId,
+          items,
+          amountCents,
+          reason,
+          status,
+          providerRefundId,
+          error,
+          requestedBy,
+          createdAt,
+          doneAt,
+        ]
+      properties:
+        id:
+          $ref: "#/components/schemas/Uuid"
+        orderId:
+          oneOf:
+            - $ref: "#/components/schemas/Uuid"
+            - type: "null"
+          description: Pedido reembolsado; `null` no reembolso de cobrança recorrente.
+        paymentId:
+          $ref: "#/components/schemas/Uuid"
+        items:
+          type: array
+          description: Itens e valores do pedido; vazia no reembolso de cobrança recorrente.
+          items:
+            $ref: "#/components/schemas/RefundItem"
+        amountCents:
+          $ref: "#/components/schemas/MoneyCents"
+        reason:
+          type: string
+          description: Motivo informado pelo admin.
+        status:
+          $ref: "#/components/schemas/RefundStatus"
+        providerRefundId:
+          type: [string, "null"]
+          description: Identificador do estorno no provedor; `null` até a confirmação.
+        error:
+          type: [string, "null"]
+          description: Motivo da falha, quando `status` é `failed`; nunca o corpo do provedor.
+        requestedBy:
+          $ref: "#/components/schemas/UserRef"
+        createdAt:
+          $ref: "#/components/schemas/DateTime"
+        doneAt:
+          oneOf:
+            - $ref: "#/components/schemas/DateTime"
+            - type: "null"
+          description: Quando o estorno foi confirmado; `null` fora de `done`.
+      additionalProperties: false
+    Payment:
+      type: object
+      description: |
+        Uma cobrança conhecida (`specs/013-pagamentos-mercado-pago.md`). Sem dado de cartão e sem
+        o corpo devolvido pelo provedor; só o estado original em `rawStatus`.
+      required:
+        [
+          id,
+          orderId,
+          orderNumber,
+          subscriptionId,
+          provider,
+          providerPaymentId,
+          status,
+          method,
+          amountCents,
+          refundedCents,
+          currency,
+          rawStatus,
+          paidAt,
+          createdAt,
+          updatedAt,
+        ]
+      properties:
+        id:
+          $ref: "#/components/schemas/Uuid"
+        orderId:
+          oneOf:
+            - $ref: "#/components/schemas/Uuid"
+            - type: "null"
+          description: Pedido da cobrança; `null` em cobrança de assinatura.
+        orderNumber:
+          oneOf:
+            - type: integer
+              minimum: 1
+            - type: "null"
+          description: Número legível do pedido; `null` em cobrança de assinatura.
+        subscriptionId:
+          oneOf:
+            - $ref: "#/components/schemas/Uuid"
+            - type: "null"
+          description: Assinatura da cobrança; `null` em cobrança de pedido.
+        provider:
+          type: string
+          enum: [mercadopago, fake]
+        providerPaymentId:
+          type: string
+        status:
+          $ref: "#/components/schemas/PaymentStatus"
+        method:
+          $ref: "#/components/schemas/PaymentMethod"
+        amountCents:
+          $ref: "#/components/schemas/MoneyCents"
+        refundedCents:
+          $ref: "#/components/schemas/MoneyCents"
+        currency:
+          $ref: "#/components/schemas/CurrencyCode"
+        rawStatus:
+          type: string
+          description: Estado original devolvido pelo provedor, para diagnóstico.
+        paidAt:
+          oneOf:
+            - $ref: "#/components/schemas/DateTime"
+            - type: "null"
+        createdAt:
+          $ref: "#/components/schemas/DateTime"
+        updatedAt:
+          $ref: "#/components/schemas/DateTime"
+      additionalProperties: false
+    PaymentPage:
+      allOf:
+        - $ref: "#/components/schemas/Page"
+        - type: object
+          required: [items]
+          properties:
+            items:
+              type: array
+              items:
+                $ref: "#/components/schemas/Payment"
+    PaymentDetail:
+      type: object
+      description: A cobrança com os reembolsos relacionados.
+      required:
+        [
+          id,
+          orderId,
+          orderNumber,
+          subscriptionId,
+          provider,
+          providerPaymentId,
+          status,
+          method,
+          amountCents,
+          refundedCents,
+          currency,
+          rawStatus,
+          paidAt,
+          createdAt,
+          updatedAt,
+          refunds,
+        ]
+      properties:
+        id:
+          $ref: "#/components/schemas/Uuid"
+        orderId:
+          oneOf:
+            - $ref: "#/components/schemas/Uuid"
+            - type: "null"
+        orderNumber:
+          oneOf:
+            - type: integer
+              minimum: 1
+            - type: "null"
+        subscriptionId:
+          oneOf:
+            - $ref: "#/components/schemas/Uuid"
+            - type: "null"
+        provider:
+          type: string
+          enum: [mercadopago, fake]
+        providerPaymentId:
+          type: string
+        status:
+          $ref: "#/components/schemas/PaymentStatus"
+        method:
+          $ref: "#/components/schemas/PaymentMethod"
+        amountCents:
+          $ref: "#/components/schemas/MoneyCents"
+        refundedCents:
+          $ref: "#/components/schemas/MoneyCents"
+        currency:
+          $ref: "#/components/schemas/CurrencyCode"
+        rawStatus:
+          type: string
+        paidAt:
+          oneOf:
+            - $ref: "#/components/schemas/DateTime"
+            - type: "null"
+        createdAt:
+          $ref: "#/components/schemas/DateTime"
+        updatedAt:
+          $ref: "#/components/schemas/DateTime"
+        refunds:
+          type: array
+          items:
+            $ref: "#/components/schemas/Refund"
+      additionalProperties: false
+    WebhookEvent:
+      type: object
+      description: |
+        Um aviso de pagamento recebido (`specs/013-pagamentos-mercado-pago.md`). Nunca traz o corpo
+        nem os cabeçalhos; em `rejected`, só os metadados mínimos da trilha de segurança.
+      required:
+        [
+          id,
+          provider,
+          eventId,
+          resourceType,
+          resourceId,
+          status,
+          attempts,
+          error,
+          receivedAt,
+          processedAt,
+        ]
+      properties:
+        id:
+          $ref: "#/components/schemas/Uuid"
+        provider:
+          type: string
+          enum: [mercadopago, fake]
+        eventId:
+          type: [string, "null"]
+          description: Identificador do evento; `null` quando não foi extraído.
+        resourceType:
+          oneOf:
+            - $ref: "#/components/schemas/WebhookResourceType"
+            - type: "null"
+        resourceId:
+          type: [string, "null"]
+          description: Identificador do recurso; `null` quando não foi extraído.
+        status:
+          $ref: "#/components/schemas/WebhookEventStatus"
+        attempts:
+          type: integer
+          minimum: 0
+          description: Tentativas de processamento; zero na trilha `rejected`.
+        error:
+          type: [string, "null"]
+          description: "`invalid_signature` em `rejected`; motivo da falha em `failed`."
+        receivedAt:
+          $ref: "#/components/schemas/DateTime"
+        processedAt:
+          oneOf:
+            - $ref: "#/components/schemas/DateTime"
+            - type: "null"
+          description: Quando o evento foi processado ou ignorado; `null` nos demais estados.
+      additionalProperties: false
+    WebhookEventPage:
+      allOf:
+        - $ref: "#/components/schemas/Page"
+        - type: object
+          required: [items]
+          properties:
+            items:
+              type: array
+              items:
+                $ref: "#/components/schemas/WebhookEvent"
+    PaymentSettings:
+      type: object
+      description: |
+        Estado da integração de pagamento (`specs/013-pagamentos-mercado-pago.md`, "Modo de
+        teste"). Nunca devolve token, chave pública, segredo do webhook nem URL com credencial.
+      required: [provider, testMode, productionWarning, lastReconciliationAt]
+      properties:
+        provider:
+          type: string
+          enum: [mercadopago, fake]
+          description: "`NUVA_PAYMENT_PROVIDER` em uso."
+        testMode:
+          type: boolean
+          description: O token configurado é de teste; nenhuma cobrança real.
+        productionWarning:
+          type: boolean
+          description: |
+            Verdadeiro só quando `NUVA_ENV=production` e o token é de teste: o admin vê o aviso em
+            vermelho.
+        lastReconciliationAt:
+          oneOf:
+            - $ref: "#/components/schemas/DateTime"
+            - type: "null"
+          description: |
+            Fim da última execução bem-sucedida de `payment.reconcile_orders`; `null` quando ainda
+            não houve nenhuma.
       additionalProperties: false
