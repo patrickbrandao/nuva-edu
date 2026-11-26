@@ -212,7 +212,7 @@ Limites além da RNF-03, validados no `packages/core` (`CATALOG_LIMITS`) e repet
 - `POST /images` e `DELETE /images/{imageId}` com a finalidade `product_cover` ([029](029-imagens.md))
 - `PUT /ebooks/{id}/targets` (vínculos em `product_ebooks`) e `PUT|DELETE /ebooks/{id}/targets/{targetType}/{targetId}` (um vínculo)
 
-O contrato do admin alcança as regras de "Criação e edição" e de "Ebooks vinculados" numa janela de contrato própria (`version` nos detalhes e nos `PATCH`, `409` declarado, `CourseDetail.ebooks`, as duas operações de um vínculo, `422` e `409` em `PUT /ebooks/{id}/targets`, `409` em `PUT /bundles/{id}/items` e os textos de vínculo `bundle` e de pacote em pacote); até ela fechar, as rotas de edição leem o `version` atual e o repassam ao núcleo, e a rota de `PUT /ebooks/{id}/targets` repete os vínculos `bundle` atuais na lista que entrega ao núcleo.
+O contrato do admin traz as regras de "Criação e edição" e de "Ebooks vinculados" (janela de contrato da tarefa 644): `version` nos detalhes e nos `PATCH`, `409` declarado, `CourseDetail.ebooks`, as duas operações de um vínculo, `422` e `409` em `PUT /ebooks/{id}/targets`, `409` em `PUT /bundles/{id}/items` e os textos de vínculo `bundle` e de pacote em pacote. As rotas repassam ao núcleo o `version` do corpo e a lista de vínculos como veio.
 
 `apps/classroom-api/openapi.yaml` (leitura), sob `/api/v1`:
 
