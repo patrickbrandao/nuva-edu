@@ -229,10 +229,14 @@ describe('confirmação do pagamento', () => {
     expect(detail.status).toBe('paid');
     expect(detail.payment).toMatchObject({ status: 'approved', method: 'card' });
 
-    const emails = await sql<{ n: number }>`
-      SELECT count(*)::int AS n FROM email_outbox
-       WHERE user_id = ${student.id} AND type = 'access.granted'`.execute(db);
-    expect(emails.rows[0]?.n).toBe(1);
+    // O e-mail `access.granted` sai pela central: uma tarefa `notify` por destinatário, que o
+    // worker converte em `email_outbox` (tarefa 586). A confirmação idempotente não duplica.
+    const notifications = await sql<{ n: number }>`
+      SELECT count(*)::int AS n FROM jobs
+       WHERE type = 'notify'
+         AND payload->>'userId' = ${student.id}
+         AND payload->>'type' = 'access.granted'`.execute(db);
+    expect(notifications.rows[0]?.n).toBe(1);
   });
 
   it('registra a cobrança mesmo quando o valor diverge do total', async () => {
