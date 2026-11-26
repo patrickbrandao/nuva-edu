@@ -6,6 +6,7 @@ Detalhe das decisões em `specs/decisions/`.
 ## [Não lançado]
 
 ### Adicionado
+- infra: inclui a definição do perfil local de pagamentos na configuração Compose do deploy, com o perfil desativado (task 735).
 - core: aviso de e-mail indisponível é registrado apenas na central do titular, com contador e SSE (spec 024, task 732).
 - core: assinatura dos avisos do fake HTTP conferida com o relógio atual (spec 013, task 729).
 - specs: aviso exclusivo da central para e-mail indisponível após três recusas permanentes consecutivas (spec 024, task 731).

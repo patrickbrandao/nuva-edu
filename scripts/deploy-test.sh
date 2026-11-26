@@ -36,6 +36,7 @@ database/postgres/docker-compose.yml
 proxy/traefik/docker-compose.yml
 mail/mailpit/docker-compose.yml
 scripts/oauth-mock/docker-compose.yml
+scripts/payment-fake/docker-compose.yml
 apps/admin-api/docker-compose.yml
 apps/classroom-api/docker-compose.yml
 apps/worker/docker-compose.yml
