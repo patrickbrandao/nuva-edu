@@ -172,6 +172,7 @@ Detalhe das decisões em `specs/decisions/`.
 - admin-api: rotas do catálogo de cursos (009): lista, criação (slug gerado do título), edição, exclusão, publicação, arquivo, pedido de publicação e dono; módulos, aulas, ordem e links de apoio; `POST` e `DELETE /images` com `product_cover` (029). A edição sem `version` no contrato usa a versão lida na rota (task 420).
 
 ### Alterado
+- classroom: `allowImportingTsExtensions` no `tsconfig` (como no admin), para o typecheck aceitar os imports internos `.ts` do `@nuva-edu/core` trazidos pelo `@nuva-edu/ui` (task 666).
 - infra: imagens da `admin-api` e da `classroom-api` rodam `apt-get upgrade` no estágio final (como no worker), e o Trivy deixa de acusar a `libzstd1` (CVE-2026-124851) de `node:26-slim`; `scripts/ci.test.mjs` confere o passo nos três backends (task 698).
 - Contrato da admin-api (janela 644): edição do catálogo por `version` com `409` declarado, ebooks do curso no detalhe e vínculo de um ebook só (`PUT`/`DELETE /ebooks/{id}/targets/{targetType}/{targetId}`); vínculo `bundle` preservado e só para leitura; `bundle_in_bundle` retirado (task 644).
 - api-client: cliente da admin-api regenerado: `version` no catálogo (conflito `409`), ebooks do curso e vínculo unitário de ebook (`linkEbookTarget`/`unlinkEbookTarget`) (task 645).

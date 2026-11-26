@@ -11,7 +11,8 @@
     "composite": false,
     "declaration": false,
     "sourceMap": false,
-    "noEmit": true
+    "noEmit": true,
+    "allowImportingTsExtensions": true
   },
   "include": ["src", "vite.config.ts", "vitest.setup.ts"]
 }
