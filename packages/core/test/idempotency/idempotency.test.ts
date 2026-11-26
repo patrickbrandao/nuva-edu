@@ -6,10 +6,12 @@ import {
   closeDatabase,
   createDatabase,
   type Database,
+  IDEMPOTENCY_PURGE_BATCH_SIZE,
   IDEMPOTENCY_RETENTION_MS,
   IDEMPOTENCY_SCOPES,
   isProviderUnavailable,
   normalizeIdempotencyKey,
+  purgeIdempotencyKeys,
   requestFingerprint,
   runIdempotent,
   unavailable,
@@ -308,5 +310,120 @@ describe('execução idempotente', () => {
       .executeTakeFirstOrThrow();
     expect(stored.name).not.toBe('Efeito desfeito');
     expect(await keyCount()).toBe(0);
+  });
+});
+
+describe('expurgo das chaves de idempotência', () => {
+  const HOUR_MS = 60 * 60 * 1_000;
+  const NOW = new Date('2026-11-26T12:00:00.000Z');
+  const hoursAgo = (hours: number) => new Date(NOW.getTime() - hours * HOUR_MS);
+
+  beforeEach(async () => {
+    await db.deleteFrom('idempotencyKeys').execute();
+  });
+
+  async function insertKey(
+    key: string,
+    createdAt: Date,
+    completed: boolean,
+    scope: string = SCOPE,
+  ): Promise<void> {
+    await db
+      .insertInto('idempotencyKeys')
+      .values({
+        key,
+        scope,
+        userId: user.id,
+        requestHash: `hash-${key}`,
+        createdAt,
+        ...(completed
+          ? {
+              responseStatus: 201,
+              responseBody: JSON.stringify({ ok: true }),
+              completedAt: createdAt,
+            }
+          : {
+              responseStatus: null,
+              responseBody: null,
+              completedAt: null,
+            }),
+      })
+      .execute();
+  }
+
+  async function remainingKeys(): Promise<string[]> {
+    const rows = await db.selectFrom('idempotencyKeys').select('key').orderBy('key').execute();
+    return rows.map((row) => row.key);
+  }
+
+  it('apaga respostas e reservas sem resposta com mais de 24 h e preserva as recentes', async () => {
+    await insertKey('concluida-25h', hoursAgo(25), true);
+    await insertKey('concluida-23h', hoursAgo(23), true);
+    await insertKey(
+      'concluida-limite-exato',
+      new Date(NOW.getTime() - IDEMPOTENCY_RETENTION_MS),
+      true,
+    );
+    await insertKey('reserva-nula-25h', hoursAgo(25), false, IDEMPOTENCY_SCOPES.orderRefund);
+    await insertKey('reserva-nula-01h', hoursAgo(1), false, IDEMPOTENCY_SCOPES.subscriptionRefund);
+
+    expect(await purgeIdempotencyKeys(db, { now: NOW })).toBe(2);
+    expect(await remainingKeys()).toEqual([
+      'concluida-23h',
+      'concluida-limite-exato',
+      'reserva-nula-01h',
+    ]);
+
+    // Idempotente: rodar de novo no mesmo instante não apaga mais nada.
+    expect(await purgeIdempotencyKeys(db, { now: NOW })).toBe(0);
+    expect(await remainingKeys()).toEqual([
+      'concluida-23h',
+      'concluida-limite-exato',
+      'reserva-nula-01h',
+    ]);
+  });
+
+  it('respeita o lote padrão de 5.000 e drena múltiplos lotes', async () => {
+    expect(IDEMPOTENCY_PURGE_BATCH_SIZE).toBe(5_000);
+
+    for (let index = 1; index <= 5; index += 1) {
+      await insertKey(`vencida-curta-0${index}`, hoursAgo(30), index % 2 === 0);
+    }
+    await insertKey('recente-curta-01', hoursAgo(2), true);
+
+    expect(await purgeIdempotencyKeys(db, { now: NOW, batchSize: 2 })).toBe(5);
+    expect(await remainingKeys()).toEqual(['recente-curta-01']);
+
+    await db.deleteFrom('idempotencyKeys').execute();
+    const expiredAt = hoursAgo(25);
+    await sql`
+      INSERT INTO idempotency_keys (key, scope, user_id, request_hash, response_status, created_at)
+      SELECT
+        'lote-' || lpad(series::text, 5, '0'),
+        ${SCOPE},
+        ${user.id}::uuid,
+        'hash-lote',
+        CASE WHEN series % 2 = 0 THEN 201 ELSE NULL END,
+        ${expiredAt}
+      FROM generate_series(1, 5002) AS series
+    `.execute(db);
+    await insertKey('recente-23h-lote', hoursAgo(23), true);
+
+    expect(await purgeIdempotencyKeys(db, { now: NOW })).toBe(5_002);
+    expect(await remainingKeys()).toEqual(['recente-23h-lote']);
+  });
+
+  it('valida batchSize e respeita sinal abortado', async () => {
+    for (const batchSize of [0, -1, 1.5, Number.NaN]) {
+      await expect(purgeIdempotencyKeys(db, { now: NOW, batchSize })).rejects.toThrow(TypeError);
+    }
+
+    await insertKey('vencida-abortada', hoursAgo(25), true);
+    const controller = new AbortController();
+    controller.abort(new Error('encerrando'));
+    await expect(purgeIdempotencyKeys(db, { now: NOW, signal: controller.signal })).rejects.toThrow(
+      'encerrando',
+    );
+    expect(await remainingKeys()).toEqual(['vencida-abortada']);
   });
 });

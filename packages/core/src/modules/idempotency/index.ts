@@ -14,6 +14,11 @@ export {
   normalizeIdempotencyKey,
 } from './key.ts';
 export {
+  IDEMPOTENCY_PURGE_BATCH_SIZE,
+  type PurgeIdempotencyKeysOptions,
+  purgeIdempotencyKeys,
+} from './purge.ts';
+export {
   IDEMPOTENCY_RETENTION_MS,
   type IdempotentOutcome,
   type IdempotentRequest,
