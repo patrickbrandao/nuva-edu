@@ -1136,8 +1136,9 @@
     },
     "orders": {
       "title": "Minhas compras",
-      "description": "Seus pedidos, estados e comprovantes.",
-      "subtitle": "Pedidos avulsos da sua conta.",
+      "description": "Suas assinaturas, pedidos, estados e comprovantes.",
+      "subtitle": "Assinaturas e pedidos avulsos da sua conta.",
+      "sectionTitle": "Pedidos",
       "loading": "Carregando os pedidos…",
       "errorTitle": "Os pedidos não carregaram",
       "emptyTitle": "Nenhum pedido ainda",
@@ -1175,6 +1176,177 @@
           "none": "Sem cobrança"
         }
       }
+    }
+  },
+  "subscriptions": {
+    "interval": {
+      "month": "por mês",
+      "year": "por ano"
+    },
+    "status": {
+      "pending": "Aguardando pagamento",
+      "active": "Ativa",
+      "past_due": "Em carência",
+      "suspended": "Suspensa",
+      "canceling": "Cancelada",
+      "ended": "Encerrada",
+      "expired": "Expirada"
+    },
+    "plans": {
+      "title": "Planos",
+      "description": "Planos de assinatura da escola, mensais e anuais, com o que cada um libera.",
+      "subtitle": "Assine e acesse o que o plano libera enquanto ele estiver em dia.",
+      "region": "Planos de assinatura",
+      "subscribe": "Assinar",
+      "loading": "Carregando os planos…",
+      "errorTitle": "Os planos não carregaram",
+      "errorText": "Não foi possível buscar os planos agora. Tente de novo em instantes.",
+      "emptyTitle": "Nenhum plano disponível",
+      "emptyText": "A escola ainda não publicou planos de assinatura. Você pode comprar cursos, pacotes e ebooks avulsos.",
+      "emptyAction": "Ver a vitrine",
+      "allBadge": "Tudo incluído",
+      "billing": {
+        "group": "Periodicidade da cobrança",
+        "month": "Mensal",
+        "year": "Anual",
+        "yearHint": "uma cobrança por ano"
+      },
+      "features": {
+        "all": "Todos os cursos, pacotes e ebooks, inclusive os lançamentos futuros",
+        "empty": "O conteúdo deste plano está sendo definido"
+      },
+      "alreadyText": "Você já tem assinatura de {{plans}}.",
+      "alreadyAction": "Ver minha assinatura",
+      "unavailableTitle": "Plano indisponível",
+      "unavailableText": "Este plano não está mais na vitrine. Escolha outro para assinar.",
+      "unavailableAction": "Ver os planos",
+      "existing": {
+        "pending": "Já assinado · aguardando pagamento",
+        "active": "Já assinado · ativo",
+        "past_due": "Já assinado · em carência",
+        "suspended": "Já assinado · suspenso",
+        "canceling": "Já assinado · cancelado",
+        "ended": "Já assinado · encerrado",
+        "expired": "Já assinado · expirado"
+      }
+    },
+    "checkout": {
+      "title": "Assinar {{plan}}",
+      "chargeNote": "renovação automática até o cancelamento",
+      "close": "Escolher outro plano",
+      "redirecting": "Abrindo o pagamento…",
+      "redirectText": "Você vai para o ambiente do provedor para autorizar a cobrança recorrente e pagar a primeira cobrança. Se a página não abrir, use o botão abaixo.",
+      "redirectAction": "Abrir o pagamento",
+      "goToMine": "Minha assinatura",
+      "refreshPlans": "Atualizar os planos",
+      "privacy": "Nenhum dado de cartão passa por este site: o pagamento é feito no ambiente do provedor.",
+      "submit": "Ir para o pagamento",
+      "submitting": "Abrindo o pagamento…",
+      "coupon": {
+        "label": "Cupom (opcional)",
+        "hint": "O cupom vale só na primeira cobrança."
+      },
+      "errors": {
+        "requiredName": "Informe o nome completo.",
+        "requiredTaxId": "Informe o CPF ou o CNPJ.",
+        "taxIdInvalid": "O documento não foi aceito. Confira os números e tente de novo.",
+        "billingRequired": "Para assinar, informe o nome e o CPF ou CNPJ do comprador.",
+        "alreadyExists": "Você já tem uma assinatura deste plano.",
+        "couponInvalid": "O cupom não vale para assinaturas. Confira o código ou siga sem ele.",
+        "emailNotVerified": "Confirme seu e-mail antes de assinar. Veja a mensagem que enviamos.",
+        "providerUnavailable": "O pagamento está indisponível no momento. Tente de novo em instantes.",
+        "planUnavailable": "Este plano não está mais disponível. Escolha outro para assinar."
+      },
+      "buyer": {
+        "required": "O provedor precisa do nome e do CPF ou CNPJ do comprador. Estes dados ficam salvos para as próximas compras.",
+        "legend": "Dados do comprador",
+        "fullName": "Nome completo",
+        "fullNameHint": "Como está no documento.",
+        "taxIdType": "Tipo de documento",
+        "cpf": "CPF",
+        "cnpj": "CNPJ",
+        "taxId": "Documento",
+        "taxIdHint": "Só números, sem pontos nem traço."
+      }
+    },
+    "mine": {
+      "title": "Minha assinatura",
+      "browsePlans": "Ver os planos",
+      "loading": "Carregando as assinaturas…",
+      "errorTitle": "As assinaturas não carregaram",
+      "emptyTitle": "Nenhuma assinatura ainda",
+      "emptyText": "Assine um plano para acessar o que ele libera enquanto estiver em dia.",
+      "emptyFilteredTitle": "Nenhuma assinatura neste estado",
+      "emptyFilteredText": "Troque o filtro para ver as outras assinaturas.",
+      "emptyAction": "Ver os planos",
+      "nextCharge": "Próxima cobrança em {{date}}",
+      "grace": "Carência até {{date}}",
+      "accessUntil": "Acesso até {{date}}",
+      "canceledAt": "Cancelada em {{date}}",
+      "endedAt": "Encerrada em {{date}}",
+      "open": "Ver a assinatura",
+      "loadMore": "Carregar mais",
+      "filters": {
+        "label": "Filtrar por estado",
+        "all": "Todos"
+      }
+    },
+    "detail": {
+      "title": "Minha assinatura",
+      "description": "Plano, estado, período e cobranças da sua assinatura.",
+      "loading": "Carregando a assinatura…",
+      "errorTitle": "A assinatura não carregou",
+      "notFoundTitle": "Assinatura não encontrada",
+      "notFoundText": "Esta assinatura não existe ou não é sua.",
+      "back": "Voltar para minhas compras",
+      "changePlan": "Ver os planos",
+      "planTitle": "Plano",
+      "contractedPrice": "Preço contratado",
+      "chargesTitle": "Cobranças",
+      "noCharges": "Nenhuma cobrança registrada ainda.",
+      "detailsTitle": "Dados da assinatura",
+      "interval": "Periodicidade",
+      "period": "Período atual",
+      "nextCharge": "Próxima cobrança",
+      "graceUntil": "Carência até",
+      "canceledAt": "Cancelada em",
+      "endedAt": "Encerrada em",
+      "createdAt": "Assinada em",
+      "noPeriod": "o fim do período em curso",
+      "status": {
+        "pending": "Aguardando a primeira cobrança. O acesso começa quando o pagamento for aprovado.",
+        "active": "Assinatura em dia.",
+        "activeNext": "Assinatura em dia. Próxima cobrança em {{date}}.",
+        "past_due": "A última cobrança foi recusada.",
+        "pastDueGrace": "A última cobrança foi recusada. Seu acesso continua até {{date}}, o fim da carência.",
+        "suspended": "A carência terminou sem pagamento e o acesso está suspenso. A assinatura pode ser encerrada a qualquer momento.",
+        "canceling": "Assinatura cancelada.",
+        "cancelingEnd": "Assinatura cancelada. Seu acesso continua até {{date}}; depois, ela é encerrada.",
+        "ended": "Assinatura encerrada.",
+        "endedAt": "Assinatura encerrada em {{date}}.",
+        "expired": "A assinatura expirou sem pagamento. Você pode assinar o mesmo plano de novo."
+      },
+      "charges": {
+        "paidAt": "Pago em {{date}}",
+        "createdAt": "Cobrança de {{date}}",
+        "refunded": "Reembolsado: {{value}}"
+      }
+    },
+    "cancel": {
+      "action": "Cancelar assinatura",
+      "title": "Cancelar a assinatura?",
+      "titlePending": "Cancelar a assinatura pendente?",
+      "text": {
+        "pending": "O pagamento é encerrado e a assinatura não é ativada. Você pode assinar o mesmo plano de novo.",
+        "active": "A cobrança recorrente é cancelada agora. Seu acesso continua até {{date}} e depois a assinatura é encerrada.",
+        "pastDue": "A cobrança recorrente é cancelada agora e a carência termina. Seu acesso continua só até {{date}}."
+      },
+      "confirm": "Cancelar assinatura",
+      "busy": "Cancelando…",
+      "done": "Assinatura cancelada.",
+      "errorTitle": "Não foi possível cancelar",
+      "notCancelable": "Esta assinatura não pode mais ser cancelada por aqui.",
+      "providerUnavailable": "O provedor não confirmou o cancelamento. Tente de novo em instantes."
     }
   },
   "construction": {

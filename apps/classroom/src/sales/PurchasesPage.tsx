@@ -3,6 +3,7 @@ import {
   AdminCard,
   AdminEmpty,
   AdminMenu,
+  AdminSection,
   ErrorState,
   LoadingState,
   OrderStatusBadge,
@@ -17,6 +18,7 @@ import { useDateFormatter } from '../catalog/format';
 import { usePageMeta } from '../lib/usePageMeta';
 import { RequireSession } from '../session/RequireSession';
 import { HOME_PATH, ORDER_PATH } from '../shell/navigation';
+import { MySubscriptions } from '../subscriptions/MySubscriptions';
 import { orderStatusLabel } from './format';
 import { type MyOrderSummary, type OrderStatus, useMyOrders } from './queries';
 
@@ -146,7 +148,7 @@ function PurchasesView() {
   );
 }
 
-/** `/conta/compras`: pedidos do aluno, com estado e o caminho para o detalhe (spec 011, RF-08). */
+/** `/conta/compras`: assinaturas e pedidos do aluno (spec 011, RF-08; spec 012, RF-08). */
 export function PurchasesPage() {
   const { t } = useTranslation();
   usePageMeta(t('sales.orders.title'), t('sales.orders.description'));
@@ -155,7 +157,10 @@ export function PurchasesPage() {
       {() => (
         <div className="mx-auto flex w-full max-w-4xl flex-col gap-4 px-4 py-8 sm:px-6">
           <PageTitle subtitle={t('sales.orders.subtitle')}>{t('sales.orders.title')}</PageTitle>
-          <PurchasesView />
+          <MySubscriptions />
+          <AdminSection title={t('sales.orders.sectionTitle')}>
+            <PurchasesView />
+          </AdminSection>
         </div>
       )}
     </RequireSession>

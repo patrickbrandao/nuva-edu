@@ -13,9 +13,11 @@ import {
   NOTES_PATH,
   ORDER_PATH,
   PENDING_PAGES,
+  PLANS_PATH,
   PROGRESS_PATH,
   PURCHASES_PATH,
   START_PATH,
+  SUBSCRIPTIONS_PATH,
 } from './shell/navigation';
 import { type RouteHandle, Shell } from './shell/Shell';
 
@@ -157,6 +159,18 @@ export const routes: RouteObject[] = [
         path: `${ORDER_PATH}/:id`,
         handle: handle({ titleKey: 'sales.order.title' }),
         lazy: async () => ({ Component: (await import('./sales/OrderPage')).OrderPage }),
+      },
+      {
+        path: PLANS_PATH,
+        handle: handle({ titleKey: 'subscriptions.plans.title' }),
+        lazy: async () => ({ Component: (await import('./subscriptions/PlansPage')).PlansPage }),
+      },
+      {
+        path: `${SUBSCRIPTIONS_PATH}/:id`,
+        handle: handle({ titleKey: 'subscriptions.detail.title' }),
+        lazy: async () => ({
+          Component: (await import('./subscriptions/SubscriptionPage')).SubscriptionPage,
+        }),
       },
       {
         path: PURCHASES_PATH,

@@ -63,7 +63,13 @@ describe('minhas compras', () => {
     );
 
     expect(await screen.findByRole('link', { name: number(1042) })).toBeTruthy();
-    await user.click(screen.getByRole('button', { name: `${t.filters.label}: ${t.filters.all}` }));
+    // a página tem dois filtros (assinaturas e pedidos): este é o da seção de pedidos
+    const orders = screen
+      .getByRole('heading', { name: t.sectionTitle })
+      .closest('section') as HTMLElement;
+    await user.click(
+      within(orders).getByRole('button', { name: `${t.filters.label}: ${t.filters.all}` }),
+    );
     await user.click(await screen.findByRole('option', { name: t.status.paid }));
 
     await waitFor(() =>

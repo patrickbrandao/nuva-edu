@@ -131,6 +131,10 @@ export const MY_COURSES_PATH = '/meus-cursos';
 export const MY_EBOOKS_PATH = '/meus-ebooks';
 export const PROGRESS_PATH = '/progresso';
 export const NOTES_PATH = '/anotacoes';
+/** Planos de assinatura (spec 006, mapa de telas; spec 012). */
+export const PLANS_PATH = '/planos';
+/** Assinaturas do aluno dentro de "Minhas compras", com o detalhe de cada uma. */
+export const SUBSCRIPTIONS_PATH = '/conta/compras/assinaturas';
 /** Compra (spec 006, mapa de telas): cesta, checkout, retorno do pagamento e minhas compras. */
 export const CART_PATH = '/cesta';
 export const CHECKOUT_PATH = '/checkout';
@@ -146,6 +150,7 @@ const BUILT_PAGES: readonly string[] = [
   MY_EBOOKS_PATH,
   PROGRESS_PATH,
   NOTES_PATH,
+  PLANS_PATH,
   CART_PATH,
   PURCHASES_PATH,
 ];

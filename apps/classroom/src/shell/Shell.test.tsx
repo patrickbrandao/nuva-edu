@@ -293,11 +293,12 @@ describe('casca do classroom', () => {
       expect(screen.getByText(ptBR.construction.title)).toBeTruthy();
       view.unmount();
     }
-    // as já construídas (fora a vitrine) exigem login: cada uma tem o próprio teste
+    // as já construídas exigem login, menos a vitrine e os planos: cada uma tem o próprio teste
     const built = NAV_GROUPS.flatMap((group) => group.items).filter(
       (item) => item.path !== '/' && !PENDING_PAGES.some((page) => page.path === item.path),
     );
     expect(built.map((item) => item.path)).toEqual([
+      '/planos',
       '/inicio',
       '/meus-cursos',
       '/meus-ebooks',
@@ -307,7 +308,14 @@ describe('casca do classroom', () => {
       '/conta/compras',
       '/conta',
     ]);
-    for (const item of built) {
+    // os planos são públicos: abrem sem sessão
+    const plans = renderApp('/planos');
+    expect(
+      await screen.findByRole('heading', { level: 1, name: ptBR.subscriptions.plans.title }),
+    ).toBeTruthy();
+    expect(screen.queryByText(ptBR.construction.title)).toBeNull();
+    plans.unmount();
+    for (const item of built.filter((entry) => entry.path !== '/planos')) {
       const view = renderApp(item.path);
       await waitFor(() => expect(view.router.state.location.pathname).toBe('/entrar'));
       expect(screen.queryByText(ptBR.construction.title)).toBeNull();

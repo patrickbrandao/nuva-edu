@@ -62,7 +62,12 @@ describe('aceite de termos pendentes', () => {
 
     await user.click(main.getByRole('checkbox', { name: ptBR.terms.accept }));
     await user.click(main.getByRole('button', { name: ptBR.termsGate.submit }));
-    expect(await screen.findByText(ptBR.construction.title)).toBeTruthy();
+    expect(
+      await screen.findByRole('heading', {
+        level: 1,
+        name: ptBR.subscriptions.plans.title,
+      }),
+    ).toBeTruthy();
     const accept = calls.find((call) => call.path === '/api/v1/me/terms-acceptance');
     expect(accept?.body).toEqual({ termsVersionIds: PENDING.map((version) => version.id) });
     expect(accept?.csrf).toBe('csrf-teste-1');
