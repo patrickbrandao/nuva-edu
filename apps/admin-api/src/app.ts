@@ -11,6 +11,7 @@ import {
 import {
   type Config,
   createOAuth,
+  createPaymentProvider,
   createSettingsReader,
   type Database,
   databasePoolStats,
@@ -18,6 +19,8 @@ import {
   type Logger,
   listSessions,
   type OAuth,
+  type PaymentProvider,
+  paymentUnavailable,
   type SettingsReader,
 } from '@nuva-edu/core';
 import { loadAdminContract } from './contract.ts';
@@ -36,6 +39,7 @@ import { registerOpsJobRoutes } from './routes/ops-jobs.ts';
 import { registerProductRoutes } from './routes/products.ts';
 import { registerProgressRoutes } from './routes/progress.ts';
 import { registerStreamRoutes } from './routes/stream.ts';
+import { registerSubscriptionRoutes } from './routes/subscriptions.ts';
 import { registerTermsRoutes } from './routes/terms.ts';
 import { registerUserRoutes } from './routes/users.ts';
 import {
@@ -89,6 +93,12 @@ export interface AdminAppOptions {
    * passam um com o `fetch` do provedor falso.
    */
   oauth?: OAuth;
+  /**
+   * Porta de pagamento (specs 012 e 013), usada pelo cancelamento administrativo de assinatura.
+   * Padrão: `createPaymentProvider` da configuração, resolvido na primeira chamada; os testes
+   * passam o provedor `fake`.
+   */
+  paymentProvider?: PaymentProvider;
   /** Limitador do processamento de imagens (spec 029). Padrão: o do processo. */
   imageLimiter?: ImageProcessingLimiter;
   /** Relógio do limite de taxa; para os testes. */
@@ -130,6 +140,21 @@ export function buildAdminApp(options: AdminAppOptions): FastifyInstance {
     eventStreams: true,
   });
   registerSessionCookieHooks(app, ttlDays);
+
+  // Porta de pagamento montada sob demanda: a API sobe (e as demais rotas respondem) mesmo com o
+  // provedor mal configurado; a rota que fala com ele responde `503 payment_provider_unavailable`
+  // (spec 013 RF-09). O adaptador do Mercado Pago é injetado pela composição do serviço.
+  let configuredProvider: PaymentProvider | null = null;
+  const paymentProvider = (): PaymentProvider => {
+    if (options.paymentProvider !== undefined) return options.paymentProvider;
+    if (configuredProvider !== null) return configuredProvider;
+    try {
+      configuredProvider = createPaymentProvider(config);
+    } catch {
+      throw paymentUnavailable();
+    }
+    return configuredProvider;
+  };
 
   // O fluxo SSE do processo (spec 003, "Fluxo SSE da equipe"; ADR 0028): escuta do canal, filtro
   // a `notification.created`, conferência com o `StreamEvent` do contrato e hub das conexões.
@@ -244,6 +269,8 @@ export function buildAdminApp(options: AdminAppOptions): FastifyInstance {
   registerEntitlementRoutes(app, { db });
   // Progresso para a equipe (spec 014): do usuário, resumo e alunos do curso.
   registerProgressRoutes(app, { db });
+  // Planos e assinaturas (spec 012): planos, consulta, cancelamento e reembolso de cobrança.
+  registerSubscriptionRoutes(app, { db, provider: paymentProvider });
   // Certificados (spec 015): gestão, templates, exemplos e signatário.
   registerCertificateRoutes(app, { db, config, settings });
   // Central da equipe e preferências por grupo (spec 024).
