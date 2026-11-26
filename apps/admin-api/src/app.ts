@@ -21,11 +21,13 @@ import { loadAdminContract } from './contract.ts';
 import { readServiceVersion } from './meta.ts';
 import { registerAuditRoutes } from './routes/audit.ts';
 import { registerAuthRoutes } from './routes/auth.ts';
+import { registerCertificateRoutes } from './routes/certificates.ts';
 import { registerCourseRoutes } from './routes/courses.ts';
 import { registerEntitlementRoutes } from './routes/entitlements.ts';
 import { registerImageRoutes } from './routes/images.ts';
 import { registerOAuthRoutes } from './routes/oauth.ts';
 import { registerProductRoutes } from './routes/products.ts';
+import { registerProgressRoutes } from './routes/progress.ts';
 import { registerTermsRoutes } from './routes/terms.ts';
 import { registerUserRoutes } from './routes/users.ts';
 import {
@@ -123,5 +125,9 @@ export function buildAdminApp(options: AdminAppOptions): FastifyInstance {
   registerProductRoutes(app, { db });
   // Direitos de acesso (spec 010): árvore do usuário, concessão e revogação manual.
   registerEntitlementRoutes(app, { db });
+  // Progresso para a equipe (spec 014): do usuário, resumo e alunos do curso.
+  registerProgressRoutes(app, { db });
+  // Certificados (spec 015): gestão, templates, exemplos e signatário.
+  registerCertificateRoutes(app, { db, config, settings });
   return app;
 }
