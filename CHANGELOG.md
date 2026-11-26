@@ -6,6 +6,8 @@ Detalhe das decisões em `specs/decisions/`.
 ## [Não lançado]
 
 ### Adicionado
+- contratos: `Idempotency-Key` declarada em `POST /api/v1/subscriptions` e exceção explícita de idempotência natural registrada para `POST /api/v1/users/{id}/entitlements` (specs 003, 004 e 012; task 713).
+- interface: cliente regenerado com cabeçalho `Idempotency-Key` em `POST /api/v1/subscriptions` (task 714).
 - core: códigos de validação de planos alinhados ao contrato da janela 560 (`422 plan_invalid` com campo apontado para `includesPrivate` sem `includesAll` e itens em plano `includesAll`; `422 plan_item_invalid` para item repetido em vez de deduplicar em silêncio) (spec 012; task 717).
 - specs: prazo fixo de 24 h para expurgo de `idempotency_keys` (inclusive reservas abandonadas com `response_status` nulo) na tabela e nos critérios de aceite da spec 033 (spec 003, migration 0021; task 721).
 - admin: envio do logotipo na identidade da escola (specs 024 e 029; task 708): a seção "E-mail" de `/configuracoes` troca o aviso de somente leitura pelo seletor de imagem, envia o arquivo por `POST /api/v1/images` com `purpose` `school_logo`, mostra a prévia da variante de 256 (ou 512) e leva o identificador no `saveBranding` existente; remover a imagem grava `logoImageId` nulo, a prévia acompanha a gravação sem recarregar, e `413`, `415`, `422`, `429` e `503` (tipo, tamanho, dimensão, peso, limite e processamento) aparecem na seção sem perder os outros campos.
