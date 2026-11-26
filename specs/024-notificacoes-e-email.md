@@ -53,7 +53,7 @@ Vários recursos precisam avisar o usuário: resposta no fórum, compra aprovada
 
 - Transporte SMTP configurado por `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD`, `SMTP_FROM`. Porta 465: TLS desde a conexão; outra porta: `STARTTLS` obrigatório. A única exceção é `SMTP_HOST=mailpit` (o Mailpit do Compose), que dispensa TLS. Com `SMTP_USER` definido, `SMTP_PASSWORD` é obrigatório e a autenticação é feita; sem ele, não há autenticação. No desenvolvimento, Mailpit ([031](031-infraestrutura-e-deploy.md)).
 - Cada e-mail é uma linha em `email_outbox`, processada pela tarefa `email.send` ([005](005-worker-e-fila.md)). SMTP fora do ar não bloqueia nenhuma ação do usuário.
-- Modelos ficam no código do worker, em arquivos por tipo e por idioma; textos via arquivos de tradução. O admin edita apenas nome da escola, logotipo, cor e rodapé (`school.name`, `school.logo_image_id`, `school.accent_color` e `school.email_footer`; [031](031-infraestrutura-e-deploy.md), "Configurações da escola").
+- Modelos ficam no código do worker, em arquivos por tipo e por idioma; textos via arquivos de tradução. O admin edita apenas nome da escola, logotipo, cor e rodapé (`school.name`, `school.logo_image_id`, `school.accent_color` e `school.email_footer`; [031](031-infraestrutura-e-deploy.md), "Configurações da escola"). O logotipo é enviado antes pela `admin-api` como `school_logo` ([029](029-imagens.md), "Finalidades e variantes") e o identificador resultante é o gravado em `school.logo_image_id`; ao gravar, ele precisa ser uma imagem existente, não oculta, dessa finalidade (`422` `image_purpose_mismatch`).
 - Links de confirmação e de redefinição expiram em 24 h ([007](007-contas-e-autenticacao.md)); o e-mail nunca contém a senha.
 
 ### E-mails do grupo `account` e da Fase 1
@@ -107,7 +107,7 @@ Até a central de notificações (Fase 4), os dois avisos da Fase 2 saem só por
 ## Interfaces e contratos
 
 - `apps/classroom-api/openapi.yaml`: `GET /notifications`, `GET /notifications/unread-count`, `POST /notifications/{id}/read`, `POST /notifications/read-all`, `DELETE /notifications`, `GET|PUT /me/notification-prefs`, `POST /unsubscribe/{token}` (sem login).
-- `apps/admin-api/openapi.yaml`: as mesmas rotas de central e preferências para a equipe e `GET /stream` para o sino em tempo real; `GET /ops/emails`, `POST /ops/emails/{id}/retry`; `GET|PUT /settings/branding`. O descadastro por token continua só no classroom.
+- `apps/admin-api/openapi.yaml`: as mesmas rotas de central e preferências para a equipe e `GET /stream` para o sino em tempo real; `GET /ops/emails`, `POST /ops/emails/{id}/retry`; `GET|PUT /settings/branding`, com o logotipo enviado antes por `POST /api/v1/images` com a finalidade `school_logo`. O descadastro por token continua só no classroom.
 - Função `notify(type, recipients, payload)` em `packages/core`, único ponto de entrada para as APIs e o worker.
 
 ## Dados

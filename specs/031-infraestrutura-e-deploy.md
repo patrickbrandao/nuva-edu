@@ -342,7 +342,7 @@ O que a escola ajusta sem reiniciar nada fica na tabela `settings`, uma linha po
 | --- | --- | --- | --- |
 | `school.name` | texto de 1 a 120 caracteres, sem espaços nas pontas | `nuva-edu` | `schoolName` do `/meta`, título dos sites, e-mails, certificados |
 | `school.timezone` | texto: fuso IANA | `America/Sao_Paulo` | Horário das tarefas recorrentes ([005](005-worker-e-fila.md)), retenção ([033](033-observabilidade-retencao-backup.md)) e padrão do usuário sem fuso próprio ([014](014-aprendizado-e-progresso.md)) |
-| `school.logo_image_id` | uuid de uma imagem ([029](029-imagens.md)) ou nulo | nulo | `logoUrl` do `/meta`, e-mails |
+| `school.logo_image_id` | uuid de uma imagem de finalidade `school_logo` ([029](029-imagens.md)) ou nulo | nulo | `logoUrl` do `/meta`, e-mails |
 | `school.accent_color` | texto `#RRGGBB` ou nulo | nulo | `accentColor` do `/meta` |
 | `school.email_footer` | texto de até 500 caracteres, sem espaços nas pontas, com quebras de linha permitidas, ou nulo; vazio vale nulo | nulo | Rodapé dos e-mails de notificação ([024](024-notificacoes-e-email.md), "E-mail"); nulo omite o rodapé |
 | `school.source_code_url` | texto: URL `https` | `https://github.com/patrickbrandao/nuva-edu` | `sourceCodeUrl` do `/meta`, link "Código-fonte" ([006](006-sites-e-interface.md), RF-11) |

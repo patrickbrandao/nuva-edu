@@ -34,12 +34,23 @@ Avatar, capa de perfil, capa de curso, pacote, ebook e evento, e a galeria dos c
 | `product_cover` | `instructor`, `manager`, `admin` | 480, 1280 (16:9) |
 | `event_cover` | `manager`, `admin` | 480, 1280 (16:9) |
 | `case_image` | Usuário com acesso ativo | 480, 1600 (proporção original) |
-| `content_image` | `instructor`, `manager`, `admin` | 1600 (proporção original); usada em descrições e novidades |
+| `content_image` | `instructor`, `manager`, `admin` | 1600 (proporção original); sem uso no plano atual |
 | `school_logo` | `admin` | 64, 256, 512 (proporção original) |
 
 O `logoUrl` do `/meta` ([003](003-admin-api.md)) aponta para a variante de 256 do `school_logo`; as de 64 e 512 ficam para quem precisar de outro tamanho (ícone, tela de alta densidade).
 
 Qualidade WebP 80; se a variante passar de 400 KB, a qualidade cai em passos de 10 até 50 e, se ainda passar, o envio é recusado com erro 422.
+
+### Variantes de proporção original
+
+Nas finalidades de proporção original (`case_image`, `content_image` e `school_logo`) a imagem não é cortada: o nome da variante (`64`, `256`, `480`, `512`, `1280` ou `1600`) é o **maior lado** do arquivo gerado, não necessariamente a largura.
+
+- Imagem paisagem ou quadrada: a largura é o nome e a altura sai da proporção, arredondada, de 1 até o nome.
+- Imagem retrato: a altura é o nome e a largura sai da proporção, arredondada, de 1 até o nome.
+
+`image_variants.width` continua guardando o nome (a chave e o segmento da URL) e `height` guarda a altura real; a largura real de uma variante retrato não é gravada e sai de `images.original_width`/`original_height` quando alguém precisar dela. Nenhum dos lados passa do nome, então o teto de 1600 px de RNF-03 é respeitado sem mudar o banco: os seis nomes, o `height` de 1 a 1600 e as dimensões originais já existem. A entrega não muda. A resposta do envio traz, em `variants`, `width` = nome e `height` = altura real; para a largura real de uma variante retrato, o cliente aplica a proporção de `Image.width`/`Image.height` (dimensões do arquivo enviado).
+
+Enviar uma imagem mais alta que larga não é recusado; o corte continua sendo só das finalidades com proporção fixa (`avatar`, `profile_cover`, `product_cover`, `event_cover`).
 
 ### Fluxo de envio
 
@@ -47,7 +58,7 @@ Qualidade WebP 80; se a variante passar de 400 KB, a qualidade cai em passos de 
 2. A API confere permissão, limite por hora e tamanho.
 3. Detecta o tipo, valida dimensões, processa as variantes e grava `images` e as variantes numa transação.
 4. Responde com `image_id` e as URLs das variantes.
-5. O cliente usa o `image_id` ao salvar o perfil, o curso ou o case. Só então a imagem passa a ter referência.
+5. O cliente usa o `image_id` ao salvar o perfil, o curso, o case ou a identidade da escola. Só então a imagem passa a ter referência.
 
 Detalhes do envio:
 
@@ -59,15 +70,19 @@ Detalhes do envio:
 
 Na Fase 1 só existe a finalidade `avatar`, enviada pelo classroom ([007](007-contas-e-autenticacao.md), "Avatar"); o admin só entrega imagens. As demais finalidades entram com os recursos que as usam, e a referência de `avatar` é `profiles.avatar_image_id`.
 
-Na Fase 2 entra `product_cover`, enviada pela `admin-api` (`POST /api/v1/images` e `DELETE /api/v1/images/{imageId}` passam a existir também lá, só com essa finalidade), com referência em `courses.cover_image_id`, `ebooks.cover_image_id` e `bundles.cover_image_id`; o expurgo passa a considerar as três. `school_logo` e `content_image` continuam fora: a regra das variantes de proporção original (abaixo, "Em aberto") é fixada antes da fase que as introduzir.
+Na Fase 2 entra `product_cover`, enviada pela `admin-api` (`POST /api/v1/images` e `DELETE /api/v1/images/{imageId}` passam a existir também lá, só com essa finalidade), com referência em `courses.cover_image_id`, `ebooks.cover_image_id` e `bundles.cover_image_id`; o expurgo passa a considerar as três.
 
-O template de certificado ([015](015-certificados.md)) pode citar uma imagem já enviada pelo caminho de entrega (`/api/v1/images/<id>/<largura>.webp`). Isso não cria referência: a imagem citada só no template continua sujeita ao expurgo de imagens sem referência, e o worker a embute no PDF enquanto ela existir. Não há finalidade de envio própria para template na Fase 2.
+Na Fase 4 entra `school_logo`, enviada pela `admin-api` só pelo `admin`, com as variantes 64, 256 e 512 de proporção original e referência em `settings` `school.logo_image_id`. O `logoUrl` do `/meta` e a marca dos e-mails usam a de 256 ([024](024-notificacoes-e-email.md), "E-mail"); a tela de identidade da escola envia pelo `POST /api/v1/images` e grava o identificador em `PUT /api/v1/settings/branding`. Ao gravar a identidade, `logoImageId` precisa ser uma imagem existente, não oculta e de finalidade `school_logo` (ou nulo); outro valor é `422` `image_purpose_mismatch`. O logotipo em uso é protegido como qualquer imagem referenciada: `DELETE /api/v1/images/{imageId}` responde `404`.
+
+`content_image` não entra em nenhuma fase do plano atual: descrições e novidades usam imagem externa `https` ([0027](decisions/0027-markdown-saneado-no-servidor.md)) e nenhum recurso aberto envia essa finalidade. Ela continua definida, com a regra desta spec, para um recurso futuro. `case_image` entra com a galeria de cases na Fase 6 ([022](022-cases.md)).
+
+O template de certificado ([015](015-certificados.md)) pode citar uma imagem já enviada pelo caminho de entrega (`/api/v1/images/<id>/<variant>.webp`). Isso não cria referência: a imagem citada só no template continua sujeita ao expurgo de imagens sem referência, e o worker a embute no PDF enquanto ela existir. Não há finalidade de envio própria para template na Fase 2.
 
 O processamento acontece na API (não na fila), porque o usuário espera o resultado; a API limita a 2 processamentos simultâneos por instância e devolve 503 com `Retry-After` quando a fila interna passa de 10.
 
 ### Entrega
 
-- URL: `/api/v1/images/{image_id}/{variant}.webp`, em que `variant` é a largura (`64`, `256`, `480`, `512`, `1280`, `1600`). Cada imagem só tem as variantes da sua finalidade (tabela acima); pedir outra largura devolve 404.
+- URL: `/api/v1/images/{image_id}/{variant}.webp`, em que `variant` é o nome da variante (`64`, `256`, `480`, `512`, `1280`, `1600`): a largura nas finalidades com corte e o maior lado nas de proporção original. Cada imagem só tem as variantes da sua finalidade (tabela acima); pedir outro nome devolve 404.
 - O `image_id` nunca é reutilizado: trocar o avatar cria outra imagem e outra URL.
 - Resposta: `Content-Type: image/webp`, `Cache-Control: public, max-age=31536000, immutable`, `ETag` com o hash do conteúdo, `X-Content-Type-Options: nosniff`.
 - `If-None-Match` igual ao `ETag` devolve 304.
@@ -94,7 +109,7 @@ Uma página do classroom (vitrine, diretório, fórum) mostra dezenas de avatare
 
 ### Expurgo
 
-A tarefa diária `image.cleanup` do worker ([005](005-worker-e-fila.md)) apaga as imagens sem referência há mais de 24 horas. A referência é mantida por chaves estrangeiras das tabelas donas (`profiles`, `courses`, `bundles`, `ebooks`, `events`, `case_images`, `settings`) e por uma tabela de uso para `content_image`.
+A tarefa diária `image.cleanup` do worker ([005](005-worker-e-fila.md)) apaga as imagens sem referência há mais de 24 horas. A referência é mantida por chaves estrangeiras das tabelas donas (`profiles`, `courses`, `bundles`, `ebooks`, `events`, `case_images`) e, para as chaves sem chave estrangeira, pela consulta do expurgo: `settings` `school.logo_image_id` (valor JSONB com o UUID em texto) e, quando entrar, a tabela de uso de `content_image`. `DELETE /api/v1/images/{imageId}` usa a mesma condição antes de apagar.
 
 ### Gatilho de revisão
 
@@ -120,10 +135,10 @@ Esta decisão é provisória. O admin vê, na tela de operação ([033](033-obse
 Decisões de esquema da migration 0004 (aceitas na tarefa 198):
 
 - `image_variants.sha256` é o SHA-256 de `data` em hexadecimal minúsculo (64 caracteres), conferido por `CHECK`. É o `ETag` da entrega, entre aspas (`ETag: "<sha256>"`).
-- `image_variants.width` é o nome da variante na URL e faz parte da chave (`image_id`, `width`); o banco aceita só os seis valores (`64`, `256`, `480`, `512`, `1280`, `1600`). `height` é a altura gravada, de 1 a 1600. `bytes` é o tamanho de `data` (de 1 a 400 KB), conferido contra ela.
-- O banco não amarra a largura à finalidade: gerar só as variantes da finalidade (tabela de "Finalidades e variantes") e devolver 404 para outra largura é do código.
-- Com isso, a variante tem exatamente a largura do nome. Nas finalidades com corte (`avatar`, `profile_cover`, `product_cover`, `event_cover`) a imagem é cortada na proporção e redimensionada para essa largura, ampliando quando o original é menor; a altura sai da proporção (no máximo 400 px em 4:1 e 720 px em 16:9), dentro do teto de RNF-03.
-- Em aberto: nas finalidades de proporção original (`case_image`, `content_image`, `school_logo`), uma imagem mais alta que larga não cabe em "largura = nome" sem passar de 1600 px de altura. A regra (por exemplo, o nome passar a ser o teto do maior lado, com uma coluna para a largura real) é fixada pelo `arquiteto` antes da fase que introduz a primeira delas; na Fase 1 só existe `avatar`.
+- `image_variants.width` é o nome da variante na URL (o maior lado do arquivo gerado) e faz parte da chave (`image_id`, `width`); o banco aceita só os seis valores (`64`, `256`, `480`, `512`, `1280`, `1600`). `height` é a altura gravada, de 1 a 1600. `bytes` é o tamanho de `data` (de 1 a 400 KB), conferido contra ela.
+- O banco não amarra o nome à finalidade: gerar só as variantes da finalidade (tabela de "Finalidades e variantes") e devolver 404 para outro nome é do código.
+- Com isso, nas finalidades com corte a variante tem exatamente a largura do nome. Em `avatar`, `profile_cover`, `product_cover` e `event_cover` a imagem é cortada na proporção e redimensionada para essa largura, ampliando quando o original é menor; a altura sai da proporção (no máximo 400 px em 4:1 e 720 px em 16:9), dentro do teto de RNF-03.
+- Nas finalidades de proporção original (`case_image`, `content_image`, `school_logo`), `width` guarda o nome da variante (o maior lado) e `height` a altura real, de 1 a 1600; a largura real de uma variante retrato não é gravada e sai da proporção de `images.original_width`/`original_height`. A regra está em [Variantes de proporção original](#variantes-de-proporção-original), sem migration.
 - Retenção: enquanto houver referência; órfãs, 24 horas. Na exclusão de conta ([030](030-lgpd.md)), avatar, capa e imagens de cases do usuário são apagados.
 
 ## Critérios de aceite
@@ -131,7 +146,8 @@ Decisões de esquema da migration 0004 (aceitas na tarefa 198):
 - [ ] Arquivo `.png` com conteúdo SVG ou executável é recusado com 415.
 - [ ] Envio de 6 MB é recusado com 413; imagem de 9000 px é recusada com 422.
 - [ ] JPEG com EXIF de GPS resulta em variantes sem nenhum metadado.
-- [ ] Nenhuma variante gravada passa de 1600 px nem de 400 KB.
+- [ ] Nenhuma variante gravada passa de 1600 px nem de 400 KB, inclusive em imagem retrato de finalidade de proporção original.
+- [ ] Logotipo retrato enviado como `school_logo` gera as variantes 64, 256 e 512 com o maior lado igual ao nome; o expurgo não apaga o logotipo referenciado em `settings`.
 - [ ] A nona imagem de um case é recusada.
 - [ ] A segunda requisição da mesma URL com `If-None-Match` devolve 304.
 - [ ] Imagem enviada e não usada some após o expurgo; imagem em uso permanece.
