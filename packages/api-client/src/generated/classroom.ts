@@ -1797,6 +1797,279 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/forum/categories": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Categorias visíveis do fórum */
+        get: operations["listForumCategories"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/forum/categories/{id}/topics": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Tópicos da categoria
+         * @description Fixados primeiro, depois por última atividade. Categoria invisível responde 404.
+         */
+        get: operations["listForumCategoryTopics"];
+        put?: never;
+        /**
+         * Criar tópico
+         * @description Saneia o Markdown, segue o tópico para o autor e limita a criação por usuário. Escrita sem direito retorna forum_forbidden.
+         */
+        post: operations["createForumTopic"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/forum/categories/{id}/mentions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Buscar pessoas que podem ler a categoria */
+        get: operations["searchForumMentions"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/forum/topics/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Ler tópico */
+        get: operations["getForumTopic"];
+        put?: never;
+        post?: never;
+        /**
+         * Remover tópico do próprio autor
+         * @description Mantém um marcador de remoção se houver respostas. Tópicos automáticos de aula não podem ser removidos.
+         */
+        delete: operations["deleteForumTopic"];
+        options?: never;
+        head?: never;
+        /** Editar tópico do próprio autor */
+        patch: operations["updateForumTopic"];
+        trace?: never;
+    };
+    "/api/v1/forum/topics/{id}/posts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Listar respostas do tópico */
+        get: operations["listForumPosts"];
+        put?: never;
+        /**
+         * Responder tópico ou publicação
+         * @description Aceita um nível de resposta. Tópico fechado ou oculto retorna topic_closed quando visível. Aplica o limite de frequência.
+         */
+        post: operations["createForumPost"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/forum/posts/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Remover a própria resposta
+         * @description Mantém um marcador de remoção se houver respostas dependentes.
+         */
+        delete: operations["deleteForumPost"];
+        options?: never;
+        head?: never;
+        /** Editar a própria resposta */
+        patch: operations["updateForumPost"];
+        trace?: never;
+    };
+    "/api/v1/forum/topics/{id}/reactions/{emoji}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Adicionar reação */
+        put: operations["addForumTopicReaction"];
+        post?: never;
+        /** Remover reação */
+        delete: operations["removeForumTopicReaction"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/forum/posts/{id}/reactions/{emoji}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Adicionar reação */
+        put: operations["addForumPostReaction"];
+        post?: never;
+        /** Remover reação */
+        delete: operations["removeForumPostReaction"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/forum/topics/{id}/solution": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Marcar ou remover solução
+         * @description Autor do tópico ou equipe. Use postId nulo para remover. Tópicos de aula não aceitam solução.
+         */
+        put: operations["setForumTopicSolution"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/forum/topics/{id}/follow": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Seguir tópico */
+        put: operations["followForumTopic"];
+        post?: never;
+        /** Deixar de seguir tópico */
+        delete: operations["unfollowForumTopic"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/forum/search": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Buscar em tópicos e respostas visíveis */
+        get: operations["searchForum"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/lessons/{id}/topic": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Comentários da aula
+         * @description Em aula amostra sem direito ao curso, devolve apenas a contagem e canRead falso, com topicId nulo.
+         */
+        get: operations["getLessonTopic"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/reports": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Denunciar publicação do fórum
+         * @description Repetir denúncia devolve a denúncia existente. Motivo other exige detalhes. O próprio conteúdo não pode ser denunciado.
+         */
+        post: operations["createForumReport"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/me/reports": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Minhas denúncias
+         * @description Mostra se a denúncia foi analisada, sem detalhes da ação disciplinar.
+         */
+        get: operations["listMyForumReports"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -2249,7 +2522,7 @@ export interface components {
             event: "notification.created";
             data: components["schemas"]["StreamNotificationCreatedData"];
         };
-        /** @description Nova resposta num tópico aberto na tela. */
+        /** @description Nova resposta num tópico aberto na tela. O cliente relê as respostas pela rota com autorização. */
         StreamEventForumPostCreated: {
             id: components["schemas"]["StreamEventId"];
             /**
@@ -3506,6 +3779,129 @@ export interface components {
              *     leva o aluno à página da assinatura, em `/conta/compras`.
              */
             checkoutUrl: string;
+        };
+        ForumCategory: {
+            id: components["schemas"]["Uuid"];
+            /** @enum {string} */
+            kind: "course" | "free";
+            courseId: components["schemas"]["Uuid"] | null;
+            /** @enum {string} */
+            audience: "all" | "active";
+            name: string;
+            description: string | null;
+            position: number;
+            archivedAt: components["schemas"]["DateTime"] | null;
+        };
+        ForumCategoryPage: components["schemas"]["Page"] & {
+            items: components["schemas"]["ForumCategory"][];
+        };
+        /** @description Id nulo para publicação da equipe ou autor removido. */
+        ForumAuthor: {
+            id: components["schemas"]["Uuid"] | null;
+            displayName: string;
+        };
+        ForumTopicSummary: {
+            id: components["schemas"]["Uuid"];
+            categoryId: components["schemas"]["Uuid"];
+            lessonId: components["schemas"]["Uuid"] | null;
+            author: components["schemas"]["ForumAuthor"];
+            title: string;
+            /** @enum {string} */
+            status: "open" | "closed" | "hidden";
+            pinned: boolean;
+            solutionPostId: components["schemas"]["Uuid"] | null;
+            postsCount: number;
+            lastActivityAt: components["schemas"]["DateTime"];
+            following: boolean;
+        };
+        ForumTopicPage: components["schemas"]["Page"] & {
+            items: components["schemas"]["ForumTopicSummary"][];
+        };
+        ForumReaction: {
+            /** @enum {string} */
+            emoji: "👍" | "❤️" | "🎉" | "😄" | "🤔" | "👀";
+            count: number;
+            reacted: boolean;
+        };
+        ForumReactions: components["schemas"]["ForumReaction"][];
+        ForumPost: {
+            id: components["schemas"]["Uuid"];
+            topicId: components["schemas"]["Uuid"];
+            parentPostId: components["schemas"]["Uuid"] | null;
+            author: components["schemas"]["ForumAuthor"];
+            bodyHtml: string;
+            /** @description Markdown disponível apenas a quem pode editar. */
+            bodyMd?: string;
+            createdAt: components["schemas"]["DateTime"];
+            editedAt: components["schemas"]["DateTime"] | null;
+            deletedAt: components["schemas"]["DateTime"] | null;
+            hiddenAt: components["schemas"]["DateTime"] | null;
+            moderatedAt: components["schemas"]["DateTime"] | null;
+            reactions: components["schemas"]["ForumReactions"];
+        };
+        ForumPostPage: components["schemas"]["Page"] & {
+            items: components["schemas"]["ForumPost"][];
+        };
+        ForumTopicDetail: {
+            topic: components["schemas"]["ForumTopicSummary"];
+            bodyHtml: string;
+            /** @description Markdown disponível apenas a quem pode editar. */
+            bodyMd?: string;
+            createdAt: components["schemas"]["DateTime"];
+            editedAt: components["schemas"]["DateTime"] | null;
+            deletedAt: components["schemas"]["DateTime"] | null;
+            hiddenAt: components["schemas"]["DateTime"] | null;
+            moderatedAt: components["schemas"]["DateTime"] | null;
+            reactions: components["schemas"]["ForumReactions"];
+            canWrite: boolean;
+        };
+        /** @enum {string} */
+        ReportTargetType: "forum_topic" | "forum_post";
+        /** @enum {string} */
+        ReportReason: "spam" | "harassment" | "inappropriate" | "piracy" | "personal_data" | "other";
+        CreateForumTopic: {
+            title: string;
+            bodyMd: string;
+        };
+        UpdateForumTopic: {
+            title?: string;
+            bodyMd?: string;
+        };
+        CreateForumPost: {
+            bodyMd: string;
+            parentPostId?: components["schemas"]["Uuid"] | null;
+        };
+        UpdateForumPost: {
+            bodyMd: string;
+        };
+        SetForumSolution: {
+            postId: components["schemas"]["Uuid"] | null;
+        };
+        ForumLessonTopic: {
+            topicId: components["schemas"]["Uuid"] | null;
+            postsCount: number;
+            canRead: boolean;
+        };
+        ForumMentionPage: components["schemas"]["Page"] & {
+            items: components["schemas"]["ForumAuthor"][];
+        };
+        CreateReport: {
+            targetType: components["schemas"]["ReportTargetType"];
+            targetId: components["schemas"]["Uuid"];
+            reason: components["schemas"]["ReportReason"];
+            details?: string;
+        };
+        MyForumReport: {
+            id: components["schemas"]["Uuid"];
+            targetType: components["schemas"]["ReportTargetType"];
+            targetId: components["schemas"]["Uuid"];
+            reason: components["schemas"]["ReportReason"];
+            /** @enum {string} */
+            status: "open" | "reviewed";
+            createdAt: components["schemas"]["DateTime"];
+        };
+        MyForumReportPage: components["schemas"]["Page"] & {
+            items: components["schemas"]["MyForumReport"][];
         };
     };
     responses: {
@@ -6337,6 +6733,778 @@ export interface operations {
             };
             400: components["responses"]["BadRequest"];
             404: components["responses"]["NotFound"];
+            429: components["responses"]["TooManyRequests"];
+            500: components["responses"]["InternalError"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    listForumCategories: {
+        parameters: {
+            query?: {
+                /** @description Quantidade de itens por página. */
+                limit?: components["parameters"]["Limit"];
+                /** @description Valor de `nextCursor` da página anterior. Ausente na primeira página. */
+                cursor?: components["parameters"]["Cursor"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Operação concluída. */
+            200: {
+                headers: {
+                    "X-Request-Id": components["headers"]["XRequestId"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ForumCategoryPage"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            429: components["responses"]["TooManyRequests"];
+            500: components["responses"]["InternalError"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    listForumCategoryTopics: {
+        parameters: {
+            query?: {
+                kind?: "all" | "lessons" | "discussions";
+                filter?: "all" | "unanswered" | "solved" | "unsolved" | "following";
+                /** @description Quantidade de itens por página. */
+                limit?: components["parameters"]["Limit"];
+                /** @description Valor de `nextCursor` da página anterior. Ausente na primeira página. */
+                cursor?: components["parameters"]["Cursor"];
+            };
+            header?: never;
+            path: {
+                /** @description Identificador do recurso. */
+                id: components["parameters"]["IdPath"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Operação concluída. */
+            200: {
+                headers: {
+                    "X-Request-Id": components["headers"]["XRequestId"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ForumTopicPage"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            429: components["responses"]["TooManyRequests"];
+            500: components["responses"]["InternalError"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    createForumTopic: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Identificador do recurso. */
+                id: components["parameters"]["IdPath"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateForumTopic"];
+            };
+        };
+        responses: {
+            /** @description Operação concluída. */
+            201: {
+                headers: {
+                    "X-Request-Id": components["headers"]["XRequestId"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ForumTopicDetail"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            413: components["responses"]["PayloadTooLarge"];
+            415: components["responses"]["UnsupportedMediaType"];
+            422: components["responses"]["UnprocessableEntity"];
+            429: components["responses"]["TooManyRequests"];
+            500: components["responses"]["InternalError"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    searchForumMentions: {
+        parameters: {
+            query: {
+                q: string;
+                /** @description Quantidade de itens por página. */
+                limit?: components["parameters"]["Limit"];
+                /** @description Valor de `nextCursor` da página anterior. Ausente na primeira página. */
+                cursor?: components["parameters"]["Cursor"];
+            };
+            header?: never;
+            path: {
+                /** @description Identificador do recurso. */
+                id: components["parameters"]["IdPath"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Operação concluída. */
+            200: {
+                headers: {
+                    "X-Request-Id": components["headers"]["XRequestId"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ForumMentionPage"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            429: components["responses"]["TooManyRequests"];
+            500: components["responses"]["InternalError"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    getForumTopic: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Identificador do recurso. */
+                id: components["parameters"]["IdPath"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Operação concluída. */
+            200: {
+                headers: {
+                    "X-Request-Id": components["headers"]["XRequestId"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ForumTopicDetail"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            429: components["responses"]["TooManyRequests"];
+            500: components["responses"]["InternalError"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    deleteForumTopic: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Identificador do recurso. */
+                id: components["parameters"]["IdPath"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Operação concluída. */
+            204: {
+                headers: {
+                    "X-Request-Id": components["headers"]["XRequestId"];
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            422: components["responses"]["UnprocessableEntity"];
+            429: components["responses"]["TooManyRequests"];
+            500: components["responses"]["InternalError"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    updateForumTopic: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Identificador do recurso. */
+                id: components["parameters"]["IdPath"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateForumTopic"];
+            };
+        };
+        responses: {
+            /** @description Operação concluída. */
+            200: {
+                headers: {
+                    "X-Request-Id": components["headers"]["XRequestId"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ForumTopicDetail"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            413: components["responses"]["PayloadTooLarge"];
+            415: components["responses"]["UnsupportedMediaType"];
+            422: components["responses"]["UnprocessableEntity"];
+            429: components["responses"]["TooManyRequests"];
+            500: components["responses"]["InternalError"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    listForumPosts: {
+        parameters: {
+            query?: {
+                /** @description Quantidade de itens por página. */
+                limit?: components["parameters"]["Limit"];
+                /** @description Valor de `nextCursor` da página anterior. Ausente na primeira página. */
+                cursor?: components["parameters"]["Cursor"];
+            };
+            header?: never;
+            path: {
+                /** @description Identificador do recurso. */
+                id: components["parameters"]["IdPath"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Operação concluída. */
+            200: {
+                headers: {
+                    "X-Request-Id": components["headers"]["XRequestId"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ForumPostPage"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            429: components["responses"]["TooManyRequests"];
+            500: components["responses"]["InternalError"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    createForumPost: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Identificador do recurso. */
+                id: components["parameters"]["IdPath"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateForumPost"];
+            };
+        };
+        responses: {
+            /** @description Operação concluída. */
+            201: {
+                headers: {
+                    "X-Request-Id": components["headers"]["XRequestId"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ForumPost"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            413: components["responses"]["PayloadTooLarge"];
+            415: components["responses"]["UnsupportedMediaType"];
+            422: components["responses"]["UnprocessableEntity"];
+            429: components["responses"]["TooManyRequests"];
+            500: components["responses"]["InternalError"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    deleteForumPost: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Identificador do recurso. */
+                id: components["parameters"]["IdPath"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Operação concluída. */
+            204: {
+                headers: {
+                    "X-Request-Id": components["headers"]["XRequestId"];
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            422: components["responses"]["UnprocessableEntity"];
+            429: components["responses"]["TooManyRequests"];
+            500: components["responses"]["InternalError"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    updateForumPost: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Identificador do recurso. */
+                id: components["parameters"]["IdPath"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateForumPost"];
+            };
+        };
+        responses: {
+            /** @description Operação concluída. */
+            200: {
+                headers: {
+                    "X-Request-Id": components["headers"]["XRequestId"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ForumPost"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            413: components["responses"]["PayloadTooLarge"];
+            415: components["responses"]["UnsupportedMediaType"];
+            422: components["responses"]["UnprocessableEntity"];
+            429: components["responses"]["TooManyRequests"];
+            500: components["responses"]["InternalError"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    addForumTopicReaction: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Identificador do recurso. */
+                id: components["parameters"]["IdPath"];
+                emoji: "👍" | "❤️" | "🎉" | "😄" | "🤔" | "👀";
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Operação concluída. */
+            200: {
+                headers: {
+                    "X-Request-Id": components["headers"]["XRequestId"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ForumReactions"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            422: components["responses"]["UnprocessableEntity"];
+            429: components["responses"]["TooManyRequests"];
+            500: components["responses"]["InternalError"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    removeForumTopicReaction: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Identificador do recurso. */
+                id: components["parameters"]["IdPath"];
+                emoji: "👍" | "❤️" | "🎉" | "😄" | "🤔" | "👀";
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Operação concluída. */
+            200: {
+                headers: {
+                    "X-Request-Id": components["headers"]["XRequestId"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ForumReactions"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            422: components["responses"]["UnprocessableEntity"];
+            429: components["responses"]["TooManyRequests"];
+            500: components["responses"]["InternalError"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    addForumPostReaction: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Identificador do recurso. */
+                id: components["parameters"]["IdPath"];
+                emoji: "👍" | "❤️" | "🎉" | "😄" | "🤔" | "👀";
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Operação concluída. */
+            200: {
+                headers: {
+                    "X-Request-Id": components["headers"]["XRequestId"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ForumReactions"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            422: components["responses"]["UnprocessableEntity"];
+            429: components["responses"]["TooManyRequests"];
+            500: components["responses"]["InternalError"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    removeForumPostReaction: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Identificador do recurso. */
+                id: components["parameters"]["IdPath"];
+                emoji: "👍" | "❤️" | "🎉" | "😄" | "🤔" | "👀";
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Operação concluída. */
+            200: {
+                headers: {
+                    "X-Request-Id": components["headers"]["XRequestId"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ForumReactions"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            422: components["responses"]["UnprocessableEntity"];
+            429: components["responses"]["TooManyRequests"];
+            500: components["responses"]["InternalError"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    setForumTopicSolution: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Identificador do recurso. */
+                id: components["parameters"]["IdPath"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SetForumSolution"];
+            };
+        };
+        responses: {
+            /** @description Operação concluída. */
+            200: {
+                headers: {
+                    "X-Request-Id": components["headers"]["XRequestId"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ForumTopicDetail"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            413: components["responses"]["PayloadTooLarge"];
+            415: components["responses"]["UnsupportedMediaType"];
+            422: components["responses"]["UnprocessableEntity"];
+            429: components["responses"]["TooManyRequests"];
+            500: components["responses"]["InternalError"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    followForumTopic: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Identificador do recurso. */
+                id: components["parameters"]["IdPath"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Operação concluída. */
+            204: {
+                headers: {
+                    "X-Request-Id": components["headers"]["XRequestId"];
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            422: components["responses"]["UnprocessableEntity"];
+            429: components["responses"]["TooManyRequests"];
+            500: components["responses"]["InternalError"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    unfollowForumTopic: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Identificador do recurso. */
+                id: components["parameters"]["IdPath"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Operação concluída. */
+            204: {
+                headers: {
+                    "X-Request-Id": components["headers"]["XRequestId"];
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            422: components["responses"]["UnprocessableEntity"];
+            429: components["responses"]["TooManyRequests"];
+            500: components["responses"]["InternalError"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    searchForum: {
+        parameters: {
+            query: {
+                q: string;
+                categoryId?: components["schemas"]["Uuid"];
+                /** @description Quantidade de itens por página. */
+                limit?: components["parameters"]["Limit"];
+                /** @description Valor de `nextCursor` da página anterior. Ausente na primeira página. */
+                cursor?: components["parameters"]["Cursor"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Operação concluída. */
+            200: {
+                headers: {
+                    "X-Request-Id": components["headers"]["XRequestId"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ForumTopicPage"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            429: components["responses"]["TooManyRequests"];
+            500: components["responses"]["InternalError"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    getLessonTopic: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Identificador do recurso. */
+                id: components["parameters"]["IdPath"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Operação concluída. */
+            200: {
+                headers: {
+                    "X-Request-Id": components["headers"]["XRequestId"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ForumLessonTopic"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            429: components["responses"]["TooManyRequests"];
+            500: components["responses"]["InternalError"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    createForumReport: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateReport"];
+            };
+        };
+        responses: {
+            /** @description Operação concluída. */
+            200: {
+                headers: {
+                    "X-Request-Id": components["headers"]["XRequestId"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MyForumReport"];
+                };
+            };
+            /** @description Operação concluída. */
+            201: {
+                headers: {
+                    "X-Request-Id": components["headers"]["XRequestId"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MyForumReport"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            413: components["responses"]["PayloadTooLarge"];
+            415: components["responses"]["UnsupportedMediaType"];
+            422: components["responses"]["UnprocessableEntity"];
+            429: components["responses"]["TooManyRequests"];
+            500: components["responses"]["InternalError"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    listMyForumReports: {
+        parameters: {
+            query?: {
+                /** @description Quantidade de itens por página. */
+                limit?: components["parameters"]["Limit"];
+                /** @description Valor de `nextCursor` da página anterior. Ausente na primeira página. */
+                cursor?: components["parameters"]["Cursor"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Operação concluída. */
+            200: {
+                headers: {
+                    "X-Request-Id": components["headers"]["XRequestId"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MyForumReportPage"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
             429: components["responses"]["TooManyRequests"];
             500: components["responses"]["InternalError"];
             503: components["responses"]["ServiceUnavailable"];
