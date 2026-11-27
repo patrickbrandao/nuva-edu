@@ -106,7 +106,10 @@ export function useNotificationEntries() {
   return useCallback(
     (items: readonly NotificationItem[]): NotificationEntry[] =>
       items.map((item) => {
-        const text = shortText(item.data);
+        const text =
+          item.type === 'account.email_undeliverable'
+            ? t('notifications.types.account.email_undeliverable_text')
+            : shortText(item.data);
         return {
           id: item.id,
           type: item.type,

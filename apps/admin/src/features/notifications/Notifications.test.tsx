@@ -250,6 +250,26 @@ describe('sino e central da equipe', () => {
     ).toBe(true);
   });
 
+  it('mostra o aviso de endereço indisponível e a orientação de recuperação', async () => {
+    const routes = notificationsRoutes({
+      'GET /api/v1/notifications': notificationPage([
+        notificationItem({
+          type: 'account.email_undeliverable',
+          group: 'account',
+          actor: null,
+          targetType: null,
+          targetId: null,
+          data: {},
+        }),
+      ]),
+    });
+    renderApp('/notificacoes', routes);
+    expect(await screen.findByText('E-mail indisponível')).toBeTruthy();
+    expect(
+      screen.getByText('Confira o endereço cadastrado para voltar a receber mensagens.'),
+    ).toBeTruthy();
+  });
+
   it('tipo que o site não conhece cai no rótulo genérico', async () => {
     const routes = notificationsRoutes({
       'GET /api/v1/notifications': notificationPage([

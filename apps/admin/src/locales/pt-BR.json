@@ -2250,6 +2250,8 @@
         "password_reset": "Redefinição de senha solicitada",
         "exists": "Já existe uma conta com este e-mail",
         "new_login": "Novo acesso à sua conta",
+        "email_undeliverable": "E-mail indisponível",
+        "email_undeliverable_text": "Confira o endereço cadastrado para voltar a receber mensagens.",
         "locked": "Conta bloqueada por tentativas",
         "password_changed": "Sua senha foi alterada",
         "role_changed": "Seu papel na equipe mudou",
