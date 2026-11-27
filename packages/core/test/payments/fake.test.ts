@@ -76,6 +76,22 @@ describe('contrato e referências do PaymentProvider', () => {
     );
   });
 
+  it('prefixa os identificadores da instância quando compartilha banco com outro processo', async () => {
+    const first = new FakePaymentProvider({ instanceId: 'processo1' });
+    const second = new FakePaymentProvider({ instanceId: 'processo2' });
+    const checkout = await first.createCheckout(checkoutInput());
+    const another = await second.createCheckout(checkoutInput());
+
+    expect(checkout.providerCheckoutId).toBe('fake_checkout_processo1_000001');
+    expect(another.providerCheckoutId).toBe('fake_checkout_processo2_000001');
+    const payment = first.approveCheckout(checkout.providerCheckoutId);
+    expect(payment.providerPaymentId).toBe('fake_payment_processo1_000001');
+    expect(
+      (await first.parseWebhook(first.paymentWebhook(payment.providerPaymentId))).eventId,
+    ).toBe('fake_event_processo1_000001');
+    expect(() => new FakePaymentProvider({ instanceId: '../invalido' })).toThrow(/instância/);
+  });
+
   it('o fake é determinístico e tem relógio e memória isolados por instância', async () => {
     const first = new FakePaymentProvider({ now: '2026-02-03T12:00:00Z' });
     const second = new FakePaymentProvider({ now: first.now });

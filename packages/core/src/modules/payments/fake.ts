@@ -45,6 +45,8 @@ export type FakePaymentOperation =
   | 'parseWebhook';
 
 export interface FakePaymentProviderOptions {
+  /** Distingue IDs de processos que compartilham um banco persistente. */
+  instanceId?: string;
   currency?: string;
   webhookSecret?: string;
   checkoutBaseUrl?: string;
@@ -109,6 +111,7 @@ const PERIOD_UNITS = { days: 'days', months: 'months', years: 'years' } as const
 export class FakePaymentProvider implements PaymentProvider {
   readonly name = 'fake' as const;
   readonly #currency: string;
+  readonly #idPrefix: string;
   readonly #webhookSecret: string;
   readonly #checkoutBaseUrl: string;
   readonly #checkouts = new Map<string, CheckoutEntry>();
@@ -134,6 +137,10 @@ export class FakePaymentProvider implements PaymentProvider {
   #eventSequence = 0;
 
   constructor(options: FakePaymentProviderOptions = {}) {
+    if (options.instanceId !== undefined && !/^[a-z0-9]{1,48}$/.test(options.instanceId)) {
+      throw new TypeError('Identificador da instância do simulador inválido.');
+    }
+    this.#idPrefix = options.instanceId === undefined ? '' : `${options.instanceId}_`;
     this.#currency = options.currency ?? 'BRL';
     this.#webhookSecret = options.webhookSecret ?? FAKE_PAYMENT_WEBHOOK_SECRET;
     this.#checkoutBaseUrl = (options.checkoutBaseUrl ?? FAKE_PAYMENT_CHECKOUT_URL).replace(
@@ -179,7 +186,7 @@ export class FakePaymentProvider implements PaymentProvider {
   async createCheckout(input: CreateCheckoutInput): Promise<PaymentCheckout> {
     this.#available('createCheckout');
     validateCheckout(input, this.#currency);
-    const providerCheckoutId = `fake_checkout_${String(++this.#checkoutSequence).padStart(6, '0')}`;
+    const providerCheckoutId = `fake_checkout_${this.#idPrefix}${String(++this.#checkoutSequence).padStart(6, '0')}`;
     const payment = this.#newPayment({
       checkoutId: providerCheckoutId,
       subscriptionId: null,
@@ -236,7 +243,7 @@ export class FakePaymentProvider implements PaymentProvider {
     if (existing !== undefined) {
       return { providerPlanId: existing.id };
     }
-    const providerPlanId = `fake_plan_${String(++this.#planSequence).padStart(6, '0')}`;
+    const providerPlanId = `fake_plan_${this.#idPrefix}${String(++this.#planSequence).padStart(6, '0')}`;
     this.#plans.set(providerPlanId, { id: providerPlanId, input: clonePlanInput(input) });
     return { providerPlanId };
   }
@@ -255,7 +262,7 @@ export class FakePaymentProvider implements PaymentProvider {
     if (!Number.isSafeInteger(discount) || discount < 0 || discount > plan.input.amountCents) {
       throw invalidPaymentRequest('O desconto da primeira cobrança é inválido.');
     }
-    const providerSubscriptionId = `fake_subscription_${String(++this.#subscriptionSequence).padStart(6, '0')}`;
+    const providerSubscriptionId = `fake_subscription_${this.#idPrefix}${String(++this.#subscriptionSequence).padStart(6, '0')}`;
     this.#subscriptions.set(providerSubscriptionId, {
       providerSubscriptionId,
       providerPlanId: input.providerPlanId,
@@ -316,7 +323,7 @@ export class FakePaymentProvider implements PaymentProvider {
     if (!Number.isSafeInteger(amount) || amount <= 0 || amount > remaining) {
       throw invalidPaymentRequest('O valor do reembolso deve ser positivo e não exceder o saldo.');
     }
-    const providerRefundId = `fake_refund_${String(++this.#refundSequence).padStart(6, '0')}`;
+    const providerRefundId = `fake_refund_${this.#idPrefix}${String(++this.#refundSequence).padStart(6, '0')}`;
     const refund: RefundEntry = {
       providerRefundId,
       status: this.#refundOutcome,
@@ -596,7 +603,8 @@ export class FakePaymentProvider implements PaymentProvider {
     options: FakeWebhookOptions,
   ): ParsePaymentWebhookInput {
     const eventId =
-      options.eventId ?? `fake_event_${String(++this.#eventSequence).padStart(6, '0')}`;
+      options.eventId ??
+      `fake_event_${this.#idPrefix}${String(++this.#eventSequence).padStart(6, '0')}`;
     const timestamp = String(new Date(options.timestamp ?? this.#now).getTime());
     const requestId = options.requestId ?? `fake_request_${eventId}`;
     const secret = options.secret ?? this.#webhookSecret;
@@ -636,7 +644,7 @@ export class FakePaymentProvider implements PaymentProvider {
     method: PaymentMethod;
     status: ProviderPayment['status'];
   }): PaymentEntry {
-    const providerPaymentId = `fake_payment_${String(++this.#paymentSequence).padStart(6, '0')}`;
+    const providerPaymentId = `fake_payment_${this.#idPrefix}${String(++this.#paymentSequence).padStart(6, '0')}`;
     const payment: PaymentEntry = {
       providerPaymentId,
       checkoutId: input.checkoutId,
