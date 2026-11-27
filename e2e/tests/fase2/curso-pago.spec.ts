@@ -1,7 +1,5 @@
-// Critério de saída da Fase 2, curso pago (PLAN; specs 009 e 010): na vitrine e na página do
-// produto, o curso pago aparece com o preço e bloqueado, sem botão de compra, com o programa
-// visível; a aula de amostra abre para o aluno sem acesso, e as demais não; a concessão manual
-// pelo gerente libera o curso e avisa o aluno por e-mail.
+// O curso pago mostra preço, programa e opção de compra (specs 009, 010 e 011).
+// A amostra abre antes da compra. A concessão pelo gerente libera as demais aulas e avisa o aluno.
 import { expect, type Page, test } from '@playwright/test';
 import { ADMIN_URL, CLASSROOM_URL } from '../../support/env.ts';
 import {
@@ -76,7 +74,7 @@ test('curso pago: bloqueado com programa e amostra; a concessão manual do geren
   const manager = await createStaff(admin, 'manager', `Gerente E2E ${TAG}`);
   await admin.context().close();
 
-  await test.step('o visitante vê o curso na vitrine com o preço, bloqueado e sem compra', async () => {
+  await test.step('o visitante vê o preço, o programa e a opção de compra', async () => {
     const visitor = await visitorPage(browser);
     await visitor.goto(`${CLASSROOM_URL}/`);
     const search = visitor.getByRole('searchbox', { name: 'Buscar por título ou resumo' });
@@ -92,12 +90,11 @@ test('curso pago: bloqueado com programa e amostra; a concessão manual do geren
     await expect(visitor).toHaveURL(new RegExp(`/cursos/${slug}$`));
     const access = visitor.getByRole('region', { name: 'Preço e acesso' });
     await expect(access).toContainText(PRICE);
-    await expect(access).toContainText('Acesso liberado pela escola');
-    // sem compra nem cesta na Fase 2 (spec 009, P6); o menu "Cesta" do site fica de fora
+    await expect(access).toContainText('Conteúdo bloqueado');
     const main = visitor.getByRole('main');
     await expect(main.getByRole('heading', { level: 1, name: COURSE })).toBeVisible();
-    await expect(main.getByRole('button', { name: /comprar|cesta/i })).toHaveCount(0);
-    await expect(main.getByRole('link', { name: /comprar|cesta/i })).toHaveCount(0);
+    const buy = access.getByRole('link', { name: 'Adicionar à cesta' });
+    await expect(buy).toBeVisible();
     // o programa é público; a aula de amostra é marcada
     const toggle = visitor.getByRole('button', { name: new RegExp(`^${MODULE}`) });
     if ((await toggle.getAttribute('aria-expanded')) !== 'true') await toggle.click();
@@ -112,6 +109,10 @@ test('curso pago: bloqueado com programa e amostra; a concessão manual do geren
     );
     expect(publicCourse.status()).toBe(200);
     expect(await publicCourse.text()).not.toContain('videos.nuva-e2e.test');
+    await buy.click();
+    await expect(visitor).toHaveURL(
+      (url) => url.pathname === '/entrar' && url.searchParams.get('destino') === `/cursos/${slug}`,
+    );
     await visitor.context().close();
   });
 
