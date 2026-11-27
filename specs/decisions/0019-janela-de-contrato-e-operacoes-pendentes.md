@@ -2,6 +2,7 @@
 
 Status: aceita (complementada por [0022](0022-janela-de-contrato-num-so-branch.md), que substitui o envio do contrato sozinho à `main` e a janela em sequência)
 Data: 2026-11-24
+Integração de operações pendentes à main substituída pela [0030](0030-janelas-sem-pendencias-na-main.md).
 
 ## Contexto
 

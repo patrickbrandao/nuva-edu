@@ -2,6 +2,7 @@
 
 Status: aceita
 Data: 2026-11-24
+Integração de operações pendentes à main substituída pela [0030](0030-janelas-sem-pendencias-na-main.md).
 
 Complementa a [0019](0019-janela-de-contrato-e-operacoes-pendentes.md) e substitui dela dois pontos: o envio do contrato sozinho à `main` e a janela "executada em sequência" com falhas esperadas na `main`. Abre, na [0021](0021-worktree-por-tarefa.md), a única exceção à regra de um worktree por tarefa.
 

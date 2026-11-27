@@ -131,9 +131,10 @@ As APIs sobem em modo estrito ([003](003-admin-api.md), RF-04): operação do co
 **O que entra na janela.** A tarefa do contrato (`arquiteto`) e uma tarefa para cada pacote que ficaria vermelho com o contrato novo e o cliente regenerado:
 
 - a do `interface`, para regenerar o cliente (sempre);
-- a da API dona da rota (`api-admin` ou `api-classroom`), e a da outra API quando ela compartilha o esquema ou a rota alterada;
+- a da API dona da rota (`api-admin` ou `api-classroom`), incluindo a implementação de cada nova rota, e a da outra API quando ela compartilha o esquema ou a rota alterada;
+- a do núcleo quando a janela já está aberta e precisa de funções ausentes da base do worktree. Quando houver independência do contrato, o núcleo pode ser integrado antes de abrir a janela;
 - as dos sites, quando o esquema alterado aparece no código ou nos dados de teste deles (a checagem de tipos quebra com o cliente regenerado). Site que só vai *passar a usar* uma operação nova não precisa entrar: a tarefa dele roda depois, no próprio worktree;
-- a de cada API cujo contrato ganha operação de escrita sem `csrfToken` (login, callback de OAuth e afins), **mesmo que a operação entre com `x-nuva-pending`**: a conferência do `csrfToken` vale também para as operações pendentes ([003](003-admin-api.md#subida-estrita), "Subida estrita"), e a lista de exceções de CSRF fica no código da API. A tarefa acrescenta a exceção à lista; a rota continua para depois.
+- a de cada API cujo contrato ganha operação de escrita sem `csrfToken` (login, callback de OAuth e afins), **mesmo que a operação entre com `x-nuva-pending`**: a conferência do `csrfToken` vale também para as operações pendentes ([003](003-admin-api.md#subida-estrita), "Subida estrita"), e a lista de exceções de CSRF fica no código da API. A tarefa acrescenta a exceção à lista junto da rota.
 
 O número da tarefa do contrato é o número da janela (`NNN`). As outras tarefas trazem `janela: NNN` no cabeçalho, além do `depende-de` normal entre elas (o site depende da do `interface`). Janela é pequena: um recurso, uma mudança.
 
@@ -157,7 +158,7 @@ Tarefa `pronta` está commitada no branch da janela e ainda não está na `main`
 
 **Fechamento.** Fecha a janela quem conclui a última tarefa dela: depois do passo 6, se todas as outras tarefas com `janela: NNN` estão `prontas`, é esse agente, qualquer que seja o papel. Numa sessão com orquestrador, ele pode fechar no lugar do agente; a regra não depende dele. Quem fecha:
 
-1. confere que todas as tarefas da janela estão `prontas` e que o worktree não tem alteração pendente;
+1. confere que todas as tarefas da janela estão `prontas`, que o worktree está limpo e que as duas APIs passam com `check-contract --no-pending`;
 2. acrescenta ao `CHANGELOG.md`, em "Não lançado", as linhas da janela (as sugeridas nos relatos, ou um resumo delas) e commita só esse arquivo, citando a tarefa da janela: `docs(<papel>): changelog da janela ... (task NNN)`;
 3. roda `pnpm task:finish NNN`, do checkout principal. É o `task:finish` normal sobre o branch inteiro (rebase, `verify:quick`, fast-forward, push), e ao final remove o worktree, o branch e os arquivos da tarefa `NNN` e de todas as tarefas com `janela: NNN`. O comando recusa enquanto houver tarefa da janela que não esteja `pronta`.
 
@@ -177,7 +178,7 @@ Abandonar a janela é `pnpm task:abort NNN --force`: descarta os commits de todo
 | Operação **nova**, com a tarefa da API pronta para ser executada em seguida | Janela num só branch, sem marca: contrato, cliente e rota chegam juntos. É a forma normal. |
 | Operação **nova** cujo contrato precisa chegar antes da rota (a API depende de migration ou de `packages/core` que ainda não existem, ou o contrato de um recurso inteiro é publicado para os papéis seguintes) | A operação entra com `x-nuva-pending: true`. A janela mínima é contrato + cliente regenerado (tarefa do `interface`); a tarefa da API roda depois, no worktree dela. |
 
-A conferência do `api-kit` ignora operação pendente sem rota, então a API continua subindo e o teste de contrato continua verde. Operação pendente que já tem rota não impede a subida, mas gera aviso no log e no teste de contrato até a marca sair. A tarefa da API que registra a rota pede ao `arquiteto`, no relato, a retirada da marca; se a retirada alterar o cliente gerado, ela também é uma janela (contrato + `interface`). Nenhuma release sai com operação pendente: `check-contract --no-pending` faz parte do `verify:full`.
+A conferência do `api-kit` ignora operação pendente sem rota, então a API continua subindo e o teste de contrato continua verde. Operação pendente que já tem rota não impede a subida, mas gera aviso no log e no teste de contrato até a marca sair. A tarefa da API que registra a rota pede ao `arquiteto`, no relato, a retirada da marca na própria janela. O `interface` confere o cliente gerado após a retirada. As marcas são locais ao worktree e devem sair antes do fast-forward ([0030](decisions/0030-janelas-sem-pendencias-na-main.md)). A main e as releases passam por `check-contract --no-pending` no `verify:full`.
 
 Mudança de contrato que não altera o cliente gerado nem a validação (hoje, só afrouxar um `pattern`) dispensa a janela: a tarefa do contrato segue o fluxo normal, e o `verify:quick` do `task:finish` confirma que o cliente está em dia.
 
@@ -258,7 +259,7 @@ pnpm task:list
 - [ ] O contrato alterado e o cliente regenerado chegam à `main` no mesmo fast-forward; entre dois avanços da `main`, `pnpm --filter @nuva-edu/api-client check` nunca falha.
 - [ ] `pnpm task:start MMM --as <papel> --join NNN` não cria worktree nem branch e imprime o caminho do worktree da janela; `pnpm task:finish MMM` deixa a tarefa `pronta` e não toca a `main`.
 - [ ] `pnpm task:finish NNN` de uma janela recusa enquanto houver tarefa dela que não esteja `pronta`; bem-sucedido, remove os arquivos de todas as tarefas da janela.
-- [ ] Nenhuma tag de release contém operação com `x-nuva-pending`.
+- [ ] Nenhum avanço da `main` nem tag de release contém operação com `x-nuva-pending`.
 
 ## Fora de escopo
 

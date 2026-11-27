@@ -6,6 +6,7 @@ Detalhe das decisões em `specs/decisions/`.
 ## [Não lançado]
 
 ### Adicionado
+- specs: contrato, cliente gerado e rotas entram juntos em cada janela, com checagem estrita antes da integração (ADR 0030, task 745).
 - admin-api: separa a preparação do OpenAPI e os modos de pagamento nos testes de integração para evitar estouro de tempo no CI (task 744).
 - e2e: confirma acesso durante o período pago e encerramento pelo worker após cancelar uma assinatura (task 743).
 - e2e: cenário do curso pago valida a compra com login, acesso de amostra e concessão manual (task 742).
