@@ -13,6 +13,7 @@ export interface OutgoingEmail {
   subject: string;
   text: string;
   html: string;
+  headers?: Record<string, string>;
 }
 
 export interface Mailer {
@@ -58,6 +59,7 @@ export function createMailer(smtp: Config['smtp'], options: MailerOptions = {}):
         subject: message.subject,
         text: message.text,
         html: message.html,
+        ...(message.headers === undefined ? {} : { headers: message.headers }),
         // O corpo é montado aqui; nada de arquivo ou URL externos embutidos na mensagem.
         disableFileAccess: true,
         disableUrlAccess: true,

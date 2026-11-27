@@ -1,17 +1,35 @@
 import {
+  asObject,
+  createNotification,
   type Database,
   emailTypeDefinition,
+  getNotificationBranding,
+  getNotificationPrefs,
+  getOrCreateUnsubscribeToken,
   getSettings,
+  isNotificationEmailRequired,
+  isNotificationStaffGroup,
+  isNotificationType,
   issueEmailToken,
   type JobHandler,
   type Logger,
   lockEmailTokens,
+  notificationTypeGroup,
   PermanentJobError,
   parseEmailData,
-  schoolLogoUrl,
 } from '@nuva-edu/core';
+import { canReceiveTarget } from '../notifications/access.ts';
+import {
+  emailRejectionStreak,
+  isPermanentRecipientError,
+} from '../notifications/delivery-history.ts';
 import { classifySmtpError, type Mailer } from './smtp.ts';
-import { isTemplateEmailType, renderEmail, type TemplateEmailType } from './templates.ts';
+import {
+  isNotificationTemplateType,
+  isTemplateEmailType,
+  renderEmail,
+  renderNotificationEmail,
+} from './templates.ts';
 
 export interface EmailSendDependencies {
   db: Database;
@@ -56,7 +74,7 @@ export function createEmailSendHandler(deps: EmailSendDependencies): JobHandler<
       outcome = await db.transaction().execute(async (trx) => {
         const row = await trx
           .selectFrom('emailOutbox')
-          .select(['id', 'userId', 'to', 'type', 'data', 'status'])
+          .select(['id', 'userId', 'to', 'type', 'data', 'status', 'attempts'])
           .where('id', '=', outboxId)
           .forUpdate()
           .executeTakeFirst();
@@ -67,18 +85,13 @@ export function createEmailSendHandler(deps: EmailSendDependencies): JobHandler<
         if (row.status !== 'queued') {
           return 'not_queued';
         }
-        if (!isTemplateEmailType(row.type)) {
+        const emailType = row.type;
+        const definition = isTemplateEmailType(emailType) ? emailTypeDefinition(emailType) : null;
+        if (definition === null && !isNotificationTemplateType(emailType)) {
           throw new SendFailure('Tipo de e-mail desconhecido', true);
         }
-        const emailType: TemplateEmailType = row.type;
-        const definition = emailTypeDefinition(emailType);
-        let data: ReturnType<typeof parseEmailData>;
-        try {
-          data = parseEmailData(emailType, row.data);
-        } catch {
-          throw new SendFailure('Dados do e-mail fora do formato do tipo', true);
-        }
-        const purpose = definition.tokenPurpose;
+        const group = isNotificationType(emailType) ? notificationTypeGroup(emailType) : null;
+        const purpose = definition?.tokenPurpose ?? null;
         // Tipo com link: a trava da emissão vem antes da leitura da conta, para a troca de e-mail
         // pela equipe (que invalida os tokens sob a mesma trava) não passar entre a conferência
         // do endereço e a emissão (spec 007, "Tokens de e-mail").
@@ -96,7 +109,7 @@ export function createEmailSendHandler(deps: EmailSendDependencies): JobHandler<
         }
         // Suspensa (`full`) depois do enfileiramento: não recebe o que não pode usar (spec 024,
         // "E-mails da Fase 2"). O `enqueueEmail` já recusa quem está suspenso na hora da ação.
-        if (definition.skipFullySuspended && user.suspendedKind === 'full') {
+        if ((definition?.skipFullySuspended ?? true) && user.suspendedKind === 'full') {
           await markSent(trx, outboxId, { lastError: 'skipped: user_suspended' });
           return 'skipped';
         }
@@ -110,25 +123,83 @@ export function createEmailSendHandler(deps: EmailSendDependencies): JobHandler<
           return 'skipped';
         }
 
+        // Os avisos da central são revalidados no envio, inclusive após uma espera de SMTP.
+        if (group !== null && group !== 'account') {
+          if (user.email !== row.to) {
+            await markSent(trx, outboxId, { lastError: 'skipped: email_changed' });
+            return 'skipped';
+          }
+          const prefs = await getNotificationPrefs(trx, row.userId);
+          if (!prefs[group].email) {
+            await markSent(trx, outboxId, { lastError: 'skipped: preference_disabled' });
+            return 'skipped';
+          }
+          if ((await emailRejectionStreak(trx, row.userId, row.to)) >= 3 && row.attempts === 0) {
+            await markSent(trx, outboxId, { lastError: 'skipped: undeliverable' });
+            return 'skipped';
+          }
+          if (emailType === 'lesson.published') {
+            const source = await trx
+              .selectFrom('jobs')
+              .select('payload')
+              .where('type', '=', 'notify')
+              .where('payload', '@>', JSON.stringify({ notificationOutboxId: outboxId }))
+              .executeTakeFirst();
+            const { targetId, targetType } = asObject(source?.payload ?? null);
+            if (
+              !(await canReceiveTarget(trx, {
+                type: emailType,
+                userId: row.userId,
+                targetType: typeof targetType === 'string' ? targetType : null,
+                targetId: typeof targetId === 'string' ? targetId : null,
+              }))
+            ) {
+              await markSent(trx, outboxId, { lastError: 'skipped: target_unavailable' });
+              return 'skipped';
+            }
+          }
+        }
+
         const settings = await getSettings(trx, { logger: log });
         // Vale o último link enviado: emitir aqui invalida os anteriores do mesmo propósito.
         const issued = purpose === null ? null : await issueEmailToken(trx, row.userId, purpose);
-        const logoPath = schoolLogoUrl(settings['school.logo_image_id']);
-        const message = renderEmail({
-          type: emailType,
-          data,
+        const unsubscribe =
+          group !== null && !isNotificationEmailRequired(group)
+            ? await getOrCreateUnsubscribeToken(trx, { userId: row.userId, group })
+            : null;
+        const branding = await getNotificationBranding(trx, {
+          logger: log,
+          baseUrl: deps.classroomUrl,
+        });
+        const common = {
           locale: deps.locale,
           recipientName: user.name,
           school: {
-            name: settings['school.name'],
+            name: branding.schoolName,
             timezone: settings['school.timezone'],
-            accentColor: settings['school.accent_color'],
-            logoUrl: logoPath === null ? null : new URL(logoPath, deps.classroomUrl).toString(),
+            accentColor: branding.accentColor,
+            logoUrl: branding.logoUrl,
+            emailFooter: branding.footer,
           },
           classroomUrl: deps.classroomUrl,
           adminUrl: deps.adminUrl,
-          token: issued?.token ?? null,
-        });
+          ...(unsubscribe === null
+            ? {}
+            : {
+                unsubscribeUrl: new URL(
+                  `/descadastro/${unsubscribe}`,
+                  deps.classroomUrl,
+                ).toString(),
+              }),
+        };
+        const message = isNotificationTemplateType(emailType)
+          ? renderNotificationEmail({
+              ...common,
+              type: emailType,
+              data: asObject(row.data),
+              forStaff: group !== null && isNotificationStaffGroup(group),
+            })
+          : renderExistingEmail(emailType, row.data, common, issued?.token ?? null);
 
         // Encerramento antes do envio: a tarefa volta à fila sem efeito (a transação desfaz).
         signal.throwIfAborted();
@@ -138,6 +209,14 @@ export function createEmailSendHandler(deps: EmailSendDependencies): JobHandler<
             subject: message.subject,
             text: message.text,
             html: message.html,
+            ...(unsubscribe === null
+              ? {}
+              : {
+                  headers: {
+                    'List-Unsubscribe': `<${new URL(`/api/v1/unsubscribe/${unsubscribe}`, deps.classroomUrl)}>`,
+                    'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click',
+                  },
+                }),
           });
         } catch (error) {
           const smtp = classifySmtpError(error);
@@ -158,16 +237,35 @@ export function createEmailSendHandler(deps: EmailSendDependencies): JobHandler<
               false,
             );
       const final = failure.permanent || job.attempts >= job.maxAttempts;
-      await db
-        .updateTable('emailOutbox')
-        .set((eb) => ({
-          attempts: eb('attempts', '+', 1),
-          lastError: failure.message,
-          status: final ? 'failed' : 'queued',
-        }))
-        .where('id', '=', outboxId)
-        .where('status', '=', 'queued')
-        .execute();
+      await db.transaction().execute(async (trx) => {
+        const failed = await trx
+          .updateTable('emailOutbox')
+          .set((eb) => ({
+            attempts: eb('attempts', '+', 1),
+            lastError: failure.message,
+            status: final ? 'failed' : 'queued',
+          }))
+          .where('id', '=', outboxId)
+          .where('status', '=', 'queued')
+          .returning(['userId', 'to'])
+          .executeTakeFirst();
+        if (!failed || !isPermanentRecipientError(failure.message)) return;
+        const recipient = await trx
+          .selectFrom('users')
+          .select('email')
+          .where('id', '=', failed.userId)
+          .forUpdate()
+          .executeTakeFirst();
+        if (
+          recipient?.email === failed.to &&
+          (await emailRejectionStreak(trx, failed.userId, failed.to)) === 3
+        ) {
+          await createNotification(trx, {
+            type: 'account.email_undeliverable',
+            userId: failed.userId,
+          });
+        }
+      });
       log.warn(
         { email_type: type, permanent: failure.permanent, final, reason: failure.message },
         failure.permanent ? 'E-mail recusado de forma definitiva' : 'Falha ao enviar e-mail',
@@ -189,6 +287,22 @@ export function createEmailSendHandler(deps: EmailSendDependencies): JobHandler<
       log.warn('Linha de email_outbox não existe; nada a enviar');
     }
   };
+}
+
+function renderExistingEmail(
+  type: string,
+  storedData: unknown,
+  common: Omit<Parameters<typeof renderEmail>[0], 'type' | 'data' | 'token'>,
+  token: string | null,
+) {
+  if (!isTemplateEmailType(type)) throw new SendFailure('Tipo de e-mail desconhecido', true);
+  let data: ReturnType<typeof parseEmailData>;
+  try {
+    data = parseEmailData(type, storedData);
+  } catch {
+    throw new SendFailure('Dados do e-mail fora do formato do tipo', true);
+  }
+  return renderEmail({ ...common, type, data, token });
 }
 
 async function markSent(

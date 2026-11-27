@@ -4,6 +4,11 @@ import {
   type EmailType,
   isEmailType,
 } from '@nuva-edu/core';
+import {
+  type NotificationTemplateType,
+  notificationCopy,
+  notificationSubjects,
+} from './locales/notification-pt-BR.ts';
 import { ptBR } from './locales/pt-BR.ts';
 
 // Montagem dos e-mails (spec 024, RF-06): o modelo do tipo, no idioma da instalação, vira
@@ -80,11 +85,18 @@ export interface RenderInput<T extends TemplateEmailType> {
   data: AnyEmailDataByType[T];
   locale: string;
   recipientName: string;
-  school: { name: string; timezone: string; accentColor: string | null; logoUrl: string | null };
+  school: {
+    name: string;
+    timezone: string;
+    accentColor: string | null;
+    logoUrl: string | null;
+    emailFooter?: string | null;
+  };
   classroomUrl: string;
   adminUrl: string;
   /** Token em claro do link, só nos tipos que o têm. Vai só no corpo devolvido. */
   token: string | null;
+  unsubscribeUrl?: string;
 }
 
 export interface RenderedEmail {
@@ -120,12 +132,59 @@ export function renderEmail<T extends TemplateEmailType>(input: RenderInput<T>):
     links,
     formatDateTime: (iso) => dateFormat.format(new Date(iso)),
   });
+  return renderContent(input, content, templates);
+}
+
+export function isNotificationTemplateType(type: string): type is NotificationTemplateType {
+  return Object.hasOwn(notificationSubjects, type);
+}
+
+type NotificationRenderInput = Omit<RenderInput<TemplateEmailType>, 'type' | 'data' | 'token'> & {
+  type: NotificationTemplateType;
+  data: Record<string, unknown>;
+  forStaff?: boolean;
+};
+
+export function renderNotificationEmail(input: NotificationRenderInput): RenderedEmail {
+  const subject = notificationSubjects[input.type];
+  const summary = [
+    'title',
+    'topicTitle',
+    'courseTitle',
+    'planTitle',
+    'eventTitle',
+    'subject',
+    'summary',
+  ]
+    .map((field) => input.data[field])
+    .find((value): value is string => typeof value === 'string' && value.trim() !== '');
+  const targetHost = input.forStaff ? input.adminUrl : input.classroomUrl;
+  const content: EmailContent = {
+    subject: notificationCopy.inSchool(subject, input.school.name),
+    paragraphs: summary ? [subject, summary] : [subject],
+    actions: [
+      { label: notificationCopy.open, url: new URL('/notificacoes', targetHost).toString() },
+    ],
+  };
+  return renderContent(input, content, templatesFor(input.locale));
+}
+
+function renderContent(
+  input: Pick<RenderInput<TemplateEmailType>, 'recipientName' | 'school' | 'unsubscribeUrl'>,
+  content: EmailContent,
+  templates: EmailTemplates,
+): RenderedEmail {
   const greeting = templates.greeting(input.recipientName);
-  const footer = templates.footer(input.school.name);
+  const footer = input.school.emailFooter ?? templates.footer(input.school.name);
+  const actions =
+    input.unsubscribeUrl === undefined
+      ? content.actions
+      : [...content.actions, { label: notificationCopy.unsubscribe, url: input.unsubscribeUrl }];
+  const message = { ...content, actions };
   return {
     subject: content.subject,
-    text: renderText(greeting, content, footer),
-    html: renderHtml(greeting, content, footer, templates.linkHint, input.school),
+    text: renderText(greeting, message, footer),
+    html: renderHtml(greeting, message, footer, templates.linkHint, input.school),
   };
 }
 
@@ -179,7 +238,7 @@ function renderHtml(
     ...content.paragraphs.map(paragraph),
     buttons,
     fallback,
-    `<hr style="border:0;border-top:1px solid #e5e5e5;margin:24px 0"><p style="margin:0;font-size:12px;color:#777777">${escapeHtml(footer)}</p>`,
+    `<hr style="border:0;border-top:1px solid #e5e5e5;margin:24px 0"><p style="margin:0;font-size:12px;color:#777777">${escapeHtml(footer).replaceAll('\n', '<br>')}</p>`,
     '</div></body></html>',
   ].join('');
 }

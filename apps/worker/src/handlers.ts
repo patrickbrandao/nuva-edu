@@ -7,6 +7,7 @@ import {
   type Logger,
   type PaymentProvider,
   PermanentJobError,
+  purgeNotifications,
   recalculateEntitlements,
   recalculatePlanSubscriptions,
 } from '@nuva-edu/core';
@@ -15,6 +16,7 @@ import type { CertificateRenderer } from './certificates/renderer.ts';
 import { createEmailSendHandler } from './email/send-email.ts';
 import type { Mailer } from './email/smtp.ts';
 import { createSalesHandlers } from './handlers/sales.ts';
+import { createNotifyHandler } from './notifications/handler.ts';
 import { drainBatches, purgeRetention, type RetentionSettings } from './retention.ts';
 import { purgeWebhookEvents } from './retention-sales.ts';
 import { createSubscriptionHandlers } from './subscriptions/handlers.ts';
@@ -34,6 +36,7 @@ export interface HandlerDependencies {
   retention: RetentionSettings;
   /** Navegador dos PDFs de certificado, um por processo (spec 015, "PDF"). */
   renderer: CertificateRenderer;
+  notificationRetention?: { readDays: number; unreadDays: number };
   payment: {
     provider(): PaymentProvider;
     boletoDays: number;
@@ -53,6 +56,7 @@ export function createHandlers(deps: HandlerDependencies): JobHandlers {
   const subscriptions = createSubscriptionHandlers({ db, logger, ...payment });
   return {
     ...sales,
+    notify: createNotifyHandler(db, logger),
     'payment.reconcile_orders': async (job, context) => {
       // A reconciliação remota de assinaturas é a cada 6 h. Os prazos locais seguem a janela de 5 min.
       await subscriptions.checkDeadlines(job, context);
@@ -71,8 +75,16 @@ export function createHandlers(deps: HandlerDependencies): JobHandlers {
         now: new Date(),
         signal: context.signal,
       });
+      const notifications = await purgeNotifications(db, {
+        ...deps.notificationRetention,
+        signal: context.signal,
+      });
       logger.info(
-        { job_id: job.id, unique_key: job.uniqueKey, deleted: { ...deleted, webhookEvents } },
+        {
+          job_id: job.id,
+          unique_key: job.uniqueKey,
+          deleted: { ...deleted, webhookEvents, notifications },
+        },
         'Expurgo diário executado',
       );
     },

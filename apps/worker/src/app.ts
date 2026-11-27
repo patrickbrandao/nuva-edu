@@ -71,6 +71,10 @@ export async function startApp(options: AppOptions): Promise<App> {
       adminUrl: config.adminUrl,
       locale: config.locale,
       retention: config.retention,
+      notificationRetention: {
+        readDays: config.retention.notificationDays,
+        unreadDays: config.retention.notificationUnreadDays,
+      },
       renderer,
       payment: {
         provider,
