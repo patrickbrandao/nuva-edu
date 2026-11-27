@@ -82,6 +82,10 @@ tags:
     description: Planos e assinaturas do aluno (`specs/012-assinaturas.md`).
   - name: webhooks
     description: Aviso de pagamento do provedor, autenticado por assinatura (`specs/013-pagamentos-mercado-pago.md`).
+  - name: forum
+    description: Fórum e comentários de aula (spec 017).
+  - name: reports
+    description: Denúncias e moderação do fórum (spec 026).
 
 security:
   - sessionCookie: []
@@ -3527,6 +3531,977 @@ paths:
         "503":
           $ref: "#/components/responses/ServiceUnavailable"
 
+  /api/v1/forum/categories:
+    get:
+      operationId: listForumCategories
+      tags:
+        - forum
+      summary: Categorias visíveis do fórum
+      x-nuva-pending: true
+      parameters:
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Cursor"
+      responses:
+        "200":
+          description: Operação concluída.
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/XRequestId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ForumCategoryPage"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+  /api/v1/forum/categories/{id}/topics:
+    get:
+      operationId: listForumCategoryTopics
+      tags:
+        - forum
+      summary: Tópicos da categoria
+      x-nuva-pending: true
+      description: Fixados primeiro, depois por última atividade. Categoria invisível responde 404.
+      parameters:
+        - $ref: "#/components/parameters/IdPath"
+        - in: query
+          name: kind
+          schema:
+            type: string
+            enum:
+              - all
+              - lessons
+              - discussions
+        - in: query
+          name: filter
+          schema:
+            type: string
+            enum:
+              - all
+              - unanswered
+              - solved
+              - unsolved
+              - following
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Cursor"
+      responses:
+        "200":
+          description: Operação concluída.
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/XRequestId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ForumTopicPage"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+    post:
+      operationId: createForumTopic
+      tags:
+        - forum
+      summary: Criar tópico
+      x-nuva-pending: true
+      description:
+        Saneia o Markdown, segue o tópico para o autor e limita a criação por usuário. Escrita sem direito
+        retorna forum_forbidden.
+      security:
+        - sessionCookie: []
+          csrfToken: []
+      parameters:
+        - $ref: "#/components/parameters/IdPath"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateForumTopic"
+      responses:
+        "201":
+          description: Operação concluída.
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/XRequestId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ForumTopicDetail"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "413":
+          $ref: "#/components/responses/PayloadTooLarge"
+        "415":
+          $ref: "#/components/responses/UnsupportedMediaType"
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+  /api/v1/forum/categories/{id}/mentions:
+    get:
+      operationId: searchForumMentions
+      tags:
+        - forum
+      summary: Buscar pessoas que podem ler a categoria
+      x-nuva-pending: true
+      parameters:
+        - $ref: "#/components/parameters/IdPath"
+        - in: query
+          name: q
+          required: true
+          schema:
+            type: string
+            minLength: 1
+            maxLength: 100
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Cursor"
+      responses:
+        "200":
+          description: Operação concluída.
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/XRequestId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ForumMentionPage"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+  /api/v1/forum/topics/{id}:
+    get:
+      operationId: getForumTopic
+      tags:
+        - forum
+      summary: Ler tópico
+      x-nuva-pending: true
+      parameters:
+        - $ref: "#/components/parameters/IdPath"
+      responses:
+        "200":
+          description: Operação concluída.
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/XRequestId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ForumTopicDetail"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+    patch:
+      operationId: updateForumTopic
+      tags:
+        - forum
+      summary: Editar tópico do próprio autor
+      x-nuva-pending: true
+      security:
+        - sessionCookie: []
+          csrfToken: []
+      parameters:
+        - $ref: "#/components/parameters/IdPath"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateForumTopic"
+      responses:
+        "200":
+          description: Operação concluída.
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/XRequestId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ForumTopicDetail"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "413":
+          $ref: "#/components/responses/PayloadTooLarge"
+        "415":
+          $ref: "#/components/responses/UnsupportedMediaType"
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+    delete:
+      operationId: deleteForumTopic
+      tags:
+        - forum
+      summary: Remover tópico do próprio autor
+      x-nuva-pending: true
+      description: Mantém um marcador de remoção se houver respostas. Tópicos automáticos de aula não podem ser removidos.
+      security:
+        - sessionCookie: []
+          csrfToken: []
+      parameters:
+        - $ref: "#/components/parameters/IdPath"
+      responses:
+        "204":
+          description: Operação concluída.
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/XRequestId"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+  /api/v1/forum/topics/{id}/posts:
+    get:
+      operationId: listForumPosts
+      tags:
+        - forum
+      summary: Listar respostas do tópico
+      x-nuva-pending: true
+      parameters:
+        - $ref: "#/components/parameters/IdPath"
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Cursor"
+      responses:
+        "200":
+          description: Operação concluída.
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/XRequestId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ForumPostPage"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+    post:
+      operationId: createForumPost
+      tags:
+        - forum
+      summary: Responder tópico ou publicação
+      x-nuva-pending: true
+      description:
+        Aceita um nível de resposta. Tópico fechado ou oculto retorna topic_closed quando visível. Aplica
+        o limite de frequência.
+      security:
+        - sessionCookie: []
+          csrfToken: []
+      parameters:
+        - $ref: "#/components/parameters/IdPath"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateForumPost"
+      responses:
+        "201":
+          description: Operação concluída.
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/XRequestId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ForumPost"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "413":
+          $ref: "#/components/responses/PayloadTooLarge"
+        "415":
+          $ref: "#/components/responses/UnsupportedMediaType"
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+  /api/v1/forum/posts/{id}:
+    patch:
+      operationId: updateForumPost
+      tags:
+        - forum
+      summary: Editar a própria resposta
+      x-nuva-pending: true
+      security:
+        - sessionCookie: []
+          csrfToken: []
+      parameters:
+        - $ref: "#/components/parameters/IdPath"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateForumPost"
+      responses:
+        "200":
+          description: Operação concluída.
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/XRequestId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ForumPost"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "413":
+          $ref: "#/components/responses/PayloadTooLarge"
+        "415":
+          $ref: "#/components/responses/UnsupportedMediaType"
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+    delete:
+      operationId: deleteForumPost
+      tags:
+        - forum
+      summary: Remover a própria resposta
+      x-nuva-pending: true
+      description: Mantém um marcador de remoção se houver respostas dependentes.
+      security:
+        - sessionCookie: []
+          csrfToken: []
+      parameters:
+        - $ref: "#/components/parameters/IdPath"
+      responses:
+        "204":
+          description: Operação concluída.
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/XRequestId"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+  /api/v1/forum/topics/{id}/reactions/{emoji}:
+    put:
+      operationId: addForumTopicReaction
+      tags:
+        - forum
+      summary: Adicionar reação
+      x-nuva-pending: true
+      security:
+        - sessionCookie: []
+          csrfToken: []
+      parameters:
+        - $ref: "#/components/parameters/IdPath"
+        - in: path
+          name: emoji
+          required: true
+          schema:
+            type: string
+            enum:
+              - 👍
+              - ❤️
+              - 🎉
+              - 😄
+              - 🤔
+              - 👀
+      responses:
+        "200":
+          description: Operação concluída.
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/XRequestId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ForumReactions"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+    delete:
+      operationId: removeForumTopicReaction
+      tags:
+        - forum
+      summary: Remover reação
+      x-nuva-pending: true
+      security:
+        - sessionCookie: []
+          csrfToken: []
+      parameters:
+        - $ref: "#/components/parameters/IdPath"
+        - in: path
+          name: emoji
+          required: true
+          schema:
+            type: string
+            enum:
+              - 👍
+              - ❤️
+              - 🎉
+              - 😄
+              - 🤔
+              - 👀
+      responses:
+        "200":
+          description: Operação concluída.
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/XRequestId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ForumReactions"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+  /api/v1/forum/posts/{id}/reactions/{emoji}:
+    put:
+      operationId: addForumPostReaction
+      tags:
+        - forum
+      summary: Adicionar reação
+      x-nuva-pending: true
+      security:
+        - sessionCookie: []
+          csrfToken: []
+      parameters:
+        - $ref: "#/components/parameters/IdPath"
+        - in: path
+          name: emoji
+          required: true
+          schema:
+            type: string
+            enum:
+              - 👍
+              - ❤️
+              - 🎉
+              - 😄
+              - 🤔
+              - 👀
+      responses:
+        "200":
+          description: Operação concluída.
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/XRequestId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ForumReactions"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+    delete:
+      operationId: removeForumPostReaction
+      tags:
+        - forum
+      summary: Remover reação
+      x-nuva-pending: true
+      security:
+        - sessionCookie: []
+          csrfToken: []
+      parameters:
+        - $ref: "#/components/parameters/IdPath"
+        - in: path
+          name: emoji
+          required: true
+          schema:
+            type: string
+            enum:
+              - 👍
+              - ❤️
+              - 🎉
+              - 😄
+              - 🤔
+              - 👀
+      responses:
+        "200":
+          description: Operação concluída.
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/XRequestId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ForumReactions"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+  /api/v1/forum/topics/{id}/solution:
+    put:
+      operationId: setForumTopicSolution
+      tags:
+        - forum
+      summary: Marcar ou remover solução
+      x-nuva-pending: true
+      description: Autor do tópico ou equipe. Use postId nulo para remover. Tópicos de aula não aceitam solução.
+      security:
+        - sessionCookie: []
+          csrfToken: []
+      parameters:
+        - $ref: "#/components/parameters/IdPath"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SetForumSolution"
+      responses:
+        "200":
+          description: Operação concluída.
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/XRequestId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ForumTopicDetail"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "413":
+          $ref: "#/components/responses/PayloadTooLarge"
+        "415":
+          $ref: "#/components/responses/UnsupportedMediaType"
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+  /api/v1/forum/topics/{id}/follow:
+    put:
+      operationId: followForumTopic
+      tags:
+        - forum
+      summary: Seguir tópico
+      x-nuva-pending: true
+      security:
+        - sessionCookie: []
+          csrfToken: []
+      parameters:
+        - $ref: "#/components/parameters/IdPath"
+      responses:
+        "204":
+          description: Operação concluída.
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/XRequestId"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+    delete:
+      operationId: unfollowForumTopic
+      tags:
+        - forum
+      summary: Deixar de seguir tópico
+      x-nuva-pending: true
+      security:
+        - sessionCookie: []
+          csrfToken: []
+      parameters:
+        - $ref: "#/components/parameters/IdPath"
+      responses:
+        "204":
+          description: Operação concluída.
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/XRequestId"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+  /api/v1/forum/search:
+    get:
+      operationId: searchForum
+      tags:
+        - forum
+      summary: Buscar em tópicos e respostas visíveis
+      x-nuva-pending: true
+      parameters:
+        - in: query
+          name: q
+          required: true
+          schema:
+            type: string
+            minLength: 1
+            maxLength: 200
+        - in: query
+          name: categoryId
+          schema:
+            $ref: "#/components/schemas/Uuid"
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Cursor"
+      responses:
+        "200":
+          description: Operação concluída.
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/XRequestId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ForumTopicPage"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+  /api/v1/lessons/{id}/topic:
+    get:
+      operationId: getLessonTopic
+      tags:
+        - forum
+      summary: Comentários da aula
+      x-nuva-pending: true
+      description: Em aula amostra sem direito ao curso, devolve apenas a contagem e canRead falso, com topicId nulo.
+      parameters:
+        - $ref: "#/components/parameters/IdPath"
+      responses:
+        "200":
+          description: Operação concluída.
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/XRequestId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ForumLessonTopic"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+  /api/v1/reports:
+    post:
+      operationId: createForumReport
+      tags:
+        - reports
+      summary: Denunciar publicação do fórum
+      x-nuva-pending: true
+      description:
+        Repetir denúncia devolve a denúncia existente. Motivo other exige detalhes. O próprio conteúdo
+        não pode ser denunciado.
+      x-permission: report.create
+      security:
+        - sessionCookie: []
+          csrfToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateReport"
+      responses:
+        "201":
+          description: Operação concluída.
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/XRequestId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MyForumReport"
+        "200":
+          description: Operação concluída.
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/XRequestId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MyForumReport"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "413":
+          $ref: "#/components/responses/PayloadTooLarge"
+        "415":
+          $ref: "#/components/responses/UnsupportedMediaType"
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+  /api/v1/me/reports:
+    get:
+      operationId: listMyForumReports
+      tags:
+        - reports
+      summary: Minhas denúncias
+      x-nuva-pending: true
+      description: Mostra se a denúncia foi analisada, sem detalhes da ação disciplinar.
+      parameters:
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Cursor"
+      responses:
+        "200":
+          description: Operação concluída.
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/XRequestId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MyForumReportPage"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+
 components:
   securitySchemes:
     sessionCookie:
@@ -4552,7 +5527,7 @@ components:
       additionalProperties: false
     StreamEventForumPostCreated:
       type: object
-      description: Nova resposta num tópico aberto na tela.
+      description: Nova resposta num tópico aberto na tela. O cliente relê as respostas pela rota com autorização.
       required: [id, event, data]
       properties:
         id:
@@ -7246,3 +8221,430 @@ components:
             (`specs/013-pagamentos-mercado-pago.md`, "Implementação Mercado Pago"); o retorno
             leva o aluno à página da assinatura, em `/conta/compras`.
       additionalProperties: false
+
+    ForumCategory:
+      type: object
+      required:
+        - id
+        - kind
+        - courseId
+        - audience
+        - name
+        - description
+        - position
+        - archivedAt
+      properties:
+        id:
+          $ref: "#/components/schemas/Uuid"
+        kind:
+          type: string
+          enum:
+            - course
+            - free
+        courseId:
+          oneOf:
+            - $ref: "#/components/schemas/Uuid"
+            - type: "null"
+        audience:
+          type: string
+          enum:
+            - all
+            - active
+        name:
+          type: string
+          minLength: 1
+          maxLength: 160
+        description:
+          oneOf:
+            - type: string
+              maxLength: 2000
+            - type: "null"
+        position:
+          type: integer
+          minimum: 0
+        archivedAt:
+          oneOf:
+            - $ref: "#/components/schemas/DateTime"
+            - type: "null"
+      additionalProperties: false
+    ForumCategoryPage:
+      allOf:
+        - $ref: "#/components/schemas/Page"
+        - type: object
+          required:
+            - items
+          properties:
+            items:
+              type: array
+              items:
+                $ref: "#/components/schemas/ForumCategory"
+    ForumAuthor:
+      type: object
+      required:
+        - id
+        - displayName
+      properties:
+        id:
+          oneOf:
+            - $ref: "#/components/schemas/Uuid"
+            - type: "null"
+        displayName:
+          type: string
+          minLength: 1
+          maxLength: 160
+      additionalProperties: false
+      description: Id nulo para publicação da equipe ou autor removido.
+    ForumTopicSummary:
+      type: object
+      required:
+        - id
+        - categoryId
+        - lessonId
+        - author
+        - title
+        - status
+        - pinned
+        - solutionPostId
+        - postsCount
+        - lastActivityAt
+        - following
+      properties:
+        id:
+          $ref: "#/components/schemas/Uuid"
+        categoryId:
+          $ref: "#/components/schemas/Uuid"
+        lessonId:
+          oneOf:
+            - $ref: "#/components/schemas/Uuid"
+            - type: "null"
+        author:
+          $ref: "#/components/schemas/ForumAuthor"
+        title:
+          type: string
+          minLength: 1
+          maxLength: 160
+        status:
+          type: string
+          enum:
+            - open
+            - closed
+            - hidden
+        pinned:
+          type: boolean
+        solutionPostId:
+          oneOf:
+            - $ref: "#/components/schemas/Uuid"
+            - type: "null"
+        postsCount:
+          type: integer
+          minimum: 0
+        lastActivityAt:
+          $ref: "#/components/schemas/DateTime"
+        following:
+          type: boolean
+      additionalProperties: false
+    ForumTopicPage:
+      allOf:
+        - $ref: "#/components/schemas/Page"
+        - type: object
+          required:
+            - items
+          properties:
+            items:
+              type: array
+              items:
+                $ref: "#/components/schemas/ForumTopicSummary"
+    ForumReaction:
+      type: object
+      required:
+        - emoji
+        - count
+        - reacted
+      properties:
+        emoji:
+          type: string
+          enum:
+            - 👍
+            - ❤️
+            - 🎉
+            - 😄
+            - 🤔
+            - 👀
+        count:
+          type: integer
+          minimum: 0
+        reacted:
+          type: boolean
+      additionalProperties: false
+    ForumReactions:
+      type: array
+      items:
+        $ref: "#/components/schemas/ForumReaction"
+    ForumPost:
+      type: object
+      required:
+        - id
+        - topicId
+        - parentPostId
+        - author
+        - bodyHtml
+        - createdAt
+        - editedAt
+        - deletedAt
+        - hiddenAt
+        - moderatedAt
+        - reactions
+      properties:
+        id:
+          $ref: "#/components/schemas/Uuid"
+        topicId:
+          $ref: "#/components/schemas/Uuid"
+        parentPostId:
+          oneOf:
+            - $ref: "#/components/schemas/Uuid"
+            - type: "null"
+        author:
+          $ref: "#/components/schemas/ForumAuthor"
+        bodyHtml:
+          type: string
+        bodyMd:
+          type: string
+          minLength: 1
+          maxLength: 20000
+          description: Markdown disponível apenas a quem pode editar.
+        createdAt:
+          $ref: "#/components/schemas/DateTime"
+        editedAt:
+          oneOf:
+            - $ref: "#/components/schemas/DateTime"
+            - type: "null"
+        deletedAt:
+          oneOf:
+            - $ref: "#/components/schemas/DateTime"
+            - type: "null"
+        hiddenAt:
+          oneOf:
+            - $ref: "#/components/schemas/DateTime"
+            - type: "null"
+        moderatedAt:
+          oneOf:
+            - $ref: "#/components/schemas/DateTime"
+            - type: "null"
+        reactions:
+          $ref: "#/components/schemas/ForumReactions"
+      additionalProperties: false
+    ForumPostPage:
+      allOf:
+        - $ref: "#/components/schemas/Page"
+        - type: object
+          required:
+            - items
+          properties:
+            items:
+              type: array
+              items:
+                $ref: "#/components/schemas/ForumPost"
+    ForumTopicDetail:
+      type: object
+      required:
+        - topic
+        - bodyHtml
+        - createdAt
+        - editedAt
+        - deletedAt
+        - hiddenAt
+        - moderatedAt
+        - reactions
+        - canWrite
+      properties:
+        topic:
+          $ref: "#/components/schemas/ForumTopicSummary"
+        bodyHtml:
+          type: string
+        bodyMd:
+          type: string
+          minLength: 1
+          maxLength: 20000
+          description: Markdown disponível apenas a quem pode editar.
+        createdAt:
+          $ref: "#/components/schemas/DateTime"
+        editedAt:
+          oneOf:
+            - $ref: "#/components/schemas/DateTime"
+            - type: "null"
+        deletedAt:
+          oneOf:
+            - $ref: "#/components/schemas/DateTime"
+            - type: "null"
+        hiddenAt:
+          oneOf:
+            - $ref: "#/components/schemas/DateTime"
+            - type: "null"
+        moderatedAt:
+          oneOf:
+            - $ref: "#/components/schemas/DateTime"
+            - type: "null"
+        reactions:
+          $ref: "#/components/schemas/ForumReactions"
+        canWrite:
+          type: boolean
+      additionalProperties: false
+    ReportTargetType:
+      type: string
+      enum:
+        - forum_topic
+        - forum_post
+    ReportReason:
+      type: string
+      enum:
+        - spam
+        - harassment
+        - inappropriate
+        - piracy
+        - personal_data
+        - other
+    CreateForumTopic:
+      type: object
+      required:
+        - title
+        - bodyMd
+      properties:
+        title:
+          type: string
+          minLength: 5
+          maxLength: 150
+        bodyMd:
+          type: string
+          minLength: 1
+          maxLength: 20000
+      additionalProperties: false
+    UpdateForumTopic:
+      type: object
+      properties:
+        title:
+          type: string
+          minLength: 5
+          maxLength: 150
+        bodyMd:
+          type: string
+          minLength: 1
+          maxLength: 20000
+      additionalProperties: false
+      minProperties: 1
+    CreateForumPost:
+      type: object
+      required:
+        - bodyMd
+      properties:
+        bodyMd:
+          type: string
+          minLength: 1
+          maxLength: 20000
+        parentPostId:
+          oneOf:
+            - $ref: "#/components/schemas/Uuid"
+            - type: "null"
+      additionalProperties: false
+    UpdateForumPost:
+      type: object
+      required:
+        - bodyMd
+      properties:
+        bodyMd:
+          type: string
+          minLength: 1
+          maxLength: 20000
+      additionalProperties: false
+    SetForumSolution:
+      type: object
+      required:
+        - postId
+      properties:
+        postId:
+          oneOf:
+            - $ref: "#/components/schemas/Uuid"
+            - type: "null"
+      additionalProperties: false
+    ForumLessonTopic:
+      type: object
+      required:
+        - topicId
+        - postsCount
+        - canRead
+      properties:
+        topicId:
+          oneOf:
+            - $ref: "#/components/schemas/Uuid"
+            - type: "null"
+        postsCount:
+          type: integer
+          minimum: 0
+        canRead:
+          type: boolean
+      additionalProperties: false
+    ForumMentionPage:
+      allOf:
+        - $ref: "#/components/schemas/Page"
+        - type: object
+          required:
+            - items
+          properties:
+            items:
+              type: array
+              items:
+                $ref: "#/components/schemas/ForumAuthor"
+    CreateReport:
+      type: object
+      required:
+        - targetType
+        - targetId
+        - reason
+      properties:
+        targetType:
+          $ref: "#/components/schemas/ReportTargetType"
+        targetId:
+          $ref: "#/components/schemas/Uuid"
+        reason:
+          $ref: "#/components/schemas/ReportReason"
+        details:
+          type: string
+          minLength: 1
+          maxLength: 2000
+      additionalProperties: false
+    MyForumReport:
+      type: object
+      required:
+        - id
+        - targetType
+        - targetId
+        - reason
+        - status
+        - createdAt
+      properties:
+        id:
+          $ref: "#/components/schemas/Uuid"
+        targetType:
+          $ref: "#/components/schemas/ReportTargetType"
+        targetId:
+          $ref: "#/components/schemas/Uuid"
+        reason:
+          $ref: "#/components/schemas/ReportReason"
+        status:
+          type: string
+          enum:
+            - open
+            - reviewed
+        createdAt:
+          $ref: "#/components/schemas/DateTime"
+      additionalProperties: false
+    MyForumReportPage:
+      allOf:
+        - $ref: "#/components/schemas/Page"
+        - type: object
+          required:
+            - items
+          properties:
+            items:
+              type: array
+              items:
+                $ref: "#/components/schemas/MyForumReport"
