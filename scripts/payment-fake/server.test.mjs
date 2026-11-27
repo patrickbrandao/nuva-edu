@@ -5,8 +5,7 @@ import { test } from 'node:test';
 import { FakePaymentProvider } from '../../packages/core/src/modules/payments/fake.ts';
 import { createFakeServer } from './server.mjs';
 
-test('controles aprovam o checkout compartilhado e geram um aviso verificável', async (t) => {
-  const publicUrl = 'http://127.0.0.1:8092';
+async function startServer(t, publicUrl) {
   const server = createFakeServer({ publicUrl });
   server.listen(0, '127.0.0.1');
   t.after(() => server.close());
@@ -18,6 +17,10 @@ test('controles aprovam o checkout compartilhado e geram um aviso verificável',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(args),
     });
+  return { base, post };
+}
+
+async function createCheckout({ post }) {
   const orderId = randomUUID();
   const returnUrl = 'http://classroom.localhost:8080/conta/compras';
   const checkout = await post('/rpc/createCheckout', [
@@ -31,8 +34,15 @@ test('controles aprovam o checkout compartilhado e geram um aviso verificável',
     },
   ]);
   assert.equal(checkout.status, 200);
-  const { checkoutUrl } = await checkout.json();
+  return { orderId, ...(await checkout.json()) };
+}
+
+test('controles aprovam o checkout compartilhado e geram um aviso verificável', async (t) => {
+  const publicUrl = 'http://127.0.0.1:8092';
+  const server = await startServer(t, publicUrl);
+  const { orderId, checkoutUrl } = await createCheckout(server);
   assert.equal(new URL(checkoutUrl).origin, publicUrl);
+  const { post } = server;
 
   const approved = await post('/simulate/approveOrder', [orderId, { method: 'pix' }]);
   assert.equal(approved.status, 200);
@@ -42,4 +52,16 @@ test('controles aprovam o checkout compartilhado e geram um aviso verificável',
   const payment = await post('/rpc/getPayment', [parsed.resourceId]);
   assert.equal((await payment.json()).status, 'approved');
   assert.equal((await post('/rpc/setNow', [0])).status, 404);
+});
+
+test('instâncias independentes geram IDs distintos e servem a página de checkout', async (t) => {
+  const publicUrl = 'http://127.0.0.1:8092';
+  const first = await startServer(t, publicUrl);
+  const second = await startServer(t, publicUrl);
+  const a = await createCheckout(first);
+  const b = await createCheckout(second);
+  assert.notEqual(a.providerCheckoutId, b.providerCheckoutId);
+  const page = await fetch(new URL(new URL(b.checkoutUrl).pathname, second.base));
+  assert.equal(page.status, 200);
+  assert.match(await page.text(), /Checkout de teste/);
 });

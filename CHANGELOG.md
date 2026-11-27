@@ -6,6 +6,7 @@ Detalhe das decisões em `specs/decisions/`.
 ## [Não lançado]
 
 ### Adicionado
+- infra: cada instância do simulador compartilhado emite identificadores distintos, inclusive após reinícios (task 739).
 - core: o fake aceita um identificador de instância para evitar colisões entre reinícios (spec 013, task 738).
 - core: teste do catálogo inclui o aviso de endereço indisponível no grupo de conta (spec 024, task 736).
 - classroom: a central orienta o aluno a conferir o endereço quando o e-mail fica indisponível (spec 024, task 733).

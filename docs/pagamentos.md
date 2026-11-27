@@ -9,8 +9,9 @@ vendedor. O conteúdo do aviso nunca é armazenado.
 `pnpm dev:up` em localhost usa `fake` por padrão. As APIs e o worker falam com o mesmo
 simulador na rede do Compose. O controle fica em `http://127.0.0.1:8092`, ou na porta
 `PAYMENT_FAKE_PORT` quando definida. O estado do simulador fica em memória e se perde se
-o serviço for reiniciado. Os números de pedido do banco e os identificadores do simulador
-são diferentes.
+o serviço for reiniciado. Cada processo emite identificadores próprios para evitar colisões
+com pedidos já registrados no banco. Os checkouts iniciados antes do reinício perdem seu
+estado no simulador.
 
 Com o pedido em aberto, simule a aprovação e o aviso ao classroom.
 

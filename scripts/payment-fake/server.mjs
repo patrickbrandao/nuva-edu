@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import { createServer } from 'node:http';
 import { isDomainError } from '../../packages/core/src/errors/domain-error.ts';
 import { FakePaymentProvider } from '../../packages/core/src/modules/payments/fake.ts';
@@ -39,7 +40,11 @@ async function readArguments(request) {
 }
 
 export function createFakeServer({ publicUrl, currency = 'BRL' }) {
-  const fake = new FakePaymentProvider({ checkoutBaseUrl: publicUrl, currency });
+  const fake = new FakePaymentProvider({
+    checkoutBaseUrl: publicUrl,
+    currency,
+    instanceId: randomUUID().replaceAll('-', ''),
+  });
   async function delivery(payment, options) {
     return {
       providerPaymentId: payment.providerPaymentId,
@@ -73,7 +78,7 @@ export function createFakeServer({ publicUrl, currency = 'BRL' }) {
     // O navegador pode seguir o link retornado no checkout. A aprovação usa o controle local.
     if (
       request.method === 'GET' &&
-      /^\/(subscriptions\/)?fake_(checkout|subscription)_\d+$/.test(path)
+      /^\/(subscriptions\/)?fake_(checkout|subscription)_(?:[a-z0-9]{1,48}_)?\d+$/.test(path)
     ) {
       response.writeHead(200, {
         'Content-Type': 'text/plain; charset=utf-8',
