@@ -3,9 +3,10 @@ import {
   createDatabase,
   type Database,
   DEFAULT_SOURCE_CODE_URL,
+  loadConfig,
   setSetting,
 } from '@nuva-edu/core';
-import { afterAll, afterEach, describe, expect, it } from 'vitest';
+import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 import { createTestApp, type TestApp } from './helpers.ts';
 
 const opened: TestApp[] = [];
@@ -144,11 +145,21 @@ describe('GET /api/v1/meta', () => {
       expect(test.logText()).not.toContain(secret);
     }
   });
+});
 
-  it('resposta fora do contrato falha: vira 500 e o motivo vai para o log', async () => {
-    // Moeda fora do padrão ISO 4217 do esquema `Meta`: a rota monta uma resposta inválida.
-    const test = open();
-    const broken = open({}, { config: { ...test.config, currency: 'reais' } });
+describe('GET /api/v1/meta: resposta fora do contrato', () => {
+  let broken: TestApp;
+
+  beforeAll(async () => {
+    const config = loadConfig({
+      env: { NUVA_ENV: 'test', DATABASE_URL: process.env.DATABASE_URL },
+    });
+    // Construção e validação do OpenAPI fazem parte da preparação do cenário.
+    broken = open({}, { config: { ...config, currency: 'reais' } });
+    await broken.app.ready();
+  }, 15_000);
+
+  it('resposta fora do contrato devolve 500 e registra o motivo', async () => {
     const response = await broken.app.inject({ method: 'GET', url: '/api/v1/meta' });
     expect(response.statusCode).toBe(500);
     expect(response.headers['content-type']).toContain('application/problem+json');

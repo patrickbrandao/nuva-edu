@@ -348,7 +348,7 @@ describe('eventos de webhook (/webhook-events)', () => {
 });
 
 describe('configuração e indicador de pagamento (/settings/payments)', () => {
-  it('indica modo de teste, aviso em produção com token TEST-, última reconciliação e nunca vaza segredos', async () => {
+  it('indica o fake, a última reconciliação e restringe o acesso ao admin', async () => {
     const initial = await call({
       method: 'GET',
       url: '/api/v1/settings/payments',
@@ -397,82 +397,52 @@ describe('configuração e indicador de pagamento (/settings/payments)', () => {
       });
       expect(denied.statusCode).toBe(403);
     }
-
-    // Instalação em produção com token de teste do Mercado Pago: `productionWarning = true` e
-    // nenhum segredo na resposta ou nos logs.
-    const testAccessToken = 'TEST-segredo-acesso-mp-998877';
-    const testPublicKey = 'TEST-chave-publica-mp-112233';
-    const testWebhookSecret = 'whsec-segredo-webhook-mp-445566';
-    const prodWithTestToken = createTestApp(
-      {
-        NUVA_ENV: 'production',
-        SESSION_SECRET: 's'.repeat(48),
-        NUVA_ADMIN_URL: 'https://edu-admin.escola.example',
-        NUVA_CLASSROOM_URL: 'https://classroom.escola.example',
-        NUVA_PAYMENT_PROVIDER: 'mercadopago',
-        MP_ACCESS_TOKEN: testAccessToken,
-        MP_PUBLIC_KEY: testPublicKey,
-        MP_WEBHOOK_SECRET: testWebhookSecret,
-        SMTP_HOST: 'smtp.escola.example',
-        SMTP_FROM: 'escola@escola.example',
-      },
-      { listenUserEvents: false },
-    );
-    try {
-      const prodAdmin = await createActor(prodWithTestToken, 'admin');
-      const res = await callAs(prodWithTestToken, {
-        method: 'GET',
-        url: '/api/v1/settings/payments',
-        as: prodAdmin,
-      });
-      expect(res.statusCode).toBe(200);
-      expect(res.json()).toMatchObject({
-        provider: 'mercadopago',
-        testMode: true,
-        productionWarning: true,
-      });
-      for (const secret of [testAccessToken, testPublicKey, testWebhookSecret]) {
-        expect(res.body).not.toContain(secret);
-        expect(prodWithTestToken.logText()).not.toContain(secret);
-      }
-    } finally {
-      await prodWithTestToken.close();
-    }
-
-    // Instalação em produção com credencial real (`APP_USR-...`): `testMode = false` e sem aviso.
-    const liveAccessToken = 'APP_USR-credencial-real-mp-776655';
-    const prodLive = createTestApp(
-      {
-        NUVA_ENV: 'production',
-        SESSION_SECRET: 's'.repeat(48),
-        NUVA_ADMIN_URL: 'https://edu-admin.escola.example',
-        NUVA_CLASSROOM_URL: 'https://classroom.escola.example',
-        NUVA_PAYMENT_PROVIDER: 'mercadopago',
-        MP_ACCESS_TOKEN: liveAccessToken,
-        MP_PUBLIC_KEY: 'APP_USR-public-key-real',
-        MP_WEBHOOK_SECRET: testWebhookSecret,
-        SMTP_HOST: 'smtp.escola.example',
-        SMTP_FROM: 'escola@escola.example',
-      },
-      { listenUserEvents: false },
-    );
-    try {
-      const prodAdmin = await createActor(prodLive, 'admin');
-      const res = await callAs(prodLive, {
-        method: 'GET',
-        url: '/api/v1/settings/payments',
-        as: prodAdmin,
-      });
-      expect(res.statusCode).toBe(200);
-      expect(res.json()).toMatchObject({
-        provider: 'mercadopago',
-        testMode: false,
-        productionWarning: false,
-      });
-      expect(res.body).not.toContain(liveAccessToken);
-      expect(prodLive.logText()).not.toContain(liveAccessToken);
-    } finally {
-      await prodLive.close();
-    }
   });
+
+  it.each([
+    { mode: 'teste', accessToken: 'TEST-segredo-acesso-mp-998877', testMode: true },
+    { mode: 'ativo', accessToken: 'APP_USR-credencial-real-mp-776655', testMode: false },
+  ])(
+    'indica o modo $mode em produção e protege as credenciais',
+    { timeout: 15_000 },
+    async ({ accessToken, testMode }) => {
+      const publicKey = 'chave-publica-mp-112233';
+      const webhookSecret = 'whsec-segredo-webhook-mp-445566';
+      const production = createTestApp(
+        {
+          NUVA_ENV: 'production',
+          SESSION_SECRET: 's'.repeat(48),
+          NUVA_ADMIN_URL: 'https://edu-admin.escola.example',
+          NUVA_CLASSROOM_URL: 'https://classroom.escola.example',
+          NUVA_PAYMENT_PROVIDER: 'mercadopago',
+          MP_ACCESS_TOKEN: accessToken,
+          MP_PUBLIC_KEY: publicKey,
+          MP_WEBHOOK_SECRET: webhookSecret,
+          SMTP_HOST: 'smtp.escola.example',
+          SMTP_FROM: 'escola@escola.example',
+        },
+        { listenUserEvents: false },
+      );
+      try {
+        const admin = await createActor(production, 'admin');
+        const response = await callAs(production, {
+          method: 'GET',
+          url: '/api/v1/settings/payments',
+          as: admin,
+        });
+        expect(response.statusCode).toBe(200);
+        expect(response.json()).toMatchObject({
+          provider: 'mercadopago',
+          testMode,
+          productionWarning: testMode,
+        });
+        for (const secret of [accessToken, publicKey, webhookSecret]) {
+          expect(response.body).not.toContain(secret);
+          expect(production.logText()).not.toContain(secret);
+        }
+      } finally {
+        await production.close();
+      }
+    },
+  );
 });
