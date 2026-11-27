@@ -6,6 +6,7 @@ Detalhe das decisões em `specs/decisions/`.
 ## [Não lançado]
 
 ### Adicionado
+- core: teste do catálogo inclui o aviso de endereço indisponível no grupo de conta (spec 024, task 736).
 - infra: inclui a definição do perfil local de pagamentos na configuração Compose do deploy, com o perfil desativado (task 735).
 - core: aviso de e-mail indisponível é registrado apenas na central do titular, com contador e SSE (spec 024, task 732).
 - core: assinatura dos avisos do fake HTTP conferida com o relógio atual (spec 013, task 729).

@@ -40,8 +40,8 @@ describe('catálogo de tipos e grupos (spec 024)', () => {
     expect(isNotificationGroup('account ')).toBe(false);
   });
 
-  it('mapeia os 41 tipos da tabela e reconhece só eles', () => {
-    expect(NOTIFICATION_TYPES).toHaveLength(41);
+  it('mapeia os tipos da tabela e a exceção de endereço indisponível', () => {
+    expect(NOTIFICATION_TYPES).toHaveLength(42);
     expect(NOTIFICATION_TYPES).toContain('forum.reply');
     expect(NOTIFICATION_TYPES).toContain('ops.job_failed');
     expect(isNotificationType('forum.reply')).toBe(true);
@@ -49,6 +49,7 @@ describe('catálogo de tipos e grupos (spec 024)', () => {
     expect(isNotificationType('toString')).toBe(false);
     expect(notificationTypeGroup('forum.mention')).toBe('forum');
     expect(notificationTypeGroup('ticket.opened')).toBe('staff');
+    expect(notificationTypeGroup('account.email_undeliverable')).toBe('account');
     expect(notificationTypesForGroup('support')).toEqual(['ticket.reply', 'ticket.status_changed']);
     expect(notificationTypesForGroup('messages')).toEqual(['dm.received']);
   });
