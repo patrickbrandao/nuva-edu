@@ -16,6 +16,7 @@ Detalhe das decisões em `specs/decisions/`.
 - infra: inclui a definição do perfil local de pagamentos na configuração Compose do deploy, com o perfil desativado (task 735).
 - worker: entrega notificações na central e por e-mail conforme preferências, agrupa e-mails por 15 minutos, confere acesso, inclui descadastro e sinaliza endereços recusados (spec 024, task 586).
 - core: aviso de e-mail indisponível é registrado apenas na central do titular, com contador e SSE (spec 024, task 732).
+- e2e: cobre compras, assinaturas, webhooks, prazos, reconciliação e estornos com o simulador compartilhado (task 563).
 - core: assinatura dos avisos do fake HTTP conferida com o relógio atual (spec 013, task 729).
 - specs: aviso exclusivo da central para e-mail indisponível após três recusas permanentes consecutivas (spec 024, task 731).
 - contratos: conferência estrita nas APIs de vendas, assinaturas, pagamentos e notificações com rotas prontas, com cliente regenerado e sem pendências (tasks 562 e 567).
