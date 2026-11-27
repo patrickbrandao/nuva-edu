@@ -7,6 +7,7 @@ Detalhe das decisões em `specs/decisions/`.
 
 ### Adicionado
 - core: teste do catálogo inclui o aviso de endereço indisponível no grupo de conta (spec 024, task 736).
+- classroom: a central orienta o aluno a conferir o endereço quando o e-mail fica indisponível (spec 024, task 733).
 - infra: inclui a definição do perfil local de pagamentos na configuração Compose do deploy, com o perfil desativado (task 735).
 - worker: entrega notificações na central e por e-mail conforme preferências, agrupa e-mails por 15 minutos, confere acesso, inclui descadastro e sinaliza endereços recusados (spec 024, task 586).
 - core: aviso de e-mail indisponível é registrado apenas na central do titular, com contador e SSE (spec 024, task 732).

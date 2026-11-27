@@ -45,6 +45,7 @@ const GROUP_ICONS: Record<NotificationGroup, LucideIcon> = {
 /** Título por tipo; tipo que este site ainda não conhece cai no genérico. */
 const TYPE_TITLES = {
   'account.new_login': 'notifications.types.newLogin',
+  'account.email_undeliverable': 'notifications.types.emailUndeliverable',
   'order.approved': 'notifications.types.orderApproved',
   'order.refunded': 'notifications.types.orderRefunded',
   'subscription.renewed': 'notifications.types.subscriptionRenewed',
@@ -174,7 +175,10 @@ export function useNotificationEntries(items: readonly NotificationItem[]): Noti
   const { t } = useTranslation();
   return items.map((item) => {
     const Icon = GROUP_ICONS[item.group] ?? UserRound;
-    const text = notificationText(item.data);
+    const text =
+      item.type === 'account.email_undeliverable'
+        ? t('notifications.types.emailUndeliverableText')
+        : notificationText(item.data);
     const href = notificationHref(item);
     return {
       id: item.id,

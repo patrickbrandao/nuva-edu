@@ -172,6 +172,24 @@ describe('/notificacoes', () => {
     expect(screen.getByRole('button', { name: t.bell.none })).toBeTruthy();
   });
 
+  it('orienta a conferir o endereço quando o e-mail fica indisponível', async () => {
+    const item = notificationItem({
+      type: 'account.email_undeliverable',
+      group: 'account',
+      actor: null,
+      targetType: null,
+      targetId: null,
+      data: {},
+    });
+    renderApp(
+      '/notificacoes',
+      routes({ [LIST_URL]: () => jsonResponse(notificationPage([item])) }),
+      { session },
+    );
+    expect(await screen.findByText(t.types.emailUndeliverable)).toBeTruthy();
+    expect(screen.getByText(t.types.emailUndeliverableText)).toBeTruthy();
+  });
+
   it('sem notificações mostra o vazio', async () => {
     renderApp('/notificacoes', routes(), { session });
     const region = await screen.findByRole('region', { name: t.list.region });
