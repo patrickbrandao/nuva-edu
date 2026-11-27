@@ -6,6 +6,7 @@ Detalhe das decisões em `specs/decisions/`.
 ## [Não lançado]
 
 ### Adicionado
+- infra: controle local do simulador emite o aviso verificável de pagamento tardio (spec 011, task 741).
 - core: o provedor fake pode simular captura tardia após o cancelamento do checkout (spec 011, task 740).
 - infra: cada instância do simulador compartilhado emite identificadores distintos, inclusive após reinícios (task 739).
 - core: o fake aceita um identificador de instância para evitar colisões entre reinícios (spec 013, task 738).

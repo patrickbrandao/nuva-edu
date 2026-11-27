@@ -65,3 +65,18 @@ test('instâncias independentes geram IDs distintos e servem a página de checko
   assert.equal(page.status, 200);
   assert.match(await page.text(), /Checkout de teste/);
 });
+
+test('controle de simulação captura pagamento depois do cancelamento', async (t) => {
+  const server = await startServer(t, 'http://127.0.0.1:8092');
+  const { post } = server;
+  const { orderId, providerCheckoutId } = await createCheckout(server);
+  assert.equal((await post('/simulate/approveLateOrder', [orderId])).status, 404);
+  assert.equal((await post('/rpc/cancelCheckout', [providerCheckoutId])).status, 200);
+  const result = await post('/simulate/approveLateOrder', [orderId, { method: 'pix' }]);
+  assert.equal(result.status, 200);
+  const notice = await result.json();
+  const event = await new FakePaymentProvider({ now: Date.now() }).parseWebhook(notice);
+  const payment = await post('/rpc/getPayment', [event.resourceId]);
+  assert.equal((await payment.json()).status, 'approved');
+  assert.equal((await post('/rpc/approveLateOrder', [orderId])).status, 404);
+});

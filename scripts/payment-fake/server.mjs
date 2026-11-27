@@ -58,6 +58,12 @@ export function createFakeServer({ publicUrl, currency = 'BRL' }) {
       if (!pending) return null;
       return delivery(fake.approvePayment(pending.providerPaymentId, options));
     },
+    async approveLateOrder(orderId, options) {
+      const payments = await fake.findPaymentsByReference(orderExternalReference(orderId));
+      const canceled = payments.find((payment) => payment.status === 'canceled');
+      if (!canceled) return null;
+      return delivery(fake.approveLatePayment(canceled.providerPaymentId, options));
+    },
     authorizeSubscription: (id, options) => delivery(fake.authorizeSubscription(id, options)),
     renewSubscription: (id, options) => delivery(fake.renewSubscription(id, options)),
     async paymentWebhook(id, options) {
