@@ -456,6 +456,23 @@ export class FakePaymentProvider implements PaymentProvider {
     return this.#settleCheckout(checkout, 'approved', options);
   }
 
+  /** Simula a captura que o provedor confirmou depois de cancelar o checkout. */
+  approveLatePayment(
+    providerPaymentId: string,
+    options: FakeCheckoutPaymentOptions = {},
+  ): ProviderPayment {
+    const payment = this.#payment(providerPaymentId);
+    if (payment.checkoutId === null || payment.status !== 'canceled') {
+      throw invalidPaymentTransition('O pagamento não pertence a um checkout cancelado.');
+    }
+    return this.#settleCheckout(
+      this.#checkout(payment.checkoutId),
+      'approved',
+      options,
+      'canceled',
+    );
+  }
+
   rejectPayment(
     providerPaymentId: string,
     options: FakeCheckoutPaymentOptions = {},
@@ -621,9 +638,10 @@ export class FakePaymentProvider implements PaymentProvider {
     checkout: CheckoutEntry,
     status: 'approved' | 'rejected',
     options: FakeCheckoutPaymentOptions,
+    expectedStatus: 'pending' | 'canceled' = 'pending',
   ): ProviderPayment {
     const payment = this.#payment(checkout.paymentId);
-    if (payment.status !== 'pending') {
+    if (payment.status !== expectedStatus) {
       throw invalidPaymentTransition('O checkout já teve uma decisão de pagamento.');
     }
     payment.status = status;

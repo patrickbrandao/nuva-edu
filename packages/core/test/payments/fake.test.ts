@@ -147,6 +147,28 @@ describe('checkout, consulta e estados de pagamento', () => {
     expect(() => fake.rejectCheckout(second.providerCheckoutId)).toThrow(/decisão/);
   });
 
+  it('simula uma captura tardia só após cancelar o checkout', async () => {
+    const fake = new FakePaymentProvider();
+    const input = checkoutInput();
+    const checkout = await fake.createCheckout(input);
+    const [payment] = await fake.findPaymentsByReference(input.externalReference);
+    if (!payment) throw new Error('pagamento ausente');
+    const id = payment.providerPaymentId;
+    expect(() => fake.approveLatePayment(id)).toThrow(/cancelado/);
+    await fake.cancelCheckout(checkout.providerCheckoutId);
+    expect(() => fake.approvePayment(id)).toThrow(/pendente/);
+    fake.advance(60_000);
+    expect(fake.approveLatePayment(id, { method: 'pix' })).toMatchObject({
+      status: 'approved',
+      amountCents: input.totalCents,
+      paidAt: fake.now,
+      method: 'pix',
+    });
+    expect(await fake.getPayment(id)).toMatchObject({ status: 'approved' });
+    expect(await fake.parseWebhook(fake.paymentWebhook(id))).toMatchObject({ resourceId: id });
+    expect(() => fake.approveLatePayment(id)).toThrow(/cancelado/);
+  });
+
   it('simula divergência de valor e devolve cópias que não alteram a memória', async () => {
     const fake = new FakePaymentProvider();
     await fake.createCheckout(checkoutInput());
