@@ -200,13 +200,16 @@ try {
   } else if (action === 'webhook_exists') {
     const row = await db.selectFrom('webhookEvents').select('id').where('id', '=', id).executeTakeFirst();
     console.log(row === undefined ? 'absent' : 'present');
-  } else if (action === 'expire_grace') {
+  } else if (action === 'expire_grace' || action === 'end_canceled_period') {
     const expired = new Date(now.getTime() - 60000);
+    const started = new Date(expired.getTime() - 60000);
+    const grace = action === 'expire_grace';
     await db.transaction().execute(async (trx) => {
-      await trx.updateTable('subscriptions').set({ graceUntil: expired })
-        .where('id', '=', id).where('status', '=', 'past_due').execute();
+      await trx.updateTable('subscriptions')
+        .set(grace ? { graceUntil: expired } : { currentPeriodStart: started, currentPeriodEnd: expired })
+        .where('id', '=', id).where('status', '=', grace ? 'past_due' : 'canceling').execute();
       await trx.updateTable('entitlements')
-        .set({ startsAt: new Date(expired.getTime() - 60000), expiresAt: expired })
+        .set({ startsAt: started, expiresAt: expired })
         .where('source', '=', 'subscription').where('sourceId', '=', id).execute();
     });
   } else {
@@ -221,7 +224,13 @@ try {
 `;
 
 export async function reconcileFixture(
-  action: 'reconcile_order' | 'expire_order' | 'expire_grace' | 'purge_webhook' | 'webhook_exists',
+  action:
+    | 'reconcile_order'
+    | 'expire_order'
+    | 'expire_grace'
+    | 'end_canceled_period'
+    | 'purge_webhook'
+    | 'webhook_exists',
   id: string,
 ) {
   const { stdout } = await run(

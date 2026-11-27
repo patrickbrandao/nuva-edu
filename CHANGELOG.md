@@ -6,6 +6,7 @@ Detalhe das decisões em `specs/decisions/`.
 ## [Não lançado]
 
 ### Adicionado
+- e2e: confirma acesso durante o período pago e encerramento pelo worker após cancelar uma assinatura (task 743).
 - e2e: cenário do curso pago valida a compra com login, acesso de amostra e concessão manual (task 742).
 - infra: controle local do simulador emite o aviso verificável de pagamento tardio (spec 011, task 741).
 - core: o provedor fake pode simular captura tardia após o cancelamento do checkout (spec 011, task 740).

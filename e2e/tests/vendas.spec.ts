@@ -305,21 +305,22 @@ test('renova uma assinatura, preserva carência e suspende o acesso ao vencer', 
       await sendWebhook(request, await simulate(request, 'authorizeSubscription', nextProviderId))
     ).status(),
   ).toBe(200);
-  await expect
-    .poll(
-      async () =>
-        (
-          await classroom<{ status: string }>(
-            secondStudent.page,
-            'GET',
-            `/me/subscriptions/${next.subscription.id}`,
-            200,
-          )
-        ).status,
-    )
-    .toBe('active');
+  const currentStatus = async () =>
+    (
+      await classroom<{ status: string }>(
+        secondStudent.page,
+        'GET',
+        `/me/subscriptions/${next.subscription.id}`,
+        200,
+      )
+    ).status;
+  await expect.poll(currentStatus).toBe('active');
   expect(await cancel(next.subscription.id)).toMatchObject({ status: 'canceling' });
   await classroom(secondStudent.page, 'GET', `/lessons/${course.lessonId}`, 200);
+
+  await reconcileFixture('end_canceled_period', next.subscription.id);
+  await expect.poll(currentStatus, { timeout: 20_000 }).toBe('ended');
+  await classroom(secondStudent.page, 'GET', `/lessons/${course.lessonId}`, 403);
 });
 
 test('expira pedido, libera pagamento tardio e aplica avisos fora de ordem', async ({
