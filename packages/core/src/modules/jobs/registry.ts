@@ -67,6 +67,11 @@ export interface JobPayloads {
   'payment.reconcile_subscriptions': Record<string, never>;
   /** Reconciliação dos reembolsos pedidos a cada 30 min (013). Recorrente. */
   'payment.reconcile_refunds': Record<string, never>;
+  /**
+   * Fecha os chamados `resolved` vencidos (spec 023, RNF-03). Diária às 04:00, sem parâmetros:
+   * o manipulador chama `autocloseResolvedTickets`.
+   */
+  'ticket.autoclose': Record<string, never>;
 }
 
 /**
@@ -120,19 +125,22 @@ export const JOB_DEFINITIONS: { readonly [T in JobType]: JobDefinition } = {
   'payment.reconcile_orders': { maxAttempts: 3, priority: 10 },
   'payment.reconcile_subscriptions': { maxAttempts: 3, priority: 10 },
   'payment.reconcile_refunds': { maxAttempts: 3, priority: 10 },
+  'ticket.autoclose': { maxAttempts: 5, priority: 0 },
 };
 
 /**
  * Tipos já no registro cujo manipulador ainda não existe no worker (chega em outra tarefa).
  * `JobHandlers` exige o manipulador dos demais; estes são opcionais. Tipo novo cujo manipulador
  * venha depois entra aqui até ele chegar; tarefa sem manipulador falha como erro comum e segue
- * as tentativas do tipo. A central de notificações (`notify`) aguarda a tarefa 586.
+ * as tentativas do tipo. A central de notificações (`notify`) aguarda a tarefa 586 e
+ * `ticket.autoclose`, a 605; a tarefa 622 os retira daqui.
  */
-export type PendingHandlerJobType = 'notify';
+export type PendingHandlerJobType = 'notify' | 'ticket.autoclose';
 
 /** Os mesmos tipos de `PendingHandlerJobType`, para conferência em tempo de execução. */
 export const PENDING_HANDLER_JOB_TYPES = [
   'notify',
+  'ticket.autoclose',
 ] as const satisfies readonly PendingHandlerJobType[];
 
 export const JOB_STATUSES = ['queued', 'running', 'done', 'failed'] as const;

@@ -25,7 +25,7 @@ Os módulos da Fase 1 (`accounts`, `audit`, `images`, `jobs`, `notifications`, `
 | `gamification` | Pontos, níveis, medalhas | 020 |
 | `messages` | Mensagens diretas | 021 |
 | `cases` | Cases | 022 |
-| `tickets` | Chamados de suporte | 023 |
+| `tickets` | Chamados de suporte: o aluno pelo classroom (`classroom.ts`), o atendimento pela equipe (`admin.ts`, escopo em `permissions/tickets.ts`) e o fechamento automático do worker (`autoclose.ts`) | 023 |
 | `notifications` | Notificações e e-mail; tipo sem modelo no worker fica em `PendingTemplateEmailType` até o modelo chegar (hoje nenhum) | 024 |
 | `announcements` | Novidades | 025 |
 | `moderation` | Denúncias e moderação | 026 |

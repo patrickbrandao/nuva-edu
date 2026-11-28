@@ -117,6 +117,7 @@ export * from './modules/images/index.ts';
 export * from './modules/jobs/index.ts';
 export * from './modules/jobs/notifications.ts';
 export * from './modules/jobs/subscriptions.ts';
+export * from './modules/jobs/tickets.ts';
 export * from './modules/learning/index.ts';
 export * from './modules/markdown/index.ts';
 export {
@@ -142,6 +143,7 @@ export * from './modules/oauth/index.ts';
 export * from './modules/payments/index.ts';
 export * from './modules/payments/subscription-transitions.ts';
 export * from './modules/permissions/index.ts';
+export * from './modules/permissions/tickets.ts';
 export * from './modules/privacy/index.ts';
 export * from './modules/sales/index.ts';
 export * from './modules/sales/refunds.ts';
@@ -191,3 +193,4 @@ export {
   type UserEventKind,
 } from './modules/stream/user-events.ts';
 export * from './modules/subscriptions/index.ts';
+export * from './modules/tickets/index.ts';

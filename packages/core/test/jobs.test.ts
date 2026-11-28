@@ -100,6 +100,7 @@ describe('registro de tipos', () => {
       'refund.execute',
       'retention.purge',
       'suspension.expire',
+      'ticket.autoclose',
     ]);
     expect(isJobType('retention.purge')).toBe(true);
     expect(isJobType('email.send')).toBe(true);
@@ -181,12 +182,12 @@ describe('registro de tipos', () => {
 });
 
 describe('tipos da Fase 2 (tarefa 405)', () => {
-  it('só a central de notificações aguarda manipulador no worker', () => {
-    expectTypeOf<PendingHandlerJobType>().toEqualTypeOf<'notify'>();
+  it('só a central de notificações e os tipos da Fase 4 aguardam manipulador no worker', () => {
+    expectTypeOf<PendingHandlerJobType>().toEqualTypeOf<'notify' | 'ticket.autoclose'>();
     expectTypeOf<
       (typeof PENDING_HANDLER_JOB_TYPES)[number]
     >().toEqualTypeOf<PendingHandlerJobType>();
-    expect(PENDING_HANDLER_JOB_TYPES).toEqual(['notify']);
+    expect(PENDING_HANDLER_JOB_TYPES).toEqual(['notify', 'ticket.autoclose']);
   });
 
   it('os tipos de vendas e pagamentos seguem a tabela da spec 005', () => {
