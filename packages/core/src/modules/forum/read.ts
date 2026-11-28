@@ -297,9 +297,23 @@ export async function readForumTopic(db: Database, userId: string, id: string, m
   const user = await getForumUser(db, userId);
   const row = await requireForumTopic(db, user, id, moderation);
   const reactions = await readForumReactions(db, userId, 'forum_topic', [id]);
+  const player =
+    row.lessonId === null
+      ? null
+      : await db
+          .selectFrom('forumCategories')
+          .innerJoin('courses', 'courses.id', 'forumCategories.courseId')
+          .where('forumCategories.id', '=', row.categoryId)
+          .select('courses.slug')
+          .executeTakeFirst();
+  const lessonUrl =
+    player && row.lessonId !== null
+      ? `/meus-cursos/${encodeURIComponent(player.slug)}/aulas/${row.lessonId}`
+      : null;
   return {
     topic: topicSummary(row),
     bodyHtml: row.bodyHtml,
+    ...(lessonUrl === null ? {} : { lessonUrl }),
     ...(row.deletedAt === null && (moderation || row.authorId === userId)
       ? { bodyMd: row.bodyMd }
       : {}),

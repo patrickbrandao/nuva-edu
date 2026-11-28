@@ -111,6 +111,9 @@ it('cria categoria e tópico da aula uma vez, preserva as respostas e confere di
       notify: false,
     }),
   );
+  expect((await readForumTopic(db, student.id, topic.id)).lessonUrl).toBe(
+    `/meus-cursos/${course.slug}/aulas/${lesson.id}`,
+  );
   await createForumPost(db, student.id, topic.id, { bodyMd: 'Comentário preservado.' });
   expect(await lookupLessonForumTopic(db, student.id, lesson.id)).toEqual({
     topicId: topic.id,
