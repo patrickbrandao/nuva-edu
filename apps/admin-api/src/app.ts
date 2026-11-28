@@ -32,7 +32,9 @@ import { registerCertificateRoutes } from './routes/certificates.ts';
 import { registerCourseRoutes } from './routes/courses.ts';
 import { registerEmailOperationsRoutes } from './routes/email-operations.ts';
 import { registerEntitlementRoutes } from './routes/entitlements.ts';
+import { registerAdminForumRoutes } from './routes/forum.ts';
 import { registerImageRoutes } from './routes/images.ts';
+import { registerModerationRoutes } from './routes/moderation.ts';
 import { registerNotificationRoutes } from './routes/notifications.ts';
 import { registerOAuthRoutes } from './routes/oauth.ts';
 import { registerOpsJobRoutes } from './routes/ops-jobs.ts';
@@ -261,6 +263,8 @@ export function buildAdminApp(options: AdminAppOptions): FastifyInstance {
     ...(options.imageLimiter === undefined ? {} : { limiter: options.imageLimiter }),
   });
   registerUserRoutes(app, { db });
+  registerAdminForumRoutes(app, { db });
+  registerModerationRoutes(app, { db });
   registerAuditRoutes(app, { db });
   registerTermsRoutes(app, { db });
   // Catálogo (spec 009): cursos, módulos, aulas e links de apoio.
