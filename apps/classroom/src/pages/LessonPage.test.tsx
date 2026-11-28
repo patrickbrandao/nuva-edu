@@ -63,10 +63,15 @@ describe('página da aula', () => {
     expect(video().src).toBe('https://cdn.exemplo.test/aulas/boas-vindas.mp4');
     expect(main.getByRole('toolbar', { name: ptBR.learning.player.controls })).toBeTruthy();
 
-    // abas: Sobre (Markdown higienizado), Materiais e Minhas notas; sem Comentários nem
-    // "Reportar" (Fase 4)
+    // abas: Sobre (Markdown higienizado), Materiais, Comentários (tópico da aula, spec 017) e
+    // Minhas notas
     const tabs = main.getAllByRole('tab').map((tab) => tab.textContent);
-    expect(tabs).toEqual([text.tabs.about, `${text.tabs.materials}2`, text.tabs.notes]);
+    expect(tabs).toEqual([
+      text.tabs.about,
+      `${text.tabs.materials}2`,
+      ptBR.forum.comments,
+      text.tabs.notes,
+    ]);
     expect(main.getByText('aprender').tagName).toBe('STRONG');
     expect(document.querySelector('main script')).toBeNull();
     await user.click(main.getByRole('tab', { name: new RegExp(text.tabs.materials) }));
@@ -76,7 +81,6 @@ describe('página da aula', () => {
     expect(main.getByRole('link', { name: 'Guia de Git' }).getAttribute('href')).toBe(
       '/ebooks/guia-de-git',
     );
-    expect(main.queryByText(/reportar|comentário/i)).toBeNull();
 
     // lateral: a aula atual marcada no programa, com o módulo dela aberto
     const program = within(await screen.findByRole('region', { name: text.courseProgram }));

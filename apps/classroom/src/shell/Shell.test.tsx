@@ -269,10 +269,10 @@ describe('casca do classroom', () => {
     renderApp('/');
 
     await user.click(screen.getByRole('button', { name: ptBR.shell.openMenu }));
-    await user.click(screen.getByRole('link', { name: ptBR.menu.items.forum }));
+    await user.click(screen.getByRole('link', { name: ptBR.menu.items.members }));
 
     expect(
-      await screen.findByRole('heading', { level: 1, name: ptBR.menu.items.forum }),
+      await screen.findByRole('heading', { level: 1, name: ptBR.menu.items.members }),
     ).toBeTruthy();
     expect(screen.getByText(ptBR.construction.title)).toBeTruthy();
     expect(screen.queryByRole('dialog')).toBeNull();
@@ -280,11 +280,11 @@ describe('casca do classroom', () => {
 
     const trail = screen.getByRole('navigation', { name: ptBR.shell.breadcrumb });
     expect(within(trail).getByRole('link', { name: ptBR.home.title })).toBeTruthy();
-    expect(within(trail).getByText(ptBR.menu.items.forum).getAttribute('aria-current')).toBe(
+    expect(within(trail).getByText(ptBR.menu.items.members).getAttribute('aria-current')).toBe(
       'page',
     );
-    expect(await screen.findByText(`Página: ${ptBR.menu.items.forum}`)).toBeTruthy();
-    await waitFor(() => expect(document.title).toBe(`${ptBR.menu.items.forum} · Escola Aurora`));
+    expect(await screen.findByText(`Página: ${ptBR.menu.items.members}`)).toBeTruthy();
+    await waitFor(() => expect(document.title).toBe(`${ptBR.menu.items.members} · Escola Aurora`));
   });
 
   it('abre todas as rotas do menu por endereço direto', async () => {
@@ -306,6 +306,7 @@ describe('casca do classroom', () => {
       '/meus-ebooks',
       '/anotacoes',
       '/progresso',
+      '/forum',
       '/cesta',
       '/conta/compras',
       '/notificacoes',

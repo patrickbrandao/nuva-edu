@@ -228,6 +228,21 @@ export const routes: RouteObject[] = [
         handle: handle({ titleKey: 'pages.lesson' }),
         lazy: async () => ({ Component: (await import('./pages/LessonPage')).LessonPage }),
       },
+      {
+        path: '/forum',
+        handle: handle({ titleKey: 'forum.title' }),
+        lazy: async () => ({ Component: (await import('./forum/ForumPage')).ForumPage }),
+      },
+      {
+        path: '/forum/denuncias',
+        handle: handle({ titleKey: 'forum.reports' }),
+        lazy: async () => ({ Component: (await import('./forum/ForumPage')).ForumReportsPage }),
+      },
+      {
+        path: '/forum/t/:id',
+        handle: handle({ titleKey: 'forum.topic' }),
+        lazy: async () => ({ Component: (await import('./forum/TopicPage')).ForumTopicPage }),
+      },
       ...PENDING_PAGES.map(
         ({ path, titleKey }): RouteObject => ({
           path,

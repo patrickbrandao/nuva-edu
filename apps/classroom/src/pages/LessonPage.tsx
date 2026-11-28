@@ -22,6 +22,7 @@ import { useTranslation } from 'react-i18next';
 import { Navigate, useNavigate, useParams, useSearchParams } from 'react-router';
 import { describeError } from '../api/errors';
 import { formatDuration, productPath } from '../catalog/format';
+import { LessonComments } from '../forum/TopicPage';
 import { CourseProgram } from '../learning/CourseProgram';
 import { type CourseView, coursePath, lessonPath, UNDO_MS } from '../learning/progress';
 import {
@@ -238,6 +239,11 @@ function LessonBody({ lesson }: { lesson: LessonView }) {
             label: t('learning.lesson.tabs.materials'),
             count: lesson.links.length + lesson.ebooks.length || undefined,
             content: <Materials lesson={lesson} />,
+          },
+          {
+            id: 'comments',
+            label: t('forum.comments'),
+            content: <LessonComments lessonId={lesson.id} courseSlug={slug} />,
           },
           {
             id: 'notes',

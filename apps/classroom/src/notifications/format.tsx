@@ -114,8 +114,13 @@ export function notificationHref(item: NotificationItem): string | undefined {
   if (!item.targetId) return undefined;
   const id = encodeURIComponent(item.targetId);
   switch (item.targetType) {
+    case 'forum_topic':
     case 'topic':
       return `/forum/t/${id}`;
+    case 'forum_post':
+      return typeof item.data.topicId === 'string'
+        ? `/forum/t/${encodeURIComponent(item.data.topicId)}#post-${id}`
+        : undefined;
     case 'order':
       return `/pedidos/${id}`;
     case 'ticket':

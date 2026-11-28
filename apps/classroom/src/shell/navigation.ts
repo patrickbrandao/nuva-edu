@@ -161,6 +161,7 @@ const BUILT_PAGES: readonly string[] = [
   CART_PATH,
   PURCHASES_PATH,
   NOTIFICATIONS_PATH,
+  '/forum',
 ];
 
 /**

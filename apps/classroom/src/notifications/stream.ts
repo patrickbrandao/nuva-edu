@@ -1,6 +1,7 @@
 import { openClassroomStream } from '@nuva-edu/api-client/classroom';
 import { useQueryClient } from '@tanstack/react-query';
 import { useEffect } from 'react';
+import { forumKey, topicKey } from '../forum/queries';
 import { useSession } from '../session/session';
 import { notificationsListKey, notificationsUnreadKey, setUnreadCount } from './queries';
 
@@ -41,8 +42,13 @@ export function useNotificationStream({
           return;
         }
         reload();
+        void client.invalidateQueries({ queryKey: forumKey(userId) });
       },
       onEvent: (event) => {
+        if (event.event === 'forum.post.created') {
+          void client.invalidateQueries({ queryKey: topicKey(userId, event.data.topicId) });
+          return;
+        }
         if (event.event !== 'notification.created') return;
         setUnreadCount(client, userId, event.data.unreadCount);
         void client.invalidateQueries({ queryKey: notificationsListKey(userId) });

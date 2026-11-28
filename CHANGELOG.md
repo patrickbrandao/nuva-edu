@@ -6,6 +6,7 @@ Detalhe das decisões em `specs/decisions/`.
 ## [Não lançado]
 
 ### Adicionado
+- classroom: fórum do aluno com categorias, busca, comentários do player, discussões, denúncias e atualização por SSE (task 595).
 - e2e: coleta eventos SSE da varredura por mensagem, com as mesmas verificações de respostas, e-mails e logs (task 754).
 - specs: contrato, cliente gerado e rotas entram juntos em cada janela, com checagem estrita antes da integração (ADR 0030, task 745).
 - admin-api: separa a preparação do OpenAPI e os modos de pagamento nos testes de integração para evitar estouro de tempo no CI (task 744).
