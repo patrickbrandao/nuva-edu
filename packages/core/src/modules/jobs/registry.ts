@@ -72,6 +72,12 @@ export interface JobPayloads {
    * o manipulador chama `autocloseResolvedTickets`.
    */
   'ticket.autoclose': Record<string, never>;
+  /**
+   * Lembrete de um evento, 30 minutos antes do início (spec 018, RF-07). Enfileirada por
+   * `enqueueEventReminder`; `startsAt` (ISO 8601) é o horário para o qual foi marcada, e o
+   * manipulador (`sendEventReminder`) descarta a de um horário que deixou de valer.
+   */
+  'event.reminder': { eventId: string; startsAt: string };
 }
 
 /**
@@ -126,6 +132,7 @@ export const JOB_DEFINITIONS: { readonly [T in JobType]: JobDefinition } = {
   'payment.reconcile_subscriptions': { maxAttempts: 3, priority: 10 },
   'payment.reconcile_refunds': { maxAttempts: 3, priority: 10 },
   'ticket.autoclose': { maxAttempts: 5, priority: 0 },
+  'event.reminder': { maxAttempts: 3, priority: 0 },
 };
 
 /**
@@ -133,14 +140,15 @@ export const JOB_DEFINITIONS: { readonly [T in JobType]: JobDefinition } = {
  * `JobHandlers` exige o manipulador dos demais; estes são opcionais. Tipo novo cujo manipulador
  * venha depois entra aqui até ele chegar; tarefa sem manipulador falha como erro comum e segue
  * as tentativas do tipo. A central de notificações (`notify`) aguarda a tarefa 586 e
- * `ticket.autoclose`, a 605; a tarefa 622 os retira daqui.
+ * `ticket.autoclose`, a 605, e `event.reminder`, a 612; a tarefa 622 os retira daqui.
  */
-export type PendingHandlerJobType = 'notify' | 'ticket.autoclose';
+export type PendingHandlerJobType = 'notify' | 'ticket.autoclose' | 'event.reminder';
 
 /** Os mesmos tipos de `PendingHandlerJobType`, para conferência em tempo de execução. */
 export const PENDING_HANDLER_JOB_TYPES = [
   'notify',
   'ticket.autoclose',
+  'event.reminder',
 ] as const satisfies readonly PendingHandlerJobType[];
 
 export const JOB_STATUSES = ['queued', 'running', 'done', 'failed'] as const;

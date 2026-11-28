@@ -6,6 +6,7 @@ Detalhe das decisões em `specs/decisions/`.
 ## [Não lançado]
 
 ### Adicionado
+- núcleo: calendário e eventos (gestão com escopo do instrutor, públicos `all`/`active`/`product`, status pelo relógio, link só na janela de 15 minutos, repetição semanal, gravações, avisos e lembrete `event.reminder`) (task 609).
 - classroom: fórum do aluno com categorias, busca, comentários do player, discussões, denúncias e atualização por SSE (task 595).
 - admin: gestão de categorias e tópicos, fila agrupada de denúncias, ações e histórico de moderação (task 596).
 - núcleo: chamados de suporte (abertura, conversa, notas internas, escopo por papel e curso, relatos somados de link quebrado, limites, auditoria, avisos e fechamento automático `ticket.autoclose`) (task 602).

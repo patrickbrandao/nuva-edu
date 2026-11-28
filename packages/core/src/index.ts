@@ -83,9 +83,19 @@ export * from './modules/accounts/index.ts';
 export * from './modules/audit/index.ts';
 export * from './modules/catalog/index.ts';
 export * from './modules/certificates/index.ts';
+export {
+  AUDIENCE_PRODUCT_TYPES,
+  AUDIENCES,
+  type Audience,
+  type AudienceProduct,
+  type AudienceProductRef,
+  type AudienceProductType,
+  isAudience,
+} from './modules/entitlements/audience.ts';
 export * from './modules/entitlements/extend.ts';
 export * from './modules/entitlements/index.ts';
 export * from './modules/entitlements/subscription.ts';
+export * from './modules/events/index.ts';
 export { createForumCategory, updateForumCategory } from './modules/forum/categories.ts';
 export {
   canReadForumTopic,
@@ -114,6 +124,7 @@ export {
 } from './modules/forum/write.ts';
 export * from './modules/idempotency/index.ts';
 export * from './modules/images/index.ts';
+export * from './modules/jobs/events.ts';
 export * from './modules/jobs/index.ts';
 export * from './modules/jobs/notifications.ts';
 export * from './modules/jobs/subscriptions.ts';
@@ -142,6 +153,7 @@ export * from './modules/notifications/index.ts';
 export * from './modules/oauth/index.ts';
 export * from './modules/payments/index.ts';
 export * from './modules/payments/subscription-transitions.ts';
+export * from './modules/permissions/events.ts';
 export * from './modules/permissions/index.ts';
 export * from './modules/permissions/tickets.ts';
 export * from './modules/privacy/index.ts';

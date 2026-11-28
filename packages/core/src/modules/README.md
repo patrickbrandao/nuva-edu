@@ -20,7 +20,7 @@ Os módulos da Fase 1 (`accounts`, `audit`, `images`, `jobs`, `notifications`, `
 | `certificates` | Certificados: emissão, código, validação pública, gestão pela equipe, templates (funções puras em `template/`), pedidos de exemplo e o estado para o aluno. O PDF é renderizado no worker | 015 |
 | `notes` | Anotações por aula e avulsas, privadas do dono | 016 |
 | `forum` | Fórum | 017 |
-| `events` | Calendário e eventos | 018 |
+| `events` | Calendário e eventos: gestão pela equipe (`admin.ts`, escopo em `permissions/events.ts`), agenda, link e gravações do aluno (`classroom.ts`) e lembrete do worker (`reminders.ts`). O público (`all`, `active`, `product`) é o de `entitlements/audience.ts`, comum às novidades | 018 |
 | `profiles` | Perfil, seguir, diretório | 019 |
 | `gamification` | Pontos, níveis, medalhas | 020 |
 | `messages` | Mensagens diretas | 021 |

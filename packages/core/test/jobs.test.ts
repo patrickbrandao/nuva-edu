@@ -89,6 +89,7 @@ describe('registro de tipos', () => {
       'course.completion_check',
       'email.send',
       'entitlement.recompute',
+      'event.reminder',
       'example.echo',
       'image.cleanup',
       'notify',
@@ -183,11 +184,13 @@ describe('registro de tipos', () => {
 
 describe('tipos da Fase 2 (tarefa 405)', () => {
   it('só a central de notificações e os tipos da Fase 4 aguardam manipulador no worker', () => {
-    expectTypeOf<PendingHandlerJobType>().toEqualTypeOf<'notify' | 'ticket.autoclose'>();
+    expectTypeOf<PendingHandlerJobType>().toEqualTypeOf<
+      'notify' | 'ticket.autoclose' | 'event.reminder'
+    >();
     expectTypeOf<
       (typeof PENDING_HANDLER_JOB_TYPES)[number]
     >().toEqualTypeOf<PendingHandlerJobType>();
-    expect(PENDING_HANDLER_JOB_TYPES).toEqual(['notify', 'ticket.autoclose']);
+    expect(PENDING_HANDLER_JOB_TYPES).toEqual(['notify', 'ticket.autoclose', 'event.reminder']);
   });
 
   it('os tipos de vendas e pagamentos seguem a tabela da spec 005', () => {
