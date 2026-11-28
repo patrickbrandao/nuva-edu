@@ -6,7 +6,7 @@
 // mensagens de falha citam só onde a senha apareceu, nunca o valor.
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
-import { type BrowserContext, expect, test } from '@playwright/test';
+import { expect, type Page, test } from '@playwright/test';
 import { testPassword, uniqueEmail } from '../../support/accounts.ts';
 import { ADMIN_STATE } from '../../support/auth-state.ts';
 import { adminCredentials } from '../../support/credentials.ts';
@@ -22,10 +22,27 @@ interface Recorded {
   body: string;
 }
 
-/** Guarda o corpo de toda resposta de texto que o contexto receber. */
-function record(context: BrowserContext): { done: () => Promise<Recorded[]> } {
+/** Registra respostas concluídas e os eventos já entregues pelo EventSource do Chromium. */
+async function record(page: Page): Promise<{ done: () => Promise<Recorded[]> }> {
   const pending: Promise<Recorded | null>[] = [];
-  context.on('response', (response) => {
+  const events: Recorded[] = [];
+  const requests = new Map<string, Pick<Recorded, 'method' | 'path'>>();
+  const devtools = await page.context().newCDPSession(page);
+  devtools.on('Network.requestWillBeSent', ({ requestId, request }) => {
+    requests.set(requestId, {
+      method: request.method,
+      path: new URL(request.url).pathname,
+    });
+  });
+  devtools.on('Network.eventSourceMessageReceived', ({ requestId, data, eventId, eventName }) => {
+    const request = requests.get(requestId) ?? { method: 'GET', path: '(EventSource)' };
+    events.push({ ...request, body: [eventId, eventName, data].join('\n') });
+  });
+  await devtools.send('Network.enable');
+
+  page.on('response', (response) => {
+    // A conexão SSE fica aberta enquanto a aba está ativa. Os eventos chegam pelo CDP.
+    if (response.request().resourceType() === 'eventsource') return;
     pending.push(
       response
         .body()
@@ -38,7 +55,7 @@ function record(context: BrowserContext): { done: () => Promise<Recorded[]> } {
     );
   });
   return {
-    done: async () => (await Promise.all(pending)).filter((item) => item !== null),
+    done: async () => [...(await Promise.all(pending)).filter((item) => item !== null), ...events],
   };
 }
 
@@ -49,16 +66,16 @@ test('a senha de teste só aparece na resposta da exibição', async ({ page, br
     email: uniqueEmail('varredura'),
     password: testPassword(),
   };
-  const classroomResponses = record(page.context());
+  const classroomResponses = await record(page);
 
   await test.step('o aluno se cadastra pela tela', async () => {
     await signUpWithPassword(page, account);
   });
 
   const admin = await browser.newContext({ storageState: ADMIN_STATE });
-  const adminResponses = record(admin);
+  const adminPage = await admin.newPage();
+  const adminResponses = await record(adminPage);
   await test.step('o admin vê a senha na ficha', async () => {
-    const adminPage = await admin.newPage();
     await adminPage.goto(`${ADMIN_URL}/alunos?q=${encodeURIComponent(account.email)}`);
     await adminPage.getByRole('link', { name: account.name, exact: true }).click();
     await adminPage.getByRole('button', { name: 'Mostrar senha' }).click();
