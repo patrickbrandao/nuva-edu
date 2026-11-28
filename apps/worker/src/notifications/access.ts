@@ -1,4 +1,4 @@
-import { canAccess, type Database, isDomainError } from '@nuva-edu/core';
+import { canAccess, canReadForumTopic, type Database, isDomainError } from '@nuva-edu/core';
 
 interface NotificationTarget {
   type: string;
@@ -9,6 +9,17 @@ interface NotificationTarget {
 
 /** Uma aula de amostra não dá direito de receber os avisos do curso inteiro. */
 export async function canReceiveTarget(db: Database, input: NotificationTarget): Promise<boolean> {
+  if (
+    input.type === 'forum.reply' ||
+    input.type === 'forum.mention' ||
+    input.type === 'forum.solution'
+  ) {
+    return (
+      input.targetType === 'forum_topic' &&
+      input.targetId !== null &&
+      canReadForumTopic(db, input.userId, input.targetId)
+    );
+  }
   if (input.type !== 'lesson.published') return true;
   if (input.targetId === null) return false;
   let courseId = input.targetId;

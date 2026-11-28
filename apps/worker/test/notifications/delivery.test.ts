@@ -30,6 +30,25 @@ async function user() {
     .executeTakeFirstOrThrow();
 }
 
+async function forumTopic(authorId: string) {
+  const category = await db
+    .insertInto('forumCategories')
+    .values({ kind: 'free', audience: 'all', name: 'Fórum' })
+    .returning('id')
+    .executeTakeFirstOrThrow();
+  return db
+    .insertInto('forumTopics')
+    .values({
+      categoryId: category.id,
+      authorId,
+      title: 'Teste do fórum',
+      bodyMd: 'Corpo',
+      bodyHtml: '<p>Corpo</p>',
+    })
+    .returning('id')
+    .executeTakeFirstOrThrow();
+}
+
 async function readNotifications(userId: string) {
   return db
     .selectFrom('notifications')
@@ -76,9 +95,11 @@ it('agrupa cinco avisos, deduplica uma repetição do job e fornece descadastro 
   const { logger, lines } = captureLogger();
   const mailer = memoryMailer();
   const handlers = createHandlers(handlerDependencies(db, logger, { mailer }));
-  const topic = randomUUID();
+  const topic = await forumTopic(recipient.id);
   const jobs = await Promise.all(
-    Array.from({ length: 5 }, () => notifyJob(recipient.id, 'forum.reply', 'topic', topic)),
+    Array.from({ length: 5 }, () =>
+      notifyJob(recipient.id, 'forum.reply', 'forum_topic', topic.id),
+    ),
   );
   await Promise.all(jobs.map((queued) => handlers.notify?.(queued, { signal })));
   const original = jobs[0];
@@ -103,7 +124,8 @@ it('agrupa cinco avisos, deduplica uma repetição do job e fornece descadastro 
   expect(JSON.stringify(lines)).not.toContain(token);
   await unsubscribeByToken(db, token);
 
-  const next = await notifyJob(recipient.id, 'forum.reply', 'topic', randomUUID());
+  const another = await forumTopic(recipient.id);
+  const next = await notifyJob(recipient.id, 'forum.reply', 'forum_topic', another.id);
   await handlers.notify?.(next, { signal });
   expect(await readNotifications(recipient.id)).toHaveLength(2);
   expect(await readOutbox(recipient.id)).toHaveLength(1);
@@ -166,4 +188,20 @@ it('após três recusas permanentes avisa só na central e preserva novas notifi
       }),
     ),
   );
+});
+
+it('revalida o tópico antes de entregar a notificação agendada', async () => {
+  const author = await user();
+  const reader = await user();
+  const topic = await forumTopic(author.id);
+  const queued = await notifyJob(reader.id, 'forum.reply', 'forum_topic', topic.id);
+  await db
+    .updateTable('forumTopics')
+    .set({ hiddenAt: new Date(), hiddenBy: author.id })
+    .where('id', '=', topic.id)
+    .execute();
+  const handlers = createHandlers(handlerDependencies(db, captureLogger().logger));
+  await handlers.notify?.(queued, { signal });
+  expect(await readNotifications(reader.id)).toEqual([]);
+  expect(await readOutbox(reader.id)).toEqual([]);
 });
