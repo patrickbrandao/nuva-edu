@@ -42,6 +42,7 @@ import {
   readTitle,
   readVersion,
 } from './fields.ts';
+import { syncLessonForum } from './forum-hooks.ts';
 import { assertContentUrl, parseVideoUrl, type VideoProvider } from './urls.ts';
 
 export interface CatalogModule {
@@ -527,6 +528,8 @@ export async function createLesson(
         videoProvider: fields.videoProvider ?? null,
       },
     });
+    const created = (await findLesson(trx, row.id)) as CatalogLesson;
+    await syncLessonForum(trx, course, created);
     return (await findLesson(trx, row.id)) as CatalogLesson;
   });
 }
@@ -591,6 +594,8 @@ export async function updateLesson(
         details: { courseId: course.id, reviewCleared },
       });
     }
+    const updated = (await findLesson(trx, lesson.id)) as CatalogLesson;
+    await syncLessonForum(trx, course, updated);
     return (await findLesson(trx, lesson.id)) as CatalogLesson;
   });
 }

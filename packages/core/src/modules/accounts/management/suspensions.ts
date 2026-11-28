@@ -100,6 +100,17 @@ export async function suspendUser(
       .where('id', '=', current.id)
       .execute();
     const sessionsRevoked = kind === 'full' ? await revokeUserSessions(trx, current.id) : 0;
+    await trx
+      .insertInto('moderationActions')
+      .values({
+        moderatorId: request.actor.id,
+        action: 'suspend',
+        targetType: 'user',
+        targetId: current.id,
+        targetUserId: current.id,
+        reason,
+      })
+      .execute();
     await notify(trx, 'moderation.suspended', current.id, {
       actorId: request.actor.id,
       targetType: 'user',
@@ -166,9 +177,14 @@ export async function reactivateUser(
   db: Database,
   request: ManagementRequest,
   userId: string,
+  reasonInput = 'reativação pela equipe',
 ): Promise<UserDetail> {
   const target = await loadTarget(db, userId);
   await requireUserManagement(db, request, 'reactivate', target, 'user.unsuspend');
+  const reason = reasonInput.trim();
+  if (!reason || [...reason].length > SUSPENSION_REASON_MAX_LENGTH) {
+    throw validationFailed([{ path: 'body.reason', message: 'Informe o motivo da reativação.' }]);
+  }
   return db.transaction().execute(async (trx) => {
     const current = await loadTarget(trx, target.id, { forUpdate: true });
     assertUserManagement(request.actor, 'reactivate', current);
@@ -176,12 +192,23 @@ export async function reactivateUser(
       throw notSuspended();
     }
     const lifted = await liftSuspension(trx, current.id);
+    await trx
+      .insertInto('moderationActions')
+      .values({
+        moderatorId: request.actor.id,
+        action: 'unsuspend',
+        targetType: 'user',
+        targetId: current.id,
+        targetUserId: current.id,
+        reason,
+      })
+      .execute();
     await recordAudit(trx, {
       context: managementAuditContext(request),
       action: 'user.unsuspend',
       targetType: 'user',
       targetId: current.id,
-      details: { suspensionIds: lifted, reason: 'reactivated' },
+      details: { suspensionIds: lifted, reason: 'reactivated', moderationReason: reason },
     });
     return readUserDetail(trx, current.id);
   });

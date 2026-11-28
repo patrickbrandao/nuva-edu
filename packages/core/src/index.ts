@@ -86,6 +86,32 @@ export * from './modules/certificates/index.ts';
 export * from './modules/entitlements/extend.ts';
 export * from './modules/entitlements/index.ts';
 export * from './modules/entitlements/subscription.ts';
+export { createForumCategory, updateForumCategory } from './modules/forum/categories.ts';
+export {
+  canReadForumTopic,
+  FORUM_EMOJIS,
+  type ForumEmoji,
+  type ForumTarget,
+  type ForumTopicQuery,
+  listForumCategories,
+  listForumPosts,
+  listForumTopics,
+  lookupLessonForumTopic,
+  readForumCategory,
+  readForumTopic,
+  searchForumMentions,
+} from './modules/forum/read.ts';
+export {
+  createForumPost,
+  createForumTopic,
+  deleteForumPost,
+  deleteForumTopic,
+  editForumPost,
+  editForumTopic,
+  setForumReaction,
+  setForumSolution,
+  toggleForumFollow,
+} from './modules/forum/write.ts';
 export * from './modules/idempotency/index.ts';
 export * from './modules/images/index.ts';
 export * from './modules/jobs/index.ts';
@@ -93,6 +119,23 @@ export * from './modules/jobs/notifications.ts';
 export * from './modules/jobs/subscriptions.ts';
 export * from './modules/learning/index.ts';
 export * from './modules/markdown/index.ts';
+export {
+  type AdminForumTopicPatch,
+  applyForumModerationAction,
+  type ForumActionInput,
+  listUserForumModerationHistory,
+  moderateForumTopic,
+  readForumModerationTarget,
+  warnForumUser,
+} from './modules/moderation/forum-actions.ts';
+export {
+  type CreateForumReportInput,
+  createForumReport,
+  FORUM_REPORT_REASONS,
+  type ForumQueueInput,
+  listForumModerationQueue,
+  listMyForumReports,
+} from './modules/moderation/forum-reports.ts';
 export * from './modules/notes/index.ts';
 export * from './modules/notifications/index.ts';
 export * from './modules/oauth/index.ts';

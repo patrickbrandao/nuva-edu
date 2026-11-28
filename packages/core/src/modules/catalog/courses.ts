@@ -51,6 +51,7 @@ import {
   readTitle,
   readVersion,
 } from './fields.ts';
+import { archiveDeletedCourseForum, syncCourseForum } from './forum-hooks.ts';
 
 /** Um curso como a escrita o devolve (todas as colunas de `courses`). */
 export interface CatalogCourse {
@@ -427,6 +428,7 @@ export async function deleteCourse(
         ]),
       )
       .execute();
+    await archiveDeletedCourseForum(trx, course.id);
     await trx.deleteFrom('courses').where('id', '=', course.id).execute();
     await enqueueRecomputes(
       trx,
@@ -479,7 +481,10 @@ export async function publishCourse(
       'course.publish',
     );
     requireCoursePublication(request, course, 'course.publish');
-    if (course.status === 'published') return course;
+    if (course.status === 'published') {
+      await syncCourseForum(trx, course);
+      return course;
+    }
     assertNotArchived(course);
     assertPublishablePrice(commercialOf(course));
     if ((await countPublishedLessons(trx, course.id)) === 0) {
@@ -498,6 +503,7 @@ export async function publishCourse(
       })
       .where('id', '=', course.id)
       .execute();
+    await syncCourseForum(trx, course);
     await catalogAudit(trx, request, {
       action: 'course.publish',
       targetType: 'course',
