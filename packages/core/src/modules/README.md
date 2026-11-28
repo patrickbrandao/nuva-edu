@@ -27,7 +27,7 @@ Os módulos da Fase 1 (`accounts`, `audit`, `images`, `jobs`, `notifications`, `
 | `cases` | Cases | 022 |
 | `tickets` | Chamados de suporte: o aluno pelo classroom (`classroom.ts`), o atendimento pela equipe (`admin.ts`, escopo em `permissions/tickets.ts`) e o fechamento automático do worker (`autoclose.ts`) | 023 |
 | `notifications` | Notificações e e-mail; tipo sem modelo no worker fica em `PendingTemplateEmailType` até o modelo chegar (hoje nenhum) | 024 |
-| `announcements` | Novidades | 025 |
+| `announcements` | Novidades: gestão pela equipe (`admin.ts`, escopo em `permissions/announcements.ts`), publicação imediata e agendada (`publish.ts`), mural e contador do aluno (`classroom.ts`); o SSE do contador fica em `stream/announcements.ts` | 025 |
 | `moderation` | Denúncias e moderação | 026 |
 | `mcp` | Chaves MCP | 027 |
 | `audit` | Auditoria | 028 |

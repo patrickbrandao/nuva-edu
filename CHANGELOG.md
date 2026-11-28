@@ -6,6 +6,7 @@ Detalhe das decisões em `specs/decisions/`.
 ## [Não lançado]
 
 ### Adicionado
+- núcleo: novidades (rascunho, agendamento, publicação e arquivamento, públicos, até três fixadas, contador de não lidas por `announcements_seen_at`, aviso opcional, SSE `announcement.published` e tarefa `announcement.publish`) (task 616).
 - núcleo: calendário e eventos (gestão com escopo do instrutor, públicos `all`/`active`/`product`, status pelo relógio, link só na janela de 15 minutos, repetição semanal, gravações, avisos e lembrete `event.reminder`) (task 609).
 - classroom: fórum do aluno com categorias, busca, comentários do player, discussões, denúncias e atualização por SSE (task 595).
 - admin: gestão de categorias e tópicos, fila agrupada de denúncias, ações e histórico de moderação (task 596).

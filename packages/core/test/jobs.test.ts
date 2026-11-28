@@ -82,6 +82,7 @@ async function waitFor(condition: () => boolean, timeoutMs = 4_000): Promise<voi
 describe('registro de tipos', () => {
   it('reconhece os tipos do registro e recusa os demais', () => {
     expect(Object.keys(JOB_DEFINITIONS).sort()).toEqual([
+      'announcement.publish',
       'certificate.backfill',
       'certificate.preview',
       'certificate.render',
@@ -185,12 +186,17 @@ describe('registro de tipos', () => {
 describe('tipos da Fase 2 (tarefa 405)', () => {
   it('só a central de notificações e os tipos da Fase 4 aguardam manipulador no worker', () => {
     expectTypeOf<PendingHandlerJobType>().toEqualTypeOf<
-      'notify' | 'ticket.autoclose' | 'event.reminder'
+      'notify' | 'ticket.autoclose' | 'event.reminder' | 'announcement.publish'
     >();
     expectTypeOf<
       (typeof PENDING_HANDLER_JOB_TYPES)[number]
     >().toEqualTypeOf<PendingHandlerJobType>();
-    expect(PENDING_HANDLER_JOB_TYPES).toEqual(['notify', 'ticket.autoclose', 'event.reminder']);
+    expect(PENDING_HANDLER_JOB_TYPES).toEqual([
+      'notify',
+      'ticket.autoclose',
+      'event.reminder',
+      'announcement.publish',
+    ]);
   });
 
   it('os tipos de vendas e pagamentos seguem a tabela da spec 005', () => {

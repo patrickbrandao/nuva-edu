@@ -80,6 +80,7 @@ export {
   SENSITIVE_KEY_PARTS,
 } from './logging/redact.ts';
 export * from './modules/accounts/index.ts';
+export * from './modules/announcements/index.ts';
 export * from './modules/audit/index.ts';
 export * from './modules/catalog/index.ts';
 export * from './modules/certificates/index.ts';
@@ -124,6 +125,7 @@ export {
 } from './modules/forum/write.ts';
 export * from './modules/idempotency/index.ts';
 export * from './modules/images/index.ts';
+export * from './modules/jobs/announcements.ts';
 export * from './modules/jobs/events.ts';
 export * from './modules/jobs/index.ts';
 export * from './modules/jobs/notifications.ts';
@@ -153,6 +155,7 @@ export * from './modules/notifications/index.ts';
 export * from './modules/oauth/index.ts';
 export * from './modules/payments/index.ts';
 export * from './modules/payments/subscription-transitions.ts';
+export * from './modules/permissions/announcements.ts';
 export * from './modules/permissions/events.ts';
 export * from './modules/permissions/index.ts';
 export * from './modules/permissions/tickets.ts';
@@ -188,6 +191,7 @@ export {
   SOURCE_CODE_URL_MAX_LENGTH,
   setSetting,
 } from './modules/settings/settings.ts';
+export * from './modules/stream/announcements.ts';
 export * from './modules/stream/notifications.ts';
 export {
   isUserEventKind,

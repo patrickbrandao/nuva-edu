@@ -78,6 +78,12 @@ export interface JobPayloads {
    * manipulador (`sendEventReminder`) descarta a de um horário que deixou de valer.
    */
   'event.reminder': { eventId: string; startsAt: string };
+  /**
+   * Publica uma novidade agendada no horário marcado (spec 025). Enfileirada por
+   * `enqueueAnnouncementPublish`; `publishAt` (ISO 8601) é o horário do agendamento, e o
+   * manipulador (`publishScheduledAnnouncement`) ignora a de um agendamento que mudou.
+   */
+  'announcement.publish': { announcementId: string; publishAt: string };
 }
 
 /**
@@ -133,6 +139,7 @@ export const JOB_DEFINITIONS: { readonly [T in JobType]: JobDefinition } = {
   'payment.reconcile_refunds': { maxAttempts: 3, priority: 10 },
   'ticket.autoclose': { maxAttempts: 5, priority: 0 },
   'event.reminder': { maxAttempts: 3, priority: 0 },
+  'announcement.publish': { maxAttempts: 3, priority: 0 },
 };
 
 /**
@@ -140,15 +147,21 @@ export const JOB_DEFINITIONS: { readonly [T in JobType]: JobDefinition } = {
  * `JobHandlers` exige o manipulador dos demais; estes são opcionais. Tipo novo cujo manipulador
  * venha depois entra aqui até ele chegar; tarefa sem manipulador falha como erro comum e segue
  * as tentativas do tipo. A central de notificações (`notify`) aguarda a tarefa 586 e
- * `ticket.autoclose`, a 605, e `event.reminder`, a 612; a tarefa 622 os retira daqui.
+ * `ticket.autoclose`, a 605, `event.reminder`, a 612, e `announcement.publish`, a 619; a tarefa
+ * 622 os retira daqui.
  */
-export type PendingHandlerJobType = 'notify' | 'ticket.autoclose' | 'event.reminder';
+export type PendingHandlerJobType =
+  | 'notify'
+  | 'ticket.autoclose'
+  | 'event.reminder'
+  | 'announcement.publish';
 
 /** Os mesmos tipos de `PendingHandlerJobType`, para conferência em tempo de execução. */
 export const PENDING_HANDLER_JOB_TYPES = [
   'notify',
   'ticket.autoclose',
   'event.reminder',
+  'announcement.publish',
 ] as const satisfies readonly PendingHandlerJobType[];
 
 export const JOB_STATUSES = ['queued', 'running', 'done', 'failed'] as const;
