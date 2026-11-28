@@ -3537,7 +3537,6 @@ paths:
       tags:
         - forum
       summary: Categorias visíveis do fórum
-      x-nuva-pending: true
       parameters:
         - $ref: "#/components/parameters/Limit"
         - $ref: "#/components/parameters/Cursor"
@@ -3569,7 +3568,6 @@ paths:
       tags:
         - forum
       summary: Tópicos da categoria
-      x-nuva-pending: true
       description: Fixados primeiro, depois por última atividade. Categoria invisível responde 404.
       parameters:
         - $ref: "#/components/parameters/IdPath"
@@ -3622,7 +3620,6 @@ paths:
       tags:
         - forum
       summary: Criar tópico
-      x-nuva-pending: true
       description:
         Saneia o Markdown, segue o tópico para o autor e limita a criação por usuário. Escrita sem direito
         retorna forum_forbidden.
@@ -3675,7 +3672,6 @@ paths:
       tags:
         - forum
       summary: Buscar pessoas que podem ler a categoria
-      x-nuva-pending: true
       parameters:
         - $ref: "#/components/parameters/IdPath"
         - in: query
@@ -3717,7 +3713,6 @@ paths:
       tags:
         - forum
       summary: Ler tópico
-      x-nuva-pending: true
       parameters:
         - $ref: "#/components/parameters/IdPath"
       responses:
@@ -3749,7 +3744,6 @@ paths:
       tags:
         - forum
       summary: Editar tópico do próprio autor
-      x-nuva-pending: true
       security:
         - sessionCookie: []
           csrfToken: []
@@ -3798,7 +3792,6 @@ paths:
       tags:
         - forum
       summary: Remover tópico do próprio autor
-      x-nuva-pending: true
       description: Mantém um marcador de remoção se houver respostas. Tópicos automáticos de aula não podem ser removidos.
       security:
         - sessionCookie: []
@@ -3835,7 +3828,6 @@ paths:
       tags:
         - forum
       summary: Listar respostas do tópico
-      x-nuva-pending: true
       parameters:
         - $ref: "#/components/parameters/IdPath"
         - $ref: "#/components/parameters/Limit"
@@ -3869,7 +3861,6 @@ paths:
       tags:
         - forum
       summary: Responder tópico ou publicação
-      x-nuva-pending: true
       description:
         Aceita um nível de resposta. Tópico fechado ou oculto retorna topic_closed quando visível. Aplica
         o limite de frequência.
@@ -3922,7 +3913,6 @@ paths:
       tags:
         - forum
       summary: Editar a própria resposta
-      x-nuva-pending: true
       security:
         - sessionCookie: []
           csrfToken: []
@@ -3971,7 +3961,6 @@ paths:
       tags:
         - forum
       summary: Remover a própria resposta
-      x-nuva-pending: true
       description: Mantém um marcador de remoção se houver respostas dependentes.
       security:
         - sessionCookie: []
@@ -4008,7 +3997,6 @@ paths:
       tags:
         - forum
       summary: Adicionar reação
-      x-nuva-pending: true
       security:
         - sessionCookie: []
           csrfToken: []
@@ -4059,7 +4047,6 @@ paths:
       tags:
         - forum
       summary: Remover reação
-      x-nuva-pending: true
       security:
         - sessionCookie: []
           csrfToken: []
@@ -4111,7 +4098,6 @@ paths:
       tags:
         - forum
       summary: Adicionar reação
-      x-nuva-pending: true
       security:
         - sessionCookie: []
           csrfToken: []
@@ -4162,7 +4148,6 @@ paths:
       tags:
         - forum
       summary: Remover reação
-      x-nuva-pending: true
       security:
         - sessionCookie: []
           csrfToken: []
@@ -4214,7 +4199,6 @@ paths:
       tags:
         - forum
       summary: Marcar ou remover solução
-      x-nuva-pending: true
       description: Autor do tópico ou equipe. Use postId nulo para remover. Tópicos de aula não aceitam solução.
       security:
         - sessionCookie: []
@@ -4265,7 +4249,6 @@ paths:
       tags:
         - forum
       summary: Seguir tópico
-      x-nuva-pending: true
       security:
         - sessionCookie: []
           csrfToken: []
@@ -4300,7 +4283,6 @@ paths:
       tags:
         - forum
       summary: Deixar de seguir tópico
-      x-nuva-pending: true
       security:
         - sessionCookie: []
           csrfToken: []
@@ -4336,7 +4318,6 @@ paths:
       tags:
         - forum
       summary: Buscar em tópicos e respostas visíveis
-      x-nuva-pending: true
       parameters:
         - in: query
           name: q
@@ -4379,7 +4360,6 @@ paths:
       tags:
         - forum
       summary: Comentários da aula
-      x-nuva-pending: true
       description: Em aula amostra sem direito ao curso, devolve apenas a contagem e canRead falso, com topicId nulo.
       parameters:
         - $ref: "#/components/parameters/IdPath"
@@ -4413,7 +4393,6 @@ paths:
       tags:
         - reports
       summary: Denunciar publicação do fórum
-      x-nuva-pending: true
       description:
         Repetir denúncia devolve a denúncia existente. Motivo other exige detalhes. O próprio conteúdo
         não pode ser denunciado.
@@ -4474,7 +4453,6 @@ paths:
       tags:
         - reports
       summary: Minhas denúncias
-      x-nuva-pending: true
       description: Mostra se a denúncia foi analisada, sem detalhes da ação disciplinar.
       parameters:
         - $ref: "#/components/parameters/Limit"
@@ -8466,6 +8444,10 @@ components:
           minLength: 1
           maxLength: 20000
           description: Markdown disponível apenas a quem pode editar.
+        lessonUrl:
+          type: string
+          description: Caminho local do player para tópico automático de aula.
+          pattern: "^/meus-cursos/[^/]+/aulas/[0-9a-f-]+$"
         createdAt:
           $ref: "#/components/schemas/DateTime"
         editedAt:
