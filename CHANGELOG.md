@@ -13,6 +13,7 @@ Detalhe das decisões em `specs/decisions/`.
 - infra: controle local do simulador emite o aviso verificável de pagamento tardio (spec 011, task 741).
 - core: o provedor fake pode simular captura tardia após o cancelamento do checkout (spec 011, task 740).
 - infra: cada instância do simulador compartilhado emite identificadores distintos, inclusive após reinícios (task 739).
+- fórum: núcleo, comentários de aula, denúncias, moderação e avisos com revalidação de acesso nas duas APIs, com cliente gerado e contratos em modo estrito (tasks 590, 591, 592, 593, 594, 746, 750, 751, 752 e 753).
 - core: o fake aceita um identificador de instância para evitar colisões entre reinícios (spec 013, task 738).
 - core: teste do catálogo inclui o aviso de endereço indisponível no grupo de conta (spec 024, task 736).
 - classroom: a central orienta o aluno a conferir o endereço quando o e-mail fica indisponível (spec 024, task 733).
