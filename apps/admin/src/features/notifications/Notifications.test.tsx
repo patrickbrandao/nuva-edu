@@ -6,6 +6,7 @@ import { expectNoAxeViolations } from '../../test/axe';
 import {
   NOTIFICATION_ID,
   NOTIFICATION_ID_2,
+  NOTIFICATION_TARGET_ID,
   notificationItem,
   notificationPage,
   notificationPrefs,
@@ -321,5 +322,30 @@ describe('sino e central da equipe', () => {
     expect(await screen.findByRole('heading', { level: 1, name: 'Notificações' })).toBeTruthy();
     const menu = await screen.findByRole('navigation', { name: 'Menu' });
     expect(within(menu).queryByRole('link', { name: /Operação/ })).toBeNull();
+  });
+
+  it('leva ao tópico e ao caso denunciado pelos itens de fórum e denúncia', async () => {
+    const contentId = '0193a5b2-0000-7000-8000-0000000000c9';
+    const routes = notificationsRoutes({
+      'GET /api/v1/notifications': () =>
+        notificationPage([
+          notificationItem({ targetType: 'forum_topic' }),
+          notificationItem({
+            id: NOTIFICATION_ID_2,
+            type: 'report.created',
+            group: 'staff',
+            targetType: 'report',
+            data: { contentType: 'forum_post', contentId },
+          }),
+        ]),
+    });
+    renderApp('/notificacoes', routes);
+
+    await screen.findByRole('heading', { level: 1, name: 'Notificações' });
+    await waitFor(() => {
+      const hrefs = screen.getAllByRole('link').map((link) => link.getAttribute('href'));
+      expect(hrefs).toContain(`/forum/t/${NOTIFICATION_TARGET_ID}`);
+      expect(hrefs).toContain(`/denuncias/forum_post/${contentId}`);
+    });
   });
 });

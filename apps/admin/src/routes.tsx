@@ -59,6 +59,23 @@ const ProductEditorPage = lazy(() =>
   })),
 );
 
+const AdminForumPage = lazy(() =>
+  import('./features/forum/ForumPage').then((module) => ({ default: module.AdminForumPage })),
+);
+const AdminForumTopicPage = lazy(() =>
+  import('./features/forum/ForumPage').then((module) => ({ default: module.AdminForumTopicPage })),
+);
+const ModerationPage = lazy(() =>
+  import('./features/moderation/ModerationPage').then((module) => ({
+    default: module.ModerationPage,
+  })),
+);
+const ModerationDetailPage = lazy(() =>
+  import('./features/moderation/ModerationPage').then((module) => ({
+    default: module.ModerationDetailPage,
+  })),
+);
+
 function PageFallback() {
   const { t } = useTranslation();
   return <LoadingState label={t('common.loadingPage')} />;
@@ -82,6 +99,14 @@ function guarded(id: MenuItemId, element: ReactNode): ReactNode {
 
 /** Telas já construídas, por item do menu. Item sem tela leva à página "em construção". */
 const PAGES: Partial<Record<MenuItemId, RouteObject[]>> = {
+  forum: [
+    { path: '/forum', element: onDemand(<AdminForumPage />) },
+    { path: '/forum/t/:id', element: onDemand(<AdminForumTopicPage />) },
+  ],
+  reports: [
+    { path: '/denuncias', element: onDemand(<ModerationPage />) },
+    { path: '/denuncias/:targetType/:targetId', element: onDemand(<ModerationDetailPage />) },
+  ],
   orders: [
     { path: '/pedidos', element: <OrdersPage /> },
     { path: '/pedidos/:id', element: <OrderDetailPage /> },

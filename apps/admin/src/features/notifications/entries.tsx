@@ -64,12 +64,20 @@ function shortText(data: Record<string, unknown>): string | undefined {
 }
 
 /**
- * Link do alvo nas telas que já existem hoje. Alvo de tela ainda não construída (chamado,
- * denúncia, tópico) fica sem link: o item continua legível e marcável como lido.
+ * Link do alvo nas telas implementadas. O item continua legível e marcável como lido sem link.
  */
 function targetHref(item: NotificationItem): string | undefined {
   if (!item.targetId) return undefined;
   switch (item.targetType) {
+    case 'forum_topic':
+      return `/forum/t/${encodeURIComponent(item.targetId)}`;
+    case 'report': {
+      const { contentType, contentId } = item.data;
+      return (contentType === 'forum_topic' || contentType === 'forum_post') &&
+        typeof contentId === 'string'
+        ? `/denuncias/${contentType}/${encodeURIComponent(contentId)}`
+        : '/denuncias';
+    }
     case 'job':
       return OPERATIONS_PATH;
     case 'course':

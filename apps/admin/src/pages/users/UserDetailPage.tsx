@@ -38,6 +38,12 @@ const UserAccessPanels = lazy(() =>
   import('../access/UserAccessPanels').then((module) => ({ default: module.UserAccessPanels })),
 );
 
+const UserModeration = lazy(() =>
+  import('../../features/moderation/UserModeration').then((module) => ({
+    default: module.UserModeration,
+  })),
+);
+
 type DialogName = 'edit' | 'suspend' | 'reactivate' | 'sessions' | 'reveal' | 'password' | 'role';
 
 /**
@@ -228,6 +234,13 @@ function UserOverview({ user }: { user: UserDetail }) {
                 />
               )}
             </AdminSection>
+          ) : null}
+
+          {can('report.handle') &&
+          (user.role === 'student' ? can('users.suspend') : can('staff.manage')) ? (
+            <Suspense fallback={<LoadingState label={t('common.loadingPage')} />}>
+              <UserModeration id={user.id} warn={canSuspend} />
+            </Suspense>
           ) : null}
 
           {can('entitlement.manage') || can('progress.view') ? (
