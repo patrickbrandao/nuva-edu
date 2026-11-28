@@ -5204,6 +5204,8 @@ export interface components {
             bodyHtml: string;
             /** @description Markdown disponível apenas a quem pode editar. */
             bodyMd?: string;
+            /** @description Caminho local do player para tópico automático de aula. */
+            lessonUrl?: string;
             createdAt: components["schemas"]["DateTime"];
             editedAt: components["schemas"]["DateTime"] | null;
             deletedAt: components["schemas"]["DateTime"] | null;
@@ -5276,7 +5278,8 @@ export interface components {
             /** @enum {string} */
             targetType: "forum_topic" | "forum_post" | "user";
             targetId: components["schemas"]["Uuid"];
-            userId: components["schemas"]["Uuid"];
+            /** @description Nulo quando o alvo é um tópico automático da escola. */
+            userId: components["schemas"]["Uuid"] | null;
             moderator: components["schemas"]["ForumAuthor"];
             reason: string | null;
             createdAt: components["schemas"]["DateTime"];
